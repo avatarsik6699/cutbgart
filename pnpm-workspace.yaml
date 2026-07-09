@@ -1,0 +1,7 @@
+# `minimumReleaseAge` (pnpm's supply-chain freshness gate) rejects lockfile
+# entries for packages published too recently. Our lockfile is already the
+# trust boundary — `pnpm install --frozen-lockfile` only ever installs
+# exact versions committed and reviewed here, so the extra freshness check
+# just breaks Docker builds run shortly after `pnpm add`. See
+# docs/KNOWN_GOTCHAS.md.
+minimumReleaseAge: 0

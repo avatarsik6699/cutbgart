@@ -1,0 +1,14 @@
+dist
+.output
+.nitro
+node_modules
+pnpm-lock.yaml
+src/routeTree.gen.ts
+
+# SDD workflow tooling and project docs — not part of the app codebase this
+# formatter governs; reformatting them is out of scope for Phase 01.
+docs/
+plugins/
+raw_spec.md
+AGENTS.md
+CLAUDE.md

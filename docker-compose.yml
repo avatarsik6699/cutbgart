@@ -1,0 +1,64 @@
+services:
+  app:
+    build: .
+    image: bg-remove-app:latest
+    restart: unless-stopped
+    init: true # tini as PID 1 — correct signal handling, no zombie processes (SPEC.md §8.1)
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    expose:
+      - "3000"
+    # Network-native way to confirm the app is actually serving, without
+    # depending on nginx/TLS (which only work post deploy/init-letsencrypt.sh
+    # on the real VPS) or publishing port 3000 to the host. Uses Node's
+    # built-in fetch — no extra tooling needed inside the image.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/app.conf:/etc/nginx/conf.d/app.conf:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+
+  # TLS via Certbot + webroot (SPEC.md §8.2 — chosen over nginx-proxy +
+  # acme-companion for this single-app deploy: fewer moving parts).
+  #
+  # First deploy on a new host: nginx's config unconditionally references
+  # /etc/letsencrypt/live/cutbg.art/*.pem, which doesn't exist until a
+  # certificate has been issued — nginx won't even start to serve the
+  # ACME challenge Certbot needs. Run ./deploy/init-letsencrypt.sh once to
+  # break that bootstrap loop (dummy cert -> start nginx -> real cert ->
+  # reload). After that, this service only handles ongoing renewal (checks
+  # twice daily, renews when within Let's Encrypt's 30-day window).
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w
+      /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  certbot-webroot:
+  certbot-certs:

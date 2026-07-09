@@ -27,20 +27,20 @@ page that proves the SSR → Docker → Nginx → VPS chain end to end. See `doc
 ## Scope
 
 ### Frontend
-- [ ] `F1` Bootstrap TanStack Start v1.x project on Vite, Nitro `node-server` preset, TypeScript strict mode — _Depends on:_ —
-- [ ] `F2` Scaffold Feature-Sliced Design layer skeleton (`app/pages/features/entities/shared`, each with a public `index.ts`) per SPEC.md §6 — _Depends on:_ `F1`
-- [ ] `F3` Configure ESLint flat config + `typescript-eslint`, Prettier + `eslint-config-prettier` — _Depends on:_ `F1`
-- [ ] `F4` Configure Steiger + `@feature-sliced/steiger-plugin` to enforce FSD layer/public-API boundaries — _Depends on:_ `F2`, `F3`
-- [ ] `F5` Configure Husky + lint-staged pre-commit hook (lint + format before commit) — _Depends on:_ `F3`
-- [ ] `F6` Minimal "hello world" page at `/`: thin `routes/index.tsx` (loader + head meta only) rendering a `pages/home` stub — validates the full SSR pipeline end to end — _Depends on:_ `F2`
+- [x] `F1` Bootstrap TanStack Start v1.x project on Vite, Nitro `node-server` preset, TypeScript strict mode — _Depends on:_ —
+- [x] `F2` Scaffold Feature-Sliced Design layer skeleton (`app/pages/features/entities/shared`, each with a public `index.ts`) per SPEC.md §6 — _Depends on:_ `F1`
+- [x] `F3` Configure ESLint flat config + `typescript-eslint`, Prettier + `eslint-config-prettier` — _Depends on:_ `F1`
+- [x] `F4` Configure Steiger + `@feature-sliced/steiger-plugin` to enforce FSD layer/public-API boundaries — _Depends on:_ `F2`, `F3`
+- [x] `F5` Configure Husky + lint-staged pre-commit hook (lint + format before commit) — _Depends on:_ `F3`
+- [x] `F6` Minimal "hello world" page at `/`: thin `routes/index.tsx` (loader + head meta only) rendering a `pages/home` stub — validates the full SSR pipeline end to end — _Depends on:_ `F2`
 
 ### Infra
-- [ ] `I1` Dockerfile for the Nitro `node-server` app image — _Depends on:_ `F1`
-- [ ] `I2` `docker-compose.yml` with `nginx` and `app` services (`restart: unless-stopped`; `app` runs with `init: true` for correct signal handling / no zombie processes) — _Depends on:_ `I1`
-- [ ] `I3` Nginx reverse proxy to the `app` container (Nitro default port 3000), Gzip/Brotli for SSR text responses — _Depends on:_ `I2`
-- [ ] `I4` TLS: Certbot with cron renewal, or `nginx-proxy` + `acme-companion` — _Depends on:_ `I3`
-- [ ] `I5` GitHub Actions CI on push to `main`: lint → build Docker image → push to GitHub Container Registry — _Depends on:_ `F3`, `F4`, `I1`
-- [ ] `I6` Deploy step: SSH to the hip-hosting VPS, `docker compose pull && docker compose up -d` — _Depends on:_ `I5`, `I2`
+- [x] `I1` Dockerfile for the Nitro `node-server` app image — _Depends on:_ `F1`
+- [x] `I2` `docker-compose.yml` with `nginx` and `app` services (`restart: unless-stopped`; `app` runs with `init: true` for correct signal handling / no zombie processes) — _Depends on:_ `I1`
+- [x] `I3` Nginx reverse proxy to the `app` container (Nitro default port 3000), Gzip/Brotli for SSR text responses — _Depends on:_ `I2`
+- [x] `I4` TLS: Certbot with cron renewal, or `nginx-proxy` + `acme-companion` — _Depends on:_ `I3`
+- [x] `I5` GitHub Actions CI on push to `main`: lint → build Docker image → push to GitHub Container Registry — _Depends on:_ `F3`, `F4`, `I1`
+- [x] `I6` Deploy step: SSH to the hip-hosting VPS, `docker compose pull && docker compose up -d` — _Depends on:_ `I5`, `I2`
 
 <!-- No Backend or Data groups: this project has no server-side API surface beyond SSR page
      shells and no persistent data store (SPEC.md §3, §4) — infra work above covers the SSR
@@ -58,31 +58,36 @@ page that proves the SSR → Docker → Nginx → VPS chain end to end. See `doc
 ~~~
 package.json
 pnpm-lock.yaml
+pnpm-workspace.yaml                        # minimumReleaseAge: 0 — see docs/KNOWN_GOTCHAS.md
 tsconfig.json
-vite.config.ts
-app.config.ts                              # TanStack Start config (Nitro node-server preset)
+vite.config.ts                             # TanStack Start config lives here — no separate app.config.ts (framework doesn't use one)
 eslint.config.js
 .prettierrc
+.prettierignore
+.lintstagedrc.json
+.gitignore
+.dockerignore
 steiger.config.ts
+vitest.config.ts                           # passWithNoTests: true until Phase 02 adds real tests
 .husky/pre-commit
-src/app/providers/                         # placeholder, populated in later phases
 src/app/styles/                            # Tailwind entry point
-src/app/router.tsx
+src/router.tsx                             # NOT src/app/router.tsx — framework hard-requires src root, see docs/KNOWN_GOTCHAS.md
+src/routes/__root.tsx
 src/routes/index.tsx
 src/pages/home/ui/HomePage.tsx             # "hello world" stub, replaced in Phase 04
 src/pages/home/index.ts
-src/shared/config/env.ts
 Dockerfile
 docker-compose.yml
 deploy/nginx/app.conf
+deploy/init-letsencrypt.sh                 # Certbot bootstrap — see Implementation Notes
 .github/workflows/ci.yml
-.dockerignore
 ~~~
 
 ### Do NOT touch
 - `src/features/`, `src/entities/` — created empty at most; real slices land in Phase 02/03
 - Any `umami`/analytics container config — Phase 05 (SPEC.md §8)
 - Model weight / R2 upload pipeline — Phase 02 (SPEC.md §6.1)
+- `src/shared/config/env.ts`, `src/app/providers/` — not created this phase; see Implementation Notes
 
 ---
 
@@ -132,20 +137,15 @@ Run `/phase-gate 01` before committing.
 - All architect review items below are resolved (checked off)
 
 Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
-- infrastructure / bootstrap
+- infrastructure / bootstrap — scoped to `app` only; `nginx`+`certbot` need a real cert and can only
+  be verified on the VPS post `deploy/init-letsencrypt.sh` (see STACK.md § TLS / reverse-proxy
+  verification)
 - migrations — `n/a`, no database in this project
 - backend / unit tests — `n/a`, no separate backend test suite (single TS/React codebase)
 - frontend prep, type-check, unit tests
-- e2e — `pnpm playwright test` exists as a command, but there is nothing meaningful to exercise
-  until Phase 04's critical path (upload → process → download) lands; treat as a no-op through
-  Phase 03
-- the default smoke check
-
-```bash
-# Phase-specific smoke override — this phase has no product page yet, just the hello-world shell
-curl -sf http://localhost:3000/ | grep -qi "hello"
-# expected: 200 response, SSR HTML containing the hello-world placeholder markup
-```
+- e2e — `n/a` until Phase 04 installs Playwright and has a real critical path to exercise
+- the default smoke check (container-network-native, doesn't require nginx/TLS or a published host
+  port — see STACK.md)
 
 ---
 
@@ -162,18 +162,51 @@ The agent resolves these items through `/impl-assist 01 review`. Leave an item u
 is still open. Check it off only after the fix is implemented and re-verified. If manual
 verification found nothing, keep the default checked line below.
 
-- [x] No architect review issues recorded
+- [x] `R1` `/phase-gate 01` found that "Infrastructure / bootstrap" and the phase-specific "Smoke"
+  check, exactly as declared, cannot pass in any environment except the production VPS after
+  `deploy/init-letsencrypt.sh` has run. Observed: `docker compose up --build -d` starts `app` and
+  `certbot` fine, but `nginx` crash-loops (`cannot load certificate ".../cutbg.art/fullchain.pem"`)
+  because no real cert exists yet; the smoke command targets `http://localhost:3000/`, but `app`
+  only `expose`s port 3000 internally — nothing publishes it to the host, so the only reachable path
+  is through `nginx`, which is down. Expected: gate commands in `docs/STACK.md` should have a path
+  to green in dev/CI without a real domain, while the production TLS/reverse-proxy topology in
+  `docker-compose.yml` stays as-is (nginx-only ingress is the intended prod security posture, not to
+  be casually bypassed).
+- [x] `R2` `/phase-gate 01`'s "E2E" check ran `pnpm playwright test` (as declared in
+  `docs/STACK.md`) and failed with `Command "playwright" not found` — the package was never
+  installed, only the `e2e` npm script referencing it exists. Expected: either the command actually
+  works (package installed) or `docs/STACK.md` honestly marks the row `n/a` until Phase 04 has a
+  critical path worth exercising, so the gate doesn't fail on a phase with no e2e coverage to run.
 
 ---
 
 ## Implementation Notes
 
-<!-- Optional. The agent adds a short bullet here only when something isn't already visible from
-     the code or commit history: an intentional deviation from the plan, a residual risk, a
-     rejected alternative. Leave empty when nothing needs recording — this is not a mandatory
-     per-task log. -->
-
-None
+- `src/router.tsx` lives at the source root, not `src/app/router.tsx` as the SPEC.md §6 illustrative
+  tree suggests — TanStack Start's default entry points only auto-discover the router at that fixed
+  path, it's not configurable. See `docs/KNOWN_GOTCHAS.md`.
+- No `app.config.ts` — TanStack Start's Vite plugin (`vite.config.ts`) is the only config surface;
+  the framework doesn't use a separate app-level config file.
+- `src/shared/config/env.ts` and `src/app/providers/` were planned in this phase's original file
+  list but not created: no env var is read by client code yet, and no provider exists yet to wrap.
+  Both are trivial to add in whichever phase first needs them (env.ts likely Phase 05 for analytics
+  keys; providers likely Phase 03+ for theme/analytics context) — creating empty scaffolding now
+  would just be dead code.
+- TypeScript is pinned to `6.0.3`, not the newest `7.x` line: `typescript-eslint`'s peer range caps
+  at `<6.1.0`, and 7.x broke typed linting. Revisit the pin once `typescript-eslint` catches up.
+- nginx's TLS config references `/etc/letsencrypt/live/cutbg.art/*.pem` unconditionally, which won't
+  exist on a first deploy — `deploy/init-letsencrypt.sh` (dummy cert → start nginx → real cert →
+  reload) breaks that bootstrap chicken-and-egg loop; run it once per new host before the normal
+  `docker compose up -d` flow.
+- `pnpm-workspace.yaml` sets `minimumReleaseAge: 0` to unblock Docker builds run shortly after
+  `pnpm add`; see `docs/KNOWN_GOTCHAS.md`.
+- Review fix (`R1`): added a Docker `healthcheck` to the `app` service (Node's built-in `fetch`,
+  no extra tooling) and rescoped `docs/STACK.md`'s bootstrap/smoke gate commands to the `app`
+  container directly, since `nginx`+`certbot` structurally can't come up outside the real VPS.
+  `docker-compose.yml`'s production topology (nginx as sole ingress) is unchanged — this only fixed
+  what the automated gate checks, not what's deployed.
+- Review fix (`R2`): left Playwright uninstalled and marked `docs/STACK.md`'s E2E row `n/a` rather
+  than installing a framework with nothing to test yet — activates in Phase 04.
 
 ---
 
