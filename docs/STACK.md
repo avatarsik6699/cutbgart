@@ -58,21 +58,29 @@ STACK.md` for those.
 
 | Gate check | Command | Preconditions / notes |
 |------------|---------|-----------------------|
-| Infrastructure / bootstrap | `docker compose up --build -d` | Needs Docker + Docker Compose; brings up `nginx` + `app` (SPEC.md §6) |
+| Infrastructure / bootstrap | `docker compose up --build -d app` | Needs Docker + Docker Compose. Scoped to `app` only — `nginx`+`certbot` need a real cert from `deploy/init-letsencrypt.sh`, which requires the real `cutbg.art` DNS record, so they can only be validated on the actual VPS, not in dev/CI. See "TLS / reverse-proxy verification" below. |
 | Migrations | `n/a` | No database in this project (SPEC.md §3) |
 | Backend / unit tests | `n/a` | No separate backend service/test suite — single TS/React codebase; all unit tests run under "Frontend unit tests" below |
 | Frontend prep | `n/a` | TanStack Start generates the route tree via its Vite plugin automatically on `dev`/`build` — no separate prepare step (confirmed via TanStack Start docs, no Nuxt-style `prepare` equivalent) |
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |
-| E2E | `pnpm playwright test` | Critical-path + cross-browser matrix (SPEC.md §7.4, §7.7); Safari/iOS project requires a real-device or full WebKit run, not just Chromium headless |
-| Smoke | `curl -sf http://localhost:3000/ -o /dev/null -w '%{http_code}'` | Expects `200` from the `app` container's SSR root route; phase files may override with a phase-specific check (e.g. PHASE_01's hello-world grep) |
+| E2E | `n/a` | Playwright isn't installed yet — nothing meaningful to exercise until Phase 04's critical path (upload → process → download) exists. Flip to `pnpm playwright test` once Phase 04 adds `@playwright/test` and real specs; installing the framework now with zero specs would be dead weight. |
+| Smoke | `docker compose exec -T app node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` | Deterministic, container-network-native — doesn't need port 3000 published to the host or TLS/nginx up. `app` also has a Docker `healthcheck` (docker-compose.yml) doing the same check on a 10s interval; `docker compose ps app` should show `(healthy)`. Phase files may override with a phase-specific check. |
 
 Architecture lint (run in CI before tests, not part of the standard gate rows above — SPEC.md §7.7):
 
 ```bash
 pnpm exec steiger ./src
 ```
+
+### TLS / reverse-proxy verification (VPS-only, not part of the automated gate)
+
+`nginx` + `certbot` can only be brought up successfully after `deploy/init-letsencrypt.sh` has run
+once against the real `cutbg.art` DNS record (see `docker-compose.yml` comments) — that's a
+deploy-time precondition no dev machine or CI runner can satisfy. Verify this path manually on the
+VPS after deploy: `docker compose ps` shows `nginx` and `certbot` up, and `https://cutbg.art/`
+resolves with a valid certificate in a browser.
 
 No project helper script exists yet for `phase-gate` orchestration — add
 `./scripts/phase-gate.sh [XX]` here if one is introduced later.

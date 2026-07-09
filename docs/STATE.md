@@ -19,7 +19,7 @@
 
 | Phase    | Status     | Tag    | Gate | Impl By | Notes |
 |----------|------------|--------|------|---------|-------|
-| PHASE_01 | ⏳ pending | v0.01.0 | ⬜ | — | Scaffold |
+| PHASE_01 | ✅ done | v0.01.0 | ✅ | 🤖 agent | Scaffold |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -31,7 +31,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `—` · **Phase in progress:** `—`
+**Phase completed:** `01` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -41,7 +41,9 @@ None yet.
 
 ### Active Endpoints
 
-None yet.
+| Method | Path | Auth | Response / Payload |
+|--------|------|------|---------------------|
+| `GET` | `/` | none | SSR HTML page shell ("hello world" placeholder; full home composition arrives in Phase 04) |
 
 ### DB Schema
 
@@ -50,11 +52,14 @@ None yet.
 
 ### UI Pages
 
-None yet.
+- `/` — hello-world placeholder (Phase 01). Replaced by the full `pages/home` composition in Phase 04.
 
 ### Env Config
 
-None yet.
+| Key | Example value | Required |
+|-----|---------------|----------|
+| `PORT` | `3000` | no — Nitro `node-server` preset default |
+| `NODE_ENV` | `production` | no — standard Node convention for the container build |
 
 ### DB Seeds
 
@@ -76,6 +81,27 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-10 — Phase 01 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_01 gate passed
+
+### Changes / Decision
+- TanStack Start scaffolded (Vite, Nitro `node-server` preset, TypeScript strict), FSD layer
+  skeleton, ESLint + Prettier, Steiger architecture lint, Husky + lint-staged
+- Hello-world page at `/`, proving the SSR pipeline end to end
+- Dockerfile, docker-compose (`app` + `nginx` + `certbot`), Nginx reverse proxy, Certbot TLS
+  bootstrap (`deploy/init-letsencrypt.sh`), GitHub Actions CI (lint → typecheck → arch-lint →
+  test → build → push to GHCR → SSH deploy)
+- Gate commands in `docs/STACK.md` scoped to what's actually testable in dev/CI (`app` container
+  directly); `nginx`/TLS verification documented as a VPS-only manual step
+
+### Affected Phases / Consequences
+- None (additive change — first phase)
+
+---
 
 ## v1.0 — 2026-07-09 — Initial Setup
 

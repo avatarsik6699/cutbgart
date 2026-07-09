@@ -1,0 +1,12 @@
+node_modules
+.output
+.nitro
+dist
+.git
+.husky
+docs
+plugins
+raw_spec.md
+*.md
+.env
+.env.*
