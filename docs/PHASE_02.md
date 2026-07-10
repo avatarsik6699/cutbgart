@@ -33,42 +33,42 @@ weights are served from Cloudflare R2 via CDN rather than the app's own Nitro se
      IDs are stable after assignment — never renumber. Mark removed tasks as ~~BN~~ (removed). -->
 
 ### Frontend
-- [ ] `F1` Define `entities/processed-image` domain types (`SourceImage`, `AlphaMatte`,
+- [x] `F1` Define `entities/processed-image` domain types (`SourceImage`, `AlphaMatte`,
   `ProcessedImage`, `QualityMode`, `DeviceCapabilities` per SPEC.md §2.2) — _Depends on:_ —
-- [ ] `F2` Scaffold `features/remove-background` slice skeleton (public API `index.ts`, internal
+- [x] `F2` Scaffold `features/remove-background` slice skeleton (public API `index.ts`, internal
   `model/`, `lib/`, `ui/`, `worker/` dirs per FSD) — _Depends on:_ `F1`
-- [ ] `F3` Implement `DeviceCapabilities` detection (`navigator.gpu.requestAdapter()`) selecting
+- [x] `F3` Implement `DeviceCapabilities` detection (`navigator.gpu.requestAdapter()`) selecting
   WebGPU (`fp16`) vs WASM (`q8`) inference path and the default `QualityMode` for weak devices —
   _Depends on:_ `F2`
-- [ ] `F4` Implement a Web Worker hosting Transformers.js v4 model init + inference (never the main
+- [x] `F4` Implement a Web Worker hosting Transformers.js v4 model init + inference (never the main
   thread) for both `onnx-community/BiRefNet_lite-ONNX` (fast) and `onnx-community/BiRefNet-ONNX`
   (max quality) — _Depends on:_ `F2`, `I1`
-- [ ] `F5` Implement the `useBackgroundRemoval` hook exposing the full state machine (SPEC.md §5.3:
+- [x] `F5` Implement the `useBackgroundRemoval` hook exposing the full state machine (SPEC.md §5.3:
   `idle → model-loading → ready → processing → result`, `error` reachable from every state) —
   _Depends on:_ `F3`, `F4`
-- [ ] `F6` Implement `OffscreenCanvas` postprocessing/compositing in the worker (`SourceImage` +
+- [x] `F6` Implement `OffscreenCanvas` postprocessing/compositing in the worker (`SourceImage` +
   `AlphaMatte` → `ProcessedImage` exposed as `Blob`/`ImageBitmap`, explicit
   `URL.revokeObjectURL` release) — _Depends on:_ `F4`
-- [ ] `F7` Wire mandatory error handling (SPEC.md §7.3): WebGPU-unavailable auto-fallback notice
+- [x] `F7` Wire mandatory error handling (SPEC.md §7.3): WebGPU-unavailable auto-fallback notice
   ("lightweight mode"), file size/resolution limit error, unsupported format error,
   model-load-failure retry action, device-out-of-memory message — _Depends on:_ `F5`
-- [ ] `F8` Build an undesigned test route exercising the full slice end to end (stub file input →
+- [x] `F8` Build an undesigned test route exercising the full slice end to end (stub file input →
   both models load → inference → result) to prove the pipeline in isolation — _Depends on:_ `F5`,
   `F6`, `F7`
-- [ ] `F9` Unit + integration tests (Vitest, Testing Library): device-capability detection, error
+- [x] `F9` Unit + integration tests (Vitest, Testing Library): device-capability detection, error
   handling, pure postprocessing functions, `useBackgroundRemoval` against a mocked worker
   (SPEC.md §7.7) — _Depends on:_ `F3`, `F6`, `F7`
 
 ### Infra
-- [ ] `I1` Add `@huggingface/transformers` v4 + ONNX Runtime Web dependencies; set
+- [x] `I1` Add `@huggingface/transformers` v4 + ONNX Runtime Web dependencies; set
   `env.useWasmCache = true` (mandatory — otherwise WASM runtime files re-download every visit,
   SPEC.md §6.1) — _Depends on:_ —
-- [ ] `I2` GitHub Actions workflow uploading `.onnx` model weights + ONNX Runtime WASM binaries to
+- [x] `I2` GitHub Actions workflow uploading `.onnx` model weights + ONNX Runtime WASM binaries to
   Cloudflare R2 at a content-hashed path, separate from the code-deploy workflow (SPEC.md §6
   CI/CD). Trigger: `push` to `main` with a `paths` filter on `models.manifest.json` (a checked-in
   file declaring HF model repo IDs + revisions — the `.onnx` binaries themselves are never
   committed), plus manual `workflow_dispatch` for a forced re-sync — _Depends on:_ —
-- [ ] `I3` Service Worker (`public/sw.js`) cache-first caching of model weights/WASM binaries
+- [x] `I3` Service Worker (`public/sw.js`) cache-first caching of model weights/WASM binaries
   fetched from the R2 CDN URL, content-hash-versioned; `lite` and full variants cache
   independently (SPEC.md §6.1) — _Depends on:_ `I1`, `I2`
 
@@ -177,7 +177,7 @@ interface ProcessedImage {
 
 | Key | Example value | Required |
 |-----|---------------|----------|
-| `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | yes — base URL the worker/service worker prepend to content-hashed model weight & WASM binary paths (SPEC.md §6, §6.1). `VITE_` prefix required for client-exposed Vite env vars (build-time inlined, not a server secret — the CDN base URL is not sensitive). R2 write credentials for `I2`'s upload workflow are GitHub Actions secrets, not an app env var, and are out of scope here. |
+| `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | required for production builds (set via Docker build arg once R2 is populated) — base URL the worker/service worker prepend to content-hashed model weight & WASM binary paths (SPEC.md §6, §6.1). Intentionally **unset in local dev**: `src/features/remove-background/worker/inference.worker.ts` only overrides Transformers.js's `env.remoteHost`/`wasm.wasmPaths` when this is actually configured — otherwise it stays on Transformers.js's own upstream defaults (HF Hub + jsDelivr), so `pnpm dev` works without R2 ever being populated. Found necessary during manual verification: without this guard, local dev silently pointed at the still-empty R2 CDN. `VITE_` prefix required for client-exposed Vite env vars (build-time inlined, not a server secret — the CDN base URL is not sensitive). R2 write credentials for `I2`'s upload workflow are GitHub Actions secrets, not an app env var, and are out of scope here. |
 
 ---
 
@@ -208,8 +208,10 @@ If this phase needs a custom smoke target or other phase-specific note, record i
 # Optional phase-specific smoke override
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/dev/remove-background
 # expected: 200
-curl -s http://localhost:3000/dev/remove-background | grep -q 'data-testid="remove-background-test-harness"'
+curl -s http://localhost:3000/dev/remove-background | grep -a -q 'data-testid="remove-background-test-harness"'
 # expected: match found (exit 0) — confirms the test-harness shell rendered, not a generic 404/error page
+# `-a`: TanStack Start's hydration payload embeds NUL bytes, which makes plain
+# grep treat the response as binary and silently find nothing (docs/KNOWN_GOTCHAS.md)
 ```
 
 ---
@@ -238,7 +240,94 @@ verification found nothing, keep the default checked line below.
      rejected alternative. Leave empty when nothing needs recording — this is not a mandatory
      per-task log. -->
 
-None
+- WASM dtype is `fp32`, not `q8`. §6.1's "q8 on the WASM fallback" is a general
+  Transformers.js default, but the actual published repos
+  (`onnx-community/BiRefNet{,_lite}-ONNX`) only ship `model.onnx` (fp32) and
+  `model_fp16.onnx` — verified against the HF API file tree. Requesting `q8`
+  would 404 at runtime.
+- `models.manifest.json` pins both model revisions to their resolved commit
+  SHAs (not `main`), so the R2 object path is content-hashed by construction
+  without inventing a custom hashing scheme.
+- The state machine's `error` status now also accepts `SELECT_FILE` (not just
+  `idle`/`result`), so `useBackgroundRemoval`'s `retry()` can actually restart
+  the FSM after a failure — SPEC.md §5.3's diagram only draws arrows into
+  `error`, not the way back out.
+- `docs/KNOWN_GOTCHAS.md` gained an entry: plain `grep` over a full SSR page
+  response silently matches nothing because TanStack Start's hydration
+  payload embeds NUL bytes (needs `grep -a`). This phase's own smoke-check
+  command above was updated accordingly.
+- Manual browser verification (`pnpm dev` + a temporary Playwright script,
+  removed afterward — Playwright itself isn't a project dependency until
+  Phase 04) found and fixed two more real bugs, beyond what unit tests alone
+  caught:
+  - `detectDeviceCapabilities()` treated any non-null WebGPU adapter as
+    usable, but some adapters (observed: headless/software WebGPU) lack the
+    `shader-f16` feature that SPEC.md §6.1's mandatory `fp16` dtype needs —
+    Transformers.js throws `"does not support fp16"` at model-load instead of
+    degrading gracefully. Fixed by checking `adapter.features.has("shader-f16")`
+    and falling back to WASM when absent, which is exactly the auto-fallback
+    SPEC.md §7.3 already mandates for "WebGPU unavailable".
+  - `loadSegmenter` could resolve with a pipeline whose `processor` is `null`
+    (Transformers.js doesn't throw in this case) and only fail much later,
+    misclassified as a processing error — see the new
+    `docs/KNOWN_GOTCHAS.md` entry. Fixed with a post-resolve check plus
+    cache eviction on failure so `retry()` actually re-attempts instead of
+    re-rejecting a permanently-cached failed promise.
+  - Residual risk: the full pipeline (real model download → inference →
+    result) was not observed completing successfully end-to-end in this
+    sandbox — it consistently failed ~20-35s into model loading with the
+    `processor: null` symptom above, which investigation traced to the
+    sandbox's network behavior under concurrent large-file load, not the
+    application code (see KNOWN_GOTCHAS for what was ruled out). Manual
+    verification of a full successful run, and of the real R2 CDN path once
+    `upload-model-weights` has actually run with real credentials, is still
+    outstanding.
+- Architect ran `pnpm dev` locally (unconstrained network, real browser) and
+  hit `Uncaught (in promise) TypeError: Failed to fetch` at `sw.js:38`, on a
+  request to `https://cdn.cutbg.art/models/...`. Two real issues found and
+  fixed:
+  - `shared/config/env.ts` defaulted `modelCdnBaseUrl` to the documented
+    placeholder R2 URL even when `VITE_MODEL_CDN_BASE_URL` was unset, so
+    plain local `pnpm dev` silently pointed at a CDN with nothing uploaded to
+    it yet. Changed to leave it `undefined` when unset; the worker now only
+    overrides `env.remoteHost`/`wasm.wasmPaths` when a CDN base is actually
+    configured, otherwise Transformers.js uses its own upstream defaults (HF
+    Hub + jsDelivr) — see the updated `Contracts § New env vars` note above.
+  - `public/sw.js`'s fetch handler had no error handling around the network
+    `fetch(request)` call — a hard failure (offline, DNS, CDN not yet
+    populated) rejected the promise passed to `respondWith()` with nothing
+    catching it, producing exactly this unhandled-rejection console error
+    instead of a failure the app's own error handling could classify. Fixed
+    by catching and returning a normal error `Response` instead.
+- Second real-browser round after the fix above (real network, huggingface.co
+  reachable, ~495MB actually transferred over the wire — confirmed the
+  network path itself is fine) surfaced the actual root cause behind the
+  earlier `processor: null` mystery (see `docs/KNOWN_GOTCHAS.md`): `sw.js`
+  checked `response.ok` (true for 206 too) before `cache.put()`, and the Cache
+  Storage API rejects partial (206) responses outright — which is exactly
+  what Transformers.js's per-file `Range: bytes=0-0` existence/size probe
+  returns. That crash was then compounded by this session's own earlier fix:
+  the fallback error `Response`'s `statusText` contained an em dash, which
+  isn't valid ISO-8859-1, so constructing it threw a *second*, actually
+  unhandled error. Fixed by gating `cache.put()` on `status === 200` and
+  using a plain-ASCII fallback `statusText`.
+- Third real-browser round (after the sw.js fix, on real GPU hardware) got
+  past model loading into actual inference and hit a genuine ONNX Runtime Web
+  WebGPU limitation: `Too many storage buffers in shader. Current: 17, Max is
+  16` — a specific model op needs more storage-buffer bindings than this
+  device's WebGPU shader-stage limit, undetectable by the adapter/fp16 check
+  done at device-capability-detection time (see
+  `docs/KNOWN_GOTCHAS.md`). Added a mid-inference auto-fallback to WASM in
+  `handleProcess` (new `fallback-to-wasm` worker message, surfaced as the
+  existing lightweight-mode UI notice) instead of just erroring out — this
+  required re-keying the segmenter cache on `(qualityMode, inferencePath)`
+  instead of just `qualityMode`, since a single session can now legitimately
+  need both a webgpu and a wasm pipeline for the same quality mode.
+  Known gap: the WASM fallback model loads lazily mid-"processing" with no
+  visible progress bar (the state machine only surfaces `MODEL_PROGRESS`
+  while in `model-loading`), so the UI just shows "processing…" for longer
+  than usual on first fallback. Acceptable for this phase's dev harness; would
+  be worth a dedicated loading sub-state if this recurs often in Phase 04.
 
 ---
 

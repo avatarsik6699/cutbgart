@@ -1,0 +1,36 @@
+name: Upload model weights to R2
+
+# Separate from ci.yml's code-deploy pipeline (SPEC.md §6 CI/CD) — only runs
+# when the pinned model/ORT revisions change, not on every code push.
+on:
+  push:
+    branches: [main]
+    paths: [models.manifest.json]
+  workflow_dispatch: {}
+
+concurrency:
+  group: upload-model-weights
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Sync model weights + ONNX Runtime Web WASM binaries to R2
+        run: pnpm upload-model-weights${{ github.event_name == 'workflow_dispatch' && ' -- --force' || '' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
