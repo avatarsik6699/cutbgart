@@ -170,4 +170,9 @@ pnpm exec steiger ./src
 # e2e — host-only, run against `pnpm dev` (never in Docker/CI); write/extend a
 # spec for every new user-facing flow (AGENTS.md core rule 8)
 pnpm e2e
+
+# Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
+# build` so `public/sitemap.xml` is always current with `src/routes/` — run
+# it standalone only to inspect/debug its output.
+pnpm generate-sitemap
 ```
