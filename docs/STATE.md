@@ -20,6 +20,7 @@
 | Phase    | Status     | Tag    | Gate | Impl By | Notes |
 |----------|------------|--------|------|---------|-------|
 | PHASE_01 | ✅ done | v0.01.0 | ✅ | 🤖 agent | Scaffold |
+| PHASE_02 | ⏳ pending | v0.02.0 | ⬜ | — | ML core |
 
 <!-- Add new rows here via /phase-init N -->
 
