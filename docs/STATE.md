@@ -22,6 +22,7 @@
 | PHASE_01 | ✅ done | v0.01.0 | ✅ | 🤖 agent | Scaffold |
 | PHASE_02 | ✅ done | v0.02.0 | ✅ | 🤖 agent | ML core |
 | PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
+| PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -33,7 +34,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `03` · **Phase in progress:** `—`
+**Phase completed:** `04` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -81,11 +82,43 @@ function useQualityMode(defaultMode: QualityMode): {
 };
 ```
 
+```ts
+// src/features/upload-image/model/types.ts — Phase 04, per SPEC.md §1.3, §7.3
+// Validates + downscales a raw File into the existing SourceImage entity
+// (entities/processed-image, Phase 02) — reuses that type rather than inventing a parallel one.
+
+type UploadErrorCode =
+  | "unsupported-format"          // SPEC.md §7.3: clear error, unsupported format
+  | "exceeds-size-limit"          // SPEC.md §1.3: 20 MB hard limit
+  | "exceeds-resolution-limit";   // SPEC.md §1.3: >4096px longest side (downscaled, not rejected;
+                                  // this code stays in the union but is never actually constructed)
+
+interface UploadValidationError {
+  code: UploadErrorCode;
+  message: string;                // human-readable, states the exact limit (SPEC.md §7.3)
+}
+
+type UploadResult =
+  | { ok: true; image: SourceImage }
+  | { ok: false; error: UploadValidationError };
+
+function validateAndPrepareUpload(file: File): Promise<UploadResult>;
+```
+
+```tsx
+// src/entities/processed-image/ui/BeforeAfterSlider.tsx — Phase 04, per SPEC.md §5.2
+interface BeforeAfterSliderProps {
+  before: SourceImage;   // original upload (entities/processed-image, Phase 02)
+  after: Blob;           // ProcessedImage.result — composited PNG-with-alpha (Phase 02)
+  alt?: string;
+}
+```
+
 ### Active Endpoints
 
 | Method | Path | Auth | Response / Payload |
 |--------|------|------|---------------------|
-| `GET` | `/` | none | SSR HTML page shell ("hello world" placeholder; full home composition arrives in Phase 04) |
+| `GET` | `/` | none | SSR HTML page shell rendering the full `pages/home` composition (upload → process → download flow, Phase 04) |
 | `GET` | `/dev/remove-background` | none | SSR HTML shell hosting the isolated `remove-background` test harness (`<div data-testid="remove-background-test-harness">`). Undesigned, `noindex`, dev-only — not a launch page (SPEC.md §5.1) |
 
 ### DB Schema
@@ -97,7 +130,10 @@ function useQualityMode(defaultMode: QualityMode): {
 
 ### UI Pages
 
-- `/` — hello-world placeholder (Phase 01). Replaced by the full `pages/home` composition in Phase 04.
+- `/` — full `pages/home` composition (Phase 04): upload (`features/upload-image`) → quality toggle
+  (`features/quality-mode-toggle`, Phase 03) → processing (`features/remove-background`, Phase 02)
+  → `BeforeAfterSlider` result view → download (`features/download-result`). Replaces the Phase 01
+  hello-world placeholder.
 - `/dev/remove-background` — undesigned ML pipeline test harness (Phase 02); exercises upload → both models load → inference → result end to end ahead of the real UI landing in Phase 04.
 
 ### Env Config
@@ -128,6 +164,51 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-10 — Phase 04 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_04 gate passed (type-check, unit tests, architecture lint, Docker
+bootstrap/smoke all green) and committed
+
+### Changes / Decision
+- `features/upload-image` FSD slice: drag-and-drop, click-to-browse, clipboard paste, mobile
+  camera capture (`capture` attribute); format/size/resolution validation (JPEG/PNG/WebP, 20 MB
+  hard limit); client-side downscale above 4096px on the longest side; `validateAndPrepareUpload`
+  produces the existing `SourceImage` entity rather than a parallel type
+- `BeforeAfterSlider` display component added to `entities/processed-image`
+- `features/download-result` FSD slice: PNG-with-alpha download button, releases the object URL
+  via `URL.revokeObjectURL` after download or on next processing
+- `pages/home` composes upload (`F1`) + quality toggle (Phase 03) + `useBackgroundRemoval`
+  (Phase 02) + `BeforeAfterSlider` (`F2`) + download (`F3`) into the full
+  `idle → model-loading → ready → processing → result` state machine, `error` reachable from any
+  state, real model-load progress, WASM path labeled "lightweight mode", reset without page
+  reload, one-click "recompute in max quality"; root carries `data-testid="home-page"`
+- `routes/index.tsx` replaced: thin `loader` + head-meta shell rendering `pages/home`, replacing
+  the Phase 01 hello-world placeholder — `GET /` is the same route, not a new endpoint
+- Accessibility (SPEC.md §5.4): real `<input type="file">` under the drop zone, `aria-live="polite"`
+  state-transition announcements, WCAG AA contrast/focus states, mobile "choose photo" button
+- Vitest + Testing Library coverage: `upload-image` validation/downscale, `BeforeAfterSlider`,
+  `download-result`, and the composed `pages/home` state machine (52 tests total project-wide)
+- Playwright `e2e/home.spec.ts` extends Phase 03's setup with the critical-path flow
+  (upload → process → download → process another image) across the chromium/webkit/Mobile Safari
+  projects added to `playwright.config.ts`, plus fast idle/validation-error specs
+- `pages/home/lib/source-image-to-file.ts` bridges `upload-image`'s validated `SourceImage.blob`
+  back into a raw `File` for `useBackgroundRemoval.selectFile` (Phase 02 hook API left unchanged,
+  per this phase's "Do NOT touch" constraint on `features/remove-background`)
+
+### Affected Phases / Consequences
+- `/dev/remove-background` stays as the isolated ML test harness (untouched this phase); Phase 06
+  adds SEO scenario pages and the sitemap script, Phase 05 adds analytics/Umami wiring
+- Known environment gap: the critical-path e2e spec's real WASM inference (`OrtRun()` on the full
+  1024×1024 BiRefNet) hits `std::bad_alloc` in this dev WSL2 environment's headless browsers
+  (chromium/webkit/Mobile Safari) — confirmed not a host-RAM shortage (16 GB free at time of gate),
+  so likely an ONNX Runtime WASM linear-memory ceiling specific to headless execution here. Fast
+  idle/validation-error specs pass on all three projects; architect approved treating `/phase-gate
+  04` as PASS with this documented, pre-existing gap (see PHASE_04.md Implementation Notes) rather
+  than blocking phase closure on it. Needs a real `pnpm e2e` run to fully verify the critical path
+  end to end
 
 ## 2026-07-10 — Docker dev environment + e2e/Playwright policy
 
