@@ -88,7 +88,15 @@ export interface UseBackgroundRemovalResult {
   reset: () => void;
 }
 
-export function useBackgroundRemoval(): UseBackgroundRemovalResult {
+/**
+ * @param qualityMode Overrides the device-detected default quality mode for new
+ * file selections (SPEC.md §5.2 — `features/quality-mode-toggle` passes its
+ * current value here, not hardcoded). Falls back to
+ * `DeviceCapabilities.defaultQualityMode` when omitted.
+ */
+export function useBackgroundRemoval(
+  qualityMode?: QualityMode,
+): UseBackgroundRemovalResult {
   const [state, dispatch] = useReducer(
     removeBackgroundReducer,
     initialRemoveBackgroundState,
@@ -238,11 +246,11 @@ export function useBackgroundRemoval(): UseBackgroundRemovalResult {
           return;
         }
         void getDeviceCapabilities().then((capabilities) => {
-          startAttempt(result.source, capabilities.defaultQualityMode);
+          startAttempt(result.source, qualityMode ?? capabilities.defaultQualityMode);
         });
       });
     },
-    [getDeviceCapabilities, startAttempt],
+    [getDeviceCapabilities, startAttempt, qualityMode],
   );
 
   const recomputeMaxQuality = useCallback(() => {

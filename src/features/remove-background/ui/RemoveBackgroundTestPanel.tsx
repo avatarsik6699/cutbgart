@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ProcessedImage } from "../../../entities/processed-image";
+import type { ProcessedImage, QualityMode } from "../../../entities/processed-image";
 import { useBackgroundRemoval } from "../model/useBackgroundRemoval";
 
 /**
@@ -39,11 +39,20 @@ function useObjectUrls(result: ProcessedImage | null): {
   return result ? urls : { sourceUrl: null, resultUrl: null };
 }
 
+export interface RemoveBackgroundTestPanelProps {
+  /** Passed through to `useBackgroundRemoval` (SPEC.md §5.2 — sourced from
+   * `features/quality-mode-toggle`, not hardcoded). Falls back to the
+   * device-detected default when omitted. */
+  qualityMode?: QualityMode;
+}
+
 /**
  * Undesigned harness proving the `remove-background` pipeline end to end in
  * isolation (SPEC.md §8, Phase 02) — no design system exists yet (Phase 03).
  */
-export function RemoveBackgroundTestPanel() {
+export function RemoveBackgroundTestPanel({
+  qualityMode,
+}: RemoveBackgroundTestPanelProps = {}) {
   const {
     state,
     deviceCapabilities,
@@ -52,7 +61,7 @@ export function RemoveBackgroundTestPanel() {
     recomputeMaxQuality,
     retry,
     reset,
-  } = useBackgroundRemoval();
+  } = useBackgroundRemoval(qualityMode);
 
   const { sourceUrl, resultUrl } = useObjectUrls(
     state.status === "result" ? state.result : null,
