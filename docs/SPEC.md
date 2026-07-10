@@ -99,10 +99,16 @@ QualityMode ("fast" | "max") — user-selectable, persisted client-side in local
 - **ProcessedImage** — `SourceImage` composited with `AlphaMatte` via `OffscreenCanvas` in the worker;
   exposed to the main thread as a `Blob`/`ImageBitmap`, explicitly released via `URL.revokeObjectURL`
   after download or when a new image is processed.
-- **QualityMode** — `"fast"` (default, `BiRefNet_lite`) or `"max"` (`BiRefNet` full). Persisted in
+- **QualityMode** — `"fast"` (default, IS-Net `q8`) or `"max"` (IS-Net `fp32`). Persisted in
   `localStorage`, applied on next visit without re-selection.
 - **DeviceCapabilities** — detected once per session (`navigator.gpu.requestAdapter()`); determines
-  inference path (WebGPU + `fp16`, or WASM + `q8`) and the default `QualityMode` for weak devices.
+  inference path (WebGPU + `fp16`-capable adapter required, or WASM) and the default `QualityMode`
+  for weak devices. WebGPU probing was force-disabled for a period after the originally-shipped
+  BiRefNet model proved unusable on WebGPU (onnxruntime-web shader-buffer limit) *and* on WASM fp32
+  (`std::bad_alloc`, wasm32 address-space ceiling) — see the model swap to IS-Net below. Re-enabled
+  after that swap; confirmed working end-to-end in a real (non-headless) browser, including the
+  mid-session `isWebGpuExecutionError` → WASM fallback path in `inference.worker.ts` as a safety net
+  if a given device's WebGPU turns out unusable for IS-Net specifically.
 
 ---
 
@@ -119,7 +125,7 @@ localStorage:
   qualityMode: "fast" | "max"     # persisted across visits, no other user data stored client-side
 
 Cache Storage (Service Worker, public/sw.js) — cache-first, content-hashed, effectively permanent:
-  model weights (.onnx files, both `BiRefNet_lite` and full `BiRefNet`)
+  model weights (.onnx files, IS-Net `q8`/`fp32` dtype variants of the same model)
   ONNX Runtime WASM binaries
 ```
 
@@ -230,8 +236,8 @@ idle → model-loading → ready → processing → result
 | Language | TypeScript, strict mode | Mandatory |
 | UI | React 19, Tailwind CSS, shadcn/ui on Base UI | Base UI became shadcn/ui's default primitive layer (replacing Radix) as of July 2026; components are copied into the repo, not installed as a black-box dependency |
 | Architecture | Feature-Sliced Design (flexible mode): `app / pages / features / entities / shared` | `processes` and `widgets` deliberately omitted — `processes` is officially excluded from FSD, and `widgets` would add abstraction with no payoff at this project's size (composition lives in `pages`) |
-| ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with WASM fallback; runs inside a Web Worker, never the main thread |
-| Model | `onnx-community/BiRefNet_lite-ONNX` (fast/default), `onnx-community/BiRefNet-ONNX` (max quality) | Both MIT-licensed — chosen over RMBG-2.0 specifically to avoid its CC BY-NC 4.0 / paid-commercial-license risk |
+| ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
+| Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
 | Package manager | pnpm | |
 | Containers | Docker + docker-compose: `nginx`, `app` (Node/Nitro SSR), `umami` + `umami-db` (Postgres) | Each service `restart: unless-stopped`; Node container runs with `init: true` (tini as PID 1); `umami-db` has a persistent volume + healthcheck gating `umami` startup |
 | Reverse proxy / TLS | Nginx; Certbot (cron) or `nginx-proxy` + `acme-companion` | Gzip/Brotli for SSR text responses |
@@ -246,10 +252,10 @@ idle → model-loading → ready → processing → result
 - `env.useWasmCache = true` is mandatory (otherwise ONNX runtime files re-download every visit).
 - A dedicated Service Worker (`public/sw.js`) cache-first caches model weight files and WASM binaries,
   versioned by content hash in the path.
-- `fp16` dtype on the WebGPU path (half the download of `fp32`, good quality/speed balance); `q8` on
-  the WASM fallback (library default for CPU inference).
-- Both `lite` and full model variants cache independently — toggling quality mode mid-session does
-  not re-download an already-cached variant.
+- `q8` dtype for `"fast"` (~44 MB, library default for CPU inference), `fp32` for `"max"` (~176 MB,
+  full precision) — both served from the same `onnx-community/ISNet-ONNX` repo.
+- The two dtype variants cache independently — toggling quality mode mid-session does not re-download
+  an already-cached variant.
 
 ---
 

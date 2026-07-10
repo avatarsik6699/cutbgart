@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 
+import { trackEvent } from "@/shared/lib/analytics";
+
 import type {
   DeviceCapabilities,
   InferencePath,
@@ -20,6 +22,20 @@ import type { WorkerRequest, WorkerResponse } from "../worker/inference.worker";
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_DIMENSION_PX = 4096;
 const ACCEPTED_FORMATS = ["image/jpeg", "image/png", "image/webp"] as const;
+// Caps the optional log panel's memory footprint on long sessions (many
+// retries/quality-mode switches) — oldest entries drop off first.
+const MAX_LOG_ENTRIES = 200;
+
+export interface LogEntry {
+  id: number;
+  timestamp: number;
+  message: string;
+}
+
+export interface RunInfo {
+  inferencePath: InferencePath;
+  dtype: string;
+}
 
 function isAcceptedFormat(type: string): type is SourceImage["format"] {
   return (ACCEPTED_FORMATS as readonly string[]).includes(type);
@@ -82,6 +98,10 @@ export interface UseBackgroundRemovalResult {
   state: RemoveBackgroundState;
   deviceCapabilities: DeviceCapabilities | null;
   lightweightMode: boolean;
+  /** Model/dtype/inference-path actually behind the current or last run — null before the first attempt. */
+  runInfo: RunInfo | null;
+  /** Timestamped diagnostic trail (file downloads, state transitions, timings) for an optional debug log panel. */
+  logs: LogEntry[];
   selectFile: (file: File) => void;
   recomputeMaxQuality: () => void;
   retry: () => void;
@@ -105,6 +125,15 @@ export function useBackgroundRemoval(
     null,
   );
   const [lightweightMode, setLightweightMode] = useState(false);
+  const [runInfo, setRunInfo] = useState<RunInfo | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logIdRef = useRef(0);
+
+  const appendLog = useCallback((message: string) => {
+    logIdRef.current += 1;
+    const entry: LogEntry = { id: logIdRef.current, timestamp: Date.now(), message };
+    setLogs((current) => [...current, entry].slice(-MAX_LOG_ENTRIES));
+  }, []);
 
   const workerRef = useRef<Worker | null>(null);
   const capabilitiesPromiseRef = useRef<Promise<DeviceCapabilities> | null>(null);
@@ -115,6 +144,13 @@ export function useBackgroundRemoval(
     qualityMode: QualityMode;
     inferencePath: InferencePath;
   } | null>(null);
+  // Tracks whether the in-flight attempt is still waiting on the model (vs.
+  // already processing), so a worker "error" message can be attributed to
+  // `model_load_failed` vs. `processing_failed` (SPEC.md §7.6) without
+  // depending on `state.status` inside the worker's message handler, which is
+  // only ever (re)bound once per worker instance (see `getWorker` below) and
+  // would otherwise read a stale value.
+  const awaitingModelLoadRef = useRef(false);
 
   const getDeviceCapabilities = useCallback((): Promise<DeviceCapabilities> => {
     capabilitiesPromiseRef.current ??= detectDeviceCapabilities();
@@ -133,68 +169,90 @@ export function useBackgroundRemoval(
     };
   }, [getDeviceCapabilities]);
 
-  const handleWorkerMessage = useCallback((message: WorkerResponse) => {
-    switch (message.type) {
-      case "model-progress": {
-        const attempt = lastAttemptRef.current;
-        if (attempt && attempt.qualityMode === message.qualityMode) {
-          dispatch({ type: "MODEL_PROGRESS", percent: message.percent });
+  const handleWorkerMessage = useCallback(
+    (message: WorkerResponse) => {
+      switch (message.type) {
+        case "model-progress": {
+          const attempt = lastAttemptRef.current;
+          if (attempt && attempt.qualityMode === message.qualityMode) {
+            dispatch({ type: "MODEL_PROGRESS", percent: message.percent });
+          }
+          break;
         }
-        break;
-      }
-      case "fallback-to-wasm": {
-        const attempt = lastAttemptRef.current;
-        if (attempt && attempt.qualityMode === message.qualityMode) {
-          setLightweightMode(true);
+        case "log": {
+          appendLog(message.message);
+          break;
         }
-        break;
-      }
-      case "model-ready": {
-        const attempt = lastAttemptRef.current;
-        if (!attempt || attempt.qualityMode !== message.qualityMode) break;
-        dispatch({ type: "MODEL_READY" });
-        dispatch({ type: "START_PROCESSING" });
-        const requestId = String(requestCounterRef.current + 1);
-        requestCounterRef.current += 1;
-        pendingRequestIdRef.current = requestId;
-        const worker = workerRef.current;
-        if (worker) {
-          const request: WorkerRequest = {
-            type: "process",
-            requestId,
-            qualityMode: attempt.qualityMode,
-            inferencePath: attempt.inferencePath,
+        case "fallback-to-wasm": {
+          const attempt = lastAttemptRef.current;
+          if (attempt && attempt.qualityMode === message.qualityMode) {
+            setLightweightMode(true);
+            appendLog("WebGPU failed on this run — falling back to WASM");
+          }
+          break;
+        }
+        case "model-ready": {
+          const attempt = lastAttemptRef.current;
+          if (!attempt || attempt.qualityMode !== message.qualityMode) break;
+          awaitingModelLoadRef.current = false;
+          setRunInfo({ inferencePath: message.inferencePath, dtype: message.dtype });
+          appendLog(
+            `Model ready — ${message.qualityMode} quality, dtype ${message.dtype}, ${message.inferencePath}`,
+          );
+          trackEvent("model_load_completed");
+          dispatch({ type: "MODEL_READY" });
+          dispatch({ type: "START_PROCESSING" });
+          trackEvent("processing_started");
+          appendLog("Processing started");
+          const requestId = String(requestCounterRef.current + 1);
+          requestCounterRef.current += 1;
+          pendingRequestIdRef.current = requestId;
+          const worker = workerRef.current;
+          if (worker) {
+            const request: WorkerRequest = {
+              type: "process",
+              requestId,
+              qualityMode: attempt.qualityMode,
+              inferencePath: attempt.inferencePath,
+              source: attempt.source,
+            };
+            worker.postMessage(request);
+          }
+          break;
+        }
+        case "process-result": {
+          if (message.requestId !== pendingRequestIdRef.current) break;
+          const attempt = lastAttemptRef.current;
+          if (!attempt) break;
+          const result: ProcessedImage = {
             source: attempt.source,
+            result: message.result,
+            qualityMode: attempt.qualityMode,
           };
-          worker.postMessage(request);
+          appendLog(`Processing completed in ${String(message.durationMs)}ms`);
+          trackEvent("processing_completed");
+          dispatch({ type: "PROCESSING_SUCCEEDED", result });
+          break;
         }
-        break;
+        case "error": {
+          appendLog(`Error (${message.code}): ${message.message}`);
+          trackEvent(
+            awaitingModelLoadRef.current ? "model_load_failed" : "processing_failed",
+          );
+          dispatch({
+            type: "FAILED",
+            error: {
+              code: message.code,
+              message: message.message,
+              action: actionForWorkerErrorCode(message.code),
+            },
+          });
+          break;
+        }
       }
-      case "process-result": {
-        if (message.requestId !== pendingRequestIdRef.current) break;
-        const attempt = lastAttemptRef.current;
-        if (!attempt) break;
-        const result: ProcessedImage = {
-          source: attempt.source,
-          result: message.result,
-          qualityMode: attempt.qualityMode,
-        };
-        dispatch({ type: "PROCESSING_SUCCEEDED", result });
-        break;
-      }
-      case "error": {
-        dispatch({
-          type: "FAILED",
-          error: {
-            code: message.code,
-            message: message.message,
-            action: actionForWorkerErrorCode(message.code),
-          },
-        });
-        break;
-      }
-    }
-  }, []);
+    },
+    [appendLog],
+  );
 
   const getWorker = useCallback((): Worker => {
     let worker = workerRef.current;
@@ -219,6 +277,14 @@ export function useBackgroundRemoval(
 
   const startAttempt = useCallback(
     (source: SourceImage, qualityMode: QualityMode) => {
+      // Only the idle/error -> model-loading transition counts as a fresh
+      // model-load funnel event (SPEC.md §7.6) — not "recompute in max
+      // quality", which re-enters from `result` with the same source.
+      if (state.status === "idle" || state.status === "error") {
+        trackEvent("model_load_started");
+      }
+      awaitingModelLoadRef.current = true;
+      setRunInfo(null);
       dispatch({ type: "SELECT_FILE", qualityMode });
       void getDeviceCapabilities().then((capabilities) => {
         lastAttemptRef.current = {
@@ -226,6 +292,7 @@ export function useBackgroundRemoval(
           qualityMode,
           inferencePath: capabilities.inferencePath,
         };
+        appendLog(`Requesting ${qualityMode} model on ${capabilities.inferencePath}`);
         const worker = getWorker();
         const request: WorkerRequest = {
           type: "load-model",
@@ -235,13 +302,14 @@ export function useBackgroundRemoval(
         worker.postMessage(request);
       });
     },
-    [getDeviceCapabilities, getWorker],
+    [appendLog, getDeviceCapabilities, getWorker, state.status],
   );
 
   const selectFile = useCallback(
     (file: File) => {
       void buildSourceImage(file).then((result) => {
         if (!result.ok) {
+          appendLog(`Upload rejected: ${result.error.message}`);
           dispatch({ type: "FAILED", error: result.error });
           return;
         }
@@ -250,7 +318,7 @@ export function useBackgroundRemoval(
         });
       });
     },
-    [getDeviceCapabilities, startAttempt, qualityMode],
+    [appendLog, getDeviceCapabilities, startAttempt, qualityMode],
   );
 
   const recomputeMaxQuality = useCallback(() => {
@@ -270,6 +338,7 @@ export function useBackgroundRemoval(
   const reset = useCallback(() => {
     lastAttemptRef.current = null;
     pendingRequestIdRef.current = null;
+    setRunInfo(null);
     dispatch({ type: "RESET" });
   }, []);
 
@@ -277,6 +346,8 @@ export function useBackgroundRemoval(
     state,
     deviceCapabilities,
     lightweightMode,
+    runInfo,
+    logs,
     selectFile,
     recomputeMaxQuality,
     retry,

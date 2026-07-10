@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { detectDeviceCapabilities } from "./device-capabilities";
 
@@ -22,8 +22,16 @@ function stubNavigator(overrides: {
 }
 
 describe("detectDeviceCapabilities", () => {
+  let track: Mock<(event: string, data?: unknown) => void>;
+
+  beforeEach(() => {
+    track = vi.fn<(event: string, data?: unknown) => void>();
+    window.umami = { track };
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete window.umami;
   });
 
   it("selects the WebGPU path and 'max' quality on a capable device with fp16 support", async () => {
@@ -36,6 +44,7 @@ describe("detectDeviceCapabilities", () => {
     const capabilities = await detectDeviceCapabilities();
 
     expect(capabilities).toEqual({ inferencePath: "webgpu", defaultQualityMode: "max" });
+    expect(track).not.toHaveBeenCalled();
   });
 
   it("downgrades to 'fast' quality on a weak device even with WebGPU available", async () => {
@@ -55,6 +64,7 @@ describe("detectDeviceCapabilities", () => {
     const capabilities = await detectDeviceCapabilities();
 
     expect(capabilities).toEqual({ inferencePath: "wasm", defaultQualityMode: "fast" });
+    expect(track).toHaveBeenCalledWith("webgpu_unavailable_fallback", undefined);
   });
 
   it("falls back to the WASM path when requestAdapter() resolves null", async () => {
@@ -82,9 +92,9 @@ describe("detectDeviceCapabilities", () => {
   });
 
   it("falls back to the WASM path when the adapter exists but doesn't support fp16 shaders", async () => {
-    // Observed on headless/software WebGPU (e.g. SwiftShader) during manual
-    // browser verification of this phase — a real adapter is returned, but
-    // Transformers.js's mandatory fp16 dtype throws at model-load time.
+    // Observed on headless/software WebGPU (e.g. SwiftShader) — a real
+    // adapter is returned, but Transformers.js's mandatory fp16 dtype throws
+    // at model-load time.
     stubNavigator({
       gpu: { requestAdapter: () => Promise.resolve(fakeAdapter([])) },
       hardwareConcurrency: 8,

@@ -1,7 +1,17 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
+import { detectDeviceCapabilities } from "./device-capabilities";
 import { useBackgroundRemoval } from "./useBackgroundRemoval";
+
+// `detectDeviceCapabilities()` now always resolves "wasm" (BiRefNet's WebGPU
+// incompatibility — see device-capabilities.ts). Mock it per-test where a
+// "webgpu" starting state is needed to exercise the hook's own mid-session
+// fallback handling in isolation from that device-capability decision.
+vi.mock("./device-capabilities", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./device-capabilities")>();
+  return { ...actual, detectDeviceCapabilities: vi.fn(actual.detectDeviceCapabilities) };
+});
 
 interface PostedMessage {
   type: string;
@@ -38,6 +48,8 @@ function makeFile(overrides: { type?: string; size?: number } = {}): File {
   });
 }
 
+let track: Mock<(event: string, data?: unknown) => void>;
+
 beforeEach(() => {
   MockWorker.instances = [];
   vi.stubGlobal("Worker", MockWorker);
@@ -45,10 +57,13 @@ beforeEach(() => {
     "createImageBitmap",
     vi.fn().mockResolvedValue({ width: 800, height: 600, close: vi.fn() }),
   );
+  track = vi.fn<(event: string, data?: unknown) => void>();
+  window.umami = { track };
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  delete window.umami;
 });
 
 describe("useBackgroundRemoval", () => {
@@ -98,6 +113,7 @@ describe("useBackgroundRemoval", () => {
       expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
     );
     expect(result.current.state.status).toBe("model-loading");
+    expect(track).toHaveBeenCalledWith("model_load_started", undefined);
 
     act(() => {
       worker.emit({ type: "model-progress", qualityMode: "fast", percent: 50 });
@@ -117,6 +133,8 @@ describe("useBackgroundRemoval", () => {
       expect(worker.posted.some((m) => m.type === "process")).toBe(true),
     );
     expect(result.current.state.status).toBe("processing");
+    expect(track).toHaveBeenCalledWith("model_load_completed", undefined);
+    expect(track).toHaveBeenCalledWith("processing_started", undefined);
 
     const processRequest = worker.posted.find((m) => m.type === "process");
     const resultBlob = new Blob(["fake-png"], { type: "image/png" });
@@ -134,16 +152,28 @@ describe("useBackgroundRemoval", () => {
       expect(result.current.state.result.qualityMode).toBe("fast");
       expect(result.current.state.result.result).toBe(resultBlob);
     }
+    expect(track).toHaveBeenCalledWith("processing_completed", undefined);
+
+    // "Recompute in max quality" re-enters model-loading from `result`, not
+    // idle/error — it must not count as a fresh model_load_started (SPEC.md
+    // §7.6), even though it still fires model_load_completed/processing_started.
+    track.mockClear();
+    act(() => {
+      result.current.recomputeMaxQuality();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("model-loading"));
+    expect(track).not.toHaveBeenCalledWith("model_load_started", undefined);
   });
 
   it("turns on lightweightMode when the worker reports a mid-inference WebGPU fallback", async () => {
-    // Simulate a capable WebGPU device so lightweightMode starts off — jsdom
-    // has no navigator.gpu by default, which would already report "wasm".
-    vi.stubGlobal("navigator", {
-      ...navigator,
-      gpu: { requestAdapter: () => Promise.resolve({ features: { has: () => true } }) },
-      hardwareConcurrency: 8,
-      deviceMemory: 8,
+    // `detectDeviceCapabilities()` always resolves "wasm" now (BiRefNet's
+    // WebGPU incompatibility), so a "webgpu" starting state — needed here to
+    // prove lightweightMode starts off and only flips on the worker's
+    // mid-session fallback message — has to be mocked directly rather than
+    // simulated via navigator.gpu.
+    vi.mocked(detectDeviceCapabilities).mockResolvedValueOnce({
+      inferencePath: "webgpu",
+      defaultQualityMode: "max",
     });
 
     const { result } = renderHook(() => useBackgroundRemoval());
@@ -194,6 +224,7 @@ describe("useBackgroundRemoval", () => {
       status: "error",
       error: { code: "model-load-failed", action: "retry" },
     });
+    expect(track).toHaveBeenCalledWith("model_load_failed", undefined);
 
     act(() => {
       result.current.retry();
@@ -203,6 +234,34 @@ describe("useBackgroundRemoval", () => {
       expect(worker.posted.filter((m) => m.type === "load-model")).toHaveLength(2),
     );
     expect(result.current.state.status).toBe("model-loading");
+  });
+
+  it("attributes a worker error during processing to processing_failed, not model_load_failed", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval());
+
+    act(() => {
+      result.current.selectFile(makeFile());
+    });
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+    );
+
+    act(() => {
+      worker.emit({ type: "model-ready", qualityMode: "fast" });
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("processing"));
+    track.mockClear();
+
+    act(() => {
+      worker.emit({ type: "error", code: "processing-failed", message: "OOM" });
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("error"));
+    expect(track).toHaveBeenCalledWith("processing_failed", undefined);
+    expect(track).not.toHaveBeenCalledWith("model_load_failed", undefined);
   });
 
   it("reset() returns to idle", async () => {

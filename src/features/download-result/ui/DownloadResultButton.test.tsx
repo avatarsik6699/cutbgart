@@ -1,17 +1,21 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { DownloadResultButton } from "./DownloadResultButton";
 
 let revokeObjectURL: ReturnType<typeof vi.spyOn>;
+let track: Mock<(event: string, data?: unknown) => void>;
 
 beforeEach(() => {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-url");
   revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  track = vi.fn<(event: string, data?: unknown) => void>();
+  window.umami = { track };
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  delete window.umami;
   cleanup();
 });
 
@@ -32,6 +36,7 @@ describe("DownloadResultButton", () => {
     expect(clickSpy).toHaveBeenCalledOnce();
     expect(anchor.download).toBe("result.png");
     expect(anchor.href).toContain("blob:mock-url");
+    expect(track).toHaveBeenCalledWith("download_clicked", undefined);
   });
 
   it("revokes the previous object URL when the image blob changes", () => {

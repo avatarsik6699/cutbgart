@@ -60,7 +60,11 @@ test.describe("/ (home)", () => {
     expect(download.suggestedFilename()).toBe("result.png");
 
     await page.getByRole("button", { name: /process another image/i }).click();
-    await expect(page.getByLabel("Upload an image")).toBeVisible();
+    // `toBeAttached`, not `toBeVisible`: UploadDropzone (this locator) is
+    // `hidden sm:flex` — ChoosePhotoButton is the visible control on narrow
+    // viewports (e.g. the Mobile Safari project). Matches the same pattern
+    // used for this locator in the idle-state test above.
+    await expect(page.getByLabel("Upload an image")).toBeAttached();
     await expect(page.getByRole("slider")).toHaveCount(0);
   });
 });

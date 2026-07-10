@@ -1,3 +1,5 @@
+import { trackEvent } from "@/shared/lib/analytics";
+
 import type { DeviceCapabilities } from "../../../entities/processed-image";
 
 // `deviceMemory` is a Chrome-only experimental API, not part of lib.dom.d.ts.
@@ -32,9 +34,26 @@ function isWeakDevice(): boolean {
  * mode once per session (SPEC.md §2.2, §5.3). Never throws — `requestAdapter()`
  * failures resolve to the WASM fallback, matching the mandatory
  * WebGPU-unavailable auto-fallback behavior (SPEC.md §7.3).
+ *
+ * WebGPU probing was disabled for a while (hardcoded to WASM) after the
+ * originally-shipped BiRefNet model proved unusable on WebGPU
+ * (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968).
+ * Re-enabled now that the model has been swapped for IS-Net
+ * (`worker/inference.worker.ts`'s `MODEL_ID`) — a much lighter classic
+ * encoder-decoder without BiRefNet's Concat/Split fan-out, so there's no
+ * known reason it should hit the same wall. This has *not* been confirmed
+ * against a real WebGPU device in this project (only end-to-end via a
+ * Node/onnxruntime-node smoke test, which can't exercise the WebGPU EP at
+ * all) — if it turns out IS-Net has its own WebGPU issue, the worker's
+ * mid-session catch (`isWebGpuExecutionError` in `inference.worker.ts`)
+ * transparently falls back to WASM per-run, and the "lightweight mode"
+ * banner (`useBackgroundRemoval`'s `lightweightMode`) will say so.
  */
 export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   const hasUsableWebGPU = await supportsWebGPU();
+  if (!hasUsableWebGPU) {
+    trackEvent("webgpu_unavailable_fallback");
+  }
   const weak = isWeakDevice();
 
   return {

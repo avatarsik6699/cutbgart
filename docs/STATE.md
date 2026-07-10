@@ -23,6 +23,7 @@
 | PHASE_02 | ✅ done | v0.02.0 | ✅ | 🤖 agent | ML core |
 | PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
 | PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
+| PHASE_05 | ✅ done | v0.05.0 | ✅ | 🤖 agent | Analytics |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -34,7 +35,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `04` · **Phase in progress:** `—`
+**Phase completed:** `05` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -114,6 +115,39 @@ interface BeforeAfterSliderProps {
 }
 ```
 
+```ts
+// src/shared/lib/analytics/types.ts + track-event.ts — Phase 05, per SPEC.md §7.6
+type AnalyticsEvent =
+  | "model_load_started"
+  | "model_load_completed"
+  | "model_load_failed"
+  | "processing_started"
+  | "processing_completed"
+  | "processing_failed"
+  | "download_clicked"
+  | "webgpu_unavailable_fallback";
+
+// Aggregate counters only — no PII, no image data, no per-image linkage (SPEC.md §1.1, §7.6).
+// No-op safe when window.umami hasn't loaded yet (dev/test).
+function trackEvent(event: AnalyticsEvent, data?: Record<string, string | number | boolean>): void;
+```
+
+### Analytics Events
+
+> Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
+> contract (see Active Endpoints below).
+
+| Event | Fired from | Purpose |
+|-------|-----------|---------|
+| `model_load_started` | `useBackgroundRemoval` on `SELECT_FILE` (idle/error → model-loading) | Model-load drop-off rate |
+| `model_load_completed` | `useBackgroundRemoval` on `MODEL_READY` | Model-load drop-off rate |
+| `model_load_failed` | `useBackgroundRemoval` on `FAILED` while status was `model-loading` | Model-load drop-off rate |
+| `processing_started` | `useBackgroundRemoval` on `START_PROCESSING` | Core product completion metric |
+| `processing_completed` | `useBackgroundRemoval` on `PROCESSING_SUCCEEDED` | Core product completion metric |
+| `processing_failed` | `useBackgroundRemoval` on `FAILED` while status was `processing` | Core product completion metric |
+| `download_clicked` | `DownloadResultButton` click handler | Funnel's final conversion |
+| `webgpu_unavailable_fallback` | `detectDeviceCapabilities` when WebGPU adapter request fails/unsupported | WASM fallback frequency |
+
 ### Active Endpoints
 
 | Method | Path | Auth | Response / Payload |
@@ -125,8 +159,9 @@ interface BeforeAfterSliderProps {
 
 - Tables: none yet.
 - Current migration head: `—`
-- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): ONNX model weights (`BiRefNet_lite` + full `BiRefNet`) and ONNX Runtime WASM binaries.
+- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): ONNX model weights (`onnx-community/ISNet-ONNX`, `q8`/`fp32` dtype variants — replaces the original `BiRefNet_lite`/`BiRefNet` pair per the 2026-07-10 model-swap decision below) and ONNX Runtime WASM binaries.
 - Client-side `localStorage` (added Phase 03): `qualityMode: "fast" | "max"` — persisted across visits, no other user data stored client-side (SPEC.md §3).
+- `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
 
@@ -143,6 +178,12 @@ interface BeforeAfterSliderProps {
 | `PORT` | `3000` | no — Nitro `node-server` preset default |
 | `NODE_ENV` | `production` | no — standard Node convention for the container build |
 | `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | required for production builds (Docker build arg once R2 is populated); unset in local dev — worker falls back to Transformers.js's own upstream defaults (SPEC.md §6, §6.1) |
+| `VITE_UMAMI_SCRIPT_URL` | `https://cutbg.art/script.js` | required for production (Phase 05); unset in dev disables script injection |
+| `VITE_UMAMI_WEBSITE_ID` | `3b1e...uuid` | required for production (Phase 05) |
+| `VITE_CF_BEACON_TOKEN` | `abc123token` | required for production (Phase 05, Cloudflare Web Analytics beacon) |
+| `UMAMI_APP_SECRET` | `<random 32+ char secret>` | required — `umami` container's own env, docker-compose only (Phase 05) |
+| `UMAMI_DATABASE_URL` | `postgresql://umami:***@umami-db:5432/umami` | required — `umami` container's own env, docker-compose only (Phase 05) |
+| `POSTGRES_PASSWORD` | `<random secret>` | required — `umami-db` container's own env, docker-compose only (Phase 05) |
 
 ### DB Seeds
 
@@ -164,6 +205,166 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-10 — Phase 05 gate: e2e regression + pre-existing Mobile Safari test bug fixed
+
+**Type**: bugfix
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: running `pnpm e2e` as part of closing out Phase 05 (bundling the analytics work
+with the post-IS-Net UX fixes below) surfaced two issues in `e2e/home.spec.ts`'s critical-path spec.
+
+### Changes / Decision
+- **Real regression**: the model-loading progress text (`pages/home/ui/HomePage.tsx`) was changed
+  to include the active inference path (e.g. "on WASM") inline, which pushed the ellipsis away from
+  the literal word "model" — breaking the `/loading .* model…/i` locator the e2e spec uses to
+  disambiguate the visible progress text from the (differently worded) `aria-live` announcement.
+  Fixed by moving the path label after the ellipsis/percentage instead of between "model" and "…".
+  Caught by `chromium`/`webkit` failing identically on the first `pnpm e2e` run after these UX fixes.
+- **Pre-existing test bug, newly exposed**: the critical-path spec asserted
+  `getByLabel("Upload an image")` (the desktop `UploadDropzone` input) to be `toBeVisible()` after
+  resetting back to idle. That input is `hidden … sm:flex` by design — `ChoosePhotoButton` is the
+  visible control on narrow viewports (SPEC.md §5.4) — so this assertion was always wrong for the
+  `Mobile Safari` project. It never surfaced before because Mobile Safari's run never reached that
+  line: BiRefNet's `std::bad_alloc` (see the model-swap entry below) killed the run earlier every
+  time. IS-Net finally let Mobile Safari's run complete, exposing the latent assertion bug. Fixed by
+  switching to `toBeAttached()`, matching the same locator's existing pattern in the idle-state test
+  above it in the same file.
+
+### Affected Phases / Consequences
+- Confirms IS-Net (unlike BiRefNet) completes the full critical path on all three configured e2e
+  projects (`chromium`, `webkit`, `Mobile Safari`) — the "known environment gap" flagged in Phase
+  04's completion entry below is resolved as a side effect of the model swap, not just a headless
+  quirk as originally guessed.
+- 15/15 e2e tests green across all three projects as of this entry.
+
+## 2026-07-10 — Post-IS-Net UX fixes: before/after preview bug, diagnostic log panel, WebGPU re-enabled
+
+**Type**: bugfix + decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: manual testing of the IS-Net model swap (previous entry below) surfaced three
+issues: the before/after slider never actually revealed the cutout, progress feedback was too
+sparse to tell what was happening, and it was unclear which model/path was actually running.
+
+### Changes / Decision
+- **Before/after slider bug** (`entities/processed-image/ui/BeforeAfterSlider.tsx`): the "after"
+  cutout was stacked directly on top of the unclipped "before" image, so the cutout's transparent
+  background just let "before" show through unchanged — the slider visually did nothing. Fixed by
+  clipping both images to complementary halves and adding a checkerboard backdrop behind the cutout
+  side (standard transparency-preview convention).
+- **Diagnostic log panel**: `inference.worker.ts` now forwards per-file `initiate`/`done` progress
+  events (previously only the aggregate download percent was surfaced); `useBackgroundRemoval` collects
+  these plus state-transition/timing events into a capped `logs` array; `pages/home/ui/ProcessingLog.tsx`
+  renders them behind a "Show log" toggle. Also added a persistent status line ("Model: IS-Net (q8) ·
+  Running on WebGPU/WASM") so the active model/dtype/path is never a mystery.
+- **WebGPU re-enabled**: `device-capabilities.ts`'s `supportsWebGPU()` real adapter/`fp16` probe is
+  restored (was hardcoded `false` after the BiRefNet failures). IS-Net is architecturally unrelated to
+  BiRefNet's Concat/Split fan-out, so there was no known reason to keep it disabled once the model
+  changed. Verified end-to-end in a real (non-headless) Chromium via Playwright automation against a
+  production build (`pnpm build` + `.output/server/index.mjs`) — that specific browser had no GPU
+  adapter available (`No available adapters`) so it exercised the WASM path, but confirmed the full
+  flow, the new log panel, the status line, and the slider fix all work correctly. WebGPU itself
+  remains unverified on a real GPU-backed browser in this project — the worker's mid-session
+  `isWebGpuExecutionError` → WASM fallback stays in place either way.
+- `docs/SPEC.md` §2.2, §6 updated to drop the "WebGPU forced off" language.
+
+### Affected Phases / Consequences
+- Supersedes the WebGPU-disabled decision in the previous Project Log entry.
+- `pnpm dev`'s Vite dev server was unreliable for this session's own Playwright verification (cold-start
+  dependency re-optimization kept forcing full page reloads mid-interaction, discarding file-upload
+  automation) — worked around by verifying against a production build instead. Not an app bug; worth
+  knowing if `/phase-gate`'s e2e step is ever flaky in a similarly cold environment.
+
+## 2026-07-10 — ML model swap: BiRefNet → IS-Net (both WebGPU and WASM paths were broken)
+
+**Type**: decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: manual post-Phase-05 testing in a real (non-headless) browser — every attempt to
+process an image failed. This turned out to be the same underlying issue Phase 04's completion entry
+below already flagged as a "known environment gap" assumed specific to headless e2e browsers; it is
+not headless-specific, it reproduces in normal interactive use too.
+
+### Changes / Decision
+- Root-caused in two steps:
+  1. WebGPU path: BiRefNet's Concat/Split-heavy ONNX graph needs more storage-buffer bindings per
+     shader than `maxStorageBuffersPerShaderStage` allows on effectively any device — a confirmed,
+     still-open onnxruntime-web limitation (microsoft/onnxruntime#21968), not a per-device fluke.
+     First fix attempt: force `inferencePath: "wasm"` in `detectDeviceCapabilities()` rather than
+     rely on the existing mid-session catch-and-retry (`isWebGpuExecutionError` in
+     `inference.worker.ts`), since the failure is deterministic, not transient.
+  2. That surfaced a second, independent failure: BiRefNet's fp32 WASM path hits `std::bad_alloc` —
+     wasm32's address-space ceiling colliding with the model's activation-memory footprint (a
+     Swin-transformer-backed decoder at a fixed 1024×1024 input). Confirmed not a host-RAM shortage
+     (16 GB free). This matches a 2024 comment on the same upstream GitHub issue predicting exactly
+     this outcome for BiRefNet specifically.
+- Given both execution paths were broken for the *same* model family, not a config/device issue,
+  the model itself was replaced: `onnx-community/ISNet-ONNX` (IS-Net, github.com/xuebinqin/DIS) now
+  backs both quality tiers, differentiated by dtype (`q8` fast / `fp32` max) instead of by separate
+  `_lite`/full model files. IS-Net is a much lighter classic encoder-decoder (no BiRefNet-style
+  fan-out) and is natively recognized by Transformers.js's pipeline resolution; verified end-to-end
+  (load + inference + correct mask dimensions on a real photo) via a throwaway Node smoke test
+  before switching — see `worker/inference.worker.ts`'s top-of-file comment for the full rationale.
+- WebGPU stays **forced off** (`supportsWebGPU()` hardcoded `false`) even after the model swap — IS-Net
+  not sharing BiRefNet's specific failure mode is a reasonable bet, not a verified fact (no real GPU/
+  browser available to test WebGPU in this session). Re-enable only after confirming IS-Net actually
+  works via WebGPU in a real browser.
+- License note: `onnx-community/ISNet-ONNX` is AGPL-3.0 (SPEC.md previously rejected BRIA's
+  RMBG-2.0 specifically over its non-commercial license). Accepted knowingly here — architect
+  confirmed this project has no commercial-use plans and takes on the risk. Revisit before any
+  commercial deployment.
+- SPEC.md §2.2, §3, §6, §6.1 updated to match (model identity, dtype scheme, WebGPU status).
+
+### Affected Phases / Consequences
+- Supersedes Phase 04's completion-entry note below ("Known environment gap... likely headless-
+  specific") — it was not headless-specific; this entry is the corrected diagnosis.
+- Phase 02's "Current Contract" model references (BiRefNet_lite/BiRefNet) below are superseded by
+  this entry per this log's append-only convention — the code and SPEC.md now reflect IS-Net.
+- No `/phase-gate` re-run performed as part of this change; typecheck/lint/unit tests/arch-lint all
+  green (51/51 tests). A full e2e pass (`pnpm e2e`, host-only) has not been re-run against the new
+  model in this session — recommended before the next phase gate.
+
+## 2026-07-10 — Phase 05 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_05 gate passed (type-check, unit tests, arch lint, Docker
+bootstrap/smoke all green; e2e explicitly waived — pure instrumentation, no new user-facing flow)
+
+### Changes / Decision
+- `umami` + `umami-db` (Postgres) services added to `docker-compose.yml`, `umami-db` gating
+  `umami` startup via healthcheck; both `restart: unless-stopped`
+- `uptime-kuma` self-hosted uptime monitoring added as a `docker-compose.yml` service (chosen over
+  UptimeRobot to stay consistent with this project's self-hosted-everything infra), bound to
+  `127.0.0.1` only — monitors/alert channels configured once through its own web UI via SSH tunnel
+- `deploy/nginx/app.conf` proxies Umami's script/collect endpoints (`/script.js`, `/api/send`) on
+  the app's own domain rather than a separate `umami.` subdomain — no extra DNS/cert needed
+- `shared/lib/analytics` FSD slice (flat `types.ts` / `track-event.ts` / `index.ts` — `model/`
+  subfolder avoided, Steiger flags it as a reserved segment name in the `shared` layer):
+  `AnalyticsEvent` union + `trackEvent()` wrapper around `window.umami.track(...)`, no-op safe
+  when the script hasn't loaded (dev/test)
+- Umami tracking script + Cloudflare Web Analytics beacon injected into `routes/__root.tsx` head,
+  gated on production env vars so local dev stays script-free
+- Event wiring: `model_load_started/completed/failed` and `processing_started/completed/failed`
+  from `useBackgroundRemoval.ts`'s existing dispatch sites (state machine reducer itself stays
+  untouched — side effects live in the hook, via a new `awaitingModelLoadRef` to distinguish
+  model-load vs. processing failures without reading stale `state.status` inside the worker's
+  once-bound message handler); `webgpu_unavailable_fallback` from `device-capabilities.ts`;
+  `download_clicked` from `DownloadResultButton.tsx`'s click handler
+- No new e2e spec added (AGENTS.md core rule 8 waived per this phase's own Gate Checks — pure
+  instrumentation of the existing Phase 04 flow); event-firing covered at the Vitest level instead
+  (`track-event.test.ts` + updated `useBackgroundRemoval.test.ts` / `device-capabilities.test.ts` /
+  `DownloadResultButton.test.tsx`) — 55/55 unit tests green across 13 files
+- This app's own server contract is unchanged (no new endpoints) — all new events are Umami
+  client-side custom events, documented in Current Contract's new "Analytics Events" table
+
+### Affected Phases / Consequences
+- No changes to `pages/home/ui/HomePage.tsx` or the ML pipeline/upload/download UX — confirmed
+  instrumentation-only, per this phase's "Do NOT touch" scope
+- Phase 06 (SEO scenario pages + sitemap script) is next; it inherits the `shared/lib/analytics`
+  slice if any new pages need event tracking
+- Production deploy still needs real values for the six new env vars (`VITE_UMAMI_SCRIPT_URL`,
+  `VITE_UMAMI_WEBSITE_ID`, `VITE_CF_BEACON_TOKEN`, `UMAMI_APP_SECRET`, `UMAMI_DATABASE_URL`,
+  `POSTGRES_PASSWORD`) and one-time Uptime Kuma monitor/alert setup via SSH tunnel — none of this
+  is automatable from compose/env alone
 
 ## 2026-07-10 — Phase 04 complete
 

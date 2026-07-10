@@ -26,6 +26,51 @@ services:
       retries: 5
       start_period: 5s
 
+  # Self-hosted Umami (custom event tracking, SPEC.md §7.6) + its own Postgres
+  # instance. `umami-db`'s healthcheck gates `umami`'s startup so it never
+  # boots against a not-yet-ready database.
+  umami-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  umami:
+    image: docker.umami.is/umami-software/umami:postgresql-latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${UMAMI_DATABASE_URL}
+      APP_SECRET: ${UMAMI_APP_SECRET}
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  # Self-hosted uptime monitoring (SPEC.md §7.6): pings the home page + this
+  # stack's own `umami` container on `/api/heartbeat` every 5 min, alerts via
+  # Telegram/email. Monitors and alert channels are configured once through
+  # its own web UI after first deploy — Uptime Kuma has no compose/env-based
+  # monitor config. Bound to loopback only; reach it via an SSH tunnel
+  # (`ssh -L 3001:localhost:3001 <host>`) rather than exposing it publicly.
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "127.0.0.1:3001:3001"
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -62,3 +107,5 @@ services:
 volumes:
   certbot-webroot:
   certbot-certs:
+  umami-db-data:
+  uptime-kuma-data:
