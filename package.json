@@ -5,7 +5,8 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "generate-sitemap": "tsx scripts/generate-sitemap.ts",
+    "build": "pnpm generate-sitemap && vite build",
     "start": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

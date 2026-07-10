@@ -24,7 +24,7 @@
 | PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
 | PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
 | PHASE_05 | ✅ done | v0.05.0 | ✅ | 🤖 agent | Analytics |
-| PHASE_06 | ⏳ pending | v0.06.0 | ⬜ | — | SEO layer |
+| PHASE_06 | ✅ done | v0.06.0 | ✅ | 🤖 agent | SEO layer |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -36,7 +36,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `05` · **Phase in progress:** `—`
+**Phase completed:** `06` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -155,6 +155,10 @@ function trackEvent(event: AnalyticsEvent, data?: Record<string, string | number
 |--------|------|------|---------------------|
 | `GET` | `/` | none | SSR HTML page shell rendering the full `pages/home` composition (upload → process → download flow, Phase 04) |
 | `GET` | `/dev/remove-background` | none | SSR HTML shell hosting the isolated `remove-background` test harness (`<div data-testid="remove-background-test-harness">`). Undesigned, `noindex`, dev-only — not a launch page (SPEC.md §5.1) |
+| `GET` | `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`, `/udalit-fon-dlya-avatarki` | none | SSR HTML: scenario-specific `pages/*` composition of the same upload → quality-toggle → remove-background → download flow as `/`, plus scenario copy, `HowTo` JSON-LD, and a static before/after example image (Phase 06, SPEC.md §5.1, §7.5) |
+| `GET` | `/about` | none | SSR HTML: static project/tech/author info, no upload tool (Phase 06, SPEC.md §5.1) |
+| `GET` | `/sitemap.xml` | none | Generated at build time by `scripts/generate-sitemap.ts` from the `routes/` tree, excludes `/dev/remove-background` (Phase 06, SPEC.md §7.5) |
+| `GET` | `/robots.txt` | none | Static, fully open, links to `/sitemap.xml` (Phase 06, SPEC.md §7.5) |
 
 ### DB Schema
 
@@ -171,6 +175,11 @@ function trackEvent(event: AnalyticsEvent, data?: Record<string, string | number
   → `BeforeAfterSlider` result view → download (`features/download-result`). Replaces the Phase 01
   hello-world placeholder.
 - `/dev/remove-background` — undesigned ML pipeline test harness (Phase 02); exercises upload → both models load → inference → result end to end ahead of the real UI landing in Phase 04.
+- `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`,
+  `/udalit-fon-dlya-avatarki` — scenario-specific `pages/*` slices (Phase 06): the same reused
+  upload/quality-toggle/remove-background/download features as `/`, wrapped in scenario copy
+  (bilingual — Russian primary, English subtitle) and a static before/after example image.
+- `/about` — static project/tech/author info (Phase 06); no upload tool.
 
 ### Env Config
 
@@ -206,6 +215,58 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-11 — Phase 06 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_06 gate passed (type-check, unit tests, Steiger arch lint, Docker
+bootstrap/smoke, and the full `pnpm e2e` cross-browser matrix — chromium/webkit/Mobile Safari,
+45/45 — all green) and committed
+
+### Changes / Decision
+- Four scenario `pages/*` slices (`product-photo`, `document-photo`, `logo`, `avatar`) added under
+  `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`,
+  `/udalit-fon-dlya-avatarki` — each composes the same reused upload/quality-toggle/
+  remove-background/download features as `pages/home` (`pages/home` itself untouched), wrapped in
+  scenario-specific copy and a static before/after example image. No new product logic.
+- Copy language (SPEC.md §10 left this an open question): resolved as bilingual — Russian
+  `<h1>`/body copy matching the Russian URL slugs' search intent, plus an English subtitle. `/about`
+  (new static `pages/about` slice: project/tech/author info, no upload tool) stays English-only.
+- `shared/lib/seo` (`json-ld.ts`): `SITE_URL` constant (`https://cutbg.art`) plus
+  `buildWebApplicationJsonLd`/`buildHowToJsonLd` builders. JSON-LD is emitted via each route's
+  `head().scripts` (TanStack Router's documented inline `application/ld+json` pattern) — `HowTo` on
+  the four scenario routes, `WebApplication` added to `routes/index.tsx`'s `head()` only (verified
+  `pages/home/ui/HomePage.tsx` itself has zero diff this phase).
+- `scripts/generate-sitemap.ts` walks `src/routes/`, excludes the `dev/` test harness by filename
+  convention, and writes `public/sitemap.xml`; wired into `pnpm build` (`pnpm generate-sitemap &&
+  vite build`) so a new route can't be forgotten. `public/sitemap.xml` is gitignored as a build
+  artifact. `public/robots.txt` added, fully open, links to the sitemap.
+- Before/after example images (`public/images/*.webp`) are procedurally generated placeholder
+  graphics (simple shapes rasterized to WebP via a temporary `sharp` dev-dependency, removed again
+  after generating the assets) — no real product/document/logo/avatar photography existed in the
+  repo. Should be swapped for real photos before relying on these pages for actual search ranking.
+- `e2e/scenario-pages.spec.ts` added: per scenario page, a fast render/h1 check and a fast
+  upload → model-loading reachability check, plus one full upload → process → download deep check
+  on `/udalit-fon-s-foto-tovara` (the full pipeline is already covered end to end by
+  `e2e/home.spec.ts`, so it isn't re-run at full cost on every scenario page); `/about` gets a
+  render-only check.
+- Bug caught during implementation verification (fixed before commit, not left for review): the
+  first draft's per-page `aria-live` announcer silently dropped the `RemoveBackgroundState`
+  `"error"` status, so screen readers heard nothing on a real processing error. Fixed by routing the
+  announcer through the same `displayError` value the visible error banner already uses, on all four
+  scenario pages.
+
+### Affected Phases / Consequences
+- No changes to `features/upload-image`, `features/remove-background`, `features/quality-mode-toggle`,
+  `features/download-result`, or `entities/processed-image` — confirmed reuse-only, per this phase's
+  own "Do NOT touch" scope.
+- Phase 07 (cross-browser hardening) inherits five new routes; this phase's `pnpm e2e` gate run
+  already exercises all of them (plus `/`) across chromium/webkit/Mobile Safari, so Phase 07 is
+  real-device hardening of already-passing coverage, not first-time coverage.
+- Production deploy has no new required env vars for this phase (Contracts: none) — `SITE_URL` is a
+  hardcoded constant (`https://cutbg.art`, matching the domain already used for Umami/CDN), not
+  configurable per deployment target.
 
 ## 2026-07-10 — Phase 05 gate: e2e regression + pre-existing Mobile Safari test bug fixed
 

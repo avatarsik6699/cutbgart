@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `06` |
 | Title | SEO layer |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.06.0` |
 | Depends on | PHASE_05 gate passing |
 
@@ -27,30 +27,30 @@ gets forgotten in search-engine discovery.
 ## Scope
 
 ### Frontend
-- [ ] `F1` `pages/product-photo` slice — `/udalit-fon-s-foto-tovara` (product photo / marketplace
+- [x] `F1` `pages/product-photo` slice — `/udalit-fon-s-foto-tovara` (product photo / marketplace
   listing scenario, required), composing the existing upload + quality-toggle + remove-background +
   download features with scenario-specific `<h1>`/body copy and at least one before/after example
   image (SPEC.md §5.1) — _Depends on:_ —
-- [ ] `F2` `pages/document-photo` slice — `/udalit-fon-s-foto-na-dokumenty` (ID/document photo
+- [x] `F2` `pages/document-photo` slice — `/udalit-fon-s-foto-na-dokumenty` (ID/document photo
   scenario, required), same composition pattern as `F1` — _Depends on:_ —
-- [ ] `F3` `pages/logo` slice — `/udalit-fon-s-logotipa` (logo scenario, desired) — _Depends on:_ —
-- [ ] `F4` `pages/avatar` slice — `/udalit-fon-dlya-avatarki` (avatar/social profile scenario,
+- [x] `F3` `pages/logo` slice — `/udalit-fon-s-logotipa` (logo scenario, desired) — _Depends on:_ —
+- [x] `F4` `pages/avatar` slice — `/udalit-fon-dlya-avatarki` (avatar/social profile scenario,
   desired) — _Depends on:_ —
-- [ ] `F5` `pages/about` slice — `/about` (project/tech/author info, does not block launch) —
+- [x] `F5` `pages/about` slice — `/about` (project/tech/author info, does not block launch) —
   _Depends on:_ —
-- [ ] `F6` `routes/*.tsx` thin loader + head shells for `F1`–`F5`, each setting `<title>`,
+- [x] `F6` `routes/*.tsx` thin loader + head shells for `F1`–`F5`, each setting `<title>`,
   `<meta description>`, `<link rel="canonical">` via the TanStack Router head API (SPEC.md §7.5) —
   _Depends on:_ `F1`, `F2`, `F3`, `F4`, `F5`
-- [ ] `F7` JSON-LD structured data: `WebApplication` schema added to the existing home page,
+- [x] `F7` JSON-LD structured data: `WebApplication` schema added to the existing home page,
   `HowTo` schema added to each scenario page (`F1`–`F4`) (SPEC.md §7.5) — _Depends on:_ `F6`
-- [ ] `F8` Unique `<h1>` per page containing its target scenario phrase; example images as
+- [x] `F8` Unique `<h1>` per page containing its target scenario phrase; example images as
   WebP/AVIF, `loading="lazy"`, placed below the fold (SPEC.md §7.5) — _Depends on:_ `F1`, `F2`,
   `F3`, `F4`
 
 ### Infra
-- [ ] `I1` `scripts/generate-sitemap.ts` — walks the `routes/` tree at build/CI time, emits
+- [x] `I1` `scripts/generate-sitemap.ts` — walks the `routes/` tree at build/CI time, emits
   `/sitemap.xml` (SPEC.md §4, §7.5) — _Depends on:_ `F6`
-- [ ] `I2` `public/robots.txt` — fully open, links to `sitemap.xml` (SPEC.md §4, §7.5) —
+- [x] `I2` `public/robots.txt` — fully open, links to `sitemap.xml` (SPEC.md §4, §7.5) —
   _Depends on:_ `I1`
 
 <!-- Test execution is governed by `## Gate Checks` below + docs/STACK.md § Gate Commands.
@@ -179,7 +179,25 @@ verification found nothing, keep the default checked line below.
      rejected alternative. Leave empty when nothing needs recording — this is not a mandatory
      per-task log. -->
 
-None
+- Scenario copy language (SPEC.md §10 left this an open question): architect chose bilingual —
+  Russian `<h1>`/body copy matching the Russian URL slugs' search intent, plus an English
+  subtitle so the copy still reads for visitors arriving from the (English) home page. `/about`
+  stays English-only (no Russian slug, matches the rest of the site).
+- Before/after example images (`public/images/*.webp`) are procedurally generated placeholder
+  graphics (simple SVG shapes rasterized to WebP), not real product/document/logo/avatar
+  photography — no such assets existed in the repo. Satisfies the WebP/`loading="lazy"`/
+  below-the-fold contract for launch, but should be swapped for real photos before relying on
+  these pages for actual search ranking.
+- JSON-LD (`F7`) lives in each route's `head().scripts` (TanStack Router's documented pattern for
+  inline `application/ld+json`), not inside the page components — so `pages/home/ui/HomePage.tsx`
+  is genuinely untouched this phase; only `routes/index.tsx`'s `head()` gained the
+  `WebApplication` script.
+- Each scenario page (`F1`–`F4`) duplicates the upload/quality-toggle/remove-background/download
+  composition rather than factoring it into a shared component — `pages/home` is explicitly
+  out of scope this phase and FSD's `widgets` layer is deliberately excluded from this project
+  (SPEC.md §6), so per-page composition (with page-local copy of the small `describeState`/
+  `sourceImageToFile` helpers) is the pattern this phase's own scope implies, consistent with how
+  `pages/home` already owns its composition privately.
 
 ---
 
@@ -193,9 +211,9 @@ feat(phase-06): SEO layer — scenario pages, sitemap, structured data
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked (or deferred in Architect Review Notes)
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 06`
+- [x] All Scope checkboxes checked (or deferred in Architect Review Notes)
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 06`
 - [ ] Committed atomically on `feat/phase-06` branch
 - [ ] Tag created after merge to develop: `git tag -a v0.06.0 -m "Phase 06: SEO layer"`
