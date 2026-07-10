@@ -215,5 +215,5 @@ feat(phase-06): SEO layer — scenario pages, sitemap, structured data
 - [x] All automated gate checks green
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 06`
-- [ ] Committed atomically on `feat/phase-06` branch
-- [ ] Tag created after merge to develop: `git tag -a v0.06.0 -m "Phase 06: SEO layer"`
+- [x] Committed atomically on `feat/phase-06` branch
+- [x] Tag created after merge to develop: `git tag -a v0.06.0 -m "Phase 06: SEO layer"`
