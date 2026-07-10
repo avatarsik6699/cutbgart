@@ -23,6 +23,7 @@
 | PHASE_02 | ✅ done | v0.02.0 | ✅ | 🤖 agent | ML core |
 | PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
 | PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
+| PHASE_05 | ⏳ pending | v0.05.0 | ⬜ | — | Analytics |
 
 <!-- Add new rows here via /phase-init N -->
 
