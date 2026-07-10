@@ -77,16 +77,14 @@ export function BeforeAfterSlider({
         updatePositionFromClientX(event.clientX);
       }}
     >
-      {beforeUrl && (
-        <img
-          src={beforeUrl}
-          alt={alt}
-          className="absolute inset-0 h-full w-full object-contain"
-        />
-      )}
       {afterUrl && (
+        // Checkerboard backdrop behind the cutout — without it, the "after"
+        // PNG's transparent background just let the "before" image (which
+        // used to sit directly underneath, unclipped, across the whole
+        // container) show through unchanged, making the slider look like it
+        // did nothing at all.
         <div
-          className="absolute inset-0 overflow-hidden"
+          className="absolute inset-0 overflow-hidden bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
           style={{ clipPath: `inset(0 ${String(100 - position)}% 0 0)` }}
         >
           <img
@@ -95,6 +93,14 @@ export function BeforeAfterSlider({
             aria-hidden="true"
             className="h-full w-full object-contain"
           />
+        </div>
+      )}
+      {beforeUrl && (
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{ clipPath: `inset(0 0 0 ${String(position)}%)` }}
+        >
+          <img src={beforeUrl} alt={alt} className="h-full w-full object-contain" />
         </div>
       )}
       <div

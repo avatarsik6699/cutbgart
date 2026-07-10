@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { trackEvent } from "@/shared/lib/analytics";
 import { Button } from "@/shared/ui";
 
 export interface DownloadResultButtonProps {
@@ -35,6 +36,7 @@ export function DownloadResultButton({
       onClick={() => {
         const url = urlRef.current;
         if (!url) return;
+        trackEvent("download_clicked");
         const anchor = document.createElement("a");
         anchor.href = url;
         anchor.download = fileName;

@@ -9,10 +9,23 @@
 const configuredModelCdnBaseUrl = import.meta.env.VITE_MODEL_CDN_BASE_URL as
   string | undefined;
 
+// Analytics (Phase 05, SPEC.md §7.6): all three left `undefined` unless set,
+// which is what keeps local `pnpm dev` script-free — `routes/__root.tsx` only
+// injects the Umami/Cloudflare tags when their vars are configured.
+const configuredUmamiScriptUrl = import.meta.env.VITE_UMAMI_SCRIPT_URL as
+  string | undefined;
+const configuredUmamiWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID as
+  string | undefined;
+const configuredCfBeaconToken = import.meta.env.VITE_CF_BEACON_TOKEN as
+  string | undefined;
+
 export const env = {
   modelCdnBaseUrl: configuredModelCdnBaseUrl?.replace(/\/+$/, ""),
   // Must match the `onnxruntime-web` version pinned in package.json — the R2
   // upload workflow mirrors that version's `dist/` folder under this path
   // segment (.github/workflows/upload-model-weights.yml).
   onnxRuntimeWebVersion: "1.27.0",
+  umamiScriptUrl: configuredUmamiScriptUrl,
+  umamiWebsiteId: configuredUmamiWebsiteId,
+  cfBeaconToken: configuredCfBeaconToken,
 };

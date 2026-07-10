@@ -17,6 +17,11 @@ import {
 import { Button } from "@/shared/ui";
 import { describeState } from "../lib/describe-state";
 import { sourceImageToFile } from "../lib/source-image-to-file";
+import { ProcessingLog } from "./ProcessingLog";
+
+function pathLabel(path: "webgpu" | "wasm"): string {
+  return path === "webgpu" ? "WebGPU" : "WASM";
+}
 
 type DisplayError = { message: string; action: "retry" | "reset" };
 
@@ -41,8 +46,18 @@ export function HomePage() {
   }, []);
 
   const { qualityMode, setQualityMode } = useQualityMode(defaultQualityMode);
-  const { state, lightweightMode, selectFile, recomputeMaxQuality, retry, reset } =
-    useBackgroundRemoval(qualityMode);
+  const {
+    state,
+    deviceCapabilities,
+    lightweightMode,
+    runInfo,
+    logs,
+    selectFile,
+    recomputeMaxQuality,
+    retry,
+    reset,
+  } = useBackgroundRemoval(qualityMode);
+  const lastLogMessage = logs.at(-1)?.message;
 
   function handleUpload(result: UploadResult) {
     if (!result.ok) {
@@ -84,9 +99,16 @@ export function HomePage() {
 
       <QualityModeToggle qualityMode={qualityMode} onQualityModeChange={setQualityMode} />
 
+      {runInfo && (
+        <p className="text-xs text-muted-foreground">
+          Model: IS-Net ({runInfo.dtype}) · Running on {pathLabel(runInfo.inferencePath)}
+        </p>
+      )}
+
       {lightweightMode && !displayError && (
         <p className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
-          Running in lightweight mode — WebGPU is unavailable, using the slower WASM path.
+          Running in lightweight mode — WebGPU is unavailable
+          {runInfo ? " for this model" : ""}, using the slower WASM path.
         </p>
       )}
 
@@ -130,6 +152,9 @@ export function HomePage() {
           <p className="text-sm text-muted-foreground">
             Loading {state.qualityMode === "max" ? "max quality" : "fast"} model…{" "}
             {state.progress.toFixed(0)}%
+            {deviceCapabilities
+              ? ` on ${pathLabel(deviceCapabilities.inferencePath)}`
+              : ""}
           </p>
           <div
             role="progressbar"
@@ -143,13 +168,21 @@ export function HomePage() {
               style={{ width: `${String(Math.round(state.progress))}%` }}
             />
           </div>
+          {lastLogMessage && (
+            <p className="truncate text-xs text-muted-foreground/70">{lastLogMessage}</p>
+          )}
         </div>
       )}
 
       {!displayError && (state.status === "ready" || state.status === "processing") && (
-        <p className="text-sm text-muted-foreground">
-          {state.status === "processing" ? "Removing background…" : "Preparing…"}
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-muted-foreground">
+            {state.status === "processing" ? "Removing background…" : "Preparing…"}
+          </p>
+          {lastLogMessage && (
+            <p className="truncate text-xs text-muted-foreground/70">{lastLogMessage}</p>
+          )}
+        </div>
       )}
 
       {!displayError && state.status === "result" && (
@@ -168,6 +201,8 @@ export function HomePage() {
           </div>
         </div>
       )}
+
+      <ProcessingLog logs={logs} />
     </main>
   );
 }

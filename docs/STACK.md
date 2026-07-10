@@ -19,7 +19,7 @@
 | ML runtime (client-side) | `@huggingface/transformers` v4 + ONNX Runtime Web (WebGPU / WASM), runs in a Web Worker — not server infra |
 | Database | None — no persistent server-side store (SPEC.md §3). `umami-db` (Postgres) is analytics-only infra, added in Phase 05 |
 | Cache | None server-side. Client-side: Service Worker (`public/sw.js`, cache-first) for model weights; `localStorage` for the quality-mode preference |
-| Infra | Docker Compose: `nginx` + `app` (Phase 01); `umami` + `umami-db` added in Phase 05. Cloudflare (proxy + R2) for CDN/model-weight storage. `docker-compose.dev.yml` adds a container-parity dev session — standalone, never merged with the production `docker-compose.yml` |
+| Infra | Docker Compose: `nginx` + `app` (Phase 01); `umami` + `umami-db` + `uptime-kuma` added in Phase 05 (uptime-kuma bound to `127.0.0.1` only — reach it via an SSH tunnel to configure monitors/alerts through its own web UI). Cloudflare (proxy + R2) for CDN/model-weight storage. `docker-compose.dev.yml` adds a container-parity dev session — standalone, never merged with the production `docker-compose.yml` |
 | Package managers | pnpm |
 | CI | GitHub Actions → GitHub Container Registry → SSH deploy to VPS |
 

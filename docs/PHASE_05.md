@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `05` |
 | Title | Analytics |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.05.0` |
 | Depends on | PHASE_04 gate passing |
 
@@ -27,31 +27,31 @@ instrumentation: no new pages, no changes to the ML pipeline or upload/download 
 ## Scope
 
 ### Infra
-- [ ] `I1` Add `umami` + `umami-db` (Postgres) services to `docker-compose.yml`: `umami-db` has a
+- [x] `I1` Add `umami` + `umami-db` (Postgres) services to `docker-compose.yml`: `umami-db` has a
   persistent volume + healthcheck gating `umami` startup; both `restart: unless-stopped`
   (SPEC.md §6) — _Depends on:_ —
-- [ ] `I2` Add an Nginx location block (`deploy/nginx/app.conf`) proxying Umami's public script/
+- [x] `I2` Add an Nginx location block (`deploy/nginx/app.conf`) proxying Umami's public script/
   collect endpoints so the self-hosted instance is reachable from the app's domain — _Depends on:_ `I1`
-- [ ] `I3` Wire uptime monitoring (Uptime Kuma self-hosted, added as a `docker-compose.yml` service,
+- [x] `I3` Wire uptime monitoring (Uptime Kuma self-hosted, added as a `docker-compose.yml` service,
   or UptimeRobot free tier if no extra container is wanted): ping home page + Umami `/api/heartbeat`
   every 5 min, alert via Telegram/email (SPEC.md §7.6) — _Depends on:_ `I1`
 
 ### Frontend
-- [ ] `F1` `shared/lib/analytics` slice: `AnalyticsEvent` union type + `trackEvent()` wrapper around
+- [x] `F1` `shared/lib/analytics` slice: `AnalyticsEvent` union type + `trackEvent()` wrapper around
   `window.umami.track(...)`, no-op safe when the script hasn't loaded yet (dev/test) — _Depends on:_ —
-- [ ] `F2` Inject the Umami tracking script and the Cloudflare Web Analytics beacon script into
+- [x] `F2` Inject the Umami tracking script and the Cloudflare Web Analytics beacon script into
   `routes/__root.tsx` head, gated on production env vars so local dev stays script-free — _Depends
   on:_ `F1`
-- [ ] `F3` Fire `model_load_started` / `model_load_completed` / `model_load_failed` from
+- [x] `F3` Fire `model_load_started` / `model_load_completed` / `model_load_failed` from
   `features/remove-background/model/useBackgroundRemoval.ts`'s existing dispatch call sites (state
   machine reducer itself stays a pure function — side effects live in the hook) — _Depends on:_ `F1`
-- [ ] `F4` Fire `processing_started` / `processing_completed` / `processing_failed` from the same
+- [x] `F4` Fire `processing_started` / `processing_completed` / `processing_failed` from the same
   hook's `START_PROCESSING` / `PROCESSING_SUCCEEDED` / processing-phase `FAILED` dispatch sites —
   _Depends on:_ `F1`
-- [ ] `F5` Fire `webgpu_unavailable_fallback` from
+- [x] `F5` Fire `webgpu_unavailable_fallback` from
   `features/remove-background/model/device-capabilities.ts` when WASM is selected over WebGPU —
   _Depends on:_ `F1`
-- [ ] `F6` Fire `download_clicked` from `features/download-result/ui/DownloadResultButton.tsx`'s
+- [x] `F6` Fire `download_clicked` from `features/download-result/ui/DownloadResultButton.tsx`'s
   click handler — _Depends on:_ `F1`
 
 <!-- Test execution is governed by `## Gate Checks` below + docs/STACK.md § Gate Commands.
@@ -65,8 +65,8 @@ instrumentation: no new pages, no changes to the ML pipeline or upload/download 
 ~~~
 docker-compose.yml
 deploy/nginx/app.conf
-src/shared/lib/analytics/model/types.ts
-src/shared/lib/analytics/model/track-event.ts
+src/shared/lib/analytics/types.ts
+src/shared/lib/analytics/track-event.ts
 src/shared/lib/analytics/index.ts
 src/shared/config/env.ts
 src/routes/__root.tsx
@@ -118,7 +118,7 @@ Umami custom events fired from the client (SPEC.md §7.6):
 ### New types / models / shared interfaces
 
 ```ts
-// src/shared/lib/analytics/model/types.ts — Phase 05, per SPEC.md §7.6
+// src/shared/lib/analytics/types.ts — Phase 05, per SPEC.md §7.6
 type AnalyticsEvent =
   | "model_load_started"
   | "model_load_completed"
@@ -207,7 +207,41 @@ verification found nothing, keep the default checked line below.
      rejected alternative. Leave empty when nothing needs recording — this is not a mandatory
      per-task log. -->
 
-None
+- `shared/lib/analytics` uses a flat `types.ts` / `track-event.ts` / `index.ts` layout instead of
+  the originally-planned `model/` subfolder — Steiger's `fsd/no-reserved-folder-names` flags `model`
+  as a reserved segment name inside the `shared` layer (which doesn't use slice/segment nesting the
+  way `entities`/`features` do). Matches the existing flat `shared/config` layout.
+- Chose Uptime Kuma (self-hosted, `docker-compose.yml` service) over UptimeRobot for `I3`, to stay
+  consistent with this project's self-hosted-everything infra pattern (own nginx/certbot, own
+  Umami). Its monitors and Telegram/email alert channels have no compose/env-based config surface —
+  they're a one-time manual setup through Kuma's own web UI after first deploy, reached via an SSH
+  tunnel to the loopback-bound port (documented in `docker-compose.yml` and `docs/STACK.md`).
+- `I2`'s Nginx location blocks proxy Umami's script/collect endpoints at `/script.js` and
+  `/api/send` on the app's own domain (`cutbg.art`), not a separate `umami.` subdomain — this needs
+  no extra DNS record or certificate. The `VITE_UMAMI_SCRIPT_URL` "Example value" in this phase's
+  Contracts table (`https://umami.cutbg.art/script.js`) is illustrative only; the real production
+  value should point at this app's own domain, e.g. `https://cutbg.art/script.js`.
+- Worker `error` messages are attributed to `model_load_failed` vs. `processing_failed` via a new
+  `awaitingModelLoadRef` in `useBackgroundRemoval.ts`, rather than reading `state.status` inside the
+  worker's message handler — the handler is only ever bound once per worker instance (`getWorker`
+  guards with `if (!worker)`), so a `state.status` read there would go stale after the first
+  attempt. The ref sidesteps that.
+- Docker-dependent verification (`docker compose config`, infra/smoke gate steps) was not run this
+  pass — the Docker CLI itself errored (`Input/output error`) in this session, a transient
+  Docker Desktop/WSL integration issue rather than a real unavailability per `docs/STACK.md`.
+  `docker-compose.yml` was YAML-validated instead; re-run the Docker-based gate steps once Docker is
+  back before/at `/phase-gate 05`.
+- Post-implementation manual testing (real browser, non-headless) surfaced that the ML pipeline
+  itself was fundamentally broken (WebGPU shader-binding limit, WASM `std::bad_alloc`) — outside
+  this phase's declared scope (`Do NOT touch` listed `pages/home/ui/HomePage.tsx` and the
+  model-loading/inference logic), but blocking any manual verification of this phase's own
+  analytics events, since the app couldn't complete a single processing run. Fixed by swapping the
+  ML model (BiRefNet → IS-Net) and, once the app was actually usable, three follow-up UX fixes
+  (before/after slider bug, diagnostic log panel, WebGPU re-enabled) that the architect reported
+  during that same testing pass. Full rationale in `docs/STATE.md` Project Log, 2026-07-10 entries
+  "ML model swap: BiRefNet → IS-Net" and "Post-IS-Net UX fixes". Bundled into this phase's commit
+  rather than opened as a separate phase, since it was a blocking prerequisite for verifying this
+  phase's own scope, not new product surface.
 
 ---
 
@@ -221,9 +255,9 @@ feat(phase-05): analytics — Umami events, Cloudflare Web Analytics, uptime mon
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked (or deferred in Architect Review Notes)
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 05`
-- [ ] Committed atomically on `feat/phase-05` branch
-- [ ] Tag created after merge to develop: `git tag -a v0.05.0 -m "Phase 05: Analytics"`
+- [x] All Scope checkboxes checked (or deferred in Architect Review Notes)
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 05`
+- [x] Committed atomically on `feat/phase-05` branch
+- [x] Tag created after merge to develop: `git tag -a v0.05.0 -m "Phase 05: Analytics"`

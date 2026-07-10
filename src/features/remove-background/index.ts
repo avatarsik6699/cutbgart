@@ -1,5 +1,9 @@
 export { useBackgroundRemoval } from "./model/useBackgroundRemoval";
-export type { UseBackgroundRemovalResult } from "./model/useBackgroundRemoval";
+export type {
+  UseBackgroundRemovalResult,
+  LogEntry,
+  RunInfo,
+} from "./model/useBackgroundRemoval";
 export { detectDeviceCapabilities } from "./model/device-capabilities";
 export type {
   RemoveBackgroundState,

@@ -7,6 +7,7 @@ import type {
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
 import { compositeProcessedImage } from "../lib/compositing";
+import { DTYPES, MODEL_ID } from "../model/model-info";
 
 // `self` in a real dedicated worker is a `DedicatedWorkerGlobalScope`, but this
 // project's tsconfig only loads the `DOM` lib (for the React app), under which
@@ -41,10 +42,20 @@ if (appEnv.modelCdnBaseUrl) {
   env.backends.onnx.wasm!.wasmPaths = `${appEnv.modelCdnBaseUrl}/onnxruntime-web/${appEnv.onnxRuntimeWebVersion}/`;
 }
 
-const MODEL_IDS: Record<QualityMode, string> = {
-  fast: "onnx-community/BiRefNet_lite-ONNX",
-  max: "onnx-community/BiRefNet-ONNX",
-};
+// BiRefNet (both `_lite` and full) is unusable in-browser via onnxruntime-web:
+// its Concat/Split-heavy graph exceeds the WebGPU EP's storage-buffer-per-shader
+// limit on effectively every device (microsoft/onnxruntime#21968), and its fp32
+// WASM path reliably hits `std::bad_alloc` under wasm32's address-space ceiling
+// (same issue, confirmed independently in this project — see git history on
+// this file). IS-Net (github.com/xuebinqin/DIS) is a much lighter classic
+// encoder-decoder — no comparable fan-out — and is natively recognized by
+// Transformers.js's pipeline resolution (`isnet` architecture), unlike
+// briaai/RMBG-1.4's Segformer head, which the "image-segmentation" task
+// rejects outright. Verified end-to-end (load + inference + correct mask
+// dimensions/output) via this project's own Node smoke test before switching.
+// One model, two dtypes stand in for the fast/max tiers BiRefNet's separate
+// `_lite`/full files used to provide. `MODEL_ID`/`DTYPES` live in
+// `../model/model-info` (not here) so the UI can display them too.
 
 export interface LoadModelRequest {
   type: "load-model";
@@ -68,9 +79,20 @@ export interface ModelProgressResponse {
   percent: number;
 }
 
+// Granular per-file loading events (initiate/download/done — the aggregate
+// download percent already has its own `ModelProgressResponse` channel).
+// Purely informational, for the UI's optional log panel.
+export interface WorkerLogResponse {
+  type: "log";
+  qualityMode: QualityMode;
+  message: string;
+}
+
 export interface ModelReadyResponse {
   type: "model-ready";
   qualityMode: QualityMode;
+  inferencePath: InferencePath;
+  dtype: string;
 }
 
 export interface FallbackToWasmResponse {
@@ -82,6 +104,7 @@ export interface ProcessResultResponse {
   type: "process-result";
   requestId: string;
   result: Blob;
+  durationMs: number;
 }
 
 export type WorkerErrorCode =
@@ -97,6 +120,7 @@ export interface WorkerErrorResponse {
 
 export type WorkerResponse =
   | ModelProgressResponse
+  | WorkerLogResponse
   | ModelReadyResponse
   | FallbackToWasmResponse
   | ProcessResultResponse
@@ -104,8 +128,9 @@ export type WorkerResponse =
 
 // Keyed on quality mode *and* inference path — a mid-session WebGPU-execution
 // fallback (see `handleProcess`) can need both a webgpu and a wasm pipeline
-// for the same quality mode, and they're genuinely different files (fp16 vs
-// fp32 dtype), not interchangeable cache entries.
+// for the same quality mode, and those are separate `onnxruntime-web` sessions
+// (different execution provider), not interchangeable cache entries, even
+// though both currently resolve the same `dtype` per `DTYPES[qualityMode]`.
 const segmenters = new Map<string, Promise<ImageSegmentationPipeline>>();
 
 function segmenterCacheKey(
@@ -126,17 +151,26 @@ function loadSegmenter(
   const cacheKey = segmenterCacheKey(qualityMode, inferencePath);
   let cached = segmenters.get(cacheKey);
   if (!cached) {
-    cached = pipeline("image-segmentation", MODEL_IDS[qualityMode], {
+    cached = pipeline("image-segmentation", MODEL_ID, {
       device: inferencePath,
-      // Both onnx-community/BiRefNet{,_lite}-ONNX only publish `model.onnx`
-      // (fp32) and `model_fp16.onnx` — no q8 variant, unlike most
-      // Transformers.js repos (confirmed against the HF API tree). Requesting
-      // the library's usual WASM default of "q8" 404s, so WASM falls back to
-      // fp32 instead of SPEC.md §6.1's generic "q8 on WASM" guidance.
-      dtype: inferencePath === "webgpu" ? "fp16" : "fp32",
+      // ISNet-ONNX publishes fp32/fp16/int8/uint8/q8 variants, unlike the old
+      // BiRefNet exports — `q8` for "fast" keeps SPEC.md §6.1's original
+      // "q8 on WASM" intent, `fp32` for "max" trades size/speed for precision.
+      dtype: DTYPES[qualityMode],
+      // `info.status` cycles through "initiate" -> "download" -> "progress"
+      // (many, per chunk) -> "done" per file, plus a synthesized
+      // "progress_total" aggregating all files (Transformers.js's
+      // `DefaultProgressCallback`). "progress" is too high-frequency to log
+      // usefully — the aggregate percent already covers it.
       progress_callback: (info) => {
         if (info.status === "progress_total") {
           post({ type: "model-progress", qualityMode, percent: info.progress });
+        } else if (info.status === "initiate" || info.status === "done") {
+          post({
+            type: "log",
+            qualityMode,
+            message: `${info.status} ${info.file}`,
+          });
         }
       },
     }).then((segmenter) => {
@@ -152,7 +186,7 @@ function loadSegmenter(
       // failure" bucket (retry action) — see docs/KNOWN_GOTCHAS.md.
       if (typeof segmenter.processor !== "function") {
         throw new Error(
-          `Model "${MODEL_IDS[qualityMode]}" loaded without a usable processor — likely a transient failure fetching repo metadata`,
+          `Model "${MODEL_ID}" (${DTYPES[qualityMode]}) loaded without a usable processor — likely a transient failure fetching repo metadata`,
         );
       }
       return segmenter;
@@ -175,7 +209,10 @@ function loadSegmenter(
 
 function isOutOfMemoryError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /out of memory|oom|allocation failed|device was lost/i.test(message);
+  // `bad_alloc` — onnxruntime-web's WASM heap allocator throwing this exact
+  // C++ exception name is how a wasm32 address-space exhaustion actually
+  // surfaces (observed running BiRefNet before the ISNet switch above).
+  return /out of memory|oom|allocation failed|device was lost|bad_alloc/i.test(message);
 }
 
 // Some model ops need more storage-buffer bindings than a given WebGPU
@@ -199,7 +236,12 @@ function toErrorMessage(error: unknown): string {
 async function handleLoadModel(request: LoadModelRequest): Promise<void> {
   try {
     await loadSegmenter(request.qualityMode, request.inferencePath);
-    post({ type: "model-ready", qualityMode: request.qualityMode });
+    post({
+      type: "model-ready",
+      qualityMode: request.qualityMode,
+      inferencePath: request.inferencePath,
+      dtype: DTYPES[request.qualityMode],
+    });
   } catch (error) {
     post({
       type: "error",
@@ -227,6 +269,7 @@ async function segmentWithWebGpuFallback(
 }
 
 async function handleProcess(request: ProcessRequest): Promise<void> {
+  const startedAt = performance.now();
   try {
     const [segment] = await segmentWithWebGpuFallback(request);
     if (!segment) {
@@ -244,6 +287,7 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
       type: "process-result",
       requestId: request.requestId,
       result: processedImage.result,
+      durationMs: Math.round(performance.now() - startedAt),
     });
   } catch (error) {
     post({
