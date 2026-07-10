@@ -24,6 +24,7 @@
 | PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
 | PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
 | PHASE_05 | ✅ done | v0.05.0 | ✅ | 🤖 agent | Analytics |
+| PHASE_06 | ⏳ pending | v0.06.0 | ⬜ | — | SEO layer |
 
 <!-- Add new rows here via /phase-init N -->
 
