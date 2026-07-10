@@ -21,6 +21,7 @@
 |----------|------------|--------|------|---------|-------|
 | PHASE_01 | ✅ done | v0.01.0 | ✅ | 🤖 agent | Scaffold |
 | PHASE_02 | ✅ done | v0.02.0 | ✅ | 🤖 agent | ML core |
+| PHASE_03 | ⏳ pending | v0.03.0 | ⬜ | — | Quality toggle & design system |
 
 <!-- Add new rows here via /phase-init N -->
 
