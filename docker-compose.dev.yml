@@ -1,0 +1,27 @@
+## Local development via Docker (container-parity dev environment). Standalone
+## file, not merged with docker-compose.yml (the production stack) — run it
+## explicitly so a container-parity dev session can never be confused with a
+## production `docker compose up`.
+##
+## Usage:
+##   docker compose -f docker-compose.dev.yml up --build
+##
+## The source tree is bind-mounted over /app, so `pnpm dev`'s Vite dev server
+## hot-reloads on host-side edits exactly as it would running `pnpm dev`
+## directly — this exists for parity checks (container-specific env behavior,
+## a clean-install reproduction, etc.), not to replace local `pnpm dev` as the
+## everyday default.
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    image: bg-remove-app:dev
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules

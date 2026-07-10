@@ -32,6 +32,10 @@ jobs:
         run: pnpm arch:lint
       - run: pnpm test
 
+  # No e2e/Playwright job here by design: e2e is a host-only, human-in-the-loop
+  # check run locally after implementing a phase (or to reproduce a reported
+  # issue) — never in Docker, never in CI. See AGENTS.md core rule 8.
+
   build-and-push:
     needs: lint-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

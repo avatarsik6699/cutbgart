@@ -8,6 +8,14 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# Local development, e.g. `docker-compose.dev.yml`. No `COPY . .` — the compose
+# file bind-mounts the repo over /app so edits hot-reload without a rebuild;
+# this stage only needs to exist to have node_modules installed.
+FROM deps AS dev
+ENV NODE_ENV=development
+EXPOSE 3000
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]
+
 FROM deps AS build
 COPY . .
 RUN pnpm build

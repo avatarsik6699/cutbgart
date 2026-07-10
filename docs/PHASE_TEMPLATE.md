@@ -113,7 +113,8 @@ Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of t
 - migrations (if applicable)
 - backend / unit tests
 - frontend prep, type-check, unit tests (if a frontend exists)
-- e2e (if an e2e suite exists)
+- e2e — mandatory for any phase that adds/changes a user-facing flow (AGENTS.md core rule 8): add
+  or extend a Playwright spec under `e2e/` covering it, not just `n/a`
 - the default smoke check
 
 If this phase needs a custom smoke target or other phase-specific note, record it here:

@@ -129,6 +129,42 @@ None
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
 
+## 2026-07-10 — Docker dev environment + e2e/Playwright policy
+
+**Type**: decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: Docker now confirmed working from this project's WSL/terminal environment
+(previously unavailable — see Phase 02's completion entry below); architect requested this be
+formalized ahead of Phase 04
+
+### Changes / Decision
+- Confirmed `docker`/`docker compose` work from this environment (`docker --version`,
+  `docker compose version`, a real `docker compose build`/`up` round-trip against the app) — the
+  Phase 02-era "Docker unavailable in this environment" constraint no longer holds
+- Added a `dev` build stage to `Dockerfile` (extends `deps`, no `COPY . .` — source is bind-mounted
+  at runtime) and a standalone `docker-compose.dev.yml` giving a container-parity, hot-reloading
+  dev session (`docker compose -f docker-compose.dev.yml up --build`, port 3000 published). This is
+  additive — plain `pnpm dev` remains the default for everyday local work; Docker is for when a
+  task genuinely needs container parity (AGENTS.md core rule 7)
+- `docs/STACK.md`'s Gate Commands "Infrastructure / bootstrap" row no longer needs a Docker-
+  unavailability caveat — Docker-dependent gate steps (bootstrap, smoke) should actually run now,
+  not be skipped
+- Formalized (AGENTS.md core rule 8, `docs/STACK.md`, `docs/playbooks/impl-assist.md`,
+  `docs/PHASE_TEMPLATE.md`) that every user-facing flow needs Playwright coverage under `e2e/`,
+  and that `pnpm e2e` should be run during `/impl-assist` verification (not only `/phase-gate`) as
+  an automated stand-in for a first pass of the architect's manual browser check
+- Explicitly scoped e2e/Playwright as **host-only**: it must never run inside Docker and must
+  never be wired into CI (`.github/workflows/ci.yml` has no e2e job, by design). Its purpose is a
+  local, human-in-the-loop confirmation that a phase's work behaves correctly after implementation,
+  or to reproduce a reported issue — not pipeline gating
+
+### Affected Phases / Consequences
+- Phase 04 onward: `/phase-gate`'s infrastructure/bootstrap/smoke steps are expected to actually
+  execute via Docker rather than being skipped; any future phase adding a user-facing flow must add
+  or extend an `e2e/` spec for it
+- No change to CI (`.github/workflows/ci.yml`): it still only runs lint/typecheck/arch-lint/unit
+  tests before building and pushing the Docker image — e2e stays a local-only step by design
+
 ## 2026-07-10 — Phase 03 complete
 
 **Type**: phase-completion

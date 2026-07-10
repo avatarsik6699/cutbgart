@@ -108,6 +108,25 @@
   needs an equivalent hydration guard — prefer waiting on an existing, observable post-mount signal
   over an arbitrary `waitForTimeout`.
 
+### Playwright/e2e is host-only by design — don't try it inside the dev container or CI
+
+- **Symptoms**: `pnpm e2e` (or `npx playwright test`) fails with a missing-browser error
+  (`Executable doesn't exist at .../chromium-.../headless_shell`) when run inside
+  `docker-compose.dev.yml`'s `app` container, or the temptation to add an e2e job to
+  `.github/workflows/ci.yml`.
+- **Root cause**: the `dev` Docker stage only runs `pnpm install` (JS deps) — it never runs
+  `playwright install`, which downloads browser binaries and (on Debian/Ubuntu bases) needs root
+  for `--with-deps` system libraries. This is intentional, not a missing step to fix: e2e/Playwright
+  is scoped as a **host-only** verification tool (AGENTS.md core rule 8) — a local,
+  human-in-the-loop check run after implementing a phase (or to reproduce a reported bug), not a
+  pipeline gate.
+- **Fix**: run `pnpm e2e` directly on the host, against `pnpm dev` (Playwright's `webServer` config
+  starts/reuses it automatically) — never inside the Docker dev container, never in CI.
+- **Prevention**: don't add an e2e/Playwright step to any Dockerfile stage or CI workflow. If a
+  future need genuinely requires e2e in CI, that's a deliberate scope change — raise it with the
+  architect and update `docs/STATE.md`'s Project Log as a new decision rather than silently wiring
+  it in.
+
 <!--
 ### [Title — short, punchy, searchable]
 

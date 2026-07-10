@@ -128,6 +128,9 @@ For each planned item:
 - Apply the smallest complete implementation that satisfies the contract or resolves the note.
 - Match existing project conventions and patterns observed during exploration.
 - Add or update focused tests when behavior is testable at reasonable cost.
+- If the item adds or changes a user-facing flow, write or extend a Playwright spec under `e2e/`
+  that drives it the way a human would in a browser (AGENTS.md core rule 8) — not just a
+  unit/component test.
 - If a non-obvious pitfall is discovered, update `docs/KNOWN_GOTCHAS.md`.
 - If — and only if — something isn't already visible from the code or commit history (an
   intentional deviation from the plan, a residual risk, a rejected alternative), add one short
@@ -140,8 +143,12 @@ After implementing each item:
 
 1. Re-read the changed files and confirm the contract/note is satisfied.
 2. Run the focused checks listed in the plan when available.
-3. Report the commands run and their results; if a check was not run, state the reason.
-4. Mark the item:
+3. If a new/updated e2e spec exists for the item, run it locally from the host (`pnpm e2e` or the
+   file-scoped Playwright command) as part of verification — never inside Docker, never as a CI
+   step. This is the automated stand-in for a first pass of the architect's manual browser check,
+   not a substitute for it (AGENTS.md core rule 8).
+4. Report the commands run and their results; if a check was not run, state the reason.
+5. Mark the item:
    - Scope task → check off the matching item in `docs/PHASE_XX.md` § Scope.
    - Review Note → check off the matching item in `docs/PHASE_XX.md` § Architect Review Notes.
 

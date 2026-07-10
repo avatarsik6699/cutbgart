@@ -19,6 +19,20 @@ must follow when working on this project. Stack-specific commands, file layout, 
    appropriate to the stack.
 6. **Context Sync**: After a phase completes, run `/context-update` to refresh `docs/STATE.md`
    (Current Contract, Phase Status, Project Log).
+7. **Container-Parity Environment**: Docker and `docker compose` are available from this project's
+   WSL/terminal environment. Reach for them when a task genuinely needs container parity —
+   `docs/STACK.md`'s Gate Commands bootstrap/smoke steps, reproducing a clean-install or
+   production-build issue, or verifying container-specific env behavior. Plain `pnpm dev` stays the
+   default for everyday local work; don't route ordinary iteration through Docker just because it's
+   available.
+8. **Automated Behavioral (E2E) Verification**: Any user-facing flow added or changed must get
+   Playwright coverage in `e2e/` that drives it the way a human would in a browser — open the page,
+   interact, assert the resulting state — not just unit/component tests. Run the e2e suite locally
+   from the host as part of implementation verification (`/impl-assist`), not only at
+   `/phase-gate`. A passing local e2e run is a stand-in for a first pass of the architect's manual
+   browser check, not a replacement for it. E2E/Playwright is intentionally **host-only** — never
+   run it in Docker and never wire it into CI; its job is local confirmation that a phase's work
+   (or a reported bug repro) actually behaves correctly, not pipeline gating.
 
 ## Stack Conventions
 
