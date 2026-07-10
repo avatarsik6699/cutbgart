@@ -1,0 +1,31 @@
+{
+  "$comment": "Declares which Hugging Face model revisions and ONNX Runtime Web version get mirrored to Cloudflare R2 (SPEC.md §6, §6.1). The .onnx binaries themselves are never committed to this repo — scripts/upload-model-weights.ts reads this file and syncs the real files to R2. Revisions are pinned to immutable commit SHAs (not \"main\") so the R2 path is content-hashed by construction.",
+  "models": [
+    {
+      "role": "fast",
+      "id": "onnx-community/BiRefNet_lite-ONNX",
+      "revision": "de15b22ba131738a16dff04aab8bdf8dc32e3ac1",
+      "files": [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model.onnx",
+        "onnx/model_fp16.onnx"
+      ]
+    },
+    {
+      "role": "max",
+      "id": "onnx-community/BiRefNet-ONNX",
+      "revision": "534d3c82d3bb8b2f0867db6dfbc3a525b8e42f67",
+      "files": [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model.onnx",
+        "onnx/model_fp16.onnx"
+      ]
+    }
+  ],
+  "onnxRuntimeWeb": {
+    "$comment": "Version must match the onnxruntime-web dependency in package.json. scripts/upload-model-weights.ts mirrors that installed package's entire dist/ folder — which exact file the runtime picks (simd-threaded / asyncify / jsep / jspi) depends on per-browser feature detection, so no fixed subset is safe to hardcode here.",
+    "version": "1.27.0"
+  }
+}

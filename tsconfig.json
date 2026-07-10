@@ -15,7 +15,14 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
-  "include": ["src", "vite.config.ts", "steiger.config.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "scripts",
+    "vite.config.ts",
+    "steiger.config.ts",
+    "vitest.config.ts",
+    "models.manifest.json"
+  ]
 }

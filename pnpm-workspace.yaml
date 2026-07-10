@@ -1,3 +1,8 @@
+allowBuilds:
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
 # `minimumReleaseAge` (pnpm's supply-chain freshness gate) rejects lockfile
 # entries for packages published too recently. Our lockfile is already the
 # trust boundary — `pnpm install --frozen-lockfile` only ever installs
