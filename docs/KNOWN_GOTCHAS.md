@@ -82,6 +82,32 @@
 - **Fix**: `inference.worker.ts`'s `handleProcess` catches WebGPU-specific execution errors (`isWebGpuExecutionError` — matches `OrtRun`/`webgpu`/`shader_helper`/`storage buffers`) and retries the same request on the WASM path, posting a `fallback-to-wasm` message so the UI's lightweight-mode notice reflects it (SPEC.md §7.3's WebGPU-unavailable auto-fallback, applied at the point of actual failure instead of only at device-detection time).
 - **Prevention**: don't assume "adapter exists + supports fp16" means a given model will run on WebGPU without issue. The segmenter cache is keyed on `(qualityMode, inferencePath)`, not just quality mode, specifically so this mid-session fallback can hold both a webgpu and a wasm pipeline for the same quality mode without clobbering each other.
 
+### Reading `localStorage` in a hook's render body/`useState` initializer crashes TanStack Start's SSR
+
+- **Symptoms**: `ReferenceError: window is not defined` thrown from `renderToReadableStream`, stack trace pointing at a `useState(() => ...)` initializer or a plain function called during render — reproduces on every SSR request, not just first load.
+- **Root cause**: TanStack Start renders every route on the server first (no `window`/`localStorage`) before client hydration. Any hook that reads `localStorage` synchronously during render (e.g. to seed initial state) runs on the server too, where `window` doesn't exist.
+- **Fix**: guard the read with `typeof window === "undefined"` and return a safe fallback (see `features/quality-mode-toggle`'s `readStoredQualityMode` in `model/use-quality-mode.ts`). Writes are fine as-is since they only ever run from client-side event handlers, never during render.
+- **Prevention**: any new hook that persists to `localStorage`/`sessionStorage` and reads it back synchronously on mount needs this guard. Caught by manually curling the route after implementation — Vitest's jsdom environment always has `window`, so this class of bug doesn't show up in the unit test suite at all.
+
+### Playwright can click through an SSR route before React hydrates, silently dropping the click
+
+- **Symptoms**: `locator.click()` against an interactive element (e.g. the `Switch` in
+  `features/quality-mode-toggle`) resolves without error, but the expected state change (e.g. a
+  `localStorage` write) never happens — reproduces intermittently right after `page.goto()`,
+  disappears if a `waitForTimeout` or extra assertion is inserted first.
+- **Root cause**: TanStack Start SSRs the route shell before client hydration attaches event
+  handlers. The SSR markup for a hydrated vs. not-yet-hydrated component is visually and
+  structurally identical, so Playwright's actionability checks (attached, visible, stable, receives
+  pointer events) all pass even though no React `onClick`/`onChange` handler is wired up yet — the
+  click event fires into the DOM and does nothing.
+- **Fix**: wait for a post-hydration signal already present on the page before interacting — e.g.
+  `e2e/dev-remove-background.spec.ts` waits for the harness's device-detection line to leave its
+  `"detecting…"` placeholder (set from an effect that only runs after mount) before clicking the
+  quality toggle, and again after `page.reload()` before re-reading the toggle's checked state.
+- **Prevention**: any new e2e spec that interacts with a client-rendered control on first paint
+  needs an equivalent hydration guard — prefer waiting on an existing, observable post-mount signal
+  over an arbitrary `waitForTimeout`.
+
 <!--
 ### [Title — short, punchy, searchable]
 

@@ -21,7 +21,7 @@
 |----------|------------|--------|------|---------|-------|
 | PHASE_01 | ✅ done | v0.01.0 | ✅ | 🤖 agent | Scaffold |
 | PHASE_02 | ✅ done | v0.02.0 | ✅ | 🤖 agent | ML core |
-| PHASE_03 | ⏳ pending | v0.03.0 | ⬜ | — | Quality toggle & design system |
+| PHASE_03 | ✅ done | v0.03.0 | ✅ | 🤖 agent | Quality toggle & design system |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -33,7 +33,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `02` · **Phase in progress:** `—`
+**Phase completed:** `03` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -70,6 +70,17 @@ interface ProcessedImage {
 }
 ```
 
+```ts
+// src/features/quality-mode-toggle/model/use-quality-mode.ts — Phase 03, per SPEC.md §3
+// QualityMode itself already exists (entities/processed-image, Phase 02); this hook reads/writes
+// it against localStorage.
+
+function useQualityMode(defaultMode: QualityMode): {
+  qualityMode: QualityMode;
+  setQualityMode: (mode: QualityMode) => void;
+};
+```
+
 ### Active Endpoints
 
 | Method | Path | Auth | Response / Payload |
@@ -82,6 +93,7 @@ interface ProcessedImage {
 - Tables: none yet.
 - Current migration head: `—`
 - Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): ONNX model weights (`BiRefNet_lite` + full `BiRefNet`) and ONNX Runtime WASM binaries.
+- Client-side `localStorage` (added Phase 03): `qualityMode: "fast" | "max"` — persisted across visits, no other user data stored client-side (SPEC.md §3).
 
 ### UI Pages
 
@@ -116,6 +128,43 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-10 — Phase 03 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_03 gate passed and committed
+
+### Changes / Decision
+- shadcn/ui installed and configured on the Base UI engine (`components.json`, Tailwind theme
+  tokens); components copied into the repo rather than consumed as an npm dependency (SPEC.md §6)
+- `shared/ui` base component set added via the shadcn CLI: `Button`, `Switch`, `Card`, aggregated
+  through a public `shared/ui/index.ts` (flat CLI output paths, not the nested-folder layout
+  originally sketched — see PHASE_03.md Implementation Notes)
+- `features/quality-mode-toggle` FSD slice: `useQualityMode` hook backing a `localStorage`-persisted
+  `qualityMode` (`"fast" | "max"`), defaulting to `DeviceCapabilities.defaultQualityMode`
+  (Phase 02) when unset
+- Toggle UI control wired to `useQualityMode`, integrated into `/dev/remove-background` as the
+  `qualityMode` parameter passed into `useBackgroundRemoval` (Phase 02), proving the wiring ahead
+  of the real `pages/home` composition in Phase 04
+- Vitest unit + Testing Library tests: `localStorage` persistence, default-selection from
+  `DeviceCapabilities`, toggle UI interaction
+- `@playwright/test` installed ahead of schedule (chromium only) with `playwright.config.ts` and
+  one smoke spec (`e2e/dev-remove-background.spec.ts`) covering harness render, toggle interaction,
+  and `localStorage` persistence across reload — STACK.md's E2E gate row updated to match; the
+  cross-browser critical-path matrix (upload → process → download) stays deferred to Phase 04
+- `resolve.tsconfigPaths: true` added to `vitest.config.ts` so shadcn's `@/*`-aliased imports
+  resolve under Vitest
+- `useQualityMode`'s initial-state read guards `typeof window === "undefined"` for SSR correctness
+  (see `docs/KNOWN_GOTCHAS.md`)
+
+### Affected Phases / Consequences
+- Phase 04 (`pages/home`) will replace `/dev/remove-background` with the real, designed UI
+  composition, reusing the `shared/ui` primitives and `quality-mode-toggle` slice from this phase
+- Phase 04's e2e work extends the Playwright setup installed in this phase rather than bootstrapping
+  it from scratch
+
+---
 
 ## 2026-07-10 — Phase 02 complete
 

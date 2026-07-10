@@ -7,3 +7,4 @@ export type {
   RemoveBackgroundErrorCode,
 } from "./model/state-machine";
 export { RemoveBackgroundTestPanel } from "./ui/RemoveBackgroundTestPanel";
+export type { RemoveBackgroundTestPanelProps } from "./ui/RemoveBackgroundTestPanel";

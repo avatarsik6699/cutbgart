@@ -15,14 +15,19 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
     "src",
     "scripts",
+    "e2e",
     "vite.config.ts",
     "steiger.config.ts",
     "vitest.config.ts",
+    "playwright.config.ts",
     "models.manifest.json"
   ]
 }
