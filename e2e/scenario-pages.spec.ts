@@ -52,11 +52,13 @@ for (const scenario of SCENARIO_PAGES) {
       page,
     }) => {
       await page.goto(scenario.path);
-      // Hydration guard (docs/KNOWN_GOTCHAS.md): wait for the bundle to
-      // settle before driving the file input.
-      await page.waitForLoadState("networkidle");
 
-      await page.getByLabel("Upload an image").setInputFiles(SAMPLE_IMAGE);
+      const uploadInput = page.getByLabel("Upload an image");
+      // Phase 08 hydration guard: the SSR-visible upload input stays disabled
+      // until React handlers attach, so the first real upload cannot be
+      // silently dropped before hydration.
+      await expect(uploadInput).toBeEnabled();
+      await uploadInput.setInputFiles(SAMPLE_IMAGE);
 
       // Reaching model-loading proves selectFile is correctly wired through
       // this page's composition of the shared upload/remove-background

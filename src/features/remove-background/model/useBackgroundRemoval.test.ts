@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 import { detectDeviceCapabilities } from "./device-capabilities";
 import { useBackgroundRemoval } from "./useBackgroundRemoval";
+import type { AlphaMatte, ProcessedImage } from "../../../entities/processed-image";
 
 // `detectDeviceCapabilities()` now always resolves "wasm" (BiRefNet's WebGPU
 // incompatibility — see device-capabilities.ts). Mock it per-test where a
@@ -311,6 +312,140 @@ describe("useBackgroundRemoval", () => {
       expect(result.current.state.result.result).toBe(correctedBlob);
     }
     expect(worker.posted.length).toBe(postedCount);
+  });
+
+  it("extracts and recomposites correction data through the existing worker", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval());
+
+    act(() => {
+      result.current.selectFile(makeFile());
+    });
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+    );
+    act(() => {
+      worker.emit({ type: "model-ready", qualityMode: "fast" });
+    });
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "process")).toBe(true),
+    );
+    const processRequest = worker.posted.find((m) => m.type === "process");
+    act(() => {
+      worker.emit({
+        type: "process-result",
+        requestId: processRequest?.requestId,
+        result: new Blob(["fake-png"], { type: "image/png" }),
+      });
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("result"));
+    const image =
+      result.current.state.status === "result" ? result.current.state.result : null;
+    if (!image) throw new Error("expected result state");
+
+    const mattePromise = result.current.extractMatte(image);
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
+    );
+    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
+    const matte: AlphaMatte = {
+      width: 1,
+      height: 1,
+      data: new Uint8ClampedArray([128]),
+    };
+    act(() => {
+      worker.emit({
+        type: "alpha-matte-result",
+        requestId: extractRequest?.requestId,
+        matte,
+        durationMs: 4,
+      });
+    });
+    await expect(mattePromise).resolves.toBe(matte);
+
+    const recompositePromise = result.current.recomposite(image, matte);
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "recomposite")).toBe(true),
+    );
+    const recompositeRequest = worker.posted.find((m) => m.type === "recomposite");
+    const updated: ProcessedImage = {
+      ...image,
+      result: new Blob(["corrected-png"], { type: "image/png" }),
+    };
+    act(() => {
+      worker.emit({
+        type: "recomposite-result",
+        requestId: recompositeRequest?.requestId,
+        result: updated,
+        durationMs: 5,
+      });
+    });
+
+    await expect(recompositePromise).resolves.toBe(updated);
+  });
+
+  it("rejects correction worker errors without replacing the current result state", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval());
+
+    act(() => {
+      result.current.selectFile(makeFile());
+    });
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+    );
+    act(() => {
+      worker.emit({ type: "model-ready", qualityMode: "fast" });
+    });
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "process")).toBe(true),
+    );
+    const processRequest = worker.posted.find((m) => m.type === "process");
+    act(() => {
+      worker.emit({
+        type: "process-result",
+        requestId: processRequest?.requestId,
+        result: new Blob(["fake-png"], { type: "image/png" }),
+      });
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("result"));
+    const image =
+      result.current.state.status === "result" ? result.current.state.result : null;
+    if (!image) throw new Error("expected result state");
+
+    const mattePromise = result.current.extractMatte(image);
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
+    );
+    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
+    act(() => {
+      worker.emit({
+        type: "error",
+        code: "compositing-failed",
+        requestId: extractRequest?.requestId,
+        message: "offscreen canvas unavailable",
+      });
+    });
+
+    await expect(mattePromise).rejects.toThrow(/offscreen canvas unavailable/);
+    expect(result.current.state.status).toBe("result");
+    track.mockClear();
+
+    act(() => {
+      worker.emit({
+        type: "error",
+        code: "compositing-failed",
+        requestId: extractRequest?.requestId,
+        message: "duplicate late correction failure",
+      });
+    });
+
+    expect(result.current.state.status).toBe("result");
+    expect(track).not.toHaveBeenCalledWith("processing_failed", undefined);
   });
 
   it("reset() returns to idle", async () => {

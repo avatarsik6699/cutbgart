@@ -10,7 +10,9 @@ export {
   applyBrushStroke,
   brushBoundingBox,
   extractAlphaRegion,
+  interpolateStrokePoints,
   stampBrushAlphaInPlace,
+  stampBrushStrokeAlphaInPlace,
   unionBoundingBox,
   writeAlphaRegion,
 } from "./model/mask-correction";

@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyBrushStroke,
   brushBoundingBox,
   extractAlphaRegion,
+  interpolateStrokePoints,
   stampBrushAlphaInPlace,
+  stampBrushStrokeAlphaInPlace,
   unionBoundingBox,
   writeAlphaRegion,
   type BrushStroke,
@@ -139,6 +141,26 @@ describe("applyBrushStroke", () => {
     expect(alphaAt(result, 18, 2)).toBe(255);
   });
 
+  it("interpolates between fast pointer points so a drag does not leave gaps", () => {
+    const matte = makeMatte(24, 5, 0);
+    const original = makeMatte(24, 5, 0);
+    const stroke: BrushStroke = {
+      points: [
+        { x: 2, y: 2 },
+        { x: 18, y: 2 },
+      ],
+      radius: 1,
+      hardness: 1,
+      mode: "add",
+    };
+
+    const result = applyBrushStroke(matte, original, stroke);
+
+    for (let x = 2; x <= 18; x++) {
+      expect(alphaAt(result, x, 2)).toBe(255);
+    }
+  });
+
   it("throws when matte and original dimensions differ", () => {
     const matte = makeMatte(10, 10, 0);
     const original = makeMatte(5, 5, 0);
@@ -235,6 +257,22 @@ describe("stampBrushAlphaInPlace", () => {
     }
   });
 
+  it("preserves sub-pixel brush centers instead of snapping every stamp to an integer pixel", () => {
+    const leftBiased = makeRgba(12, 12, 0);
+    const rightBiased = makeRgba(12, 12, 0);
+    const original = new Uint8ClampedArray(12 * 12);
+
+    stampBrushAlphaInPlace(leftBiased, original, 12, 12, { x: 5.25, y: 5 }, 4, 0, "add");
+    stampBrushAlphaInPlace(rightBiased, original, 12, 12, { x: 5.75, y: 5 }, 4, 0, "add");
+
+    expect(leftBiased[(5 * 12 + 5) * 4 + 3]).toBeGreaterThan(
+      leftBiased[(5 * 12 + 6) * 4 + 3] ?? 0,
+    );
+    expect(rightBiased[(5 * 12 + 6) * 4 + 3]).toBeGreaterThan(
+      rightBiased[(5 * 12 + 5) * 4 + 3] ?? 0,
+    );
+  });
+
   it("returns null and does nothing for a non-positive radius", () => {
     const rgba = makeRgba(10, 10, 100);
     const original = new Uint8ClampedArray(100);
@@ -252,6 +290,63 @@ describe("stampBrushAlphaInPlace", () => {
 
     expect(box).toBeNull();
     expect(rgba[(5 * 10 + 5) * 4 + 3]).toBe(100);
+  });
+
+  it("stamps every interpolated point and returns the whole segment dirty box", () => {
+    const rgba = makeRgba(24, 5, 0);
+    const original = new Uint8ClampedArray(24 * 5);
+
+    const box = stampBrushStrokeAlphaInPlace(
+      rgba,
+      original,
+      24,
+      5,
+      [
+        { x: 2, y: 2 },
+        { x: 18, y: 2 },
+      ],
+      1,
+      1,
+      "add",
+    );
+
+    expect(box).toEqual({ minX: 1, maxX: 19, minY: 1, maxY: 3 });
+    for (let x = 2; x <= 18; x++) {
+      expect(rgba[(2 * 24 + x) * 4 + 3]).toBe(255);
+    }
+  });
+
+  it("reuses the brush-stamp LUT for repeated large-radius stamps", () => {
+    const rgba = makeRgba(120, 120, 0);
+    const original = new Uint8ClampedArray(120 * 120);
+    const sqrtSpy = vi.spyOn(Math, "sqrt");
+
+    stampBrushAlphaInPlace(rgba, original, 120, 120, { x: 50, y: 50 }, 37, 0.5, "add");
+    expect(sqrtSpy).toHaveBeenCalled();
+    sqrtSpy.mockClear();
+
+    stampBrushAlphaInPlace(rgba, original, 120, 120, { x: 70, y: 70 }, 37, 0.5, "add");
+
+    expect(sqrtSpy).not.toHaveBeenCalled();
+    sqrtSpy.mockRestore();
+  });
+});
+
+describe("interpolateStrokePoints", () => {
+  it("keeps neighboring interpolated points no farther than half a brush radius", () => {
+    const points = interpolateStrokePoints(
+      [
+        { x: 0, y: 0 },
+        { x: 20, y: 0 },
+      ],
+      10,
+    );
+
+    expect(points.at(0)).toEqual({ x: 0, y: 0 });
+    expect(points.at(-1)).toEqual({ x: 20, y: 0 });
+    for (let index = 1; index < points.length; index++) {
+      expect(points[index]!.x - points[index - 1]!.x).toBeLessThanOrEqual(5);
+    }
   });
 });
 
