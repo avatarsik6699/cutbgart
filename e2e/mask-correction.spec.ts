@@ -274,6 +274,8 @@ test.describe("mask correction", () => {
     await page.mouse.up();
     await page.keyboard.up("Space");
     expect(await alphaAt(page, handPoint.x, handPoint.y)).toBe(alphaBeforeHandPan);
+    const brushCursor = editor.locator('[aria-hidden="true"]');
+    await expect(brushCursor).toHaveCSS("opacity", "1");
 
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("Shift+ArrowDown");

@@ -283,6 +283,24 @@ describe("MaskCorrectionCanvas", () => {
     expect(liveAlphaAt(40, 20)).toBe(0);
   });
 
+  it("restores the brush cursor after panning while the pointer remains inside", async () => {
+    const { editor, canvas, container } = renderCanvas();
+    await waitUntilReady();
+    const cursor = container.querySelector('[aria-hidden="true"]') as HTMLDivElement;
+
+    fireEvent.pointerEnter(canvas, { clientX: 80, clientY: 40 });
+    expect(cursor.style.opacity).toBe("1");
+
+    fireEvent.keyDown(editor, { key: " " });
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: 40, pointerId: 1 });
+    expect(cursor.style.opacity).toBe("0");
+
+    fireEvent.pointerUp(canvas, { clientX: 80, clientY: 40, pointerId: 1 });
+    fireEvent.keyUp(editor, { key: " " });
+
+    expect(cursor.style.opacity).toBe("1");
+  });
+
   it("uses middle-button drag as an exclusive hand gesture", async () => {
     const onPanBySourcePixels = vi.fn();
     const onStrokeCommitted = vi.fn();
@@ -473,10 +491,7 @@ describe("MaskCorrectionCanvas", () => {
     const { canvas, container } = renderCanvas({ brushRadius: 20 });
     await waitUntilReady();
     const cursor = container.querySelector('[aria-hidden="true"]') as HTMLDivElement;
-    // Initially hidden via the `opacity-0` Tailwind class (not inline style,
-    // which jsdom doesn't resolve from compiled CSS) until the pointer
-    // actually enters the canvas.
-    expect(cursor.className).toContain("opacity-0");
+    expect(cursor.style.opacity).toBe("0");
 
     fireEvent.pointerEnter(canvas, { clientX: 50, clientY: 25 });
 

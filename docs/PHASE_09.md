@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `09` |
 | Title | Correction zoom & pan |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.09.0` |
 | Depends on | PHASE_08 gate passing |
 
@@ -183,8 +183,8 @@ feat(phase-09): add correction zoom and pan
 ## Post-Phase Checklist
 
 - [x] All Scope checkboxes checked (or deferred in Architect Review Notes)
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 09`
-- [ ] Committed atomically on `feat/phase-09` branch
-- [ ] Tag created after merge to main: `git tag -a v0.09.0 -m "Phase 09: Correction zoom & pan"`
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 09`
+- [x] Committed atomically on `feat/phase-09` branch
+- [x] Tag created after merge to main: `git tag -a v0.09.0 -m "Phase 09: Correction zoom & pan"`

@@ -168,6 +168,7 @@ export function MaskCorrectionCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
+  const [pointerInside, setPointerInside] = useState(false);
   const [spacePanning, setSpacePanning] = useState(false);
   const [panning, setPanning] = useState(false);
   const spacePanningRef = useRef(false);
@@ -197,6 +198,7 @@ export function MaskCorrectionCanvas({
   // the browser to keep the canvas CPU-backed rather than paying a GPU
   // readback stall on every call.
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const brushCursorVisible = pointerInside && !spacePanning && !panning;
 
   function repaintRect(box: BrushBoundingBox): void {
     const imageData = rgbaRef.current;
@@ -568,13 +570,11 @@ export function MaskCorrectionCanvas({
           transformOrigin: "top left",
         }}
         onPointerEnter={(event) => {
+          setPointerInside(true);
           updateCursor(event.clientX, event.clientY);
-          if (cursorRef.current) {
-            cursorRef.current.style.opacity = spacePanning || panning ? "0" : "1";
-          }
         }}
         onPointerLeave={() => {
-          if (cursorRef.current) cursorRef.current.style.opacity = "0";
+          setPointerInside(false);
         }}
         onPointerDown={(event) => {
           if (!rgbaRef.current) return;
@@ -588,7 +588,6 @@ export function MaskCorrectionCanvas({
             isPanningRef.current = true;
             setPanning(true);
             lastPanClientPointRef.current = { x: event.clientX, y: event.clientY };
-            if (cursorRef.current) cursorRef.current.style.opacity = "0";
             return;
           }
           isPaintingRef.current = true;
@@ -646,8 +645,9 @@ export function MaskCorrectionCanvas({
       <div
         ref={cursorRef}
         aria-hidden="true"
-        className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 transition-opacity"
+        className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full transition-opacity"
         style={{
+          opacity: brushCursorVisible ? 1 : 0,
           border: `1.5px solid rgba(${MODE_CURSOR_COLOR[mode]}, 0.95)`,
           boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.4)",
         }}
