@@ -60,6 +60,110 @@ async function dragOnCanvasCenter(page: Page): Promise<void> {
 }
 
 test.describe("mask correction", () => {
+  test("keeps the completed result visible when worker-backed mask preparation fails", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const posts: unknown[] = [];
+      Object.defineProperty(window, "__maskCorrectionWorkerPosts", {
+        value: posts,
+        configurable: true,
+      });
+
+      class MockWorker extends EventTarget {
+        postMessage(message: {
+          type: string;
+          requestId?: string;
+          qualityMode?: string;
+          inferencePath?: string;
+        }): void {
+          posts.push(message);
+          if (message.type === "load-model") {
+            queueMicrotask(() => {
+              this.dispatchEvent(
+                new MessageEvent("message", {
+                  data: {
+                    type: "model-ready",
+                    qualityMode: message.qualityMode,
+                    inferencePath: message.inferencePath ?? "wasm",
+                    dtype: "mock",
+                  },
+                }),
+              );
+            });
+          }
+          if (message.type === "process") {
+            queueMicrotask(() => {
+              this.dispatchEvent(
+                new MessageEvent("message", {
+                  data: {
+                    type: "process-result",
+                    requestId: message.requestId,
+                    result: new Blob(["mock-png"], { type: "image/png" }),
+                    durationMs: 1,
+                  },
+                }),
+              );
+            });
+          }
+          if (message.type === "extract-alpha-matte") {
+            queueMicrotask(() => {
+              this.dispatchEvent(
+                new MessageEvent("message", {
+                  data: {
+                    type: "error",
+                    code: "compositing-failed",
+                    requestId: message.requestId,
+                    message: "mock correction failure",
+                  },
+                }),
+              );
+            });
+          }
+        }
+
+        terminate(): void {
+          // no-op
+        }
+      }
+
+      Object.defineProperty(window, "Worker", {
+        value: MockWorker,
+        configurable: true,
+      });
+    });
+
+    await page.goto("/");
+    const uploadInput = page.getByLabel("Upload an image");
+    await expect(uploadInput).toBeEnabled();
+    await uploadInput.setInputFiles(SAMPLE_IMAGE);
+    await expect(
+      page.getByRole("slider", { name: "Before/after comparison position" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: /edit mask/i }).click();
+
+    await expect(page.getByRole("alert")).toContainText(/could not prepare mask/i);
+    await expect(page.getByRole("button", { name: /^download$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /edit mask/i })).toBeVisible();
+
+    await page.getByRole("button", { name: /try again/i }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __maskCorrectionWorkerPosts: { type: string }[];
+              }
+            ).__maskCorrectionWorkerPosts.filter(
+              (message) => message.type === "extract-alpha-matte",
+            ).length,
+        ),
+      )
+      .toBe(2);
+  });
+
   test("enter correcting -> add/erase/restore each change the composite -> undo/redo -> done -> download reflects the correction", async ({
     page,
   }) => {

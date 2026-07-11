@@ -1,12 +1,18 @@
 import { env, pipeline, type ImageSegmentationPipeline } from "@huggingface/transformers";
 
 import type {
+  AlphaMatte,
   InferencePath,
+  ProcessedImage,
   QualityMode,
   SourceImage,
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
-import { compositeProcessedImage } from "../lib/compositing";
+import {
+  compositeProcessedImage,
+  extractAlphaMatte,
+  recompositeProcessedImage,
+} from "../lib/compositing";
 import { DTYPES, MODEL_ID } from "../model/model-info";
 
 // `self` in a real dedicated worker is a `DedicatedWorkerGlobalScope`, but this
@@ -71,7 +77,21 @@ export interface ProcessRequest {
   source: SourceImage;
 }
 
-export type WorkerRequest = LoadModelRequest | ProcessRequest;
+export interface ExtractAlphaMatteRequest {
+  type: "extract-alpha-matte";
+  requestId: string;
+  result: Blob;
+}
+
+export interface RecompositeRequest {
+  type: "recomposite";
+  requestId: string;
+  image: ProcessedImage;
+  matte: AlphaMatte;
+}
+
+export type WorkerRequest =
+  LoadModelRequest | ProcessRequest | ExtractAlphaMatteRequest | RecompositeRequest;
 
 export interface ModelProgressResponse {
   type: "model-progress";
@@ -107,8 +127,25 @@ export interface ProcessResultResponse {
   durationMs: number;
 }
 
+export interface AlphaMatteResultResponse {
+  type: "alpha-matte-result";
+  requestId: string;
+  matte: AlphaMatte;
+  durationMs: number;
+}
+
+export interface RecompositeResultResponse {
+  type: "recomposite-result";
+  requestId: string;
+  result: ProcessedImage;
+  durationMs: number;
+}
+
 export type WorkerErrorCode =
-  "model-load-failed" | "device-out-of-memory" | "processing-failed";
+  | "model-load-failed"
+  | "device-out-of-memory"
+  | "processing-failed"
+  | "compositing-failed";
 
 export interface WorkerErrorResponse {
   type: "error";
@@ -124,6 +161,8 @@ export type WorkerResponse =
   | ModelReadyResponse
   | FallbackToWasmResponse
   | ProcessResultResponse
+  | AlphaMatteResultResponse
+  | RecompositeResultResponse
   | WorkerErrorResponse;
 
 // Keyed on quality mode *and* inference path — a mid-session WebGPU-execution
@@ -299,11 +338,55 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
   }
 }
 
+async function handleExtractAlphaMatte(request: ExtractAlphaMatteRequest): Promise<void> {
+  const startedAt = performance.now();
+  try {
+    const matte = await extractAlphaMatte(request.result);
+    post({
+      type: "alpha-matte-result",
+      requestId: request.requestId,
+      matte,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
+  } catch (error) {
+    post({
+      type: "error",
+      code: "compositing-failed",
+      message: toErrorMessage(error),
+      requestId: request.requestId,
+    });
+  }
+}
+
+async function handleRecomposite(request: RecompositeRequest): Promise<void> {
+  const startedAt = performance.now();
+  try {
+    const result = await recompositeProcessedImage(request.image, request.matte);
+    post({
+      type: "recomposite-result",
+      requestId: request.requestId,
+      result,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
+  } catch (error) {
+    post({
+      type: "error",
+      code: "compositing-failed",
+      message: toErrorMessage(error),
+      requestId: request.requestId,
+    });
+  }
+}
+
 workerScope.addEventListener("message", (event) => {
   const request = event.data;
   if (request.type === "load-model") {
     void handleLoadModel(request);
-  } else {
+  } else if (request.type === "process") {
     void handleProcess(request);
+  } else if (request.type === "extract-alpha-matte") {
+    void handleExtractAlphaMatte(request);
+  } else {
+    void handleRecomposite(request);
   }
 });

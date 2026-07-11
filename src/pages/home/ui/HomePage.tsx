@@ -15,8 +15,6 @@ import {
 import { DownloadResultButton } from "../../../features/download-result";
 import {
   detectDeviceCapabilities,
-  extractAlphaMatte,
-  recompositeProcessedImage,
   useBackgroundRemoval,
 } from "../../../features/remove-background";
 import { QualityModeToggle, useQualityMode } from "../../../features/quality-mode-toggle";
@@ -39,6 +37,7 @@ interface MaskCorrectionPanelProps {
   sourceImage: SourceImage;
   originalMatte: AlphaMatte;
   onDone: (matte: AlphaMatte) => void;
+  doneDisabled?: boolean;
 }
 
 /**
@@ -51,6 +50,7 @@ function MaskCorrectionPanel({
   sourceImage,
   originalMatte,
   onDone,
+  doneDisabled = false,
 }: MaskCorrectionPanelProps) {
   // The working matte lives inside MaskCorrectionCanvas's persistent buffer,
   // reached imperatively via this handle (undo/redo patches in, final matte
@@ -98,6 +98,7 @@ function MaskCorrectionPanel({
       />
       <Button
         type="button"
+        disabled={doneDisabled}
         onClick={() => {
           const matte = canvasHandleRef.current?.extractMatte();
           if (matte) onDone(matte);
@@ -112,11 +113,40 @@ function MaskCorrectionPanel({
 
 type DisplayError = { message: string; action: "retry" | "reset" };
 
+interface CorrectionErrorAlertProps {
+  error: DisplayError;
+  onRetry: () => void;
+  onReset: () => void;
+}
+
+function CorrectionErrorAlert({ error, onRetry, onReset }: CorrectionErrorAlertProps) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+    >
+      <p>{error.message}</p>
+      <div className="flex flex-wrap gap-3">
+        <Button type="button" variant="outline" onClick={onRetry}>
+          Try again
+        </Button>
+        <Button type="button" variant="outline" onClick={onReset}>
+          Reset
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
   const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
   const [extractingMatte, setExtractingMatte] = useState(false);
+  const [finalizingCorrection, setFinalizingCorrection] = useState(false);
+  const [correctionError, setCorrectionError] = useState<DisplayError | null>(null);
+  const retryCorrectionRef = useRef<(() => void) | null>(null);
+  const correctionRunRef = useRef(0);
   // TanStack Start SSRs this page's markup before client hydration attaches
   // `UploadDropzone`/`ChoosePhotoButton`'s onChange/onDrop handlers — a real
   // interaction in that window is visually indistinguishable from a working
@@ -162,10 +192,15 @@ export function HomePage() {
     reset,
     enterCorrecting,
     exitCorrecting,
+    extractMatte,
+    recomposite,
   } = useBackgroundRemoval(qualityMode);
   const lastLogMessage = logs.at(-1)?.message;
 
   function handleUpload(result: UploadResult) {
+    correctionRunRef.current += 1;
+    setCorrectionError(null);
+    retryCorrectionRef.current = null;
     if (!result.ok) {
       setUploadError(result.error);
       return;
@@ -175,26 +210,78 @@ export function HomePage() {
   }
 
   function handleReset() {
+    correctionRunRef.current += 1;
     setUploadError(null);
+    setCorrectionError(null);
+    retryCorrectionRef.current = null;
+    setOriginalMatte(null);
+    setExtractingMatte(false);
+    setFinalizingCorrection(false);
     reset();
+  }
+
+  function handleRetry() {
+    if (correctionError && retryCorrectionRef.current) {
+      retryCorrectionRef.current();
+      return;
+    }
+    retry();
   }
 
   function handleEditMask() {
     if (state.status !== "result") return;
+    const image = state.result;
+    const runId = correctionRunRef.current + 1;
+    correctionRunRef.current = runId;
+    retryCorrectionRef.current = () => {
+      if (state.status === "result") handleEditMask();
+    };
+    setCorrectionError(null);
     setExtractingMatte(true);
-    void extractAlphaMatte(state.result.result).then((matte) => {
-      setExtractingMatte(false);
-      setOriginalMatte(matte);
-      enterCorrecting();
-    });
+    void extractMatte(image)
+      .then((matte) => {
+        if (correctionRunRef.current !== runId) return;
+        setExtractingMatte(false);
+        setOriginalMatte(matte);
+        retryCorrectionRef.current = null;
+        enterCorrecting();
+      })
+      .catch((error: unknown) => {
+        if (correctionRunRef.current !== runId) return;
+        setExtractingMatte(false);
+        setCorrectionError({
+          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
   }
 
   function handleDoneCorrecting(correctedMatte: AlphaMatte) {
     if (state.status !== "correcting") return;
-    void recompositeProcessedImage(state.result, correctedMatte).then((updated) => {
-      setOriginalMatte(null);
-      exitCorrecting(updated);
-    });
+    const image = state.result;
+    const runId = correctionRunRef.current + 1;
+    correctionRunRef.current = runId;
+    retryCorrectionRef.current = () => {
+      if (state.status === "correcting") handleDoneCorrecting(correctedMatte);
+    };
+    setCorrectionError(null);
+    setFinalizingCorrection(true);
+    void recomposite(image, correctedMatte)
+      .then((updated) => {
+        if (correctionRunRef.current !== runId) return;
+        setFinalizingCorrection(false);
+        setOriginalMatte(null);
+        retryCorrectionRef.current = null;
+        exitCorrecting(updated);
+      })
+      .catch((error: unknown) => {
+        if (correctionRunRef.current !== runId) return;
+        setFinalizingCorrection(false);
+        setCorrectionError({
+          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
   }
 
   const busy = state.status === "model-loading" || state.status === "processing";
@@ -246,7 +333,7 @@ export function HomePage() {
             <Button
               type="button"
               variant="outline"
-              onClick={retry}
+              onClick={handleRetry}
               className="self-start"
             >
               Try again
@@ -331,15 +418,32 @@ export function HomePage() {
               {extractingMatte ? "Preparing…" : "Edit mask"}
             </Button>
           </div>
+          {correctionError && (
+            <CorrectionErrorAlert
+              error={correctionError}
+              onRetry={handleRetry}
+              onReset={handleReset}
+            />
+          )}
         </div>
       )}
 
       {!displayError && state.status === "correcting" && originalMatte && (
-        <MaskCorrectionPanel
-          sourceImage={state.result.source}
-          originalMatte={originalMatte}
-          onDone={handleDoneCorrecting}
-        />
+        <div className="flex flex-col gap-4">
+          {correctionError && (
+            <CorrectionErrorAlert
+              error={correctionError}
+              onRetry={handleRetry}
+              onReset={handleReset}
+            />
+          )}
+          <MaskCorrectionPanel
+            sourceImage={state.result.source}
+            originalMatte={originalMatte}
+            onDone={handleDoneCorrecting}
+            doneDisabled={finalizingCorrection}
+          />
+        </div>
       )}
 
       <ProcessingLog logs={logs} />

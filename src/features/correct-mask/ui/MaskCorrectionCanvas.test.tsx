@@ -64,18 +64,20 @@ function renderCanvas(
   };
   const view = render(<MaskCorrectionCanvas {...props} />);
   const canvas = screen.getByRole("img", { name: /mask correction canvas/i });
-  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
-    left: 0,
-    top: 0,
-    width: 200, // rendered at 2x — canvas internal pixels are half of client coords
-    height: 100,
-    right: 200,
-    bottom: 100,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  });
-  return { ...view, canvas, handleRef, props };
+  const getBoundingClientRect = vi
+    .spyOn(canvas, "getBoundingClientRect")
+    .mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 200, // rendered at 2x — canvas internal pixels are half of client coords
+      height: 100,
+      right: 200,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+  return { ...view, canvas, getBoundingClientRect, handleRef, props };
 }
 
 async function waitUntilReady() {
@@ -125,6 +127,69 @@ describe("MaskCorrectionCanvas", () => {
     expect(putImageData).toHaveBeenCalledTimes(1);
     // dirty-rect overload: (imageData, dx, dy, dirtyX, dirtyY, dirtyWidth, dirtyHeight)
     expect(putImageData.mock.calls[0]).toHaveLength(7);
+  });
+
+  it("interpolates fast drags in the live buffer instead of painting only isolated dabs", async () => {
+    const { canvas } = renderCanvas({ brushRadius: 1 });
+    await waitUntilReady();
+
+    fireEvent.pointerDown(canvas, { clientX: 20, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 10, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 10, pointerId: 1 });
+
+    // client (40,10) -> matte (20,5), midway between the two pointer events.
+    expect(liveAlphaAt(20, 5)).toBe(255);
+  });
+
+  it("reads getBoundingClientRect once per painting gesture and reuses it for cursor and matte coordinates", async () => {
+    const { canvas, getBoundingClientRect } = renderCanvas();
+    await waitUntilReady();
+    getBoundingClientRect.mockClear();
+
+    fireEvent.pointerDown(canvas, { clientX: 20, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 28, clientY: 14, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 36, clientY: 18, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 36, clientY: 18, pointerId: 1 });
+
+    expect(getBoundingClientRect).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes cached gesture geometry after viewport invalidation during pointer capture", async () => {
+    const { canvas, getBoundingClientRect } = renderCanvas({ brushRadius: 1 });
+    await waitUntilReady();
+    getBoundingClientRect.mockClear();
+    getBoundingClientRect
+      .mockReturnValueOnce({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      })
+      .mockReturnValue({
+        left: 10,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 210,
+        bottom: 100,
+        x: 10,
+        y: 0,
+        toJSON: () => ({}),
+      });
+
+    fireEvent.pointerDown(canvas, { clientX: 20, clientY: 10, pointerId: 1 });
+    window.dispatchEvent(new Event("resize"));
+    fireEvent.pointerMove(canvas, { clientX: 30, clientY: 10, pointerId: 1 });
+
+    // With stale geometry, clientX 30 would map to matte x=15 and interpolation
+    // would paint this pixel. Refreshed geometry keeps it at matte x=10.
+    expect(liveAlphaAt(15, 5)).toBe(0);
+    expect(getBoundingClientRect).toHaveBeenCalledTimes(2);
   });
 
   it("a gesture that never touches a pixel commits no patch (no empty undo steps)", async () => {

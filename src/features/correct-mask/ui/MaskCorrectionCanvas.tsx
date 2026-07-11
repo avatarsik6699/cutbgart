@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 
 import {
   extractAlphaRegion,
+  interpolateStrokePoints,
   stampBrushAlphaInPlace,
   unionBoundingBox,
   writeAlphaRegion,
@@ -20,6 +21,13 @@ const MODE_CURSOR_COLOR: Record<BrushMode, string> = {
   erase: "239, 68, 68",
   restore: "59, 130, 246",
 };
+
+interface CanvasGeometry {
+  rect: DOMRect;
+  scaleX: number;
+  scaleY: number;
+  cssPixelsPerSourcePixel: number;
+}
 
 function overwriteAlphaChannel(rgba: Uint8ClampedArray, matte: AlphaMatte): void {
   const pixelCount = matte.width * matte.height;
@@ -152,6 +160,8 @@ export function MaskCorrectionCanvas({
   // live buffer at every gesture boundary.
   const committedAlphaRef = useRef<Uint8ClampedArray | null>(null);
   const isPaintingRef = useRef(false);
+  const lastPaintPointRef = useRef<{ x: number; y: number } | null>(null);
+  const gestureGeometryRef = useRef<CanvasGeometry | null>(null);
   // Union of every stamp's bounding box in the current gesture — the commit
   // at pointer-up only reads/writes this rect.
   const gestureBoxRef = useRef<BrushBoundingBox | null>(null);
@@ -183,6 +193,52 @@ export function MaskCorrectionCanvas({
     if (!ctx || !imageData) return;
     ctx.putImageData(imageData, 0, 0);
   }
+
+  function readCanvasGeometry(): CanvasGeometry | null {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width === 0 ? 1 : canvas.width / rect.width;
+    const scaleY = rect.height === 0 ? 1 : canvas.height / rect.height;
+    return {
+      rect,
+      scaleX,
+      scaleY,
+      cssPixelsPerSourcePixel: canvas.width === 0 ? 1 : rect.width / canvas.width,
+    };
+  }
+
+  function currentGeometry(): CanvasGeometry | null {
+    return gestureGeometryRef.current ?? readCanvasGeometry();
+  }
+
+  useEffect(() => {
+    function refreshGestureGeometry(): void {
+      if (!isPaintingRef.current) return;
+      gestureGeometryRef.current = readCanvasGeometry();
+    }
+
+    window.addEventListener("resize", refreshGestureGeometry);
+    window.addEventListener("scroll", refreshGestureGeometry, true);
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", refreshGestureGeometry);
+    viewport?.addEventListener("scroll", refreshGestureGeometry);
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(refreshGestureGeometry);
+    const canvas = canvasRef.current;
+    if (canvas) observer?.observe(canvas);
+
+    return () => {
+      window.removeEventListener("resize", refreshGestureGeometry);
+      window.removeEventListener("scroll", refreshGestureGeometry, true);
+      viewport?.removeEventListener("resize", refreshGestureGeometry);
+      viewport?.removeEventListener("scroll", refreshGestureGeometry);
+      observer?.disconnect();
+    };
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -243,30 +299,32 @@ export function MaskCorrectionCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally excludes `initialMatte`: it is read exactly once per source decode by contract (see its prop doc); re-decoding on a matte change would defeat the persistent buffer.
   }, [sourceImage]);
 
-  function toMattePoint(clientX: number, clientY: number): { x: number; y: number } {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width === 0 ? 1 : canvas.width / rect.width;
-    const scaleY = rect.height === 0 ? 1 : canvas.height / rect.height;
+  function toMattePoint(
+    clientX: number,
+    clientY: number,
+    geometry: CanvasGeometry | null = currentGeometry(),
+  ): { x: number; y: number } {
+    if (!geometry) return { x: 0, y: 0 };
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
+      x: (clientX - geometry.rect.left) * geometry.scaleX,
+      y: (clientY - geometry.rect.top) * geometry.scaleY,
     };
   }
 
-  function updateCursor(clientX: number, clientY: number): void {
-    const canvas = canvasRef.current;
+  function updateCursor(
+    clientX: number,
+    clientY: number,
+    geometry: CanvasGeometry | null = currentGeometry(),
+  ): void {
     const cursor = cursorRef.current;
-    if (!canvas || !cursor) return;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0) return;
+    if (!geometry || !cursor) return;
+    if (geometry.rect.width === 0) return;
     // Inverse of `toMattePoint`'s scale — brush radius is in source-image
     // pixels, the cursor is drawn in on-screen CSS pixels.
-    const cssRadius = brushRadius * (rect.width / canvas.width);
+    const cssRadius = brushRadius * geometry.cssPixelsPerSourcePixel;
     const cssDiameter = cssRadius * 2;
-    cursor.style.left = `${String(clientX - rect.left)}px`;
-    cursor.style.top = `${String(clientY - rect.top)}px`;
+    cursor.style.left = `${String(clientX - geometry.rect.left)}px`;
+    cursor.style.top = `${String(clientY - geometry.rect.top)}px`;
     cursor.style.width = `${String(cssDiameter)}px`;
     cursor.style.height = `${String(cssDiameter)}px`;
     // The hardness-flat zone (always-full-strength core) vs. the softer
@@ -294,6 +352,17 @@ export function MaskCorrectionCanvas({
     repaintRect(box);
   }
 
+  function stampInterpolatedSegment(point: { x: number; y: number }): void {
+    const previous = lastPaintPointRef.current;
+    const points = previous
+      ? interpolateStrokePoints([previous, point], brushRadius).slice(1)
+      : [point];
+    for (const interpolated of points) {
+      stampAndRepaint(interpolated);
+    }
+    lastPaintPointRef.current = point;
+  }
+
   return (
     <div className="relative">
       <canvas
@@ -312,19 +381,30 @@ export function MaskCorrectionCanvas({
         onPointerDown={(event) => {
           if (!rgbaRef.current) return;
           event.currentTarget.setPointerCapture(event.pointerId);
+          gestureGeometryRef.current = readCanvasGeometry();
           isPaintingRef.current = true;
+          lastPaintPointRef.current = null;
           gestureBoxRef.current = null;
-          stampAndRepaint(toMattePoint(event.clientX, event.clientY));
+          const point = toMattePoint(
+            event.clientX,
+            event.clientY,
+            gestureGeometryRef.current,
+          );
+          updateCursor(event.clientX, event.clientY, gestureGeometryRef.current);
+          stampInterpolatedSegment(point);
         }}
         onPointerMove={(event) => {
-          updateCursor(event.clientX, event.clientY);
+          const geometry = currentGeometry();
+          updateCursor(event.clientX, event.clientY, geometry);
           if (!isPaintingRef.current) return;
-          stampAndRepaint(toMattePoint(event.clientX, event.clientY));
+          stampInterpolatedSegment(toMattePoint(event.clientX, event.clientY, geometry));
         }}
         onPointerUp={(event) => {
           if (!isPaintingRef.current) return;
           event.currentTarget.releasePointerCapture(event.pointerId);
           isPaintingRef.current = false;
+          lastPaintPointRef.current = null;
+          gestureGeometryRef.current = null;
           const canvas = canvasRef.current;
           const imageData = rgbaRef.current;
           const committed = committedAlphaRef.current;
@@ -342,6 +422,8 @@ export function MaskCorrectionCanvas({
         onPointerCancel={() => {
           if (!isPaintingRef.current) return;
           isPaintingRef.current = false;
+          lastPaintPointRef.current = null;
+          gestureGeometryRef.current = null;
           const canvas = canvasRef.current;
           const imageData = rgbaRef.current;
           const committed = committedAlphaRef.current;

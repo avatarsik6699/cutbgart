@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 import { trackEvent } from "@/shared/lib/analytics";
 
 import type {
+  AlphaMatte,
   DeviceCapabilities,
   InferencePath,
   ProcessedImage,
@@ -25,6 +26,11 @@ const ACCEPTED_FORMATS = ["image/jpeg", "image/png", "image/webp"] as const;
 // Caps the optional log panel's memory footprint on long sessions (many
 // retries/quality-mode switches) — oldest entries drop off first.
 const MAX_LOG_ENTRIES = 200;
+
+interface PendingWorkerRequest<T> {
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+}
 
 export interface LogEntry {
   id: number;
@@ -110,6 +116,10 @@ export interface UseBackgroundRemovalResult {
   enterCorrecting: () => void;
   /** Returns to `result` from `correcting` with the corrected composite (Phase 07). */
   exitCorrecting: (result: ProcessedImage) => void;
+  /** Extracts the current result PNG's alpha channel on the existing worker. */
+  extractMatte: (image: ProcessedImage) => Promise<AlphaMatte>;
+  /** Re-composites a corrected matte with the source image on the existing worker. */
+  recomposite: (image: ProcessedImage, matte: AlphaMatte) => Promise<ProcessedImage>;
 }
 
 /**
@@ -143,6 +153,12 @@ export function useBackgroundRemoval(
   const capabilitiesPromiseRef = useRef<Promise<DeviceCapabilities> | null>(null);
   const requestCounterRef = useRef(0);
   const pendingRequestIdRef = useRef<string | null>(null);
+  const pendingAlphaMatteRequestsRef = useRef(
+    new Map<string, PendingWorkerRequest<AlphaMatte>>(),
+  );
+  const pendingRecompositeRequestsRef = useRef(
+    new Map<string, PendingWorkerRequest<ProcessedImage>>(),
+  );
   const lastAttemptRef = useRef<{
     source: SourceImage;
     qualityMode: QualityMode;
@@ -155,6 +171,12 @@ export function useBackgroundRemoval(
   // only ever (re)bound once per worker instance (see `getWorker` below) and
   // would otherwise read a stale value.
   const awaitingModelLoadRef = useRef(false);
+
+  const nextRequestId = useCallback(() => {
+    const requestId = String(requestCounterRef.current + 1);
+    requestCounterRef.current += 1;
+    return requestId;
+  }, []);
 
   const getDeviceCapabilities = useCallback((): Promise<DeviceCapabilities> => {
     capabilitiesPromiseRef.current ??= detectDeviceCapabilities();
@@ -208,8 +230,7 @@ export function useBackgroundRemoval(
           dispatch({ type: "START_PROCESSING" });
           trackEvent("processing_started");
           appendLog("Processing started");
-          const requestId = String(requestCounterRef.current + 1);
-          requestCounterRef.current += 1;
+          const requestId = nextRequestId();
           pendingRequestIdRef.current = requestId;
           const worker = workerRef.current;
           if (worker) {
@@ -238,24 +259,66 @@ export function useBackgroundRemoval(
           dispatch({ type: "PROCESSING_SUCCEEDED", result });
           break;
         }
+        case "alpha-matte-result": {
+          const pending = pendingAlphaMatteRequestsRef.current.get(message.requestId);
+          if (!pending) break;
+          pendingAlphaMatteRequestsRef.current.delete(message.requestId);
+          appendLog(`Correction matte extracted in ${String(message.durationMs)}ms`);
+          pending.resolve(message.matte);
+          break;
+        }
+        case "recomposite-result": {
+          const pending = pendingRecompositeRequestsRef.current.get(message.requestId);
+          if (!pending) break;
+          pendingRecompositeRequestsRef.current.delete(message.requestId);
+          appendLog(`Correction composite updated in ${String(message.durationMs)}ms`);
+          pending.resolve(message.result);
+          break;
+        }
         case "error": {
+          if (message.requestId) {
+            const alphaPending = pendingAlphaMatteRequestsRef.current.get(
+              message.requestId,
+            );
+            if (alphaPending) {
+              pendingAlphaMatteRequestsRef.current.delete(message.requestId);
+              appendLog(`Correction matte extraction failed: ${message.message}`);
+              alphaPending.reject(new Error(message.message));
+              break;
+            }
+
+            const recompositePending = pendingRecompositeRequestsRef.current.get(
+              message.requestId,
+            );
+            if (recompositePending) {
+              pendingRecompositeRequestsRef.current.delete(message.requestId);
+              appendLog(`Correction recomposite failed: ${message.message}`);
+              recompositePending.reject(new Error(message.message));
+              break;
+            }
+          }
+          if (message.code === "compositing-failed") {
+            appendLog(`Ignored stale correction compositing error: ${message.message}`);
+            break;
+          }
           appendLog(`Error (${message.code}): ${message.message}`);
           trackEvent(
             awaitingModelLoadRef.current ? "model_load_failed" : "processing_failed",
           );
+          const errorCode = message.code;
           dispatch({
             type: "FAILED",
             error: {
-              code: message.code,
+              code: errorCode,
               message: message.message,
-              action: actionForWorkerErrorCode(message.code),
+              action: actionForWorkerErrorCode(errorCode),
             },
           });
           break;
         }
       }
     },
-    [appendLog],
+    [appendLog, nextRequestId],
   );
 
   const getWorker = useCallback((): Worker => {
@@ -354,6 +417,39 @@ export function useBackgroundRemoval(
     dispatch({ type: "EXIT_CORRECTING", result });
   }, []);
 
+  const extractMatte = useCallback(
+    (image: ProcessedImage): Promise<AlphaMatte> => {
+      const requestId = nextRequestId();
+      appendLog("Extracting correction matte on worker");
+      return new Promise((resolve, reject) => {
+        pendingAlphaMatteRequestsRef.current.set(requestId, { resolve, reject });
+        getWorker().postMessage({
+          type: "extract-alpha-matte",
+          requestId,
+          result: image.result,
+        } satisfies WorkerRequest);
+      });
+    },
+    [appendLog, getWorker, nextRequestId],
+  );
+
+  const recomposite = useCallback(
+    (image: ProcessedImage, matte: AlphaMatte): Promise<ProcessedImage> => {
+      const requestId = nextRequestId();
+      appendLog("Updating correction composite on worker");
+      return new Promise((resolve, reject) => {
+        pendingRecompositeRequestsRef.current.set(requestId, { resolve, reject });
+        getWorker().postMessage({
+          type: "recomposite",
+          requestId,
+          image,
+          matte,
+        } satisfies WorkerRequest);
+      });
+    },
+    [appendLog, getWorker, nextRequestId],
+  );
+
   return {
     state,
     deviceCapabilities,
@@ -366,5 +462,7 @@ export function useBackgroundRemoval(
     reset,
     enterCorrecting,
     exitCorrecting,
+    extractMatte,
+    recomposite,
   };
 }

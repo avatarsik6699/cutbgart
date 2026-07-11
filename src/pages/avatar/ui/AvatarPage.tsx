@@ -50,6 +50,12 @@ function sourceImageToFile(image: { blob: Blob; format: string }): File {
 export function AvatarPage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration gate: upload controls must stay disabled until React handlers are attached.
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -167,8 +173,8 @@ export function AvatarPage() {
 
       {!displayError && state.status === "idle" && (
         <div className="flex flex-col gap-3">
-          <UploadDropzone onUpload={handleUpload} disabled={busy} />
-          <ChoosePhotoButton onUpload={handleUpload} disabled={busy} />
+          <UploadDropzone onUpload={handleUpload} disabled={!hydrated || busy} />
+          <ChoosePhotoButton onUpload={handleUpload} disabled={!hydrated || busy} />
         </div>
       )}
 

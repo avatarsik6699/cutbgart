@@ -26,6 +26,7 @@
 | PHASE_05 | ✅ done | v0.05.0 | ✅ | 🤖 agent | Analytics |
 | PHASE_06 | ✅ done | v0.06.0 | ✅ | 🤖 agent | SEO layer |
 | PHASE_07 | ✅ done | v0.07.0 | ✅ | 🤖 agent | Manual mask correction |
+| PHASE_08 | ✅ done | v0.08.0 | ✅ | 🤖 agent | Correction editor hardening |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -264,6 +265,134 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-11 — Spec change: point-prompt/SAM removed from MVP; batch/background renumbered
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: Architect request — brush correction covers roughly 80% of real correction
+scenarios, so spending current MVP time on Point-prompt / SAM mask correction is not worthwhile.
+
+### Changes / Decision
+- Supersedes the previous 2026-07-11 spec-change entry only for Point-prompt / SAM scope.
+- `SPEC.md` §8: removed the planned "Point-prompt / SAM mask correction" phase from MVP.
+- `SPEC.md` §8: Phase `10` is now Batch processing, Phase `11` is Background replacement, and
+  Phase `12` is Hardening & Launch.
+- `SPEC.md` §1.3, §2.1, §2.2, §3, §5.2, §5.3, §6, §6.1, §7.3, §7.7, and §10: removed
+  Point-prompt / SAM-specific model, state-machine, feature-slice, error-handling, testing, cache,
+  and open-question requirements from current MVP scope.
+- `SPEC.md` §9: returned Point-prompt / SAM-style mask correction to backlog v2+ as deliberately
+  deferred, not rejected.
+- Document Version `v1.3` → `v1.4`.
+- No change to `docs/STATE.md` § Current Contract — nothing shipped changed; the removed phase was
+  not scaffolded.
+
+### Affected Phases / Consequences
+- PHASE_01–PHASE_07 — unaffected (`✅ done`, no contracts of already-shipped phases changed).
+- PHASE_08 and PHASE_09 — unaffected future phases from the existing plan.
+- Future PHASE_10–PHASE_12 should be initialized from the updated `SPEC.md` numbering:
+  `10` = Batch processing, `11` = Background replacement, `12` = Hardening & Launch.
+- No `docs/PHASE_*.md` files were patched because PHASE_08+ files do not exist yet.
+
+## 2026-07-11 — Spec change: three backlog v2+ items pulled into MVP as Phases 10-12 (point-prompt/SAM correction, batch processing, background replacement); Hardening & Launch renumbered to 13
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: Architect review of §9 Out of Scope — confirmed point-prompt/SAM-style mask
+correction is a genuinely complementary tool to the Phase 07 brush (fast whole-region selection /
+better complex-boundary handling vs. manual pixel painting), not a replacement, and decided to pull
+it into MVP alongside batch processing and background replacement, all before the final launch
+phase. Ordering and feature shape confirmed via `AskUserQuestion`.
+
+### Changes / Decision
+- `SPEC.md` §8: three new phases inserted before the final phase, in architect-chosen order:
+  - Phase `10` — Point-prompt/SAM mask correction: a "smart-select" mode inside the existing
+    `features/correct-mask` slice/`correcting` state, alongside (not replacing) the brush modes;
+    commits into the same undo/redo history as brush strokes; needs one new client-side segmentation
+    model (exact repo left `[NEEDS_CLARIFICATION]`, §6/§10 — to be settled at Phase 10 `/phase-init`,
+    same process used for the IS-Net model choice).
+  - Phase `11` — Batch processing: parallel upload/processing of multiple images (bounded
+    concurrency, §7.1), grid/tile overview with per-item status, selecting an item reuses the
+    existing single-image `result`⇄`correcting` flow unchanged (no parallel state machine),
+    per-item or "download all as ZIP" (client-side library, `[NEEDS_CLARIFICATION]`).
+  - Phase `12` — Background replacement: `BackgroundFill` (solid color / linear-or-radial gradient /
+    user-uploaded image), composited via the existing `OffscreenCanvas` pipeline; uploaded background
+    image stays client-side only, same privacy invariant as `SourceImage`.
+  - Old Phase `08` "Hardening & Launch" → renumbered to Phase `13`, content unchanged.
+- `SPEC.md` §1.3: the three items moved from the Excluded/backlog-v2 column into Included (MVP),
+  each with a one-line description and its new phase number.
+- `SPEC.md` §2.1: `Visitor` role capabilities/restrictions updated (batch upload, mask correction via
+  brush and/or point-prompt, background replacement, ZIP download; dropped the stale
+  "cannot batch-process" restriction).
+- `SPEC.md` §2.2: new `BatchSession`/`BatchItem` and `BackgroundFill` entities; `AlphaMatte` bullet
+  extended to describe the point-prompt "smart-select" mode.
+- `SPEC.md` §3, §4: reaffirmed the client-side-only/no-server-endpoint invariant explicitly covers
+  batch sessions, ZIP assembly, and uploaded background images — nothing new touches the server.
+- `SPEC.md` §5.1, §5.2, §5.3, §5.4: no new routes or top-level UI states — batch mode is entered by
+  dropping/selecting multiple files on the existing upload surface; background-fill selection and
+  per-item batch review live inside the existing `result`/`correcting` states; accessibility bullets
+  added for batch grid navigation and the background-fill controls.
+- `SPEC.md` §6, §6.1: infrastructure rows added for the Phase 10 segmentation model and Phase 11 ZIP
+  library (both `[NEEDS_CLARIFICATION]` pending real evaluation), following the same
+  cache-independently-per-first-use pattern as the existing IS-Net weights.
+- `SPEC.md` §7.1, §7.3, §7.7: new NFR/error-handling/testing rows for bounded batch concurrency,
+  per-item batch error isolation, degenerate point-prompt selections, and e2e coverage for all three
+  new features.
+- `SPEC.md` §9: the three items removed from backlog v2+ with a pointer to this entry; remaining
+  backlog is Accounts/processing-history/cloud-storage, Public API, Mobile app.
+- `SPEC.md` §10: three new open questions (exact SAM model repo, exact ZIP library, batch concurrency
+  limit) — all explicitly deferred to their respective phase's `/phase-init`, not guessed here.
+- Document Version `v1.2` → `v1.3` (see Metadata; date unchanged, same day).
+- No change to `docs/STATE.md` § Current Contract — nothing shipped changed; none of Phases
+  08-13 are scaffolded yet.
+
+### Affected Phases / Consequences
+- PHASE_01–PHASE_07 — unaffected (`✅ done`, no contracts of already-shipped phases changed).
+- PHASE_08, PHASE_09 (already spec'd, not yet scaffolded — previous entry below) — unaffected in
+  content; only the phases after them shifted.
+- PHASE_10, PHASE_11, PHASE_12, PHASE_13 — not yet scaffolded; the next `/phase-init` beyond 09
+  should target this entry's §8 numbering, not the prior two-phase tail.
+- Recommended sequencing note (not enforced by tooling): Phase 10's point-prompt mode extends the
+  same `MaskCorrectionCanvas`/`MaskPatch` history that Phase 08 restructures and Phase 09 adds
+  zoom/pan to — build order 08 → 09 → 10 avoids rework, consistent with the phase numbering itself.
+
+## 2026-07-11 — Spec change: Phase 07 hardening carve-out (new Phase 08) + correction zoom/pan (new Phase 09); old Phase 08 renumbered to 10
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: Architect request — Phase 07's residual architectural debt (`PHASE_07.md` §
+Implementation Notes: stroke interpolation, large-brush O(r²) stamp cost, main-thread
+extractAlphaMatte/recomposite+PNG-encode on Edit/Done, duplicate `getBoundingClientRect` reads, the
+react-dom 19.2 dev-perf-track freeze, and the Phase 06 scenario-page hydration race) should be
+closed out as its own phase before adding new correction-editor functionality, and the architect
+wants to schedule zoom/pan for the correction canvas next as a distinct feature phase.
+
+### Changes / Decision
+- `SPEC.md` §8: new Phase `08` = "Correction editor hardening" — folds in every residual item listed
+  in `PHASE_07.md` § Implementation Notes (stroke interpolation, brush-stamp LUT, worker offload of
+  Edit/Done compositing, cached `getBoundingClientRect`, react-dom 19.3 upgrade, Phase 06 scenario-page
+  hydration-race fix). Purely a hardening/perf/robustness phase — no new externally observable
+  behavior, so no new Contracts beyond what Phase 07 already recorded.
+- `SPEC.md` §8: new Phase `09` = "Correction zoom & pan" — zoom/pan controls scoped to the existing
+  `correcting` state, precise editing on high-resolution images; no new top-level UI state.
+- `SPEC.md` §8: old Phase `08` ("Hardening & Launch") renumbered to Phase `10`, unchanged in content.
+- `SPEC.md` §1.3, §5.2, §5.3, §5.4, §7.7 updated to describe the new zoom/pan capability (Phase 09):
+  correction-canvas zoom/pan added to the MVP boundaries row, `features/correct-mask`'s
+  responsibility note, the `correcting` state description (view-only transform, brush coordinates
+  stay in source-image pixel space), a new accessibility bullet (keyboard-operable zoom, `aria-live`
+  level announcement), and a new mandatory e2e coverage row.
+- Document Version `v1.1` → `v1.2`.
+- No change to `docs/STATE.md` § Current Contract — nothing shipped changed; neither new phase is
+  scaffolded yet.
+
+### Affected Phases / Consequences
+- PHASE_01–PHASE_07 — unaffected (`✅ done`, no contracts of already-shipped phases changed).
+- PHASE_08, PHASE_09, PHASE_10 — not yet scaffolded; the next `/phase-init` should target the new
+  §8 phase table as of this entry (`08` = Correction editor hardening, `09` = Correction zoom & pan,
+  `10` = Hardening & Launch), not the old two-phase numbering.
+- Phase 08 should be scaffolded and gated before Phase 09 starts (Phase 09's zoom/pan touches the
+  same `MaskCorrectionCanvas` that Phase 08 restructures for worker-offloaded compositing and
+  patch-based history — sequencing avoids rework).
 
 ## 2026-07-11 — Phase 07 complete + R4: pointer-up freeze root-caused to react-dom dev build; patch-based history
 

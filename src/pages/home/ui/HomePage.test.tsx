@@ -1,35 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AlphaMatte } from "../../../entities/processed-image";
 import { HomePage } from "./HomePage";
-
-// extractAlphaMatte/recompositeProcessedImage are OffscreenCanvas-backed
-// (unavailable in jsdom) — mocked here the same way other
-// canvas/worker-adjacent boundaries in this suite are (see
-// useBackgroundRemoval.test.ts's device-capabilities mock), so this test
-// exercises the `correcting` wiring itself, not canvas pixel math (already
-// covered by entities/processed-image's `applyBrushStroke` unit tests).
-vi.mock("../../../features/remove-background", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../../features/remove-background")>();
-  return {
-    ...actual,
-    extractAlphaMatte: vi.fn((): Promise<AlphaMatte> =>
-      Promise.resolve({
-        width: 800,
-        height: 600,
-        data: new Uint8ClampedArray(800 * 600).fill(255),
-      }),
-    ),
-    recompositeProcessedImage: vi.fn((image: unknown) =>
-      Promise.resolve({
-        ...(image as object),
-        result: new Blob(["corrected-png"], { type: "image/png" }),
-      }),
-    ),
-  };
-});
 
 interface PostedMessage {
   type: string;
@@ -198,6 +170,22 @@ describe("HomePage", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /edit mask/i }));
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
+    );
+    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
+    act(() => {
+      worker.emit({
+        type: "alpha-matte-result",
+        requestId: extractRequest?.requestId,
+        matte: {
+          width: 800,
+          height: 600,
+          data: new Uint8ClampedArray(800 * 600).fill(255),
+        },
+        durationMs: 4,
+      });
+    });
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /^done$/i })).toBeDefined(),
@@ -206,8 +194,83 @@ describe("HomePage", () => {
     expect(screen.getByRole("group", { name: /brush mode/i })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "recomposite")).toBe(true),
+    );
+    const recompositeRequest = worker.posted.find((m) => m.type === "recomposite");
+    act(() => {
+      worker.emit({
+        type: "recomposite-result",
+        requestId: recompositeRequest?.requestId,
+        result: {
+          source: { blob: makeFile(), width: 800, height: 600, format: "image/jpeg" },
+          result: new Blob(["corrected-png"], { type: "image/png" }),
+          qualityMode: "fast",
+        },
+        durationMs: 5,
+      });
+    });
 
     await waitFor(() => expect(screen.getByRole("slider")).toBeDefined());
     expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined();
+  });
+
+  it("shows retry/reset UI when worker-backed mask preparation fails", async () => {
+    render(<HomePage />);
+
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: { files: [makeFile()] },
+    });
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+    );
+    act(() => {
+      worker.emit({ type: "model-ready", qualityMode: "fast" });
+    });
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "process")).toBe(true),
+    );
+    const processRequest = worker.posted.find((m) => m.type === "process");
+    act(() => {
+      worker.emit({
+        type: "process-result",
+        requestId: processRequest?.requestId,
+        result: new Blob(["fake-png"], { type: "image/png" }),
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /edit mask/i }));
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
+    );
+    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
+    act(() => {
+      worker.emit({
+        type: "error",
+        code: "compositing-failed",
+        requestId: extractRequest?.requestId,
+        message: "OffscreenCanvas unavailable",
+      });
+    });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
+    expect(screen.getByRole("alert").textContent).toMatch(/could not prepare mask/i);
+    expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^reset$/i })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+
+    await waitFor(() =>
+      expect(worker.posted.filter((m) => m.type === "extract-alpha-matte")).toHaveLength(
+        2,
+      ),
+    );
   });
 });

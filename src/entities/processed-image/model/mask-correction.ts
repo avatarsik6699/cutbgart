@@ -19,6 +19,22 @@ export interface BrushBoundingBox {
   maxY: number;
 }
 
+interface BrushStampRow {
+  offsetY: number;
+  startX: number;
+  influences: Uint8Array;
+}
+
+interface BrushStamp {
+  radius: number;
+  hardness: number;
+  rows: BrushStampRow[];
+}
+
+const BRUSH_SUBPIXEL_STEPS = 16;
+const BRUSH_STAMP_CACHE_LIMIT = 256;
+const brushStampCache = new Map<string, BrushStamp>();
+
 /**
  * The pixel rectangle a stamp centered at `center` with `radius` can touch,
  * clamped to `[0, width) x [0, height)`. Shared by every stamping function
@@ -132,6 +148,123 @@ function brushInfluence(t: number, hardness: number): number {
   return 1 - (t - hardness) / (1 - hardness);
 }
 
+function brushStampCacheKey(
+  radius: number,
+  hardness: number,
+  subpixelX: number,
+  subpixelY: number,
+): string {
+  return `${radius.toFixed(3)}:${hardness.toFixed(3)}:${subpixelX.toFixed(4)}:${subpixelY.toFixed(4)}`;
+}
+
+function getBrushStamp(
+  radius: number,
+  hardness: number,
+  subpixelX: number,
+  subpixelY: number,
+): BrushStamp | null {
+  if (radius <= 0) return null;
+  const clampedHardness = Math.min(Math.max(hardness, 0), 1);
+  const key = brushStampCacheKey(radius, clampedHardness, subpixelX, subpixelY);
+  const cached = brushStampCache.get(key);
+  if (cached) return cached;
+
+  const integerRadius = Math.ceil(radius);
+  const rows: BrushStampRow[] = [];
+  for (let offsetY = -integerRadius; offsetY <= integerRadius; offsetY++) {
+    const influences: number[] = [];
+    let startX: number | null = null;
+    let lastX: number | null = null;
+
+    for (let offsetX = -integerRadius; offsetX <= integerRadius; offsetX++) {
+      const dx = offsetX - subpixelX;
+      const dy = offsetY - subpixelY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const influence = brushInfluence(distance / radius, clampedHardness);
+      if (influence <= 0) continue;
+
+      if (startX === null) startX = offsetX;
+      if (lastX !== null && offsetX !== lastX + 1) {
+        rows.push({
+          offsetY,
+          startX,
+          influences: Uint8Array.from(influences),
+        });
+        influences.length = 0;
+        startX = offsetX;
+      }
+      influences.push(Math.round(influence * 255));
+      lastX = offsetX;
+    }
+
+    if (startX !== null) {
+      rows.push({
+        offsetY,
+        startX,
+        influences: Uint8Array.from(influences),
+      });
+    }
+  }
+
+  const stamp = { radius, hardness: clampedHardness, rows };
+  brushStampCache.set(key, stamp);
+  if (brushStampCache.size > BRUSH_STAMP_CACHE_LIMIT) {
+    const oldest = brushStampCache.keys().next().value;
+    if (oldest) brushStampCache.delete(oldest);
+  }
+  return stamp;
+}
+
+function stampPlacement(
+  center: { x: number; y: number },
+  radius: number,
+  hardness: number,
+): { stamp: BrushStamp; baseX: number; baseY: number } | null {
+  const snappedX = Math.round(center.x * BRUSH_SUBPIXEL_STEPS) / BRUSH_SUBPIXEL_STEPS;
+  const snappedY = Math.round(center.y * BRUSH_SUBPIXEL_STEPS) / BRUSH_SUBPIXEL_STEPS;
+  const baseX = Math.floor(snappedX);
+  const baseY = Math.floor(snappedY);
+  const subpixelX = snappedX - baseX;
+  const subpixelY = snappedY - baseY;
+  const stamp = getBrushStamp(radius, hardness, subpixelX, subpixelY);
+  if (!stamp) return null;
+  return { stamp, baseX, baseY };
+}
+
+function applyBrushTarget(
+  current: number,
+  target: number,
+  influenceByte: number,
+): number {
+  return current + (target - current) * (influenceByte / 255);
+}
+
+export function interpolateStrokePoints(
+  points: { x: number; y: number }[],
+  radius: number,
+): { x: number; y: number }[] {
+  if (points.length <= 1) return [...points];
+
+  const spacing = Math.max(1, Math.max(radius, 0) * 0.5);
+  const interpolated: { x: number; y: number }[] = [points[0]!];
+
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1]!;
+    const to = points[index]!;
+    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const steps = Math.max(1, Math.ceil(distance / spacing));
+    for (let step = 1; step <= steps; step++) {
+      const t = step / steps;
+      interpolated.push({
+        x: from.x + (to.x - from.x) * t,
+        y: from.y + (to.y - from.y) * t,
+      });
+    }
+  }
+
+  return interpolated;
+}
+
 function stampBrush(
   data: Uint8ClampedArray,
   originalData: Uint8ClampedArray,
@@ -141,28 +274,48 @@ function stampBrush(
   radius: number,
   hardness: number,
   mode: BrushMode,
-): void {
-  const box = brushBoundingBox(center, radius, width, height);
-  if (!box) return;
-  const radiusSquared = radius * radius;
+): BrushBoundingBox | null {
+  const placement = stampPlacement(center, radius, hardness);
+  if (!placement) return null;
+  const { stamp, baseX, baseY } = placement;
+  let minX = width;
+  let maxX = -1;
+  let minY = height;
+  let maxY = -1;
 
-  for (let y = box.minY; y <= box.maxY; y++) {
-    for (let x = box.minX; x <= box.maxX; x++) {
-      const dx = x - center.x;
-      const dy = y - center.y;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > radiusSquared) continue;
+  for (const row of stamp.rows) {
+    const y = baseY + row.offsetY;
+    if (y < 0 || y >= height) continue;
 
-      const influence = brushInfluence(Math.sqrt(distanceSquared) / radius, hardness);
+    const startX = baseX + row.startX;
+    let rowTouched = false;
+    let rowMinX = width;
+    let rowMaxX = -1;
+    for (let offset = 0; offset < row.influences.length; offset++) {
+      const x = startX + offset;
+      if (x < 0 || x >= width) continue;
+
+      const influence = row.influences[offset] ?? 0;
       if (influence <= 0) continue;
 
       const index = y * width + x;
       const current = data[index] ?? 0;
       const target =
         mode === "add" ? 255 : mode === "erase" ? 0 : (originalData[index] ?? 0);
-      data[index] = current + (target - current) * influence;
+      data[index] = applyBrushTarget(current, target, influence);
+      rowTouched = true;
+      if (x < rowMinX) rowMinX = x;
+      if (x > rowMaxX) rowMaxX = x;
+    }
+    if (rowTouched) {
+      if (rowMinX < minX) minX = rowMinX;
+      if (rowMaxX > maxX) maxX = rowMaxX;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
     }
   }
+
+  return minX <= maxX && minY <= maxY ? { minX, maxX, minY, maxY } : null;
 }
 
 /**
@@ -193,7 +346,7 @@ export function applyBrushStroke(
   const radius = Math.max(stroke.radius, 0);
   const hardness = Math.min(Math.max(stroke.hardness, 0), 1);
 
-  for (const point of stroke.points) {
+  for (const point of interpolateStrokePoints(stroke.points, radius)) {
     stampBrush(data, original.data, width, height, point, radius, hardness, stroke.mode);
   }
 
@@ -221,22 +374,27 @@ export function stampBrushAlphaInPlace(
   hardness: number,
   mode: BrushMode,
 ): BrushBoundingBox | null {
-  const box = brushBoundingBox(center, radius, width, height);
-  if (!box) return null;
-  const radiusSquared = radius * radius;
-  const clampedHardness = Math.min(Math.max(hardness, 0), 1);
+  const placement = stampPlacement(center, radius, hardness);
+  if (!placement) return null;
+  const { stamp, baseX, baseY } = placement;
+  let minX = width;
+  let maxX = -1;
+  let minY = height;
+  let maxY = -1;
 
-  for (let y = box.minY; y <= box.maxY; y++) {
-    for (let x = box.minX; x <= box.maxX; x++) {
-      const dx = x - center.x;
-      const dy = y - center.y;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > radiusSquared) continue;
+  for (const row of stamp.rows) {
+    const y = baseY + row.offsetY;
+    if (y < 0 || y >= height) continue;
 
-      const influence = brushInfluence(
-        Math.sqrt(distanceSquared) / radius,
-        clampedHardness,
-      );
+    const startX = baseX + row.startX;
+    let rowTouched = false;
+    let rowMinX = width;
+    let rowMaxX = -1;
+    for (let offset = 0; offset < row.influences.length; offset++) {
+      const x = startX + offset;
+      if (x < 0 || x >= width) continue;
+
+      const influence = row.influences[offset] ?? 0;
       if (influence <= 0) continue;
 
       const pixelIndex = y * width + x;
@@ -244,9 +402,47 @@ export function stampBrushAlphaInPlace(
       const current = rgba[alphaIndex] ?? 0;
       const target =
         mode === "add" ? 255 : mode === "erase" ? 0 : (originalAlpha[pixelIndex] ?? 0);
-      rgba[alphaIndex] = current + (target - current) * influence;
+      rgba[alphaIndex] = applyBrushTarget(current, target, influence);
+      rowTouched = true;
+      if (x < rowMinX) rowMinX = x;
+      if (x > rowMaxX) rowMaxX = x;
+    }
+    if (rowTouched) {
+      if (rowMinX < minX) minX = rowMinX;
+      if (rowMaxX > maxX) maxX = rowMaxX;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
     }
   }
 
-  return box;
+  return minX <= maxX && minY <= maxY ? { minX, maxX, minY, maxY } : null;
+}
+
+export function stampBrushStrokeAlphaInPlace(
+  rgba: Uint8ClampedArray,
+  originalAlpha: Uint8ClampedArray,
+  width: number,
+  height: number,
+  points: { x: number; y: number }[],
+  radius: number,
+  hardness: number,
+  mode: BrushMode,
+): BrushBoundingBox | null {
+  let touched: BrushBoundingBox | null = null;
+  for (const point of interpolateStrokePoints(points, radius)) {
+    touched = unionBoundingBox(
+      touched,
+      stampBrushAlphaInPlace(
+        rgba,
+        originalAlpha,
+        width,
+        height,
+        point,
+        radius,
+        hardness,
+        mode,
+      ),
+    );
+  }
+  return touched;
 }
