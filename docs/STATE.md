@@ -27,6 +27,7 @@
 | PHASE_06 | ✅ done | v0.06.0 | ✅ | 🤖 agent | SEO layer |
 | PHASE_07 | ✅ done | v0.07.0 | ✅ | 🤖 agent | Manual mask correction |
 | PHASE_08 | ✅ done | v0.08.0 | ✅ | 🤖 agent | Correction editor hardening |
+| PHASE_09 | ✅ done | v0.09.0 | ✅ | 🤖 agent | Correction zoom & pan |
 
 <!-- Add new rows here via /phase-init N -->
 

@@ -192,6 +192,14 @@ describe("HomePage", () => {
     );
     expect(screen.getByRole("img", { name: /mask correction canvas/i })).toBeDefined();
     expect(screen.getByRole("group", { name: /brush mode/i })).toBeDefined();
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(/mask editor zoom 100%/i),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /zoom in/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(/mask editor zoom 125%/i),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     await waitFor(() =>

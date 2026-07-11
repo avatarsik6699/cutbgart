@@ -1,5 +1,8 @@
 export { useMaskCorrection } from "./model/use-mask-correction";
-export type { UseMaskCorrectionResult } from "./model/use-mask-correction";
+export type {
+  MaskCorrectionViewport,
+  UseMaskCorrectionResult,
+} from "./model/use-mask-correction";
 export { MaskCorrectionCanvas } from "./ui/MaskCorrectionCanvas";
 export type {
   MaskCanvasHandle,

@@ -127,6 +127,31 @@
   architect and update `docs/STATE.md`'s Project Log as a new decision rather than silently wiring
   it in.
 
+### Do not run real model inference concurrently inside the normal Playwright matrix
+
+- **Symptoms**: `pnpm e2e` takes 5–10 minutes, intermittently waits for a result slider until its
+  timeout, or appears hung while several browser projects download/execute the ONNX model.
+- **Root cause**: the normal cross-browser suite used to run multiple real model pipelines in
+  parallel. That coupled UI determinism to CDN/network state and multiplied CPU/WASM/WebGPU memory
+  pressure. `networkidle` waits made the startup path less predictable as well.
+- **Fix**: keep user-flow tests on `e2e/support/mock-inference.ts` and run them with `pnpm e2e`.
+  Run the external integration once and serially with `pnpm e2e:real-model`; the phase gate command
+  `pnpm e2e:full` runs both tiers.
+- **Prevention**: new UI E2E tests should install the mock inference Worker. Add behavior to the
+  single real-model smoke only when it specifically validates the model/CDN boundary.
+
+### Pre-optimize lazily imported Transformers.js in Vite development
+
+- **Symptoms**: the first real upload reaches "Loading model", then the page unexpectedly reloads
+  and returns to the idle upload state; an E2E test waits forever for the result slider.
+- **Root cause**: the inference worker imports `@huggingface/transformers` only after user action,
+  so Vite's initial dependency scan misses it. Late discovery triggers dependency optimization and
+  a full-page reload, which discards the non-persistent selected file.
+- **Fix**: keep `@huggingface/transformers` in `vite.config.ts`'s `optimizeDeps.include` so Vite
+  prepares it before serving the first page.
+- **Prevention**: any new large dependency imported only from a lazy worker/route should be checked
+  for the same first-use optimization reload during local development.
+
 ### A Playwright drag can silently miss its target if intervening clicks reflow the page
 
 - **Symptoms**: `page.mouse.move/down/up` at coordinates from an element's `boundingBox()` appears
@@ -147,6 +172,21 @@
 - **Prevention**: any e2e spec that repeatedly drags/clicks on the same element interleaved with
   clicks elsewhere on the page should scroll that element into view fresh before every interaction,
   not just once at the start.
+
+### Playwright's Vite server must not silently fall through to port 3001
+
+- **Symptoms**: Playwright prints nothing for roughly the full webServer timeout while Vite has
+  actually started on port 3001; this often follows an interrupted E2E run that briefly leaves
+  port 3000 occupied.
+- **Root cause**: Vite normally auto-increments an occupied port, but Playwright continues polling
+  the configured `http://localhost:3000` URL. In this WSL environment, probing an unused localhost
+  port can also wait for the OS TCP timeout instead of immediately refusing the connection, so
+  Playwright's `reuseExistingServer` preflight itself looked like a hang.
+- **Fix**: `scripts/run-e2e.ts` starts Vite with `--port 3000 --strictPort`, waits for the live
+  endpoint, then starts Playwright without its `webServer` preflight. It owns teardown on success,
+  failure, and interruption. A genuine port conflict now fails immediately.
+- **Prevention**: invoke Playwright through the package scripts and keep server lifecycle in the
+  runner; after manually killing processes outside it, confirm port 3000 is free before retrying.
 
 ### Never pass large typed arrays through changing React props — dev-mode React 19.2 freezes for seconds
 

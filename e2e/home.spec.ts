@@ -3,11 +3,16 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import { installMockInference } from "./support/mock-inference";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
 const UNSUPPORTED_FILE = path.join(__dirname, "fixtures", "unsupported.txt");
 
 test.describe("/ (home)", () => {
+  test.beforeEach(async ({ page }) => {
+    await installMockInference(page);
+  });
   test("renders the idle state with the quality toggle and upload controls", async ({
     page,
   }) => {
@@ -25,7 +30,7 @@ test.describe("/ (home)", () => {
     // Hydration guard (docs/KNOWN_GOTCHAS.md): the input's onChange handler
     // only runs once React attaches it, so wait for the bundle to settle
     // before driving the file input.
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByLabel("Upload an image")).toBeEnabled();
 
     await page.getByLabel("Upload an image").setInputFiles(UNSUPPORTED_FILE);
 
@@ -37,21 +42,12 @@ test.describe("/ (home)", () => {
   test("critical path: upload -> process -> download -> process another image", async ({
     page,
   }) => {
-    // Real model download + inference — first run downloads the ONNX weights,
-    // this is the automated stand-in for the architect's manual browser check
-    // (AGENTS.md core rule 8), not a fast unit test.
-    test.setTimeout(10 * 60 * 1000);
-
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE_IMAGE);
 
-    await page.getByLabel("Upload an image").setInputFiles(SAMPLE_IMAGE);
-
-    // The visible progress text ends in an ellipsis; the `aria-live` summary
-    // (same "loading … model" phrase, different wording) does not — matching
-    // on it keeps this locator from resolving to both elements at once.
-    await expect(page.getByText(/loading .* model…/i)).toBeVisible();
-    await expect(page.getByRole("slider")).toBeVisible({ timeout: 5 * 60 * 1000 });
+    await expect(page.getByRole("slider")).toBeVisible();
     await expect(page.getByRole("button", { name: /download/i })).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");

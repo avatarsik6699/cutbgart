@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { installMockInference } from "./support/mock-inference";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
 
@@ -21,6 +23,41 @@ async function centerAlpha(page: Page): Promise<number> {
       1,
     );
     return data[3] ?? -1;
+  });
+}
+
+async function alphaAt(page: Page, x: number, y: number): Promise<number> {
+  return page.evaluate(
+    ({ sourceX, sourceY }) => {
+      const canvas = document.querySelector("canvas");
+      if (!canvas) throw new Error("mask correction canvas not found");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("2D context unavailable");
+      const { data } = ctx.getImageData(sourceX, sourceY, 1, 1);
+      return data[3] ?? -1;
+    },
+    { sourceX: x, sourceY: y },
+  );
+}
+
+async function visibleCenterSourcePoint(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) throw new Error("mask correction canvas not found");
+    const viewport = canvas.parentElement;
+    if (!viewport) throw new Error("mask correction viewport not found");
+    const canvasRect = canvas.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    return {
+      x: Math.floor(
+        (viewportRect.left + viewportRect.width / 2 - canvasRect.left) *
+          (canvas.width / canvasRect.width),
+      ),
+      y: Math.floor(
+        (viewportRect.top + viewportRect.height / 2 - canvasRect.top) *
+          (canvas.height / canvasRect.height),
+      ),
+    };
   });
 }
 
@@ -167,19 +204,15 @@ test.describe("mask correction", () => {
   test("enter correcting -> add/erase/restore each change the composite -> undo/redo -> done -> download reflects the correction", async ({
     page,
   }) => {
-    // Real model download + inference, same as e2e/home.spec.ts's critical
-    // path — this is the automated stand-in for the architect's manual
-    // browser check (AGENTS.md core rule 8), not a fast unit test.
-    test.setTimeout(10 * 60 * 1000);
-
+    await installMockInference(page);
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
-
-    await page.getByLabel("Upload an image").setInputFiles(SAMPLE_IMAGE);
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE_IMAGE);
     const beforeAfterSlider = page.getByRole("slider", {
       name: "Before/after comparison position",
     });
-    await expect(beforeAfterSlider).toBeVisible({ timeout: 5 * 60 * 1000 });
+    await expect(beforeAfterSlider).toBeVisible();
 
     const preEditDownloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: /^download$/i }).click();
@@ -191,6 +224,85 @@ test.describe("mask correction", () => {
     await page.getByRole("button", { name: /edit mask/i }).click();
     await expect(page.getByRole("button", { name: /^done$/i })).toBeVisible();
     await expect(page.getByRole("status")).toContainText(/editing mask corrections/i);
+    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
+
+    const editor = page.getByRole("application", { name: /mask correction editor/i });
+    await editor.focus();
+    const browserScale = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+    await page.keyboard.press("ControlOrMeta+=");
+    await page.keyboard.press("ControlOrMeta+=");
+    await expect(page.getByRole("status")).toContainText(/mask editor zoom 150%/i);
+    await expect
+      .poll(() => page.evaluate(() => window.visualViewport?.scale ?? 1))
+      .toBe(browserScale);
+
+    const canvasTransformBeforeWheel = await page
+      .getByRole("img", { name: /mask correction canvas/i })
+      .evaluate((canvas) => canvas.style.transform);
+    const wheelPrevented = await editor.evaluate((element) => {
+      const event = new WheelEvent("wheel", {
+        deltaY: 80,
+        bubbles: true,
+        cancelable: true,
+      });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(wheelPrevented).toBe(true);
+    await expect
+      .poll(() =>
+        page
+          .getByRole("img", { name: /mask correction canvas/i })
+          .evaluate((canvas) => canvas.style.transform),
+      )
+      .not.toBe(canvasTransformBeforeWheel);
+
+    const handPoint = await visibleCenterSourcePoint(page);
+    const alphaBeforeHandPan = await alphaAt(page, handPoint.x, handPoint.y);
+    const canvasForHandPan = page.getByRole("img", {
+      name: /mask correction canvas/i,
+    });
+    const handBox = await canvasForHandPan.boundingBox();
+    if (!handBox) throw new Error("mask correction canvas has no bounding box");
+    await page.keyboard.down("Space");
+    await page.mouse.move(handBox.x + handBox.width / 2, handBox.y + handBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      handBox.x + handBox.width / 2 - 20,
+      handBox.y + handBox.height / 2 - 10,
+    );
+    await page.mouse.up();
+    await page.keyboard.up("Space");
+    expect(await alphaAt(page, handPoint.x, handPoint.y)).toBe(alphaBeforeHandPan);
+    const brushCursor = editor.locator('[aria-hidden="true"]');
+    await expect(brushCursor).toHaveCSS("opacity", "1");
+
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Shift+ArrowDown");
+
+    const mappedPoint = await visibleCenterSourcePoint(page);
+    const mappedOriginalAlpha = await alphaAt(page, mappedPoint.x, mappedPoint.y);
+    const mappingMode = mappedOriginalAlpha === 255 ? "Erase" : "Add";
+    const mappedExpectedAlpha = mappedOriginalAlpha === 255 ? 0 : 255;
+    await page.getByLabel("Brush size").focus();
+    await page.keyboard.press("Home");
+    await page.getByRole("button", { name: mappingMode }).click();
+    await dragOnCanvasCenter(page);
+    await expect
+      .poll(() => alphaAt(page, mappedPoint.x, mappedPoint.y))
+      .toBe(mappedExpectedAlpha);
+    await page.getByRole("button", { name: "Restore" }).click();
+    await dragOnCanvasCenter(page);
+    await expect
+      .poll(() => alphaAt(page, mappedPoint.x, mappedPoint.y))
+      .toBe(mappedOriginalAlpha);
+
+    await page.getByRole("button", { name: "Reset view" }).click();
+    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await expect(page.getByRole("status")).toContainText(/mask editor zoom 125%/i);
+    await page.getByRole("button", { name: "Zoom out" }).click();
+    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
 
     // Max out the brush radius (also exercises the size slider's own keyboard
     // operability, SPEC.md §5.4/Phase 07 F6) so every stroke below covers the
