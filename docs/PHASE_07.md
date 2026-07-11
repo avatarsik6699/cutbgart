@@ -367,5 +367,5 @@ feat(phase-07): manual mask correction — brush add/erase/restore on the alpha 
 - [x] All automated gate checks green
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 07`
-- [ ] Committed atomically on `feat/phase-07` branch
-- [ ] Tag created after merge to develop: `git tag -a v0.07.0 -m "Phase 07: Manual mask correction"`
+- [x] Committed atomically on `feat/phase-07` branch
+- [x] Tag created after merge to develop: `git tag -a v0.07.0 -m "Phase 07: Manual mask correction"`
