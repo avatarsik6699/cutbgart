@@ -10,5 +10,6 @@ export type {
   RemoveBackgroundError,
   RemoveBackgroundErrorCode,
 } from "./model/state-machine";
+export { extractAlphaMatte, recompositeProcessedImage } from "./lib/compositing";
 export { RemoveBackgroundTestPanel } from "./ui/RemoveBackgroundTestPanel";
 export type { RemoveBackgroundTestPanelProps } from "./ui/RemoveBackgroundTestPanel";

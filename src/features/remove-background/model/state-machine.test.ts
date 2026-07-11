@@ -49,6 +49,7 @@ describe("removeBackgroundReducer", () => {
       { status: "ready", qualityMode: "fast" },
       { status: "processing", qualityMode: "fast" },
       { status: "result", result: dummyResult },
+      { status: "correcting", result: dummyResult },
     ];
 
     for (const state of states) {
@@ -71,6 +72,38 @@ describe("removeBackgroundReducer", () => {
     expect(removeBackgroundReducer(resultState, { type: "RESET" })).toEqual({
       status: "idle",
     });
+  });
+
+  it("enters correcting from result and returns to result on exit (Phase 07)", () => {
+    const resultState: RemoveBackgroundState = { status: "result", result: dummyResult };
+
+    const correcting = removeBackgroundReducer(resultState, { type: "ENTER_CORRECTING" });
+    expect(correcting).toEqual({ status: "correcting", result: dummyResult });
+
+    const correctedResult = { ...dummyResult, qualityMode: "max" } as ProcessedImage;
+    const backToResult = removeBackgroundReducer(correcting, {
+      type: "EXIT_CORRECTING",
+      result: correctedResult,
+    });
+    expect(backToResult).toEqual({ status: "result", result: correctedResult });
+  });
+
+  it("ignores actions that don't apply to correcting or result w.r.t. correcting transitions", () => {
+    const resultState: RemoveBackgroundState = { status: "result", result: dummyResult };
+    expect(
+      removeBackgroundReducer(resultState, {
+        type: "EXIT_CORRECTING",
+        result: dummyResult,
+      }),
+    ).toBe(resultState);
+
+    const correctingState: RemoveBackgroundState = {
+      status: "correcting",
+      result: dummyResult,
+    };
+    expect(removeBackgroundReducer(correctingState, { type: "ENTER_CORRECTING" })).toBe(
+      correctingState,
+    );
   });
 
   it("allows re-entering model-loading from result (recompute in a different quality mode)", () => {

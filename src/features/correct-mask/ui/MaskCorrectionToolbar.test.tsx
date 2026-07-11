@@ -1,0 +1,81 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { MaskCorrectionToolbar } from "./MaskCorrectionToolbar";
+
+afterEach(() => {
+  cleanup();
+});
+
+function renderToolbar(
+  overrides: Partial<Parameters<typeof MaskCorrectionToolbar>[0]> = {},
+) {
+  const props = {
+    mode: "add" as const,
+    onModeChange: vi.fn(),
+    brushSize: 24,
+    onBrushSizeChange: vi.fn(),
+    brushHardness: 0.5,
+    onBrushHardnessChange: vi.fn(),
+    canUndo: false,
+    canRedo: false,
+    onUndo: vi.fn(),
+    onRedo: vi.fn(),
+    ...overrides,
+  };
+  render(<MaskCorrectionToolbar {...props} />);
+  return props;
+}
+
+describe("MaskCorrectionToolbar", () => {
+  it("marks the active mode button as pressed", () => {
+    renderToolbar({ mode: "erase" });
+
+    expect(
+      screen.getByRole("button", { name: "Erase" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: "Add" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("calls onModeChange when a mode button is clicked", () => {
+    const props = renderToolbar();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(props.onModeChange).toHaveBeenCalledWith("restore");
+  });
+
+  it("calls onBrushSizeChange/onBrushHardnessChange from the range inputs", () => {
+    const props = renderToolbar();
+
+    fireEvent.change(screen.getByLabelText("Brush size"), { target: { value: "40" } });
+    fireEvent.change(screen.getByLabelText("Brush hardness"), {
+      target: { value: "0.8" },
+    });
+
+    expect(props.onBrushSizeChange).toHaveBeenCalledWith(40);
+    expect(props.onBrushHardnessChange).toHaveBeenCalledWith(0.8);
+  });
+
+  it("disables undo/redo buttons when there's no history, and enables them otherwise", () => {
+    renderToolbar({ canUndo: false, canRedo: true });
+
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Redo" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
+
+  it("calls onUndo/onRedo when clicked", () => {
+    const props = renderToolbar({ canUndo: true, canRedo: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+
+    expect(props.onUndo).toHaveBeenCalledTimes(1);
+    expect(props.onRedo).toHaveBeenCalledTimes(1);
+  });
+});

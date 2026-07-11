@@ -27,6 +27,8 @@ export function describeState(
       return "Removing background…";
     case "result":
       return "Background removed. Result ready to review and download.";
+    case "correcting":
+      return "Editing mask corrections. Brush add, erase, or restore, then choose Done.";
     case "error":
       return state.error.message;
   }

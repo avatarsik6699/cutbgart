@@ -6,5 +6,19 @@ export type {
   AlphaMatte,
   ProcessedImage,
 } from "./model/types";
+export {
+  applyBrushStroke,
+  brushBoundingBox,
+  extractAlphaRegion,
+  stampBrushAlphaInPlace,
+  unionBoundingBox,
+  writeAlphaRegion,
+} from "./model/mask-correction";
+export type {
+  BrushMode,
+  BrushStroke,
+  BrushBoundingBox,
+  MaskPatch,
+} from "./model/mask-correction";
 export { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 export type { BeforeAfterSliderProps } from "./ui/BeforeAfterSlider";

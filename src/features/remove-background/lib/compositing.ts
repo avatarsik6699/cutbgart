@@ -55,3 +55,43 @@ export async function compositeProcessedImage(
 
   return { source, result, qualityMode };
 }
+
+/**
+ * Reads the alpha channel back out of an already-composited PNG-with-alpha
+ * blob — the composited PNG's alpha channel *is* the `AlphaMatte` the model
+ * produced (SPEC.md §2.2), pixel-for-pixel, since `compositeProcessedImage`
+ * writes it there and nowhere else. This lets the manual-correction flow
+ * (Phase 07) recover the working matte on the main thread without touching
+ * `worker/inference.worker.ts` or re-running inference.
+ */
+export async function extractAlphaMatte(result: Blob): Promise<AlphaMatte> {
+  const bitmap = await createImageBitmap(result);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("extractAlphaMatte: 2D OffscreenCanvas context unavailable");
+  }
+
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const matteData = new Uint8ClampedArray(canvas.width * canvas.height);
+  for (let pixel = 0; pixel < matteData.length; pixel++) {
+    matteData[pixel] = data[pixel * 4 + 3] ?? 0;
+  }
+
+  return { width: canvas.width, height: canvas.height, data: matteData };
+}
+
+/**
+ * Re-composites `image.source` with a corrected `AlphaMatte` — no inference,
+ * pure canvas math re-run through the same pipeline `compositeProcessedImage`
+ * uses (Phase 07, SPEC.md §5.2/§5.3's `correcting` state).
+ */
+export async function recompositeProcessedImage(
+  image: ProcessedImage,
+  matte: AlphaMatte,
+): Promise<ProcessedImage> {
+  return compositeProcessedImage(image.source, matte, image.qualityMode);
+}

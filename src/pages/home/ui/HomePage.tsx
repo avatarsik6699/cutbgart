@@ -1,10 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { QualityMode } from "../../../entities/processed-image";
+import type {
+  AlphaMatte,
+  QualityMode,
+  SourceImage,
+} from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
+import {
+  MaskCorrectionCanvas,
+  MaskCorrectionToolbar,
+  useMaskCorrection,
+  type MaskCanvasHandle,
+} from "../../../features/correct-mask";
 import { DownloadResultButton } from "../../../features/download-result";
 import {
   detectDeviceCapabilities,
+  extractAlphaMatte,
+  recompositeProcessedImage,
   useBackgroundRemoval,
 } from "../../../features/remove-background";
 import { QualityModeToggle, useQualityMode } from "../../../features/quality-mode-toggle";
@@ -23,11 +35,103 @@ function pathLabel(path: "webgpu" | "wasm"): string {
   return path === "webgpu" ? "WebGPU" : "WASM";
 }
 
+interface MaskCorrectionPanelProps {
+  sourceImage: SourceImage;
+  originalMatte: AlphaMatte;
+  onDone: (matte: AlphaMatte) => void;
+}
+
+/**
+ * Composes `features/correct-mask`'s hook + canvas + toolbar into the
+ * `correcting` state's UI (Phase 07, SPEC.md §5.2/§5.3) — kept local to this
+ * page (not exported) since `pages/home` is the only place it's mounted this
+ * phase (SPEC.md §8 scopes the entry point to `pages/home` only).
+ */
+function MaskCorrectionPanel({
+  sourceImage,
+  originalMatte,
+  onDone,
+}: MaskCorrectionPanelProps) {
+  // The working matte lives inside MaskCorrectionCanvas's persistent buffer,
+  // reached imperatively via this handle (undo/redo patches in, final matte
+  // out on Done) — never through props/state, which is what froze the app
+  // for 1-2s per stroke under React 19.2's dev-mode Performance Track
+  // (Architect Review Notes R4, docs/KNOWN_GOTCHAS.md).
+  const canvasHandleRef = useRef<MaskCanvasHandle>(null);
+  const {
+    mode,
+    setMode,
+    brushSize,
+    setBrushSize,
+    brushHardness,
+    setBrushHardness,
+    canUndo,
+    canRedo,
+    commitStroke,
+    undo,
+    redo,
+  } = useMaskCorrection(canvasHandleRef);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <MaskCorrectionCanvas
+        ref={canvasHandleRef}
+        sourceImage={sourceImage}
+        initialMatte={originalMatte}
+        original={originalMatte}
+        mode={mode}
+        brushRadius={brushSize}
+        brushHardness={brushHardness}
+        onStrokeCommitted={commitStroke}
+      />
+      <MaskCorrectionToolbar
+        mode={mode}
+        onModeChange={setMode}
+        brushSize={brushSize}
+        onBrushSizeChange={setBrushSize}
+        brushHardness={brushHardness}
+        onBrushHardnessChange={setBrushHardness}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+      />
+      <Button
+        type="button"
+        onClick={() => {
+          const matte = canvasHandleRef.current?.extractMatte();
+          if (matte) onDone(matte);
+        }}
+        className="self-start"
+      >
+        Done
+      </Button>
+    </div>
+  );
+}
+
 type DisplayError = { message: string; action: "retry" | "reset" };
 
 export function HomePage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
+  const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
+  const [extractingMatte, setExtractingMatte] = useState(false);
+  // TanStack Start SSRs this page's markup before client hydration attaches
+  // `UploadDropzone`/`ChoosePhotoButton`'s onChange/onDrop handlers — a real
+  // interaction in that window is visually indistinguishable from a working
+  // control but silently drops the event (same class of bug as
+  // docs/KNOWN_GOTCHAS.md's Playwright-hydration-race entry, but reproducible
+  // by a real user's very first upload attempt, not just automation). `false`
+  // on both the server render and the first client render, flipping to `true`
+  // only once this effect actually runs — i.e. only once hydration has
+  // completed and the upload controls' own handlers are live.
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate hydration flag (see comment above): it must flip exactly once, only after hydration completes on the client; the one extra render is the point, not an accident.
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -56,6 +160,8 @@ export function HomePage() {
     recomputeMaxQuality,
     retry,
     reset,
+    enterCorrecting,
+    exitCorrecting,
   } = useBackgroundRemoval(qualityMode);
   const lastLogMessage = logs.at(-1)?.message;
 
@@ -71,6 +177,24 @@ export function HomePage() {
   function handleReset() {
     setUploadError(null);
     reset();
+  }
+
+  function handleEditMask() {
+    if (state.status !== "result") return;
+    setExtractingMatte(true);
+    void extractAlphaMatte(state.result.result).then((matte) => {
+      setExtractingMatte(false);
+      setOriginalMatte(matte);
+      enterCorrecting();
+    });
+  }
+
+  function handleDoneCorrecting(correctedMatte: AlphaMatte) {
+    if (state.status !== "correcting") return;
+    void recompositeProcessedImage(state.result, correctedMatte).then((updated) => {
+      setOriginalMatte(null);
+      exitCorrecting(updated);
+    });
   }
 
   const busy = state.status === "model-loading" || state.status === "processing";
@@ -142,8 +266,8 @@ export function HomePage() {
 
       {!displayError && state.status === "idle" && (
         <div className="flex flex-col gap-3">
-          <UploadDropzone onUpload={handleUpload} disabled={busy} />
-          <ChoosePhotoButton onUpload={handleUpload} disabled={busy} />
+          <UploadDropzone onUpload={handleUpload} disabled={!hydrated || busy} />
+          <ChoosePhotoButton onUpload={handleUpload} disabled={!hydrated || busy} />
         </div>
       )}
 
@@ -198,8 +322,24 @@ export function HomePage() {
                 Recompute in max quality
               </Button>
             )}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleEditMask}
+              disabled={extractingMatte}
+            >
+              {extractingMatte ? "Preparing…" : "Edit mask"}
+            </Button>
           </div>
         </div>
+      )}
+
+      {!displayError && state.status === "correcting" && originalMatte && (
+        <MaskCorrectionPanel
+          sourceImage={state.result.source}
+          originalMatte={originalMatte}
+          onDone={handleDoneCorrecting}
+        />
       )}
 
       <ProcessingLog logs={logs} />

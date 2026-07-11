@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.0` |
-| Date | `2026-07-09` |
+| Document Version | `v1.1` |
+| Date | `2026-07-11` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -60,7 +60,7 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Included (MVP) | Excluded |
 |-----------------|----------|
 | Drag-and-drop / click-to-browse / clipboard-paste image upload | Batch upload of multiple images (backlog v2) |
-| JPEG / PNG / WebP input, 20 MB hard limit, client-side downscale above 4096px per side | Manual mask correction (brush add/remove) (backlog v2) |
+| JPEG / PNG / WebP input, 20 MB hard limit, client-side downscale above 4096px per side | Point-prompt / SAM-style mask correction (backlog v2+) |
 | Single-image processing with cancel/retry | Background replacement (color/image/gradient) (backlog v2) |
 | Explicit "fast" vs "max quality" model switch, persisted in `localStorage` | Accounts, processing history, cloud storage of results (backlog v2) |
 | Before/after slider result view, PNG-with-alpha download | Public API (backlog v2) |
@@ -68,6 +68,7 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Explicit error handling for every documented failure mode (§7 NFR) | Any server endpoint that accepts uploaded images (never — architectural invariant) |
 | SEO-optimized scenario landing pages (product photo, documents, logo, avatar) | Advertising on this domain (never — product decision) |
 | Analytics (Cloudflare Web Analytics + self-hosted Umami, no PII) | Donation/payment on this domain (never — lives on a separate portfolio project) |
+| Manual mask correction: brush add/erase/restore directly on the existing `AlphaMatte`, adjustable brush size/hardness, undo/redo | |
 
 ---
 
@@ -95,7 +96,10 @@ QualityMode ("fast" | "max") — user-selectable, persisted client-side in local
 - **SourceImage** — the user's uploaded file (in-memory only; validated for format/size/resolution,
   downscaled client-side if > 4096px on the longest side).
 - **AlphaMatte** — single-channel alpha-matte output of the ML model (not a binary mask — preserves
-  soft edges for hair/fur/translucent objects).
+  soft edges for hair/fur/translucent objects). User-correctable post-inference (Phase 07): brush
+  add/erase/restore-to-model-output, adjustable brush size/hardness, undo/redo. Corrections mutate
+  the in-memory `AlphaMatte` only — never persisted, never leave the device, consistent with the
+  §1.1 privacy invariant.
 - **ProcessedImage** — `SourceImage` composited with `AlphaMatte` via `OffscreenCanvas` in the worker;
   exposed to the main thread as a `Blob`/`ImageBitmap`, explicitly released via `URL.revokeObjectURL`
   after download or when a new image is processed.
@@ -185,6 +189,7 @@ scenario-relevant before/after example — thin/duplicate content risks search-e
 | `features/remove-background` | `features` | Web Worker model init + inference, WebGPU/WASM device detection, `useBackgroundRemoval` hook exposing the state machine (§5.3), `OffscreenCanvas` postprocessing/compositing |
 | `features/quality-mode-toggle` | `features` | Fast/max-quality UI control, reads/writes `localStorage`, passed into `remove-background` as a parameter (not hardcoded) |
 | `features/download-result` | `features` | PNG-with-alpha download button |
+| `features/correct-mask` | `features` | Brush-based add/erase/restore editing of the current `AlphaMatte`; adjustable brush size/hardness; undo/redo history; re-composites via the existing `OffscreenCanvas` pipeline in `features/remove-background` — no new inference pass |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
 | `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box |
 
@@ -198,7 +203,7 @@ brief. Cross-layer imports must go through each slice's public API (`index.ts`) 
 Implemented explicitly as a state machine, not scattered boolean flags:
 
 ```
-idle → model-loading → ready → processing → result
+idle → model-loading → ready → processing → result ⇄ correcting
                 ↓            ↓         ↓
               error        error     error
 ```
@@ -212,7 +217,12 @@ idle → model-loading → ready → processing → result
 - **processing** — inference running in the Web Worker; WASM fallback path explicitly labeled as
   "lightweight mode" in the UI.
 - **result** — before/after slider, download button, "process another image" (resets state without a
-  page reload; model stays in memory/cache), and a one-click "recompute in max quality" action.
+  page reload; model stays in memory/cache), a one-click "recompute in max quality" action, and an
+  "edit mask" entry point into **correcting**.
+- **correcting** — user brushes corrections (add/erase/restore-to-model-output) onto the current
+  `AlphaMatte`; adjustable brush size/hardness; undo/redo. Does not re-run inference — only
+  re-composites via the existing `OffscreenCanvas` pipeline. "Done" returns to **result** with the
+  corrected composite; corrections are never persisted beyond the in-memory session.
 - **error** — reachable from any state; always carries a concrete message and an action (retry/reset),
   never a bare "something went wrong."
 
@@ -330,6 +340,7 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | Architecture | FSD layer boundaries, slice public-API enforcement, no same-layer cross-imports | Steiger (separate CI step, before tests) |
 | Integration | `useBackgroundRemoval` hook against a mocked worker | Vitest + Testing Library |
 | E2E (critical path) | Upload → process → download, on a real (or headless WebGPU-flagged) browser | Playwright |
+| E2E (mask correction) | Enter **correcting** → brush add/erase/restore → undo/redo → "done" → download reflects the corrected composite | Playwright |
 | Cross-browser matrix | WebGPU path and WASM fallback separately, must include Safari/iOS | Playwright projects per browser |
 | Visual regression (optional, v2) | UI components across states | Playwright screenshots |
 
@@ -349,8 +360,8 @@ utility function's unit tests.
 | `04` | Home page UI | Full product experience on the primary page | `pages/home` composing upload + quality toggle + ML core + result view; all §5.3 states wired to UI; accessibility (§5.4) |
 | `05` | Analytics | Funnel visibility | Umami + Cloudflare Web Analytics wired; all events from §7.6 firing |
 | `06` | SEO layer | Search-driven acquisition | Scenario pages (§5.1) as new `pages/*` slices reusing existing features; sitemap generation; structured data; meta tags |
-| `07` | Cross-browser hardening | Confidence across the real device matrix | Full pass over §7.4 matrix on real devices, not just emulators; polish |
-| `08` | Launch | Public availability | Production publish; explicitly not blocked on the separate portfolio/donation track |
+| `07` | Manual mask correction | Post-inference precision control — the tool is not usable end-to-end without a way to fix model mistakes on real photos | `features/correct-mask` slice: brush add/erase/restore on the current `AlphaMatte`, adjustable brush size/hardness, undo/redo; new `correcting` state (§5.3) wired into `pages/home`; e2e coverage (§7.7) |
+| `08` | Hardening & Launch | Confidence across the real device matrix, then public availability | Full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 
 ---
 
@@ -358,7 +369,8 @@ utility function's unit tests.
 
 **Backlog v2+ (deliberately deferred, not rejected):**
 - Batch processing of multiple images
-- Manual mask correction (brush add/remove)
+- Point-prompt / SAM-style mask correction (click positive/negative regions; heavier model, distinct
+  from the brush-based correction pulled into MVP as Phase 07)
 - Background replacement (color/image/gradient)
 - Accounts, processing history, cloud storage of results
 - Public API

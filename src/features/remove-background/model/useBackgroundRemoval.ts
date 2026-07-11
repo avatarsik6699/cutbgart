@@ -106,6 +106,10 @@ export interface UseBackgroundRemovalResult {
   recomputeMaxQuality: () => void;
   retry: () => void;
   reset: () => void;
+  /** Enters `correcting` from `result` (Phase 07) — no worker/inference involved. */
+  enterCorrecting: () => void;
+  /** Returns to `result` from `correcting` with the corrected composite (Phase 07). */
+  exitCorrecting: (result: ProcessedImage) => void;
 }
 
 /**
@@ -342,6 +346,14 @@ export function useBackgroundRemoval(
     dispatch({ type: "RESET" });
   }, []);
 
+  const enterCorrecting = useCallback(() => {
+    dispatch({ type: "ENTER_CORRECTING" });
+  }, []);
+
+  const exitCorrecting = useCallback((result: ProcessedImage) => {
+    dispatch({ type: "EXIT_CORRECTING", result });
+  }, []);
+
   return {
     state,
     deviceCapabilities,
@@ -352,5 +364,7 @@ export function useBackgroundRemoval(
     recomputeMaxQuality,
     retry,
     reset,
+    enterCorrecting,
+    exitCorrecting,
   };
 }
