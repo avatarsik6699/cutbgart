@@ -127,6 +127,53 @@
   architect and update `docs/STATE.md`'s Project Log as a new decision rather than silently wiring
   it in.
 
+### A Playwright drag can silently miss its target if intervening clicks reflow the page
+
+- **Symptoms**: `page.mouse.move/down/up` at coordinates from an element's `boundingBox()` appears
+  to do nothing — no error, but the expected effect (e.g. a canvas repaint) never happens. Adding a
+  fresh `boundingBox()` call right before the drag doesn't fix it on its own.
+- **Root cause**: an earlier `.click()` on a *different* element (e.g. a toolbar button) can change
+  page content in a way that reflows layout — even content below the drag target — and Playwright
+  auto-scrolls whatever it just clicked into view. If the drag target sits above the click target,
+  it can end up scrolled out of the viewport (confirmed via a diagnostic dump: `boundingBox()`
+  returned a negative `y`). A `boundingBox()` call still returns *a* rectangle at that point — it's
+  just for an off-screen position — so `page.mouse` coordinates computed from it land outside the
+  viewport and hit nothing.
+- **Fix**: call `locator.scrollIntoViewIfNeeded()` immediately before computing `boundingBox()` for
+  the drag, not just before the first drag of the test — see `e2e/mask-correction.spec.ts`'s
+  `dragOnCanvasCenter` (Phase 07 Architect Review Notes R3 fix verification uncovered this: the
+  brush-mode toolbar's description text changes length per mode, reflowing the page enough to push
+  the canvas above the fold after a mode-button click).
+- **Prevention**: any e2e spec that repeatedly drags/clicks on the same element interleaved with
+  clicks elsewhere on the page should scroll that element into view fresh before every interaction,
+  not just once at the start.
+
+### Never pass large typed arrays through changing React props — dev-mode React 19.2 freezes for seconds
+
+- **Symptoms**: under `pnpm dev` (development react-dom only), any state commit whose re-render
+  hands a component a *new* prop object containing a big `Uint8ClampedArray`/typed array freezes
+  the main thread for seconds — in Phase 07's mask editor, ~1-2s on every brush-stroke pointer-up
+  and every Undo/Redo click, on a mere 1MP image. A CPU profile shows the time inside react-dom's
+  `addObjectToProperties`/`addValueToProperties`/`debugTask.run` plus GC, while the app's own
+  handlers measure milliseconds. Production builds are unaffected, which makes it easy to
+  misattribute to app code (that happened here: the R3-addendum diagnosis in `docs/PHASE_07.md`
+  blamed and "fixed" a redundant repaint; the freeze survived).
+- **Root cause**: React 19.2's dev-only Component Performance Track (`logComponentRender` in
+  `react-dom-client.development.js`) deep-diffs every changed prop object against its previous
+  value on every render to annotate the DevTools timeline. A typed array is neither
+  `[object Object]` nor `[object Array]`, so it falls into the generic serializer, which `for..in`s
+  *every element as an own enumerable key* — twice (removed + added sides of the diff) — building
+  millions of diff entries per commit. Fixed upstream in react-dom 19.3 canary (`ArrayBuffer.isView`
+  guard + `OBJECT_WIDTH_LIMIT`), not in stable 19.2.x.
+- **Fix**: keep multi-megabyte buffers out of React props/state identity churn entirely. The mask
+  editor commits O(stroke area) `MaskPatch` deltas and routes undo/redo through an imperative
+  `MaskCanvasHandle` ref (`features/correct-mask`); its canvas props stay identity-stable during
+  editing. (Hook *state* is safe from this specific trap — only `memoizedProps` are diffed — but
+  props of any re-rendering component are not.)
+- **Prevention**: treat "a fresh multi-MB object flows through a prop on a hot path" as a design
+  smell even where production is fine — dev-mode responsiveness is part of the product for whoever
+  develops it. When react-dom 19.3 stable ships, upgrading also removes the underlying footgun.
+
 <!--
 ### [Title — short, punchy, searchable]
 

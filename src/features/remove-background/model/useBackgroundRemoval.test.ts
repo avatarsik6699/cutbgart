@@ -264,6 +264,55 @@ describe("useBackgroundRemoval", () => {
     expect(track).not.toHaveBeenCalledWith("model_load_failed", undefined);
   });
 
+  it("enterCorrecting/exitCorrecting round-trip through correcting without touching the worker (Phase 07)", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval());
+
+    act(() => {
+      result.current.selectFile(makeFile());
+    });
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+    );
+    act(() => {
+      worker.emit({ type: "model-ready", qualityMode: "fast" });
+    });
+    const processRequest = worker.posted.find((m) => m.type === "process");
+    const resultBlob = new Blob(["fake-png"], { type: "image/png" });
+    act(() => {
+      worker.emit({
+        type: "process-result",
+        requestId: processRequest?.requestId,
+        result: resultBlob,
+      });
+    });
+    await waitFor(() => expect(result.current.state.status).toBe("result"));
+    const postedCount = worker.posted.length;
+
+    act(() => {
+      result.current.enterCorrecting();
+    });
+    expect(result.current.state.status).toBe("correcting");
+    expect(worker.posted.length).toBe(postedCount);
+
+    const correctedBlob = new Blob(["corrected-png"], { type: "image/png" });
+    const correctedResult =
+      result.current.state.status === "correcting"
+        ? { ...result.current.state.result, result: correctedBlob }
+        : null;
+    act(() => {
+      if (correctedResult) result.current.exitCorrecting(correctedResult);
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe("result"));
+    if (result.current.state.status === "result") {
+      expect(result.current.state.result.result).toBe(correctedBlob);
+    }
+    expect(worker.posted.length).toBe(postedCount);
+  });
+
   it("reset() returns to idle", async () => {
     const { result } = renderHook(() => useBackgroundRemoval());
 

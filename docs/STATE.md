@@ -25,6 +25,7 @@
 | PHASE_04 | ✅ done | v0.04.0 | ✅ | 🤖 agent | Home page UI |
 | PHASE_05 | ✅ done | v0.05.0 | ✅ | 🤖 agent | Analytics |
 | PHASE_06 | ✅ done | v0.06.0 | ✅ | 🤖 agent | SEO layer |
+| PHASE_07 | ✅ done | v0.07.0 | ✅ | 🤖 agent | Manual mask correction |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -36,7 +37,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `06` · **Phase in progress:** `—`
+**Phase completed:** `07` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -133,6 +134,54 @@ type AnalyticsEvent =
 function trackEvent(event: AnalyticsEvent, data?: Record<string, string | number | boolean>): void;
 ```
 
+```ts
+// src/entities/processed-image/model/mask-correction.ts — Phase 07, per SPEC.md §2.2, §5.2
+// Manual mask correction: pure brush primitives + patch-based gesture deltas.
+
+type BrushMode = "add" | "erase" | "restore";
+
+interface BrushStroke {
+  points: { x: number; y: number }[];  // source-image pixel coordinates
+  radius: number;                      // brush size, source-image pixels
+  hardness: number;                    // 0–1, edge softness of the brush stamp
+  mode: BrushMode;
+}
+
+// Reference implementation (pure/immutable); `restore` reads back from `original` (the
+// pre-correction matte produced by inference) rather than clearing to 0/255.
+function applyBrushStroke(matte: AlphaMatte, original: AlphaMatte, stroke: BrushStroke): AlphaMatte;
+
+// Live-paint path: in-place alpha stamp on an RGBA buffer, returns the touched box.
+function stampBrushAlphaInPlace(
+  rgba: Uint8ClampedArray, originalAlpha: Uint8ClampedArray,
+  width: number, height: number,
+  center: { x: number; y: number }, radius: number, hardness: number, mode: BrushMode,
+): BrushBoundingBox | null;
+
+interface BrushBoundingBox { minX: number; maxX: number; minY: number; maxY: number }
+
+// One committed gesture as a delta — undo/redo history stores these, O(stroke area) each; no
+// changing multi-MB buffer ever crosses a React prop/state boundary (PHASE_07 R4).
+interface MaskPatch {
+  box: BrushBoundingBox;
+  before: Uint8ClampedArray;  // alpha of `box`, row-major, pre-gesture
+  after: Uint8ClampedArray;   // alpha of `box` post-gesture
+}
+
+function unionBoundingBox(a: BrushBoundingBox | null, b: BrushBoundingBox | null): BrushBoundingBox | null;
+function extractAlphaRegion(rgba: Uint8ClampedArray, imageWidth: number, box: BrushBoundingBox): Uint8ClampedArray;
+function writeAlphaRegion(rgba: Uint8ClampedArray, imageWidth: number, box: BrushBoundingBox, alpha: Uint8ClampedArray): void;
+```
+
+```ts
+// src/features/correct-mask/ui/MaskCorrectionCanvas.tsx — Phase 07 (R4)
+// Imperative channel for undo/redo + final matte readout — deliberately a ref API, not props.
+interface MaskCanvasHandle {
+  applyPatch(box: BrushBoundingBox, alpha: Uint8ClampedArray): void; // undo → patch.before, redo → patch.after
+  extractMatte(): AlphaMatte | null;                                 // read once, on Done
+}
+```
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -215,6 +264,152 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-11 — Phase 07 complete + R4: pointer-up freeze root-caused to react-dom dev build; patch-based history
+
+**Type**: bugfix + decision (supersedes the diagnosis in the next entry, "Phase 07 follow-up:
+pointer-up freeze in mask correction")
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: the ~1-2s freeze on every brush-stroke pointer-up survived the previous entry's
+`appliedMatteRef` fix — reproduced on a 1024x1024 (1MP) image and profiled against a live
+`pnpm dev` session.
+
+### Changes / Decision
+- **The previous diagnosis was wrong.** The redundant resync/repaint it eliminated was real but
+  cost ~50ms; the freeze was a 1.0-1.4s main-thread long task inside *react-dom's development
+  build*: React 19.2's Component Performance Track deep-diffs every changed prop object per render
+  (`logComponentRender` → `addObjectDiffToProperties`), and a changing `matte: AlphaMatte` prop
+  made it enumerate the megapixel `Uint8ClampedArray` element-by-element via `for..in`, twice per
+  commit. App code measured ~3ms. Production builds are unaffected; upstream fixed it in react-dom
+  19.3 canary (`ArrayBuffer.isView` guard), not in stable 19.2.x. Same freeze applied to every
+  Undo/Redo click. Recorded as a reusable pitfall in `docs/KNOWN_GOTCHAS.md`.
+- **Fix (architectural, not a workaround)**: no changing multi-MB object crosses a React
+  prop/state boundary in the correction flow anymore. A gesture commits a `MaskPatch` delta
+  (dirty box + before/after alpha bytes, O(stroke area)); `useMaskCorrection`'s undo/redo history
+  stores patches instead of full-matte snapshots and writes them back through the canvas's new
+  imperative `MaskCanvasHandle.applyPatch`; "Done" reads the final matte once via `extractMatte`.
+  `MaskCorrectionCanvas`'s props are all identity-stable during editing (`initialMatte` replaces
+  the old `matte` prop, read once per source decode); the `[matte]` resync effect and
+  `appliedMatteRef` are gone.
+- Side benefits: history memory drops from up to 20 full mattes (~320MB at the 4096² input limit)
+  to stroke-sized patches; pointer-up cost drops from O(image) to O(stroke box); `pointercancel`
+  now reverts an aborted gesture's stamps (previously lingered uncommitted); empty gestures no
+  longer push undo steps.
+- Verified: CPU profile after the change shows **zero** >50ms long tasks on stroke release and on
+  undo/redo (was 1.0-1.4s per release); full unit suite, `tsc`, `eslint`, and
+  `e2e/mask-correction.spec.ts` (real inference) green.
+
+### Affected Phases / Consequences
+- No SPEC.md/API/schema changes — the correction feature's externally observable behavior is
+  identical; `MaskPatch`/`MaskCanvasHandle` are recorded in PHASE_07.md Contracts and the Current
+  Contract above.
+- Residual follow-ups (stroke interpolation, large-brush stamp LUT, worker offload of Edit/Done
+  compositing, react-dom 19.3 upgrade when stable, scenario-page hydration race) are listed in
+  PHASE_07.md § Implementation Notes so they aren't rediscovered from scratch.
+
+## 2026-07-11 — Phase 07 follow-up: pointer-up freeze in mask correction
+
+**Type**: bugfix
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: manual `pnpm dev` testing after the R1–R3 Architect Review Notes fix (previous
+entry) — dragging the brush was smooth, but releasing the mouse button froze for ~1-2s on realistic
+image sizes.
+
+### Changes / Decision
+- Root cause: `MaskCorrectionCanvas`'s `[matte]` sync effect couldn't tell "this prop change is our
+  own commit echoing back down" apart from "this is a genuine external change" (undo/redo) — every
+  stroke commit triggered a second, fully redundant full-buffer alpha resync plus a full-canvas
+  `putImageData`, on top of the dirty-rect repaints the drag itself had already done. `putImageData`
+  over a full-resolution photo is the expensive part and is what produced the freeze.
+- Fixed with an `appliedMatteRef` tracking which `AlphaMatte` object is currently reflected in the
+  live buffer (set on decode and on every commit); the sync effect now bails out immediately when
+  the incoming `matte` prop is that same object reference, and only pays for the full resync/repaint
+  on genuine external changes (undo/redo still work as before). Also cached the 2D context with
+  `willReadFrequently: true`, since this component calls `getImageData`/`putImageData` continuously
+  by design — a standard mitigation for GPU-readback stalls in canvas-heavy pixel editors.
+- Regression test added in `MaskCorrectionCanvas.test.tsx` that round-trips a committed matte back in
+  as the next prop (mirroring the real `useMaskCorrection` data flow, which the existing tests didn't
+  exercise) and asserts no extra `putImageData` call fires.
+
+### Affected Phases / Consequences
+- No SPEC.md/API/schema changes — implementation-detail performance fix within Phase 07's existing
+  contract, same as R3.
+
+## 2026-07-11 — Phase 07 Architect Review Notes: hydration race, brush cursor/UX, brush performance
+
+**Type**: bugfix + decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: manual `pnpm dev` testing of Phase 07's initial Scope implementation surfaced
+three issues, resolved via `/impl-assist 07 review` (R1–R3).
+
+### Changes / Decision
+- **R1 (pre-existing, cross-cutting, predates Phase 07)**: the very first upload attempt right
+  after a page load could silently do nothing — a real hydration race (SSR markup painted before
+  React finishes attaching `UploadDropzone`/`ChoosePhotoButton`'s handlers), the same class of bug
+  `docs/KNOWN_GOTCHAS.md` already documented for Playwright automation, but reproducible by a real
+  user. Fixed only on `pages/home/ui/HomePage.tsx` (a `hydrated` flag gates the upload controls'
+  `disabled` prop until a `useEffect` confirms hydration) — the Phase 06 scenario pages almost
+  certainly have the same latent issue but are Phase 07's explicit "Do NOT touch" scope; flagged as
+  a follow-up, not fixed here.
+- **R2/R3**: `features/correct-mask`'s brush tool had no visible size indicator and stuttered on
+  anything larger than the e2e fixture's 1x1 placeholder image. Root-caused to
+  `useMaskCorrection`/`MaskCorrectionCanvas` doing O(image size) array clones and full-canvas
+  repaints on every single pointer-move point. Re-architected: `MaskCorrectionCanvas` now owns a
+  persistent `ImageData` buffer mutated in place per point (new `stampBrushAlphaInPlace` in
+  `entities/processed-image`) and repaints only the touched bounding box; `useMaskCorrection` was
+  simplified to a single `commitStroke(matte)` call per whole gesture instead of a
+  begin/add/end-per-point trio, restoring undo/redo to "one gesture, one history entry" without the
+  per-point cost. Added a mode-tinted (green/red/blue) brush-size cursor overlay and plain-language
+  mode descriptions in the toolbar for the UX gap.
+- Verifying the R3 fix via real e2e (not the mocked unit tests) surfaced a second, test-only issue:
+  the toolbar's mode-description text reflows the page enough on a mode-button click to scroll the
+  canvas out of the viewport before the next drag reads its position — fixed in
+  `e2e/mask-correction.spec.ts` (`scrollIntoViewIfNeeded()` before every drag) and recorded in
+  `docs/KNOWN_GOTCHAS.md` as a reusable Playwright pitfall.
+
+### Affected Phases / Consequences
+- No SPEC.md/API/schema changes — all three notes were implementation-detail and UX fixes within
+  Phase 07's existing contract.
+- Follow-up not yet scheduled: Phase 06 scenario pages (`pages/product-photo`,
+  `pages/document-photo`, `pages/logo`, `pages/avatar`) likely share R1's hydration race on their
+  own upload controls; worth its own pass rather than silently bundling into a future phase.
+
+## 2026-07-11 — Spec change: manual mask correction pulled into MVP as new Phase 07
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: Architect request — the tool isn't fully usable end-to-end without a way to fix
+model mistakes on real photos; deferring this to backlog v2 no longer made sense pre-launch.
+
+### Changes / Decision
+- `SPEC.md` §1.3: "Manual mask correction (brush add/erase/restore)" moved from Excluded (backlog
+  v2) into Included (MVP).
+- `SPEC.md` §2.2: `AlphaMatte` is now documented as user-correctable post-inference — brush
+  add/erase/restore-to-model-output, adjustable brush size/hardness, undo/redo. Corrections mutate
+  the in-memory `AlphaMatte` only; nothing new is persisted or leaves the device (§1.1 invariant
+  unaffected).
+- `SPEC.md` §5.2: new feature slice `features/correct-mask` — reuses the existing
+  `OffscreenCanvas` compositing pipeline in `features/remove-background`; no new ML model, no new
+  inference pass.
+- `SPEC.md` §5.3: new `correcting` state, reachable from and returning to `result`.
+- `SPEC.md` §7.7: new mandatory e2e coverage row for the correction flow.
+- `SPEC.md` §8: renumbered. New Phase `07` = "Manual mask correction". Old Phase `07`
+  (Cross-browser hardening) and old Phase `08` (Launch) merged into new Phase `08` = "Hardening &
+  Launch".
+- `SPEC.md` §9: backlog v2+ now lists "Point-prompt / SAM-style mask correction" (click-based,
+  heavier model) as the deferred follow-up technique, distinct from the brush-based correction
+  that moved to MVP.
+- Document Version `v1.0` → `v1.1`, Date → `2026-07-11`.
+- No change to `docs/STATE.md` § Current Contract — nothing shipped changed; Phase 07's actual
+  code contract will be recorded by `/context-update` once that phase is implemented.
+
+### Affected Phases / Consequences
+- PHASE_01–PHASE_06 — unaffected (`✅ done`, no contracts of already-shipped phases changed).
+- PHASE_07, PHASE_08 — not yet scaffolded; the next `/phase-init` should target the new §8 phase
+  table as of this entry (`07` = Manual mask correction, `08` = Hardening & Launch), not the old
+  Cross-browser-hardening/Launch split.
+
+---
 
 ## 2026-07-11 — Phase 06 complete
 

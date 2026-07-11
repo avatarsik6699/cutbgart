@@ -19,13 +19,15 @@ export interface RemoveBackgroundError {
 }
 
 // SPEC.md §5.3: idle -> model-loading -> ready -> processing -> result,
-// with `error` reachable from every state.
+// with `error` reachable from every state and `correcting` reachable from
+// (and returning to) `result` (Phase 07).
 export type RemoveBackgroundState =
   | { status: "idle" }
   | { status: "model-loading"; qualityMode: QualityMode; progress: number }
   | { status: "ready"; qualityMode: QualityMode }
   | { status: "processing"; qualityMode: QualityMode }
   | { status: "result"; result: ProcessedImage }
+  | { status: "correcting"; result: ProcessedImage }
   | { status: "error"; error: RemoveBackgroundError };
 
 export type RemoveBackgroundAction =
@@ -35,7 +37,9 @@ export type RemoveBackgroundAction =
   | { type: "START_PROCESSING" }
   | { type: "PROCESSING_SUCCEEDED"; result: ProcessedImage }
   | { type: "FAILED"; error: RemoveBackgroundError }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "ENTER_CORRECTING" }
+  | { type: "EXIT_CORRECTING"; result: ProcessedImage };
 
 export const initialRemoveBackgroundState: RemoveBackgroundState = { status: "idle" };
 
@@ -84,8 +88,16 @@ export function removeBackgroundReducer(
     case "result":
       // "Recompute in max quality" reuses the loaded source with a new quality
       // mode; "process another image" goes through RESET above instead.
-      return action.type === "SELECT_FILE"
-        ? { status: "model-loading", qualityMode: action.qualityMode, progress: 0 }
+      if (action.type === "SELECT_FILE") {
+        return { status: "model-loading", qualityMode: action.qualityMode, progress: 0 };
+      }
+      return action.type === "ENTER_CORRECTING"
+        ? { status: "correcting", result: state.result }
+        : state;
+
+    case "correcting":
+      return action.type === "EXIT_CORRECTING"
+        ? { status: "result", result: action.result }
         : state;
   }
 }
