@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import { installMockInference } from "./support/mock-inference";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
 
@@ -35,6 +37,10 @@ const SCENARIO_PAGES: ScenarioPage[] = [
   },
 ];
 
+test.beforeEach(async ({ page }) => {
+  await installMockInference(page);
+});
+
 for (const scenario of SCENARIO_PAGES) {
   test.describe(`${scenario.path} (scenario page)`, () => {
     test("renders its h1 and the upload control", async ({ page }) => {
@@ -60,13 +66,9 @@ for (const scenario of SCENARIO_PAGES) {
       await expect(uploadInput).toBeEnabled();
       await uploadInput.setInputFiles(SAMPLE_IMAGE);
 
-      // Reaching model-loading proves selectFile is correctly wired through
-      // this page's composition of the shared upload/remove-background
-      // features — the full download+inference+download path is already
-      // covered end to end by e2e/home.spec.ts's critical-path test and by
-      // this file's own single deep check below, so every scenario page
-      // doesn't need to re-run the slow full pipeline.
-      await expect(page.getByText(/loading .* model…/i)).toBeVisible();
+      // A rendered result proves the scenario composition reached the Worker
+      // boundary and completed the shared upload/process path.
+      await expect(page.getByRole("slider")).toBeVisible();
     });
   });
 }
@@ -75,18 +77,12 @@ test.describe("/udalit-fon-s-foto-tovara (deep critical path)", () => {
   test("critical path: upload -> process -> download, on a scenario page", async ({
     page,
   }) => {
-    // Real model download + inference, same as e2e/home.spec.ts's critical
-    // path — run once here to prove the full flow genuinely works when
-    // composed on a scenario page, not only on the home page.
-    test.setTimeout(10 * 60 * 1000);
-
     await page.goto("/udalit-fon-s-foto-tovara");
-    await page.waitForLoadState("networkidle");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE_IMAGE);
 
-    await page.getByLabel("Upload an image").setInputFiles(SAMPLE_IMAGE);
-
-    await expect(page.getByText(/loading .* model…/i)).toBeVisible();
-    await expect(page.getByRole("slider")).toBeVisible({ timeout: 5 * 60 * 1000 });
+    await expect(page.getByRole("slider")).toBeVisible();
     await expect(page.getByRole("button", { name: /download/i })).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");

@@ -1,7 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const realModelRun = process.env.E2E_REAL_MODEL === "1";
+
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: realModelRun ? undefined : "**/real-model.spec.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -9,6 +12,7 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    actionTimeout: 10_000,
   },
   projects: [
     // Chrome/Edge desktop — WebGPU + fp16 inference path (SPEC.md §7.4, high priority).
@@ -22,10 +26,4 @@ export default defineConfig({
     // "requires testing on a real device, not just emulation" note).
     { name: "Mobile Safari", use: { ...devices["iPhone 14"] } },
   ],
-  webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
 });

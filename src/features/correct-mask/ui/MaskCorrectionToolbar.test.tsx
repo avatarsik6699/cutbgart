@@ -21,6 +21,13 @@ function renderToolbar(
     canRedo: false,
     onUndo: vi.fn(),
     onRedo: vi.fn(),
+    zoomPercent: 100,
+    canZoomIn: true,
+    canZoomOut: false,
+    canPan: false,
+    onZoomIn: vi.fn(),
+    onZoomOut: vi.fn(),
+    onResetView: vi.fn(),
     ...overrides,
   };
   render(<MaskCorrectionToolbar {...props} />);
@@ -77,5 +84,31 @@ describe("MaskCorrectionToolbar", () => {
 
     expect(props.onUndo).toHaveBeenCalledTimes(1);
     expect(props.onRedo).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls zoom controls and exposes the current zoom level", () => {
+    const props = renderToolbar({
+      zoomPercent: 125,
+      canZoomOut: true,
+    });
+
+    expect(screen.getByText("125%")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
+
+    expect(props.onZoomIn).toHaveBeenCalledWith();
+    expect(props.onZoomOut).toHaveBeenCalledWith();
+    expect(props.onResetView).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables reset when the view is panned even at 100% zoom", () => {
+    renderToolbar({ zoomPercent: 100, canPan: true });
+
+    expect(screen.getByRole("button", { name: "Reset view" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(screen.getByLabelText("Zoom 100%, panned")).toBeDefined();
   });
 });

@@ -1,3 +1,5 @@
+import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+
 import type { BrushMode } from "../../../entities/processed-image";
 import { Button } from "@/shared/ui";
 
@@ -34,6 +36,13 @@ export interface MaskCorrectionToolbarProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  zoomPercent: number;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+  canPan: boolean;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetView: () => void;
 }
 
 /**
@@ -52,6 +61,13 @@ export function MaskCorrectionToolbar({
   canRedo,
   onUndo,
   onRedo,
+  zoomPercent,
+  canZoomIn,
+  canZoomOut,
+  canPan,
+  onZoomIn,
+  onZoomOut,
+  onResetView,
 }: MaskCorrectionToolbarProps) {
   const activeModeDescription = MODES.find(
     (option) => option.value === mode,
@@ -115,6 +131,56 @@ export function MaskCorrectionToolbar({
         </Button>
         <Button type="button" variant="outline" disabled={!canRedo} onClick={onRedo}>
           Redo
+        </Button>
+      </div>
+
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="View controls"
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Zoom out"
+          title="Zoom out"
+          disabled={!canZoomOut}
+          onClick={() => {
+            onZoomOut();
+          }}
+        >
+          <ZoomOut aria-hidden="true" />
+        </Button>
+        <span
+          className="min-w-16 rounded-md border border-border bg-muted/40 px-2 py-1 text-center text-sm tabular-nums"
+          aria-label={`Zoom ${String(zoomPercent)}%${canPan ? ", panned" : ""}`}
+        >
+          {zoomPercent}%
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Zoom in"
+          title="Zoom in"
+          disabled={!canZoomIn}
+          onClick={() => {
+            onZoomIn();
+          }}
+        >
+          <ZoomIn aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Reset view"
+          title="Reset view"
+          disabled={zoomPercent === 100 && !canPan}
+          onClick={onResetView}
+        >
+          <RotateCcw aria-hidden="true" />
         </Button>
       </div>
     </div>

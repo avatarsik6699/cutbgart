@@ -38,6 +38,7 @@ interface MaskCorrectionPanelProps {
   originalMatte: AlphaMatte;
   onDone: (matte: AlphaMatte) => void;
   doneDisabled?: boolean;
+  onViewAnnouncementChange: (announcement: string) => void;
 }
 
 /**
@@ -51,6 +52,7 @@ function MaskCorrectionPanel({
   originalMatte,
   onDone,
   doneDisabled = false,
+  onViewAnnouncementChange,
 }: MaskCorrectionPanelProps) {
   // The working matte lives inside MaskCorrectionCanvas's persistent buffer,
   // reached imperatively via this handle (undo/redo patches in, final matte
@@ -70,7 +72,29 @@ function MaskCorrectionPanel({
     commitStroke,
     undo,
     redo,
-  } = useMaskCorrection(canvasHandleRef);
+    viewport,
+    zoomPercent,
+    zoomAnnouncement,
+    canZoomIn,
+    canZoomOut,
+    canPan,
+    zoomIn,
+    zoomOut,
+    zoomByWheel,
+    resetView,
+    panView,
+    panBySourcePixels,
+  } = useMaskCorrection(canvasHandleRef, {
+    width: sourceImage.width,
+    height: sourceImage.height,
+  });
+
+  useEffect(() => {
+    onViewAnnouncementChange(zoomAnnouncement);
+    return () => {
+      onViewAnnouncementChange("");
+    };
+  }, [onViewAnnouncementChange, zoomAnnouncement]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,6 +106,13 @@ function MaskCorrectionPanel({
         mode={mode}
         brushRadius={brushSize}
         brushHardness={brushHardness}
+        viewport={viewport}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onWheelZoom={zoomByWheel}
+        onResetView={resetView}
+        onPan={panView}
+        onPanBySourcePixels={panBySourcePixels}
         onStrokeCommitted={commitStroke}
       />
       <MaskCorrectionToolbar
@@ -95,6 +126,13 @@ function MaskCorrectionPanel({
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        zoomPercent={zoomPercent}
+        canZoomIn={canZoomIn}
+        canZoomOut={canZoomOut}
+        canPan={canPan}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onResetView={resetView}
       />
       <Button
         type="button"
@@ -145,6 +183,7 @@ export function HomePage() {
   const [extractingMatte, setExtractingMatte] = useState(false);
   const [finalizingCorrection, setFinalizingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState<DisplayError | null>(null);
+  const [correctionViewAnnouncement, setCorrectionViewAnnouncement] = useState("");
   const retryCorrectionRef = useRef<(() => void) | null>(null);
   const correctionRunRef = useRef(0);
   // TanStack Start SSRs this page's markup before client hydration attaches
@@ -200,6 +239,7 @@ export function HomePage() {
   function handleUpload(result: UploadResult) {
     correctionRunRef.current += 1;
     setCorrectionError(null);
+    setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
     if (!result.ok) {
       setUploadError(result.error);
@@ -213,6 +253,7 @@ export function HomePage() {
     correctionRunRef.current += 1;
     setUploadError(null);
     setCorrectionError(null);
+    setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
     setOriginalMatte(null);
     setExtractingMatte(false);
@@ -306,6 +347,9 @@ export function HomePage() {
 
       <div aria-live="polite" role="status" className="sr-only">
         {describeState(state, lightweightMode, uploadError)}
+        {state.status === "correcting" && correctionViewAnnouncement
+          ? `. ${correctionViewAnnouncement}.`
+          : ""}
       </div>
 
       <QualityModeToggle qualityMode={qualityMode} onQualityModeChange={setQualityMode} />
@@ -442,6 +486,7 @@ export function HomePage() {
             originalMatte={originalMatte}
             onDone={handleDoneCorrecting}
             doneDisabled={finalizingCorrection}
+            onViewAnnouncementChange={setCorrectionViewAnnouncement}
           />
         </div>
       )}

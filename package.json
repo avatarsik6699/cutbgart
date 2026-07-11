@@ -16,7 +16,9 @@
     "arch:lint": "steiger ./src",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
+    "e2e": "tsx scripts/run-e2e.ts",
+    "e2e:real-model": "E2E_REAL_MODEL=1 tsx scripts/run-e2e.ts e2e/real-model.spec.ts --project=chromium --workers=1",
+    "e2e:full": "pnpm e2e && pnpm e2e:real-model",
     "upload-model-weights": "tsx scripts/upload-model-weights.ts",
     "prepare": "husky"
   },

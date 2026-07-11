@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 import {
   extractAlphaRegion,
@@ -12,6 +12,10 @@ import {
   type MaskPatch,
   type SourceImage,
 } from "../../../entities/processed-image";
+import type {
+  MaskCorrectionViewport,
+  MaskCorrectionViewportPoint,
+} from "../model/use-mask-correction";
 
 // Distinct tint per mode so the brush cursor also answers "what will this
 // stroke actually do" at a glance (Phase 07 Architect Review Notes R2) —
@@ -23,7 +27,8 @@ const MODE_CURSOR_COLOR: Record<BrushMode, string> = {
 };
 
 interface CanvasGeometry {
-  rect: DOMRect;
+  canvasRect: DOMRect;
+  viewportRect: DOMRect;
   scaleX: number;
   scaleY: number;
   cssPixelsPerSourcePixel: number;
@@ -119,6 +124,14 @@ export interface MaskCorrectionCanvasProps {
   brushRadius: number;
   /** 0 (fully soft falloff) – 1 (hard edge). */
   brushHardness: number;
+  /** View-only transform; brush math remains in source-image pixel space. */
+  viewport: MaskCorrectionViewport;
+  onZoomIn: (anchor?: MaskCorrectionViewportPoint) => void;
+  onZoomOut: (anchor?: MaskCorrectionViewportPoint) => void;
+  onWheelZoom: (deltaY: number, anchor: MaskCorrectionViewportPoint) => void;
+  onResetView: () => void;
+  onPan: (deltaX: number, deltaY: number, speed?: "normal" | "fast") => void;
+  onPanBySourcePixels: (deltaX: number, deltaY: number) => void;
   /** Fires once per whole gesture (pointerdown → drag → pointerup), not per point. */
   onStrokeCommitted: (patch: MaskPatch) => void;
 }
@@ -143,10 +156,21 @@ export function MaskCorrectionCanvas({
   mode,
   brushRadius,
   brushHardness,
+  viewport,
+  onZoomIn,
+  onZoomOut,
+  onWheelZoom,
+  onResetView,
+  onPan,
+  onPanBySourcePixels,
   onStrokeCommitted,
 }: MaskCorrectionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
+  const [spacePanning, setSpacePanning] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const spacePanningRef = useRef(false);
   // Persistent working buffer — source RGB, kept in sync with the current
   // alpha channel. Reused directly from `getImageData` (never reconstructed
   // via `new ImageData(...)`, which the DOM lib types reject for a plain
@@ -160,7 +184,9 @@ export function MaskCorrectionCanvas({
   // live buffer at every gesture boundary.
   const committedAlphaRef = useRef<Uint8ClampedArray | null>(null);
   const isPaintingRef = useRef(false);
+  const isPanningRef = useRef(false);
   const lastPaintPointRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPanClientPointRef = useRef<{ x: number; y: number } | null>(null);
   const gestureGeometryRef = useRef<CanvasGeometry | null>(null);
   // Union of every stamp's bounding box in the current gesture — the commit
   // at pointer-up only reads/writes this rect.
@@ -197,14 +223,16 @@ export function MaskCorrectionCanvas({
   function readCanvasGeometry(): CanvasGeometry | null {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width === 0 ? 1 : canvas.width / rect.width;
-    const scaleY = rect.height === 0 ? 1 : canvas.height / rect.height;
+    const canvasRect = canvas.getBoundingClientRect();
+    const viewportRect = viewportRef.current?.getBoundingClientRect() ?? canvasRect;
+    const scaleX = canvasRect.width === 0 ? 1 : canvas.width / canvasRect.width;
+    const scaleY = canvasRect.height === 0 ? 1 : canvas.height / canvasRect.height;
     return {
-      rect,
+      canvasRect,
+      viewportRect,
       scaleX,
       scaleY,
-      cssPixelsPerSourcePixel: canvas.width === 0 ? 1 : rect.width / canvas.width,
+      cssPixelsPerSourcePixel: canvas.width === 0 ? 1 : canvasRect.width / canvas.width,
     };
   }
 
@@ -306,10 +334,166 @@ export function MaskCorrectionCanvas({
   ): { x: number; y: number } {
     if (!geometry) return { x: 0, y: 0 };
     return {
-      x: (clientX - geometry.rect.left) * geometry.scaleX,
-      y: (clientY - geometry.rect.top) * geometry.scaleY,
+      x: (clientX - geometry.canvasRect.left) * geometry.scaleX,
+      y: (clientY - geometry.canvasRect.top) * geometry.scaleY,
     };
   }
+
+  function viewportCenterPoint(): MaskCorrectionViewportPoint {
+    return {
+      x: viewport.offsetX + sourceImage.width / viewport.zoom / 2,
+      y: viewport.offsetY + sourceImage.height / viewport.zoom / 2,
+    };
+  }
+
+  function stopPainting(): void {
+    isPaintingRef.current = false;
+    lastPaintPointRef.current = null;
+    gestureGeometryRef.current = null;
+    gestureBoxRef.current = null;
+  }
+
+  function stopPanning(): void {
+    isPanningRef.current = false;
+    setPanning(false);
+    lastPanClientPointRef.current = null;
+    gestureGeometryRef.current = null;
+  }
+
+  function commitPaintingGesture(): void {
+    const canvas = canvasRef.current;
+    const imageData = rgbaRef.current;
+    const committed = committedAlphaRef.current;
+    const box = gestureBoxRef.current;
+    stopPainting();
+    if (!canvas || !imageData || !committed || !box) return;
+    const after = extractAlphaRegion(imageData.data, canvas.width, box);
+    const before = readPlaneRegion(committed, canvas.width, box);
+    writePlaneRegion(committed, canvas.width, box, after);
+    onStrokeCommitted({ box, before, after });
+  }
+
+  function revertPaintingGesture(): void {
+    const canvas = canvasRef.current;
+    const imageData = rgbaRef.current;
+    const committed = committedAlphaRef.current;
+    const box = gestureBoxRef.current;
+    stopPainting();
+    if (!canvas || !imageData || !committed || !box) return;
+    const baseline = readPlaneRegion(committed, canvas.width, box);
+    writeAlphaRegion(imageData.data, canvas.width, box, baseline);
+    repaintRect(box);
+  }
+
+  function handleKeyboardNavigation(event: globalThis.KeyboardEvent): void {
+    const key = event.key;
+    const modifierPressed = event.ctrlKey || event.metaKey;
+    const center = viewportCenterPoint();
+    const target = event.target;
+    const editingText =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
+
+    if (key === " " && !editingText) {
+      event.preventDefault();
+      if (isPaintingRef.current) return;
+      spacePanningRef.current = true;
+      setSpacePanning(true);
+      return;
+    }
+
+    if (modifierPressed && (key === "+" || key === "=")) {
+      event.preventDefault();
+      onZoomIn(center);
+      return;
+    }
+
+    if (modifierPressed && key === "-") {
+      event.preventDefault();
+      onZoomOut(center);
+      return;
+    }
+
+    if (modifierPressed && (key === "0" || key === "1")) {
+      event.preventDefault();
+      onResetView();
+      return;
+    }
+
+    if (key.startsWith("Arrow") && !editingText) {
+      event.preventDefault();
+      const amount = event.shiftKey ? "fast" : "normal";
+      if (key === "ArrowLeft") onPan(-1, 0, amount);
+      if (key === "ArrowRight") onPan(1, 0, amount);
+      if (key === "ArrowUp") onPan(0, -1, amount);
+      if (key === "ArrowDown") onPan(0, 1, amount);
+    }
+  }
+
+  function handleWheel(event: globalThis.WheelEvent): void {
+    if (!rgbaRef.current) return;
+    const geometry = readCanvasGeometry();
+    if (!geometry) return;
+    event.preventDefault();
+    if (event.ctrlKey || event.metaKey) {
+      onWheelZoom(event.deltaY, toMattePoint(event.clientX, event.clientY, geometry));
+      return;
+    }
+
+    const lineHeight = 16;
+    const pageSize = geometry.viewportRect.height;
+    const unit =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? lineHeight
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? pageSize
+          : 1;
+    const deltaX = event.deltaX * unit;
+    const deltaY = event.deltaY * unit;
+
+    if (event.shiftKey) {
+      onPanBySourcePixels((deltaX || deltaY) * geometry.scaleX, 0);
+      return;
+    }
+
+    onPanBySourcePixels(deltaX * geometry.scaleX, deltaY * geometry.scaleY);
+  }
+
+  useEffect(() => {
+    const editor = viewportRef.current;
+    if (!editor) return;
+
+    function releaseHandTool(): void {
+      spacePanningRef.current = false;
+      setSpacePanning(false);
+      if (isPanningRef.current) stopPanning();
+    }
+
+    function handleKeyUp(event: globalThis.KeyboardEvent): void {
+      if (event.key !== " ") return;
+      event.preventDefault();
+      releaseHandTool();
+    }
+
+    // Capture shortcuts for the lifetime of the correction editor. This is
+    // how desktop-style editors keep Cmd/Ctrl +/- from escaping to browser
+    // page zoom after a toolbar button has taken focus.
+    window.addEventListener("keydown", handleKeyboardNavigation, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", releaseHandTool);
+    // React intentionally delegates wheel passively. The editor must be able
+    // to prevent page scrolling, so this interaction surface owns a native
+    // non-passive listener instead.
+    editor.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyboardNavigation, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", releaseHandTool);
+      editor.removeEventListener("wheel", handleWheel);
+    };
+  });
 
   function updateCursor(
     clientX: number,
@@ -318,13 +502,13 @@ export function MaskCorrectionCanvas({
   ): void {
     const cursor = cursorRef.current;
     if (!geometry || !cursor) return;
-    if (geometry.rect.width === 0) return;
+    if (geometry.canvasRect.width === 0) return;
     // Inverse of `toMattePoint`'s scale — brush radius is in source-image
     // pixels, the cursor is drawn in on-screen CSS pixels.
     const cssRadius = brushRadius * geometry.cssPixelsPerSourcePixel;
     const cssDiameter = cssRadius * 2;
-    cursor.style.left = `${String(clientX - geometry.rect.left)}px`;
-    cursor.style.top = `${String(clientY - geometry.rect.top)}px`;
+    cursor.style.left = `${String(clientX - geometry.viewportRect.left)}px`;
+    cursor.style.top = `${String(clientY - geometry.viewportRect.top)}px`;
     cursor.style.width = `${String(cssDiameter)}px`;
     cursor.style.height = `${String(cssDiameter)}px`;
     // The hardness-flat zone (always-full-strength core) vs. the softer
@@ -364,24 +548,49 @@ export function MaskCorrectionCanvas({
   }
 
   return (
-    <div className="relative">
+    <div
+      ref={viewportRef}
+      role="application"
+      aria-label="Mask correction editor"
+      tabIndex={0}
+      className="relative overflow-hidden rounded-xl bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
       <canvas
         ref={canvasRef}
         role="img"
         aria-label="Mask correction canvas — drag to paint corrections"
-        className="w-full touch-none rounded-xl bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
-        style={{ cursor: "none" }}
+        className="block w-full touch-none"
+        style={{
+          cursor: spacePanning || panning ? "grab" : "none",
+          transform: `scale(${String(viewport.zoom)}) translate(${String(
+            (-viewport.offsetX / sourceImage.width) * 100,
+          )}%, ${String((-viewport.offsetY / sourceImage.height) * 100)}%)`,
+          transformOrigin: "top left",
+        }}
         onPointerEnter={(event) => {
           updateCursor(event.clientX, event.clientY);
-          if (cursorRef.current) cursorRef.current.style.opacity = "1";
+          if (cursorRef.current) {
+            cursorRef.current.style.opacity = spacePanning || panning ? "0" : "1";
+          }
         }}
         onPointerLeave={() => {
           if (cursorRef.current) cursorRef.current.style.opacity = "0";
         }}
         onPointerDown={(event) => {
           if (!rgbaRef.current) return;
+          const handGesture = spacePanningRef.current || event.button === 1;
+          if (!handGesture && event.button !== 0) return;
+          event.preventDefault();
+          viewportRef.current?.focus();
           event.currentTarget.setPointerCapture(event.pointerId);
           gestureGeometryRef.current = readCanvasGeometry();
+          if (handGesture) {
+            isPanningRef.current = true;
+            setPanning(true);
+            lastPanClientPointRef.current = { x: event.clientX, y: event.clientY };
+            if (cursorRef.current) cursorRef.current.style.opacity = "0";
+            return;
+          }
           isPaintingRef.current = true;
           lastPaintPointRef.current = null;
           gestureBoxRef.current = null;
@@ -396,45 +605,42 @@ export function MaskCorrectionCanvas({
         onPointerMove={(event) => {
           const geometry = currentGeometry();
           updateCursor(event.clientX, event.clientY, geometry);
+          if (isPanningRef.current) {
+            const previous = lastPanClientPointRef.current;
+            if (!previous || !geometry) return;
+            onPanBySourcePixels(
+              (previous.x - event.clientX) * geometry.scaleX,
+              (previous.y - event.clientY) * geometry.scaleY,
+            );
+            lastPanClientPointRef.current = { x: event.clientX, y: event.clientY };
+            return;
+          }
           if (!isPaintingRef.current) return;
           stampInterpolatedSegment(toMattePoint(event.clientX, event.clientY, geometry));
         }}
         onPointerUp={(event) => {
-          if (!isPaintingRef.current) return;
           event.currentTarget.releasePointerCapture(event.pointerId);
-          isPaintingRef.current = false;
-          lastPaintPointRef.current = null;
-          gestureGeometryRef.current = null;
-          const canvas = canvasRef.current;
-          const imageData = rgbaRef.current;
-          const committed = committedAlphaRef.current;
-          const box = gestureBoxRef.current;
-          gestureBoxRef.current = null;
+          if (isPanningRef.current) {
+            stopPanning();
+            return;
+          }
+          if (!isPaintingRef.current) return;
           // A gesture that never touched a pixel (e.g. radius 0, or entirely
           // outside the image) commits nothing — no empty undo steps.
-          if (!canvas || !imageData || !committed || !box) return;
-          const after = extractAlphaRegion(imageData.data, canvas.width, box);
-          const before = readPlaneRegion(committed, canvas.width, box);
-          // Advance the committed baseline to include this gesture.
-          writePlaneRegion(committed, canvas.width, box, after);
-          onStrokeCommitted({ box, before, after });
+          commitPaintingGesture();
         }}
         onPointerCancel={() => {
+          if (isPanningRef.current) {
+            stopPanning();
+            return;
+          }
           if (!isPaintingRef.current) return;
-          isPaintingRef.current = false;
-          lastPaintPointRef.current = null;
-          gestureGeometryRef.current = null;
-          const canvas = canvasRef.current;
-          const imageData = rgbaRef.current;
-          const committed = committedAlphaRef.current;
-          const box = gestureBoxRef.current;
-          gestureBoxRef.current = null;
-          if (!canvas || !imageData || !committed || !box) return;
           // Revert the aborted gesture's stamps so the canvas never shows
           // pixels that were never committed (previously they lingered).
-          const baseline = readPlaneRegion(committed, canvas.width, box);
-          writeAlphaRegion(imageData.data, canvas.width, box, baseline);
-          repaintRect(box);
+          revertPaintingGesture();
+        }}
+        onAuxClick={(event) => {
+          if (event.button === 1) event.preventDefault();
         }}
       />
       <div

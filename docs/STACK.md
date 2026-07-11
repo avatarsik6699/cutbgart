@@ -74,7 +74,7 @@ STACK.md` for those.
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |
-| E2E | `pnpm e2e` (= `playwright test`) — **run locally from the host only** | `@playwright/test` installed in Phase 03 with one smoke spec (`e2e/dev-remove-background.spec.ts`) covering the toggle + harness render and `localStorage` persistence, chromium-only. Every new user-facing flow needs its own spec here (AGENTS.md core rule 8) — treat this row as mandatory, not optional coverage. Deliberately **not** run in Docker or CI (`.github/workflows/ci.yml` has no e2e job) — it's a local check the agent/architect runs after implementing a phase, or to reproduce a reported issue, not a pipeline gate. The full cross-browser critical-path matrix (upload → process → download, SPEC.md §7.4) lands in Phase 04. |
+| E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic cross-browser UI suite first, then one serialized Chromium real-model/CDN smoke. Use `pnpm e2e` during ordinary iteration; use `pnpm e2e:real-model` to diagnose only the external inference path. Never run Playwright in Docker or CI. |
 | Smoke | `docker compose exec -T app node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` | Deterministic, container-network-native — doesn't need port 3000 published to the host or TLS/nginx up. `app` also has a Docker `healthcheck` (docker-compose.yml) doing the same check on a 10s interval; `docker compose ps app` should show `(healthy)`. Phase files may override with a phase-specific check. |
 
 Architecture lint (run in CI before tests, not part of the standard gate rows above — SPEC.md §7.7):
@@ -108,16 +108,18 @@ None — no backend test suite (no server-side API beyond SSR shells, SPEC.md §
 pnpm tsc --noEmit          # type-check, strict mode
 pnpm vitest run            # unit + integration (Testing Library for hooks)
 pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
-pnpm e2e                   # Playwright — e2e critical path + cross-browser matrix (SPEC.md §7.4)
+pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
+pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
+pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker, never in CI
 ```
 
-Playwright (`pnpm e2e`) drives the app the way a human would in a browser — navigate, click,
-assert visible/stored state — and is the automated stand-in for manual browser verification
-(AGENTS.md core rule 8). Write or extend an `e2e/` spec for any new/changed user-facing flow, and
-run it locally from the host during `/impl-assist`, not only at `/phase-gate`. It stays out of
-Docker and CI by design — it's a local, human-in-the-loop confirmation step (post-phase, or to
-reproduce a reported bug), not a pipeline gate.
+Playwright drives the app the way a human would in a browser. `pnpm e2e` replaces only the external
+ML Worker boundary with a deterministic in-browser test double; uploads, state transitions,
+canvas editing, responsive layouts, and downloads remain real and run across the browser matrix.
+`pnpm e2e:real-model` owns the slow/network-dependent ONNX+CDN check and runs once, serially, in
+Chromium. Write or extend the deterministic suite for every changed user-facing flow and run
+`pnpm e2e:full` at `/phase-gate`. Playwright remains host-only and stays out of Docker/CI.
 
 ---
 
@@ -169,7 +171,8 @@ pnpm exec steiger ./src
 
 # e2e — host-only, run against `pnpm dev` (never in Docker/CI); write/extend a
 # spec for every new user-facing flow (AGENTS.md core rule 8)
-pnpm e2e
+pnpm e2e                  # fast iteration
+pnpm e2e:full             # phase gate, includes one real-model smoke
 
 # Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run

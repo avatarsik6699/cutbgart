@@ -59,25 +59,45 @@ function renderCanvas(
     mode: "add" as const,
     brushRadius: 10,
     brushHardness: 1,
+    viewport: { zoom: 1, offsetX: 0, offsetY: 0 },
+    onZoomIn: vi.fn(),
+    onZoomOut: vi.fn(),
+    onWheelZoom: vi.fn(),
+    onResetView: vi.fn(),
+    onPan: vi.fn(),
+    onPanBySourcePixels: vi.fn(),
     onStrokeCommitted: vi.fn(),
     ...overrides,
   };
   const view = render(<MaskCorrectionCanvas {...props} />);
+  const editor = screen.getByRole("application", { name: /mask correction editor/i });
   const canvas = screen.getByRole("img", { name: /mask correction canvas/i });
+  const rect = {
+    left: 0,
+    top: 0,
+    width: 200, // rendered at 2x — canvas internal pixels are half of client coords
+    height: 100,
+    right: 200,
+    bottom: 100,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  };
   const getBoundingClientRect = vi
     .spyOn(canvas, "getBoundingClientRect")
-    .mockReturnValue({
-      left: 0,
-      top: 0,
-      width: 200, // rendered at 2x — canvas internal pixels are half of client coords
-      height: 100,
-      right: 200,
-      bottom: 100,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-  return { ...view, canvas, getBoundingClientRect, handleRef, props };
+    .mockReturnValue(rect);
+  const getViewportBoundingClientRect = vi
+    .spyOn(editor, "getBoundingClientRect")
+    .mockReturnValue(rect);
+  return {
+    ...view,
+    editor,
+    canvas,
+    getBoundingClientRect,
+    getViewportBoundingClientRect,
+    handleRef,
+    props,
+  };
 }
 
 async function waitUntilReady() {
@@ -190,6 +210,140 @@ describe("MaskCorrectionCanvas", () => {
     // would paint this pixel. Refreshed geometry keeps it at matte x=10.
     expect(liveAlphaAt(15, 5)).toBe(0);
     expect(getBoundingClientRect).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps brush strokes through a zoomed and panned viewport back into source-image pixels", async () => {
+    const { canvas, getBoundingClientRect } = renderCanvas({
+      brushRadius: 1,
+      viewport: { zoom: 2, offsetX: 25, offsetY: 12.5 },
+    });
+    await waitUntilReady();
+    getBoundingClientRect.mockReturnValue({
+      left: -100,
+      top: -50,
+      width: 400,
+      height: 200,
+      right: 300,
+      bottom: 150,
+      x: -100,
+      y: -50,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 100, clientY: 50, pointerId: 1 });
+
+    expect(liveAlphaAt(50, 25)).toBe(255);
+    expect(liveAlphaAt(25, 12)).toBe(0);
+  });
+
+  it("zooms around the pointer with Ctrl/Cmd + wheel without painting", async () => {
+    const onWheelZoom = vi.fn();
+    const onStrokeCommitted = vi.fn();
+    const { editor, canvas } = renderCanvas({ onWheelZoom, onStrokeCommitted });
+    await waitUntilReady();
+
+    fireEvent.wheel(editor, { clientX: 80, clientY: 40, deltaY: -120, ctrlKey: true });
+
+    expect(onWheelZoom).toHaveBeenCalledWith(-120, { x: 40, y: 20 });
+    expect(onStrokeCommitted).not.toHaveBeenCalled();
+    expect(liveAlphaAt(40, 20)).toBe(0);
+    expect(canvas).toBeDefined();
+  });
+
+  it("pans with wheel and Shift+wheel in source-pixel space", async () => {
+    const onPanBySourcePixels = vi.fn();
+    const { editor } = renderCanvas({
+      viewport: { zoom: 2, offsetX: 0, offsetY: 0 },
+      onPanBySourcePixels,
+    });
+    await waitUntilReady();
+
+    fireEvent.wheel(editor, { deltaX: 12, deltaY: 20 });
+    fireEvent.wheel(editor, { deltaY: 30, shiftKey: true });
+
+    expect(onPanBySourcePixels).toHaveBeenNthCalledWith(1, 6, 10);
+    expect(onPanBySourcePixels).toHaveBeenNthCalledWith(2, 15, 0);
+  });
+
+  it("pans with Space+drag instead of painting", async () => {
+    const onPanBySourcePixels = vi.fn();
+    const onStrokeCommitted = vi.fn();
+    const { editor, canvas } = renderCanvas({ onPanBySourcePixels, onStrokeCommitted });
+    await waitUntilReady();
+
+    fireEvent.keyDown(editor, { key: " " });
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: 40, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 30, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 30, pointerId: 1 });
+    fireEvent.keyUp(editor, { key: " " });
+
+    expect(onPanBySourcePixels).toHaveBeenCalledWith(10, 5);
+    expect(onStrokeCommitted).not.toHaveBeenCalled();
+    expect(liveAlphaAt(40, 20)).toBe(0);
+  });
+
+  it("uses middle-button drag as an exclusive hand gesture", async () => {
+    const onPanBySourcePixels = vi.fn();
+    const onStrokeCommitted = vi.fn();
+    const { canvas } = renderCanvas({ onPanBySourcePixels, onStrokeCommitted });
+    await waitUntilReady();
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 80,
+      clientY: 40,
+      pointerId: 1,
+      button: 1,
+    });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 30, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 30, pointerId: 1 });
+
+    expect(onPanBySourcePixels).toHaveBeenCalledWith(10, 5);
+    expect(onStrokeCommitted).not.toHaveBeenCalled();
+  });
+
+  it("captures zoom shortcuts at window level and prevents browser zoom", async () => {
+    const onZoomIn = vi.fn();
+    renderCanvas({ onZoomIn });
+    await waitUntilReady();
+    const event = new KeyboardEvent("keydown", {
+      key: "+",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports editor keyboard shortcuts for zoom, reset, and arrow-key pan", async () => {
+    const onZoomIn = vi.fn();
+    const onZoomOut = vi.fn();
+    const onResetView = vi.fn();
+    const onPan = vi.fn();
+    const { editor } = renderCanvas({
+      viewport: { zoom: 2, offsetX: 10, offsetY: 5 },
+      onZoomIn,
+      onZoomOut,
+      onResetView,
+      onPan,
+    });
+    await waitUntilReady();
+
+    fireEvent.keyDown(editor, { key: "+", ctrlKey: true });
+    fireEvent.keyDown(editor, { key: "-", metaKey: true });
+    fireEvent.keyDown(editor, { key: "0", ctrlKey: true });
+    fireEvent.keyDown(editor, { key: "ArrowRight" });
+    fireEvent.keyDown(editor, { key: "ArrowDown", shiftKey: true });
+
+    expect(onZoomIn).toHaveBeenCalledWith({ x: 35, y: 17.5 });
+    expect(onZoomOut).toHaveBeenCalledWith({ x: 35, y: 17.5 });
+    expect(onResetView).toHaveBeenCalledTimes(1);
+    expect(onPan).toHaveBeenNthCalledWith(1, 1, 0, "normal");
+    expect(onPan).toHaveBeenNthCalledWith(2, 0, 1, "fast");
   });
 
   it("a gesture that never touches a pixel commits no patch (no empty undo steps)", async () => {
