@@ -9,7 +9,7 @@
     "generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy url baseLocale --silent",
     "generate:routes": "tsr generate",
     "generate-sitemap": "tsx scripts/generate-sitemap.ts",
-    "build": "pnpm generate-sitemap && vite build",
+    "build": "pnpm generate:code && pnpm generate-sitemap && vite build",
     "start": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
