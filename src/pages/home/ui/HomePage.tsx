@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type {
   AlphaMatte,
+  BackgroundFill,
   QualityMode,
   SourceImage,
 } from "../../../entities/processed-image";
@@ -13,6 +14,7 @@ import {
   type MaskCanvasHandle,
 } from "../../../features/correct-mask";
 import { DownloadResultButton } from "../../../features/download-result";
+import { BackgroundFillSelector } from "../../../features/background-replacement";
 import { DownloadAllButton } from "../../../features/download-result";
 import { BatchGrid, useBatchProcessing } from "../../../features/batch-processing";
 import {
@@ -39,6 +41,7 @@ function pathLabel(path: "webgpu" | "wasm"): string {
 interface MaskCorrectionPanelProps {
   sourceImage: SourceImage;
   originalMatte: AlphaMatte;
+  backgroundFill?: BackgroundFill;
   onDone: (matte: AlphaMatte) => void;
   doneDisabled?: boolean;
   onViewAnnouncementChange: (announcement: string) => void;
@@ -53,6 +56,7 @@ interface MaskCorrectionPanelProps {
 function MaskCorrectionPanel({
   sourceImage,
   originalMatte,
+  backgroundFill,
   onDone,
   doneDisabled = false,
   onViewAnnouncementChange,
@@ -104,6 +108,7 @@ function MaskCorrectionPanel({
       <MaskCorrectionCanvas
         ref={canvasHandleRef}
         sourceImage={sourceImage}
+        backgroundFill={backgroundFill}
         initialMatte={originalMatte}
         original={originalMatte}
         mode={mode}
@@ -188,6 +193,14 @@ export function HomePage() {
   const [finalizingCorrection, setFinalizingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState<DisplayError | null>(null);
   const [correctionViewAnnouncement, setCorrectionViewAnnouncement] = useState("");
+  const [previewFill, setPreviewFill] = useState<BackgroundFill>({ type: "transparent" });
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [batchPreviewFills, setBatchPreviewFills] = useState<
+    Record<string, BackgroundFill>
+  >({});
+  const [batchBackgroundBusy, setBatchBackgroundBusy] = useState<Record<string, boolean>>(
+    {},
+  );
   const retryCorrectionRef = useRef<(() => void) | null>(null);
   const correctionRunRef = useRef(0);
   // TanStack Start SSRs this page's markup before client hydration attaches
@@ -238,6 +251,8 @@ export function HomePage() {
     exitCorrecting,
     extractMatte,
     recomposite,
+    applyBackgroundFill,
+    replaceResult,
   } = useBackgroundRemoval(qualityMode);
   const batch = useBatchProcessing({
     qualityMode,
@@ -255,6 +270,8 @@ export function HomePage() {
     setCorrectionError(null);
     setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
+    setPreviewFill({ type: "transparent" });
+    setBackgroundBusy(false);
     if (!result.ok) {
       setUploadError(result.error);
       return;
@@ -282,6 +299,8 @@ export function HomePage() {
     setOriginalMatte(null);
     setExtractingMatte(false);
     setFinalizingCorrection(false);
+    setPreviewFill({ type: "transparent" });
+    setBackgroundBusy(false);
     reset();
   }
 
@@ -324,20 +343,45 @@ export function HomePage() {
   function handleBatchEditMask() {
     if (!selectedBatchItem?.processedImage) return;
     const image = selectedBatchItem.processedImage;
+    const runId = correctionRunRef.current + 1;
+    correctionRunRef.current = runId;
     setExtractingMatte(true);
     void batch
       .extractMatte(image)
       .then((matte) => {
+        // The user may have selected a different batch item while this
+        // extraction was in flight — applying it now would seed the mask
+        // editor with a matte whose dimensions don't match the now-selected
+        // image's source. `handleSelectBatchItem` bumps `correctionRunRef`
+        // on every switch, so a stale run is simply dropped here.
+        if (correctionRunRef.current !== runId) return;
         setExtractingMatte(false);
         setOriginalMatte(matte);
       })
       .catch((error: unknown) => {
+        if (correctionRunRef.current !== runId) return;
         setExtractingMatte(false);
         setCorrectionError({
           message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
           action: "retry",
         });
       });
+  }
+
+  function handleSelectBatchItem(id: string) {
+    if (id !== batch.session.selectedItemId) {
+      // Clear any in-progress correction state from the previously selected
+      // item — otherwise a stale `originalMatte` (wrong dimensions for the
+      // newly selected image) or a stale extraction/error can leak across
+      // the switch. Bumping `correctionRunRef` also invalidates any
+      // in-flight `extractMatte` from the item being switched away from.
+      correctionRunRef.current += 1;
+      setCorrectionError(null);
+      setExtractingMatte(false);
+      setOriginalMatte(null);
+      setCorrectionViewAnnouncement("");
+    }
+    batch.selectItem(id);
   }
 
   function handleBatchDoneCorrecting(correctedMatte: AlphaMatte) {
@@ -492,11 +536,14 @@ export function HomePage() {
             snapshot={batch.snapshot}
             selectedItemId={batch.session.selectedItemId}
             modelLoad={batch.session.modelLoads[batchModelKey]}
-            onSelect={batch.selectItem}
+            onSelect={handleSelectBatchItem}
             onRetry={batch.retryItem}
           />
           <div className="flex flex-wrap gap-3">
-            <DownloadAllButton items={batch.session.items} />
+            <DownloadAllButton
+              items={batch.session.items}
+              disabled={Object.values(batchBackgroundBusy).some(Boolean)}
+            />
             <Button type="button" variant="outline" onClick={batch.reset}>
               Clear batch
             </Button>
@@ -508,10 +555,50 @@ export function HomePage() {
             >
               <BeforeAfterSlider
                 before={selectedBatchItem.processedImage.source}
-                after={selectedBatchItem.processedImage.result}
+                after={
+                  selectedBatchItem.processedImage.cutout ??
+                  selectedBatchItem.processedImage.result
+                }
+                backgroundFill={
+                  batchPreviewFills[selectedBatchItem.id] ??
+                  selectedBatchItem.processedImage.backgroundFill
+                }
+              />
+              <BackgroundFillSelector
+                image={{
+                  source: selectedBatchItem.processedImage.source,
+                  backgroundFill: selectedBatchItem.processedImage.backgroundFill,
+                }}
+                onPreview={(fill) => {
+                  setBatchPreviewFills((current) => ({
+                    ...current,
+                    [selectedBatchItem.id]: fill,
+                  }));
+                }}
+                onApply={(fill) =>
+                  batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
+                }
+                onResult={(updated) => {
+                  batch.replaceResult(selectedBatchItem.id, updated);
+                  setBatchPreviewFills((current) => ({
+                    ...current,
+                    [selectedBatchItem.id]: updated.backgroundFill ?? {
+                      type: "transparent",
+                    },
+                  }));
+                }}
+                onBusyChange={(busy) =>
+                  setBatchBackgroundBusy((current) => ({
+                    ...current,
+                    [selectedBatchItem.id]: busy,
+                  }))
+                }
               />
               <div className="flex flex-wrap gap-3">
-                <DownloadResultButton image={selectedBatchItem.processedImage.result} />
+                <DownloadResultButton
+                  image={selectedBatchItem.processedImage.result}
+                  disabled={batchBackgroundBusy[selectedBatchItem.id]}
+                />
                 <Button
                   type="button"
                   variant="secondary"
@@ -524,7 +611,7 @@ export function HomePage() {
                   type="button"
                   variant="secondary"
                   onClick={handleBatchEditMask}
-                  disabled={extractingMatte}
+                  disabled={extractingMatte || batchBackgroundBusy[selectedBatchItem.id]}
                 >
                   {extractingMatte ? "Preparing…" : "Edit mask"}
                 </Button>
@@ -540,6 +627,7 @@ export function HomePage() {
             <MaskCorrectionPanel
               sourceImage={selectedBatchItem.processedImage.source}
               originalMatte={originalMatte}
+              backgroundFill={selectedBatchItem.processedImage.backgroundFill}
               onDone={handleBatchDoneCorrecting}
               doneDisabled={finalizingCorrection}
               onViewAnnouncementChange={setCorrectionViewAnnouncement}
@@ -591,9 +679,26 @@ export function HomePage() {
 
       {!displayError && state.status === "result" && (
         <div className="flex flex-col gap-4">
-          <BeforeAfterSlider before={state.result.source} after={state.result.result} />
+          <BeforeAfterSlider
+            before={state.result.source}
+            after={state.result.cutout ?? state.result.result}
+            backgroundFill={previewFill}
+          />
+          <BackgroundFillSelector
+            image={{
+              source: state.result.source,
+              backgroundFill: state.result.backgroundFill,
+            }}
+            onPreview={setPreviewFill}
+            onApply={(fill) => applyBackgroundFill(state.result, fill)}
+            onResult={(updated) => {
+              replaceResult(updated);
+              setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
+            }}
+            onBusyChange={setBackgroundBusy}
+          />
           <div className="flex flex-wrap gap-3">
-            <DownloadResultButton image={state.result.result} />
+            <DownloadResultButton image={state.result.result} disabled={backgroundBusy} />
             <Button type="button" variant="outline" onClick={handleReset}>
               Process another image
             </Button>
@@ -606,7 +711,7 @@ export function HomePage() {
               type="button"
               variant="secondary"
               onClick={handleEditMask}
-              disabled={extractingMatte}
+              disabled={extractingMatte || backgroundBusy}
             >
               {extractingMatte ? "Preparing…" : "Edit mask"}
             </Button>
@@ -633,6 +738,7 @@ export function HomePage() {
           <MaskCorrectionPanel
             sourceImage={state.result.source}
             originalMatte={originalMatte}
+            backgroundFill={state.result.backgroundFill}
             onDone={handleDoneCorrecting}
             doneDisabled={finalizingCorrection}
             onViewAnnouncementChange={setCorrectionViewAnnouncement}

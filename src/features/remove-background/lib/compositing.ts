@@ -1,9 +1,68 @@
 import type {
   AlphaMatte,
+  BackgroundFill,
   ProcessedImage,
   QualityMode,
   SourceImage,
 } from "../../../entities/processed-image";
+
+export interface BackgroundGeometry {
+  width: number;
+  height: number;
+}
+
+export function getCoverRect(
+  source: BackgroundGeometry,
+  target: BackgroundGeometry,
+): { x: number; y: number; width: number; height: number } {
+  const scale = Math.max(target.width / source.width, target.height / source.height);
+  const width = source.width * scale;
+  const height = source.height * scale;
+  return {
+    x: (target.width - width) / 2,
+    y: (target.height - height) / 2,
+    width,
+    height,
+  };
+}
+
+async function drawBackground(
+  context: OffscreenCanvasRenderingContext2D,
+  fill: BackgroundFill,
+  width: number,
+  height: number,
+): Promise<void> {
+  if (fill.type === "transparent") return;
+  if (fill.type === "color") {
+    context.fillStyle = fill.value;
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+  if (fill.type === "gradient") {
+    const gradient =
+      fill.kind === "linear"
+        ? context.createLinearGradient(0, height / 2, width, height / 2)
+        : context.createRadialGradient(
+            width / 2,
+            height / 2,
+            0,
+            width / 2,
+            height / 2,
+            Math.hypot(width / 2, height / 2),
+          );
+    for (const stop of fill.stops) gradient.addColorStop(stop.offset, stop.color);
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+    return;
+  }
+  const bitmap = await createImageBitmap(fill.blob);
+  try {
+    const rect = getCoverRect(bitmap, { width, height });
+    context.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height);
+  } finally {
+    bitmap.close();
+  }
+}
 
 /**
  * Overwrites the alpha channel of an RGBA pixel buffer with a single-channel
@@ -36,6 +95,7 @@ export async function compositeProcessedImage(
   source: SourceImage,
   matte: AlphaMatte,
   qualityMode: QualityMode,
+  backgroundFill: BackgroundFill = { type: "transparent" },
 ): Promise<ProcessedImage> {
   const bitmap = await createImageBitmap(source.blob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -45,15 +105,31 @@ export async function compositeProcessedImage(
   }
 
   ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   imageData.data.set(applyAlphaMatte(imageData.data, matte));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.putImageData(imageData, 0, 0);
+  const cutout = await canvas.convertToBlob({ type: "image/png" });
+  ctx.globalCompositeOperation = "destination-over";
+  await drawBackground(ctx, backgroundFill, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = "source-over";
+  bitmap.close();
 
-  const result = await canvas.convertToBlob({ type: "image/png" });
+  const result =
+    backgroundFill.type === "transparent"
+      ? cutout
+      : await canvas.convertToBlob({ type: "image/png" });
 
-  return { source, result, qualityMode };
+  return {
+    source,
+    result,
+    cutout,
+    qualityMode,
+    alphaMatte: matte,
+    backgroundFill,
+    backgroundPending: false,
+  };
 }
 
 /**
@@ -92,6 +168,7 @@ export async function extractAlphaMatte(result: Blob): Promise<AlphaMatte> {
 export async function recompositeProcessedImage(
   image: ProcessedImage,
   matte: AlphaMatte,
+  backgroundFill: BackgroundFill = image.backgroundFill ?? { type: "transparent" },
 ): Promise<ProcessedImage> {
-  return compositeProcessedImage(image.source, matte, image.qualityMode);
+  return compositeProcessedImage(image.source, matte, image.qualityMode, backgroundFill);
 }

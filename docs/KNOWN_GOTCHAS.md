@@ -140,15 +140,17 @@
 - **Prevention**: new UI E2E tests should install the mock inference Worker. Add behavior to the
   single real-model smoke only when it specifically validates the model/CDN boundary.
 
-### Pre-optimize lazily imported Transformers.js in Vite development
+### Pre-optimize lazily imported dependencies in Vite development
 
 - **Symptoms**: the first real upload reaches "Loading model", then the page unexpectedly reloads
-  and returns to the idle upload state; an E2E test waits forever for the result slider.
-- **Root cause**: the inference worker imports `@huggingface/transformers` only after user action,
-  so Vite's initial dependency scan misses it. Late discovery triggers dependency optimization and
-  a full-page reload, which discards the non-persistent selected file.
-- **Fix**: keep `@huggingface/transformers` in `vite.config.ts`'s `optimizeDeps.include` so Vite
-  prepares it before serving the first page.
+  and returns to the idle upload state; or the first ZIP download never starts while the browser
+  reports `504 (Outdated Optimize Dep)` and a failed dynamic import.
+- **Root cause**: the inference worker imports `@huggingface/transformers` only after upload and ZIP
+  assembly imports `client-zip` only after download. Vite's initial dependency scan can miss these
+  user-action-only paths. Late discovery triggers optimization/reload or invalidates the module URL
+  already requested by the page.
+- **Fix**: keep both `@huggingface/transformers` and `client-zip` in `vite.config.ts`'s
+  `optimizeDeps.include` so Vite prepares them before serving the first page.
 - **Prevention**: any new large dependency imported only from a lazy worker/route should be checked
   for the same first-use optimization reload during local development.
 
@@ -228,6 +230,30 @@
 - **Prevention**: functional state updaters must only calculate and return state. Never perform
   Worker messages, network calls, ref mutation, timers, analytics, or other externally observable
   work inside them.
+
+### A hook value derived from a ref read during render silently freezes in `renderHook` tests
+
+- **Symptoms**: a Vitest `renderHook` test's `result.current` gets stuck on an older value (e.g. a
+  derived `dirty`/`stale` boolean) after an `await act(...)` that resolves an async update, even
+  though extra `act()` flushes, `waitFor` polling for a full second, and manual render-count
+  logging all confirm the hook's render function *did* re-run with the correct value. A parallel
+  test that renders the real component with `render()` instead of `renderHook()` shows no such lag.
+- **Root cause**: `@testing-library/react`'s `renderHook` snapshots the hook's return value into
+  `result.current` from a wrapper `useEffect` with no dependency array, not synchronously during
+  render. Deriving a value in the hook body by reading a `ref.current` (e.g.
+  `const dirty = !sameFill(fill, someRef.current)`) is itself invalid — `react-hooks/refs`
+  (`eslint-plugin-react-hooks` v7) flags reading a ref during render — and in practice that
+  wrapper effect can fail to re-fire for the render that follows an async `setState` sequence whose
+  net value matches an earlier render (observed: `saving` went `true -> false`, landing back on a
+  `false` already held by `result.current`), leaving the derived ref-based value permanently stale
+  in the test even though the app's real component tree is unaffected.
+  See `feat/phase-11`'s `use-background-fill.ts` history for a live repro/fix.
+- **Fix**: never read a ref during render to compute a returned/derived value — track it as real
+  `useState` (updated via its setter at the same points the ref would have been mutated) so it
+  participates in React's normal update/commit cycle instead of this snapshot indirection.
+- **Prevention**: treat any `eslint` `react-hooks/refs` error as a real bug, not a false positive,
+  even if a quick manual/browser check seems to work — `renderHook`-based unit tests are exactly
+  where the invalid pattern's fallout shows up first.
 
 <!--
 ### [Title — short, punchy, searchable]

@@ -8,6 +8,7 @@ export interface DownloadResultButtonProps {
   /** Composited PNG-with-alpha result (`ProcessedImage.result`, Phase 02). */
   image: Blob;
   fileName?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -18,6 +19,7 @@ export interface DownloadResultButtonProps {
 export function DownloadResultButton({
   image,
   fileName = "result.png",
+  disabled = false,
 }: DownloadResultButtonProps) {
   const urlRef = useRef<string | null>(null);
 
@@ -33,6 +35,7 @@ export function DownloadResultButton({
   return (
     <Button
       type="button"
+      disabled={disabled}
       onClick={() => {
         const url = urlRef.current;
         if (!url) return;

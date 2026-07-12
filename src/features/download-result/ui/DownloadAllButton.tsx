@@ -3,15 +3,25 @@ import { createResultsZip } from "../lib/create-results-zip";
 
 interface DownloadableItem {
   originalFileName: string;
-  processedImage?: { result: Blob };
+  processedImage?: { result: Blob; backgroundPending?: boolean };
 }
 
-export function DownloadAllButton({ items }: { items: DownloadableItem[] }) {
+export function DownloadAllButton({
+  items,
+  disabled = false,
+}: {
+  items: DownloadableItem[];
+  disabled?: boolean;
+}) {
   const completed = items.filter((item) => item.processedImage);
   return (
     <Button
       type="button"
-      disabled={!completed.length}
+      disabled={
+        disabled ||
+        !completed.length ||
+        completed.some((item) => item.processedImage?.backgroundPending)
+      }
       onClick={() => {
         void createResultsZip(completed).then((blob) => {
           const url = URL.createObjectURL(blob);

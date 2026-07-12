@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AlphaMatte } from "../../../entities/processed-image";
-import { applyAlphaMatte } from "./compositing";
+import { applyAlphaMatte, getCoverRect } from "./compositing";
 
 function makeMatte(alphaValues: number[]): AlphaMatte {
   return {
@@ -36,5 +36,29 @@ describe("applyAlphaMatte", () => {
     const matte = makeMatte([10, 20]);
 
     expect(() => applyAlphaMatte(rgba, matte)).toThrow(/does not match matte dimensions/);
+  });
+});
+
+describe("getCoverRect", () => {
+  it("centers and crops a wide background without stretching", () => {
+    expect(
+      getCoverRect({ width: 400, height: 200 }, { width: 100, height: 100 }),
+    ).toEqual({
+      x: -50,
+      y: 0,
+      width: 200,
+      height: 100,
+    });
+  });
+
+  it("centers and crops a tall background without bars", () => {
+    expect(
+      getCoverRect({ width: 100, height: 200 }, { width: 100, height: 100 }),
+    ).toEqual({
+      x: 0,
+      y: -50,
+      width: 100,
+      height: 200,
+    });
   });
 });

@@ -29,6 +29,7 @@
 | PHASE_08 | ✅ done | v0.08.0 | ✅ | 🤖 agent | Correction editor hardening |
 | PHASE_09 | ✅ done | v0.09.0 | ✅ | 🤖 agent | Correction zoom & pan |
 | PHASE_10 | ✅ done | v0.10.0 | ✅ | 🤖 agent | Batch processing |
+| PHASE_11 | ✅ done | v0.11.0 | ✅ | 🤖 agent | Background replacement |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -40,7 +41,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `10` · **Phase in progress:** `—`
+**Phase completed:** `11` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -238,6 +239,43 @@ interface BatchSession {
 }
 ```
 
+```ts
+// src/features/background-replacement/model/types.ts — Phase 11, per SPEC.md §1.3, §2.2, §5.2–§5.4
+// Composited behind the cutout via the existing worker-side OffscreenCanvas pipeline
+// (features/remove-background/lib/compositing.ts); never triggers a new inference pass.
+
+type HexColor = `#${string}`;
+
+interface BackgroundGradientStop {
+  offset: 0 | 1;
+  color: HexColor;
+}
+
+type BackgroundFill =
+  | { type: "transparent" }
+  | { type: "color"; value: HexColor }
+  | {
+      type: "gradient";
+      kind: "linear" | "radial";
+      stops: readonly [
+        BackgroundGradientStop & { offset: 0 },
+        BackgroundGradientStop & { offset: 1 },
+      ];
+    }
+  | { type: "image"; blob: Blob };
+
+// transparent is the default (preserves the pre-Phase-11 PNG-with-alpha behavior). Colors are
+// uppercase opaque sRGB `#RRGGBB`; invalid values fall back to transparent, never an invented
+// color. Gradients are fixed two-stop presets (three linear, three radial — see PHASE_11.md
+// Contracts for the exact hex values/geometry); custom angles/stops are deferred beyond Phase 11.
+// Custom-image fills accept the existing JPEG/PNG/WebP set up to 20 MB, downscaled above 4096px,
+// drawn with centered aspect-preserving `cover`. Fill selection is item-local in batch mode; the
+// same recomposited blob drives preview, individual download, and ZIP output. `preview()` is a
+// local CSS-only update (no worker call); an explicit "Save background" action performs the one
+// PNG recomposite/encode, and download/mask-correction entry are gated on that saved (non-`dirty`)
+// state so neither ever serves a stale or preview-only file.
+```
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -320,6 +358,72 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-12 — Phase 11 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_11 gate passed (type-check, unit tests, Steiger arch lint, Docker
+bootstrap/smoke, and the full `pnpm e2e:full` suite — 63/63 deterministic cross-browser tests plus
+the serialized real-model smoke — all green) and all Architect Review Notes resolved
+
+### Changes / Decision
+- Added the `features/background-replacement` slice and the `BackgroundFill` union (transparent /
+  opaque color / two-stop linear-or-radial gradient preset / in-memory custom image), composited
+  behind the cutout through the existing worker-side `OffscreenCanvas` pipeline without any new
+  inference pass (SPEC.md §1.3, §2.2, §5.2–§5.4, §7.7, §8).
+- Added a keyboard-operable, swatch-based background-fill selector (inline draggable color palette,
+  six fixed gradient presets, custom-image file input) wired into both the single-image and
+  selected-batch-item `result` flows; a fill choice is item-local in batch mode and survives
+  result ⇄ correcting.
+- Preview is fully decoupled from encoding: `preview()` only drives an instant local CSS update and
+  marks the fill unsaved, with zero worker calls while browsing colors/gradients/images. An explicit
+  "Save background" action performs the one PNG recomposite/encode on demand; individual/ZIP
+  download and mask-correction entry are gated on the saved (non-`dirty`) state so neither ever
+  serves a stale or preview-only file.
+- Added Vitest coverage for fill selection and in-memory image lifecycle, plus Playwright coverage
+  switching color → gradient → uploaded image in `result` and verifying the downloaded PNG reflects
+  each selected fill. No server endpoint, persistence, analytics event, or environment variable was
+  added — custom background blobs/object URLs stay client-side and are released on replace/reset.
+- Five Architect Review Notes rounds resolved during implementation: continuous native-input preview
+  without blocking, item-local fill rendering through the live correction canvas (brush/undo-redo/
+  zoom/pan), circular swatches for scannability, checkerboard restricted to the transparent swatch
+  only, the inline draggable palette replacing the native color picker (which closed on every click),
+  and finally the preview/encode decoupling + explicit Save described above (the debounced-then-
+  encode approach still put a full recomposite on the critical path of nearly every interaction).
+
+### Affected Phases / Consequences
+- No breaking contract change; `BackgroundFill` and the save/dirty gating are additive to the
+  existing `ProcessedImage`/`BatchItem` result contract.
+- `use-background-fill` tracks the last-saved fill via `useState`, not a ref read during render — see
+  `docs/KNOWN_GOTCHAS.md` § "A hook value derived from a ref read during render silently freezes in
+  `renderHook` tests" for the reusable pitfall this phase recorded.
+
+## 2026-07-12 — Phase 11 background-fill runtime decisions
+
+**Type**: decision
+**Author**: AI (architect-delegated)
+**Triggered by**: Architect delegated the unresolved Phase 11 color, gradient, and custom-image
+contracts after `/phase-init 11`.
+
+### Changes / Decision
+- Background colors use opaque uppercase sRGB `#RRGGBB`. Transparency remains its own explicit fill
+  variant; invalid color values fall back to transparent.
+- MVP gradients use exactly two stops at offsets `0` and `1` and six fixed presets: three linear
+  (`Sunset`, `Ocean`, `Mint`) and three radial (`Spotlight`, `Peach`, `Night`). Linear geometry is
+  deterministic left-to-right; radial geometry is centered and extends to the farthest corner.
+  Custom angles, stops, and gradient colors are deferred beyond Phase 11.
+- Custom backgrounds accept the existing JPEG/PNG/WebP set up to 20 MB, are downscaled above 4096 px,
+  and are rendered with centered aspect-preserving `cover` into the unchanged output dimensions.
+  SVG/GIF/remote URLs are not accepted. Replaced resources are released immediately; decode failure
+  retains the last valid fill and presents a recoverable error.
+- Fill selection is item-local in batch mode. The same recomposited blob drives preview, individual
+  download, and ZIP output; changing a fill never reruns inference and never leaves the device.
+
+### Affected Phases / Consequences
+- PHASE_11 — all `[TODO: verify]` markers are resolved; implementation and Playwright assertions can
+  use deterministic pixel geometry and preset values.
+- No server endpoint, persistence, analytics event, environment variable, or privacy-contract change.
 
 ## 2026-07-12 — Phase 10 complete
 

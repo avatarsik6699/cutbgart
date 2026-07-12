@@ -39,7 +39,8 @@ export type RemoveBackgroundAction =
   | { type: "FAILED"; error: RemoveBackgroundError }
   | { type: "RESET" }
   | { type: "ENTER_CORRECTING" }
-  | { type: "EXIT_CORRECTING"; result: ProcessedImage };
+  | { type: "EXIT_CORRECTING"; result: ProcessedImage }
+  | { type: "REPLACE_RESULT"; result: ProcessedImage };
 
 export const initialRemoveBackgroundState: RemoveBackgroundState = { status: "idle" };
 
@@ -90,6 +91,9 @@ export function removeBackgroundReducer(
       // mode; "process another image" goes through RESET above instead.
       if (action.type === "SELECT_FILE") {
         return { status: "model-loading", qualityMode: action.qualityMode, progress: 0 };
+      }
+      if (action.type === "REPLACE_RESULT") {
+        return { status: "result", result: action.result };
       }
       return action.type === "ENTER_CORRECTING"
         ? { status: "correcting", result: state.result }

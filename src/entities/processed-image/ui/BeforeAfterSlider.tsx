@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { SourceImage } from "../model/types";
+import type { BackgroundFill, SourceImage } from "../model/types";
 
 export interface BeforeAfterSliderProps {
   before: SourceImage;
   after: Blob;
+  backgroundFill?: BackgroundFill;
   alt?: string;
 }
 
 /** Mirrors `features/remove-background`'s `useObjectUrls` (RemoveBackgroundTestPanel). */
-function useObjectUrl(blob: Blob): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-
+function useObjectUrl(blob: Blob | null): string | null {
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
   useEffect(() => {
-    const objectUrl = URL.createObjectURL(blob);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronizing React state with an externally-owned Blob URL (an external system), not deriving state from props.
-    setUrl(objectUrl);
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      if (url) URL.revokeObjectURL(url);
     };
-  }, [blob]);
-
+  }, [url]);
   return url;
 }
 
@@ -35,6 +31,7 @@ const STEP_PERCENT = 5;
 export function BeforeAfterSlider({
   before,
   after,
+  backgroundFill = { type: "transparent" },
   alt = "Image before and after background removal",
 }: BeforeAfterSliderProps) {
   const [position, setPosition] = useState(50);
@@ -43,6 +40,24 @@ export function BeforeAfterSlider({
 
   const beforeUrl = useObjectUrl(before.blob);
   const afterUrl = useObjectUrl(after);
+  const backgroundImageUrl = useObjectUrl(
+    backgroundFill.type === "image" ? backgroundFill.blob : null,
+  );
+  const backgroundStyle =
+    backgroundFill.type === "color"
+      ? { backgroundColor: backgroundFill.value, backgroundImage: "none" }
+      : backgroundFill.type === "gradient"
+        ? {
+            backgroundImage: `${backgroundFill.kind === "linear" ? "linear-gradient(to right" : "radial-gradient(circle at center"}, ${backgroundFill.stops[0].color}, ${backgroundFill.stops[1].color})`,
+          }
+        : backgroundFill.type === "image" && backgroundImageUrl
+          ? {
+              backgroundImage: `url("${backgroundImageUrl}")`,
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "cover",
+            }
+          : undefined;
 
   const updatePositionFromClientX = useCallback((clientX: number) => {
     const container = containerRef.current;
@@ -84,8 +99,16 @@ export function BeforeAfterSlider({
         // container) show through unchanged, making the slider look like it
         // did nothing at all.
         <div
-          className="absolute inset-0 overflow-hidden bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
-          style={{ clipPath: `inset(0 ${String(100 - position)}% 0 0)` }}
+          className={`absolute inset-0 overflow-hidden ${
+            backgroundFill.type === "transparent"
+              ? "bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
+              : ""
+          }`}
+          data-testid="after-preview-background"
+          style={{
+            ...backgroundStyle,
+            clipPath: `inset(0 ${String(100 - position)}% 0 0)`,
+          }}
         >
           <img
             src={afterUrl}

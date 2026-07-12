@@ -50,4 +50,27 @@ describe("BeforeAfterSlider", () => {
     fireEvent.keyDown(slider, { key: "Home" });
     expect(slider.getAttribute("aria-valuenow")).toBe("0");
   });
+
+  it("previews a selected fill behind the transparent cutout", () => {
+    render(
+      <BeforeAfterSlider
+        before={before}
+        after={after}
+        backgroundFill={{ type: "color", value: "#123456" }}
+      />,
+    );
+
+    const background = screen.getByTestId("after-preview-background");
+    expect(background.style.backgroundColor).toBe("rgb(18, 52, 86)");
+    expect(background.style.backgroundImage).toBe("none");
+    expect(background.className).not.toContain("repeating-conic-gradient");
+  });
+
+  it("shows the checkerboard only for a transparent fill", () => {
+    render(<BeforeAfterSlider before={before} after={after} />);
+
+    expect(screen.getByTestId("after-preview-background").className).toContain(
+      "repeating-conic-gradient",
+    );
+  });
 });

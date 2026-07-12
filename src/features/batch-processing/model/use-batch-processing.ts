@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   AlphaMatte,
+  BackgroundFill,
   InferencePath,
   ProcessedImage,
   QualityMode,
@@ -24,7 +25,13 @@ type BatchWorkerRequest =
       source: SourceImage;
     }
   | { type: "extract-alpha-matte"; requestId: string; result: Blob }
-  | { type: "recomposite"; requestId: string; image: ProcessedImage; matte: AlphaMatte };
+  | {
+      type: "recomposite";
+      requestId: string;
+      image: ProcessedImage;
+      matte: AlphaMatte;
+      backgroundFill?: BackgroundFill;
+    };
 type BatchWorkerResponse =
   | {
       type: "model-progress";
@@ -39,7 +46,13 @@ type BatchWorkerResponse =
       inferencePath: InferencePath;
       dtype: string;
     }
-  | { type: "process-result"; requestId: string; result: Blob; durationMs: number }
+  | {
+      type: "process-result";
+      requestId: string;
+      result: Blob;
+      matte: AlphaMatte;
+      durationMs: number;
+    }
   | {
       type: "alpha-matte-result";
       requestId: string;
@@ -256,7 +269,11 @@ export function useBatchProcessing({
           processedImage: {
             source: item.source,
             result: message.result,
+            cutout: message.result,
             qualityMode: item.qualityMode,
+            alphaMatte: message.matte,
+            backgroundFill: { type: "transparent" },
+            backgroundPending: false,
           },
           processingProgress: {
             ...item.processingProgress,
@@ -419,15 +436,17 @@ export function useBatchProcessing({
   );
   const extractMatte = useCallback(
     (image: ProcessedImage) =>
-      new Promise<AlphaMatte>((resolve, reject) => {
-        const requestId = `batch-matte-${crypto.randomUUID()}`;
-        pendingMattesRef.current.set(requestId, { resolve, reject });
-        workerRef.current?.postMessage({
-          type: "extract-alpha-matte",
-          requestId,
-          result: image.result,
-        } satisfies BatchWorkerRequest);
-      }),
+      image.alphaMatte
+        ? Promise.resolve(image.alphaMatte)
+        : new Promise<AlphaMatte>((resolve, reject) => {
+            const requestId = `batch-matte-${crypto.randomUUID()}`;
+            pendingMattesRef.current.set(requestId, { resolve, reject });
+            workerRef.current?.postMessage({
+              type: "extract-alpha-matte",
+              requestId,
+              result: image.result,
+            } satisfies BatchWorkerRequest);
+          }),
     [],
   );
   const recomposite = useCallback(
@@ -442,6 +461,27 @@ export function useBatchProcessing({
           matte,
         } satisfies BatchWorkerRequest);
       }),
+    [],
+  );
+  const applyBackgroundFill = useCallback(
+    (image: ProcessedImage, backgroundFill: BackgroundFill) => {
+      const matte = image.alphaMatte;
+      if (!matte) return Promise.reject(new Error("Background matte is unavailable"));
+      return new Promise<ProcessedImage>((resolve, reject) => {
+        const requestId = `batch-background-${crypto.randomUUID()}`;
+        pendingCompositesRef.current.set(requestId, {
+          resolve,
+          reject,
+        });
+        workerRef.current?.postMessage({
+          type: "recomposite",
+          requestId,
+          image,
+          matte,
+          backgroundFill,
+        } satisfies BatchWorkerRequest);
+      });
+    },
     [],
   );
   const retryItem = useCallback(
@@ -483,6 +523,7 @@ export function useBatchProcessing({
     retryItem,
     extractMatte,
     recomposite,
+    applyBackgroundFill,
     reset,
   };
 }
