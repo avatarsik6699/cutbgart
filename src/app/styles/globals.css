@@ -55,7 +55,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.546 0.215 264.376);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -90,8 +90,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.623 0.188 264.376);
+  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -126,5 +126,90 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* widgets/tool-workspace (Phase 12): single column on mobile/tablet with the
+   pre-Phase-12 top-to-bottom stacking order preserved; two columns from `lg`
+   up — preview surface left, control rail right — with the toggle/info/
+   notice/error rows and the processing-log accordion spanning both columns. */
+@layer components {
+  .tool-workspace-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "toggle"
+      "info"
+      "notice"
+      "error"
+      "batch-header"
+      "surface"
+      "rail"
+      "batch"
+      "log";
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .tool-workspace-grid {
+      grid-template-columns: 3fr 2fr;
+      grid-template-areas:
+        "toggle toggle"
+        "info info"
+        "notice notice"
+        "error error"
+        "batch-header batch-header"
+        "surface rail"
+        "batch batch"
+        "log log";
+    }
+  }
+
+  .tool-workspace-idle {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "toggle"
+      "info"
+      "notice"
+      "error"
+      "surface"
+      "batch"
+      "log";
+  }
+
+  .tool-workspace-batch {
+    grid-template-areas:
+      "info"
+      "notice"
+      "error"
+      "batch-header"
+      "surface"
+      "rail"
+      "batch"
+      "log";
+  }
+
+  @media (min-width: 64rem) {
+    .tool-workspace-batch {
+      grid-template-areas:
+        "info info"
+        "notice notice"
+        "error error"
+        "batch-header batch-header"
+        "surface rail"
+        "batch batch"
+        "log log";
+    }
+  }
+
+  .tool-workspace-idle > [style*="surface"],
+  .tool-workspace-idle > .\[grid-area\:surface\] {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+  }
+
+  .tool-workspace-idle > .\[grid-area\:toggle\] {
+    justify-self: center;
   }
 }

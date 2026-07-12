@@ -1,4 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { m } from "@/paraglide/messages";
 
 import {
   extractAlphaRegion,
@@ -584,14 +585,14 @@ export function MaskCorrectionCanvas({
     <div
       ref={viewportRef}
       role="application"
-      aria-label="Mask correction editor"
+      aria-label={m.maskEditor()}
       tabIndex={0}
       className="relative overflow-hidden rounded-xl bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Mask correction canvas — drag to paint corrections"
+        aria-label={m.maskCanvas()}
         className="block w-full touch-none"
         style={{
           ...backgroundStyle,

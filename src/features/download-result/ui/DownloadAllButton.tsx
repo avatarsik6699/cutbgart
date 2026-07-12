@@ -1,4 +1,6 @@
 import { Button } from "@/shared/ui";
+import { cn } from "@/shared/lib/utils";
+import { m } from "@/paraglide/messages";
 import { createResultsZip } from "../lib/create-results-zip";
 
 interface DownloadableItem {
@@ -9,9 +11,11 @@ interface DownloadableItem {
 export function DownloadAllButton({
   items,
   disabled = false,
+  className,
 }: {
   items: DownloadableItem[];
   disabled?: boolean;
+  className?: string;
 }) {
   const completed = items.filter((item) => item.processedImage);
   return (
@@ -33,8 +37,9 @@ export function DownloadAllButton({
           window.setTimeout(() => URL.revokeObjectURL(url), 0);
         });
       }}
+      className={cn(className)}
     >
-      Download all as ZIP
+      {m.downloadAll()}
     </Button>
   );
 }

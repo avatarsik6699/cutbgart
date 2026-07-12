@@ -4,3 +4,5 @@ export type {
   HowToJsonLdInput,
   HowToStepInput,
 } from "./json-ld";
+export { buildSocialMeta } from "./social-meta";
+export type { SocialMetaInput, AlternateLocalePath, Locale } from "./social-meta";

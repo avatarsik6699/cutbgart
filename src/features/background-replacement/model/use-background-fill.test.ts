@@ -142,12 +142,10 @@ describe("background fill model", () => {
         useBackgroundFill({
           image,
           onPreview: vi.fn(),
-          onApply: vi
-            .fn()
-            .mockResolvedValue({
-              ...image,
-              backgroundFill: { type: "color", value: "#FFFFFF" },
-            }),
+          onApply: vi.fn().mockResolvedValue({
+            ...image,
+            backgroundFill: { type: "color", value: "#FFFFFF" },
+          }),
           onResult: vi.fn(),
         }),
       { wrapper },

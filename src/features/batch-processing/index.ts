@@ -1,3 +1,3 @@
 export * from "./model/types";
 export * from "./model/use-batch-processing";
-export { BatchGrid } from "./ui/BatchGrid";
+export { BatchGrid, BatchStatus } from "./ui/BatchGrid";

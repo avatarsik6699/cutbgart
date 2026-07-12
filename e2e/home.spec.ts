@@ -45,17 +45,47 @@ test.describe("/ (home)", () => {
   test("renders the idle state with the quality toggle and upload controls", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/en");
 
     await expect(page.getByTestId("home-page")).toBeVisible();
+    const brandLogos = page.getByRole("img", { name: "cutbg" });
+    await expect(brandLogos).toHaveCount(2);
+    await expect(brandLogos.first()).toHaveJSProperty("complete", true);
+    await expect(brandLogos.first()).toHaveJSProperty("naturalWidth", 1100);
     await expect(page.getByRole("switch")).toBeVisible();
     await expect(page.getByLabel("Upload an image")).toBeAttached();
+  });
+
+  test("idle upload workspace stays centered across breakpoints", async ({ page }) => {
+    await page.goto("/en");
+    const workspace = page.getByTestId("tool-workspace");
+    await expect(workspace).toBeVisible();
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const mobileColumns = await workspace.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+    );
+    expect(mobileColumns).toBe(1);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const desktopColumns = await workspace.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+    );
+    expect(desktopColumns).toBe(1);
+    const uploadBox = await page
+      .getByLabel("Upload an image")
+      .locator("..")
+      .boundingBox();
+    expect(uploadBox).not.toBeNull();
+    if (uploadBox) {
+      expect(Math.abs(uploadBox.x + uploadBox.width / 2 - 640)).toBeLessThan(2);
+    }
   });
 
   test("shows a clear error for an unsupported file format without starting the model pipeline", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/en");
     // Hydration guard (docs/KNOWN_GOTCHAS.md): the input's onChange handler
     // only runs once React attaches it, so wait for the bundle to settle
     // before driving the file input.
@@ -71,7 +101,7 @@ test.describe("/ (home)", () => {
   test("critical path: upload -> process -> download -> process another image", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
@@ -98,7 +128,7 @@ test.describe("/ (home)", () => {
   test("background replacement updates preview and downloaded PNG for color, gradient, and uploaded image", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
@@ -111,6 +141,12 @@ test.describe("/ (home)", () => {
       name: "Color saturation and brightness",
     });
     const hue = page.getByRole("slider", { name: "Color hue" });
+    // Phase 12's two-column desktop grid (`lg:grid-cols-[3fr_2fr]`) puts this
+    // control further down the page than the pre-Phase-12 single-column
+    // layout did — unlike `.click()`, raw `page.mouse.move()` coordinates
+    // don't auto-scroll, so the target must be brought into view first or
+    // the computed bounds can point below the fold.
+    await palette.scrollIntoViewIfNeeded();
     const paletteBounds = await palette.boundingBox();
     expect(paletteBounds).not.toBeNull();
     if (!paletteBounds) throw new Error("Color palette has no bounds");
@@ -169,7 +205,7 @@ test.describe("/ (home)", () => {
   test("batch: upload multiple, select, reprocess, download one and all", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE, SAMPLE_IMAGE]);
@@ -178,6 +214,58 @@ test.describe("/ (home)", () => {
     await expect(page.getByText("sample.jpg")).toHaveCount(3);
     await page.getByText("sample.jpg").first().click();
     await expect(page.getByRole("slider")).toBeVisible();
+    const selectedTile = page
+      .getByRole("button", {
+        name: /select sample\.jpg for review/i,
+      })
+      .first();
+    await expect(selectedTile).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByLabel("Upload an image")).toHaveCount(0);
+    const addImages = page.getByLabel("Add images");
+    await addImages.setInputFiles(SAMPLE_IMAGE);
+    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
+    await expect(selectedTile).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("Selected for review")).toHaveCount(1);
+    await expect(page.getByRole("slider")).toBeVisible();
+    const previewImages = page.getByRole("slider").locator("xpath=..//img");
+    await expect(previewImages).toHaveCount(2);
+    await expect
+      .poll(async () =>
+        previewImages
+          .first()
+          .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+      )
+      .toBeGreaterThan(0);
+    const previewBox = await page.getByRole("slider").boundingBox();
+    const controlsBox = await page.getByTestId("batch-controls").boundingBox();
+    const statusBox = await page.getByTestId("scheduler-summary").boundingBox();
+    const listBox = await page.getByRole("heading", { name: "All images" }).boundingBox();
+    expect(previewBox).not.toBeNull();
+    expect(controlsBox).not.toBeNull();
+    expect(statusBox).not.toBeNull();
+    expect(listBox).not.toBeNull();
+    if (previewBox && controlsBox && statusBox && listBox) {
+      if ((page.viewportSize()?.width ?? 0) >= 1024) {
+        expect(Math.abs(previewBox.y - controlsBox.y)).toBeLessThan(24);
+      } else {
+        expect(controlsBox.y).toBeGreaterThan(previewBox.y);
+      }
+      expect(statusBox.y).toBeLessThan(previewBox.y);
+      expect(previewBox.y).toBeLessThan(listBox.y);
+    }
+
+    const actionBoxes = await Promise.all([
+      page.getByLabel("Add images").locator("..").boundingBox(),
+      page.getByRole("button", { name: /^download all$/i }).boundingBox(),
+      page.getByRole("button", { name: /clear batch/i }).boundingBox(),
+    ]);
+    expect(actionBoxes.every(Boolean)).toBe(true);
+    const [addBox, downloadAllBox, clearBox] = actionBoxes;
+    if (addBox && downloadAllBox && clearBox) {
+      expect(Math.abs(addBox.height - downloadAllBox.height)).toBeLessThan(2);
+      expect(Math.abs(addBox.width - downloadAllBox.width)).toBeLessThan(2);
+      expect(clearBox.y).toBeLessThan(addBox.y);
+    }
 
     await page.getByRole("button", { name: "Ocean" }).click();
     await expect(page.getByRole("button", { name: /^download$/i })).toBeDisabled();
@@ -215,15 +303,15 @@ test.describe("/ (home)", () => {
     await expect(
       page.getByRole("button", { name: /reprocess in fast mode/i }),
     ).toBeVisible();
-    await expect(page.getByText(/toggle applies to images added after/i)).toBeVisible();
+    await expect(page.getByText(/setting applies to images added after/i)).toBeVisible();
 
     const schedulerSummary = page.getByTestId("scheduler-summary");
     await page.getByRole("button", { name: /reprocess in fast mode/i }).click();
-    await expect(schedulerSummary).not.toContainText("3 done");
-    await expect(schedulerSummary).toContainText("3 done");
+    await expect(schedulerSummary).not.toContainText("4 done");
+    await expect(schedulerSummary).toContainText("4 done");
 
     const archive = page.waitForEvent("download");
-    await page.getByRole("button", { name: /download all as zip/i }).click();
+    await page.getByRole("button", { name: /^download all$/i }).click();
     expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
   });
 
@@ -237,7 +325,7 @@ test.describe("/ (home)", () => {
         return nativeCreateImageBitmap(image);
       };
     });
-    await page.goto("/");
+    await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
 
@@ -249,10 +337,6 @@ test.describe("/ (home)", () => {
     await expect(upload).toBeDisabled();
     await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
     await expect(page.getByText(/\d+ × \d+ · Fast/)).toHaveCount(4);
-    await expect(page.getByTestId("batch-queue-explanation")).toContainText(
-      /processed in upload order/i,
-    );
-
     const unavailableTile = page
       .getByRole("button", { name: /review available when ready/i })
       .first();

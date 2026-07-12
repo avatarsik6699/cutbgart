@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { m } from "@/paraglide/messages";
 import type { LogEntry } from "../../../features/remove-background";
 
 export interface ProcessingLogProps {
@@ -19,7 +20,8 @@ function formatTime(timestamp: number): string {
 /**
  * Collapsible diagnostic trail (model file downloads, state transitions,
  * timings) — opt-in detail beyond the plain 0%→100% progress bar, for users
- * who want to see what's actually happening at a given moment.
+ * who want to see what's actually happening at a given moment. Placed as a
+ * full-width accordion at the bottom of the tool-workspace grid (Phase 12).
  */
 export function ProcessingLog({ logs }: ProcessingLogProps) {
   const [expanded, setExpanded] = useState(false);
@@ -36,7 +38,7 @@ export function ProcessingLog({ logs }: ProcessingLogProps) {
         aria-expanded={expanded}
         className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
       >
-        {expanded ? "Hide log" : `Show log (${String(logs.length)})`}
+        {expanded ? m.hideLog() : m.showLog({ count: String(logs.length) })}
       </button>
       {expanded && (
         <ul className="max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs text-muted-foreground">

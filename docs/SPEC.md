@@ -8,12 +8,14 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.4` |
-| Date | `2026-07-11` |
+| Document Version | `v1.5` |
+| Date | `2026-07-12` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
 | Domain | Client-side (in-browser) image background removal. Free, anonymous, no-account tool — ML inference runs entirely on the user's device via WebGPU (WASM fallback), the server never receives or processes the user's image. Domain: `cutbg.art`. |
+| Public brand name | `cutbg` — wordmark-only logo (no pictorial icon), set in the app's existing Geist Variable font. This is the user-facing brand (site `<title>`, header/footer, `site.webmanifest`, OG tags); it does not rename the repo or `package.json`, which stay `bg_remove_app` / "BG Remove App" as internal project identifiers. |
+| Feedback channel | Telegram: `https://t.me/+HaqBWI1A3vg4MWJi` — linked from `shared/ui/site-header` and `site-footer` (Phase 12); also the contact channel referenced on `/privacy` for privacy questions (§5.1) |
 
 ---
 
@@ -197,15 +199,19 @@ the same rule: the background file never leaves the device either.
 
 | Surface | Purpose | Notes |
 |---------|---------|-------|
-| `/` | Home — generic tool, targets broad queries | Required |
-| `/udalit-fon-s-foto-tovara` | Product photo / marketplace listings scenario | Required |
-| `/udalit-fon-s-foto-na-dokumenty` | ID/document photo scenario | Required |
-| `/udalit-fon-s-logotipa` | Logo scenario | Desired |
-| `/udalit-fon-dlya-avatarki` | Avatar/social profile photo scenario | Desired |
-| `/about` | About the project, tech, author link | Does not block launch |
+| `/` | Home — generic tool, targets broad queries | Required · `ru` base locale |
+| `/udalit-fon-s-foto-tovara` | Product photo / marketplace listings scenario | Required · `ru` base locale |
+| `/udalit-fon-s-foto-na-dokumenty` | ID/document photo scenario | Required · `ru` base locale |
+| `/udalit-fon-s-logotipa` | Logo scenario | Desired · `ru` base locale |
+| `/udalit-fon-dlya-avatarki` | Avatar/social profile photo scenario | Desired · `ru` base locale |
+| `/about` | About the project, tech, author link | Does not block launch · `ru` base locale |
+| `/privacy` | Static privacy-policy page fulfilling §7.2's "image never leaves your device" claim; discloses aggregate-only analytics (§7.6), cookie/localStorage usage, Telegram contact | Required (Phase 12) · `ru` base locale |
+| `/en/...` | English counterpart of every row above, same path suffix under the `/en` prefix (e.g. `/en/about`, `/en/privacy`) | Required (Phase 12, §5.5) |
 
-Every scenario page requires unique, substantive body copy (not keyword-shuffled) and at least one
-scenario-relevant before/after example — thin/duplicate content risks search-engine penalties.
+Every scenario page (both locales) requires unique, substantive body copy (not keyword-shuffled) and
+at least one scenario-relevant before/after example — thin/duplicate content risks search-engine
+penalties. The English scenario pages are genuine translations targeting English search intent, not
+a mechanical pass over the Russian copy.
 
 Batch processing (Phase 10) does not introduce a new route: dropping/selecting more than one file on
 any existing page's upload surface (`features/upload-image`) is what enters batch mode, on that same
@@ -224,7 +230,9 @@ page. No dedicated `/batch` URL.
 | `features/batch-processing` | `features` | (Phase 10) Parallel upload + processing of multiple images (bounded concurrency, §7.1); grid/tile overview with per-`BatchItem` status; selecting an item enters the existing single-image `result`⇄`correcting` flow (§5.3) for review/correction/reprocess; no parallel state machine |
 | `features/background-replacement` | `features` | (Phase 11) Solid color / gradient (linear, radial) / user-uploaded image `BackgroundFill`, applied via the existing `OffscreenCanvas` compositing pipeline in place of transparency |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
-| `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box |
+| `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box; also `site-header`, `site-footer`, `site-shell` (Phase 12) — presentational sitewide chrome, no business logic |
+| `widgets/tool-workspace` | `widgets` | (Phase 12) Extracts the upload → quality-toggle → process → preview → background-fill → download composition previously duplicated across `pages/home` and the four scenario pages (flagged as debt in `PHASE_06.md` Implementation Notes); responsive grid layout (single column on mobile, two-column preview/control-rail split on desktop) instead of the flat vertical stack. First and only use of the `widgets` layer — see §6's Architecture row for the rationale reversal |
+| `pages/privacy` | `pages` | (Phase 12) Static privacy-policy content, composed with `site-shell`; no business logic |
 
 Routing note: `routes/*.tsx` (TanStack Router file-based routing) stays a thin `loader` + head-meta +
 render shell; all composition and business logic lives in `pages/*`, per §5.5 of the architect's
@@ -287,6 +295,32 @@ does not block or cancel the others (§7.3).
   gradient presets, file input for the custom image) — no new interaction pattern beyond what §5.4
   already requires elsewhere.
 
+### 5.5 Internationalization (Phase 12)
+
+The product serves both a Russian-language audience (the SEO scenario pages, §5.1, were deliberately
+written to target Russian long-tail search queries) and an English-language audience — the site must
+be fully bilingual, not translated as an afterthought.
+
+- **Library**: Paraglide JS (`@inlang/paraglide-js`) — compiler-based, tree-shakeable message
+  catalogs, consistent with §1.1's performance-is-a-functional-requirement invariant. Chosen over
+  `react-i18next` for having a first-party, documented TanStack Start SSR integration (URL rewrite
+  hook on `createRouter`, server middleware for locale detection, `localizeHref` for
+  locale-aware links and prerendering).
+- **URL strategy**: `ru` is the **base locale** (unprefixed — preserves every existing path from
+  §5.1 exactly as-is, including the four Russian scenario slugs already chosen for search targeting).
+  `en` is a **prefixed locale** (`/en/...`) covering the same set of pages.
+- Every localized route emits `hreflang` alternate `<link>` tags (`ru`, `en`, and `x-default`
+  pointing at the `ru` version) and sets JSON-LD `inLanguage` accordingly.
+- A language switcher is present in `shared/ui/site-header` on every page, toggling between the
+  current page's `ru`/`en` counterpart (not resetting to the home page).
+- `scripts/generate-sitemap.ts` emits both locale URLs per page, with `<xhtml:link rel="alternate"
+  hreflang="...">` entries per sitemap best practice.
+- Content scope: home, about, privacy, and site chrome (header/footer/hero/value-prop copy) are
+  bilingual from Phase 12. The four scenario pages' English counterparts require genuinely unique,
+  substantive translated copy (not mechanical translation) per §5.1's thin-content warning — this is
+  the largest content item in Phase 12 and should be reviewed by the architect before relying on it
+  for launch, the same caution already given to Phase 06's placeholder example images.
+
 ---
 
 ## 6. Infrastructure
@@ -297,7 +331,8 @@ does not block or cancel the others (§7.3).
 | Server runtime | Nitro, `node-server` preset | Produces the Docker-deployable Node bundle |
 | Language | TypeScript, strict mode | Mandatory |
 | UI | React 19, Tailwind CSS, shadcn/ui on Base UI | Base UI became shadcn/ui's default primitive layer (replacing Radix) as of July 2026; components are copied into the repo, not installed as a black-box dependency |
-| Architecture | Feature-Sliced Design (flexible mode): `app / pages / features / entities / shared` | `processes` and `widgets` deliberately omitted — `processes` is officially excluded from FSD, and `widgets` would add abstraction with no payoff at this project's size (composition lives in `pages`) |
+| Architecture | Feature-Sliced Design (flexible mode): `app / pages / widgets / features / entities / shared` | `processes` remains omitted — officially excluded from FSD. `widgets` was deliberately omitted through Phase 11 (composition lived in `pages`, no payoff at that size); Phase 12 introduces exactly one `widgets` slice, `widgets/tool-workspace`, once five pages ended up duplicating the identical tool composition (§5.2) — the reversal is scoped to that one slice, not a general policy change |
+| i18n | Paraglide JS (`@inlang/paraglide-js`) | Compiler-based message catalogs (`messages/ru.json`, `messages/en.json`); URL-based locale strategy via TanStack Router's `rewrite.input`/`rewrite.output`; see §5.5 |
 | ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
 | Client-side ZIP (Phase 10) | `[NEEDS_CLARIFICATION: exact library — e.g. fflate or client-zip]` | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
@@ -344,6 +379,8 @@ device, consistent with the "UI must never hang" requirement already stated in �
 - Model weights are intentionally public (open-source weights) — no need to gate access to them.
 - A static privacy-policy page must explicitly and accurately state "your image never leaves your
   device" — this is the product's core claim and must remain verifiably true, not marketing copy.
+  Shipped as `/privacy` (and `/en/privacy`) in Phase 12 — see §5.1; this requirement existed since
+  the original spec but was not implemented in any phase through 11, a gap Phase 12 closes.
 
 ### 7.3 Error Handling (mandatory, one explicit path per case)
 
@@ -373,8 +410,13 @@ device, consistent with the "UI must never hang" requirement already stated in �
 - Unique `<h1>` per page containing the target scenario phrase.
 - Example images: WebP/AVIF, `loading="lazy"`, below the fold.
 - `scripts/generate-sitemap.ts` runs at build/CI time, walking the `routes/` tree — prevents a new
-  scenario page from being forgotten in the sitemap.
+  scenario page from being forgotten in the sitemap. From Phase 12, emits both locale URLs per page
+  with `hreflang` alternates (§5.5).
 - `robots.txt` fully open, links to `sitemap.xml`.
+- Favicon/app-icon set (`favicon.svg` + generated `.ico`/PNG sizes, `apple-touch-icon.png`) and
+  `site.webmanifest` (Phase 12, brand name "cutbg" — see Metadata table).
+- OpenGraph (`og:title`/`og:description`/`og:image`/`og:type`) and Twitter Card meta on every route,
+  plus `hreflang`/`x-default` alternate `<link>` tags per §5.5 (Phase 12).
 
 ### 7.6 Observability
 
@@ -427,7 +469,8 @@ utility function's unit tests.
 | `09` | Correction zoom & pan | Precise, zoomed-in editing for fine mask corrections on high-resolution images | `features/correct-mask` gains zoom/pan controls scoped to the `correcting` state (§5.3); brush coordinate mapping and dirty-rect repainting updated to account for a zoomed/panned viewport; zoom controls keyboard-accessible and announced via `aria-live` (§5.4); e2e coverage for zoom+brush interaction (§7.7) |
 | `10` | Batch processing | Process many images in one session without repeating the upload → download loop by hand | `features/batch-processing` slice: parallel upload/processing with bounded concurrency (§7.1), grid/tile overview with per-item status, select-to-review/correct/reprocess via the existing single-image flow, per-item and "download all as ZIP" (§4, §6); per-item error isolation (§7.3); e2e coverage (§7.7) |
 | `11` | Background replacement | Let the user place the cutout on a solid color, gradient, or custom background instead of only transparent PNG | `features/background-replacement` slice: `BackgroundFill` (color/gradient/image) composited via the existing `OffscreenCanvas` pipeline; background-fill selector wired into **result** (§5.3); custom background image stays client-side only (§1.1, §4); e2e coverage (§7.7) |
-| `12` | Hardening & Launch | Confidence across the real device matrix, then public availability | Full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
+| `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
+| `13` | Hardening & Launch | Confidence across the real device matrix, then public availability | Full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 
 ---
 

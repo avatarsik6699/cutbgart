@@ -1,0 +1,27 @@
+{
+  "name": "cutbg",
+  "short_name": "cutbg",
+  "description": "Remove image backgrounds in seconds — free, private, entirely in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2D62EB",
+  "background_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

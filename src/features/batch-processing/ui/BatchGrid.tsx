@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { m } from "@/paraglide/messages";
 
 import type {
   BatchItem,
@@ -12,24 +13,30 @@ function pathLabel(path: BatchSchedulerSnapshot["inferencePath"]) {
 }
 
 function progressText(progress: ModelLoadProgress): string {
-  if (progress.status === "checking-cache") return "Checking browser cache…";
-  if (progress.status === "building-session") return "Building ONNX session…";
+  if (progress.status === "checking-cache") return m.batchCheckingCache();
+  if (progress.status === "building-session") return m.batchBuildingSession();
   if (progress.status === "ready")
-    return progress.fromCache ? "Loaded from browser cache" : "Model ready";
+    return progress.fromCache ? m.batchModelCached() : m.batchModelReady();
   const loaded = (progress.loadedBytes / 1_048_576).toFixed(1);
   const total = progress.totalBytes
     ? ` / ${(progress.totalBytes / 1_048_576).toFixed(1)} MiB`
     : " MiB";
-  return `Downloading model · ${loaded}${total}${progress.percent === null ? "" : ` · ${progress.percent.toFixed(1)}%`}`;
+  return m.batchDownloadingModel({
+    loaded,
+    total,
+    percent: progress.percent === null ? "" : ` · ${progress.percent.toFixed(1)}%`,
+  });
 }
 
-const STATUS_LABELS: Record<BatchItemStatus, string> = {
-  queued: "Queued",
-  "model-loading": "Loading model",
-  processing: "Processing",
-  result: "Ready",
-  error: "Failed",
-};
+function statusLabel(status: BatchItemStatus): string {
+  return {
+    queued: m.batchQueued(),
+    "model-loading": m.batchLoading(),
+    processing: m.batchProcessingStatus(),
+    result: m.batchReady(),
+    error: m.batchFailed(),
+  }[status];
+}
 
 const STATUS_STYLES: Record<BatchItemStatus, string> = {
   queued: "bg-background/90 text-muted-foreground",
@@ -66,7 +73,7 @@ function SourceThumbnail({ item }: { item: BatchItem }) {
       <span
         className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[0.6875rem] font-medium shadow-sm ${STATUS_STYLES[item.status]}`}
       >
-        {STATUS_LABELS[item.status]}
+        {statusLabel(item.status)}
       </span>
     </div>
   );
@@ -75,26 +82,22 @@ function SourceThumbnail({ item }: { item: BatchItem }) {
 function itemStatusText(item: BatchItem): string {
   const elapsed = `${(item.processingProgress.elapsedMs / 1000).toFixed(1)}s`;
   if (item.status === "processing") {
-    return `Removing background · ${elapsed}`;
+    return m.batchRemoving({ elapsed });
   }
-  if (item.status === "model-loading") return `Preparing shared model · ${elapsed}`;
-  if (item.status === "error") return item.error ?? "Processing failed";
-  if (item.status === "result") return `Ready · ${elapsed}`;
-  return STATUS_LABELS[item.status];
+  if (item.status === "model-loading") return m.batchPreparingModel({ elapsed });
+  if (item.status === "error") return item.error ?? m.batchProcessingFailed();
+  if (item.status === "result") return m.batchReadyElapsed({ elapsed });
+  return statusLabel(item.status);
 }
 
 export function BatchGrid({
   items,
-  snapshot,
   selectedItemId,
-  modelLoad,
   onSelect,
   onRetry,
 }: {
   items: BatchItem[];
-  snapshot: BatchSchedulerSnapshot;
   selectedItemId: string | null;
-  modelLoad?: ModelLoadProgress;
   onSelect: (id: string) => void;
   onRetry: (id: string) => void;
 }) {
@@ -103,38 +106,12 @@ export function BatchGrid({
     .map((item) => item.id);
 
   return (
-    <section className="flex flex-col gap-3" aria-label="Batch processing">
-      <p className="text-sm text-muted-foreground" data-testid="scheduler-summary">
-        {pathLabel(snapshot.inferencePath)} · {snapshot.activeCount}/
-        {snapshot.concurrencyLimit} active · {snapshot.queuedCount} queued ·{" "}
-        {snapshot.completedCount} done · {snapshot.failedCount} failed ·{" "}
-        {snapshot.totalCount} total
-      </p>
-      {snapshot.completedCount + snapshot.failedCount < snapshot.totalCount && (
-        <p
-          className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
-          data-testid="batch-queue-explanation"
-        >
-          A shared quality model is prepared once, then images are processed in upload
-          order. {pathLabel(snapshot.inferencePath)} runs up to{" "}
-          {snapshot.concurrencyLimit}{" "}
-          {snapshot.concurrencyLimit === 1 ? "image" : "images"} at a time; queued images
-          are waiting for the next available slot.
-        </p>
-      )}
-      {modelLoad && (
-        <div
-          className="rounded-lg border p-3 text-sm"
-          data-testid="shared-model-progress"
-        >
-          <p className="font-medium">Shared model setup</p>
-          <p className="text-muted-foreground">{progressText(modelLoad)}</p>
-          {modelLoad.percent !== null && modelLoad.status !== "ready" && (
-            <progress className="w-full" max={100} value={modelLoad.percent} />
-          )}
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <section className="flex flex-col gap-4" aria-label={m.batchProcessing()}>
+      <div>
+        <h3 className="text-sm font-semibold">{m.batchImagesHeading()}</h3>
+        <p className="mt-1 text-xs text-muted-foreground">{m.batchImagesHint()}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => {
           const selectable = item.status === "result";
           const selected = selectable && selectedItemId === item.id;
@@ -142,14 +119,14 @@ export function BatchGrid({
           const elapsed = `${(item.processingProgress.elapsedMs / 1000).toFixed(1)}s`;
           const detail =
             item.status === "queued"
-              ? `Waiting · #${queuePosition} in queue · ${elapsed}`
+              ? m.batchWaiting({ position: queuePosition, elapsed })
               : itemStatusText(item);
           return (
             <article
               key={item.id}
-              className={`group overflow-hidden rounded-xl border bg-card text-card-foreground transition-[border-color,box-shadow,transform] duration-200 ${
+              className={`group overflow-hidden rounded-xl border bg-card text-card-foreground transition-[border-color,box-shadow] duration-200 ${
                 selectable
-                  ? "hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md"
+                  ? "hover:border-foreground/30 hover:shadow-sm"
                   : "border-border"
               } ${selected ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
             >
@@ -160,8 +137,8 @@ export function BatchGrid({
                 aria-pressed={selectable ? selected : undefined}
                 aria-label={
                   selectable
-                    ? `Select ${item.originalFileName} for review. ${detail}`
-                    : `${item.originalFileName}. ${detail}. Review available when ready.`
+                    ? m.batchSelectAria({ name: item.originalFileName, detail })
+                    : m.batchUnavailableAria({ name: item.originalFileName, detail })
                 }
                 className="block w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-wait"
               >
@@ -175,7 +152,7 @@ export function BatchGrid({
                   </span>
                   <span className="mt-1 block truncate text-xs text-muted-foreground">
                     {item.source.width} × {item.source.height} ·{" "}
-                    {item.qualityMode === "max" ? "Max" : "Fast"}
+                    {item.qualityMode === "max" ? m.qualityMax() : m.qualityFast()}
                   </span>
                   <span
                     className="mt-2 block text-xs text-muted-foreground"
@@ -193,9 +170,9 @@ export function BatchGrid({
                   <span className="mt-2 block text-xs font-medium text-foreground/70 transition-colors group-hover:text-foreground">
                     {selectable
                       ? selected
-                        ? "Selected for review"
-                        : "Select to review"
-                      : "Review available when ready"}
+                        ? m.batchSelected()
+                        : m.batchSelect()
+                      : m.batchReviewWhenReady()}
                   </span>
                 </span>
               </button>
@@ -205,7 +182,7 @@ export function BatchGrid({
                   className="mx-3 mb-3 text-xs font-medium underline underline-offset-2"
                   onClick={() => onRetry(item.id)}
                 >
-                  Try again
+                  {m.tryAgain()}
                 </button>
               )}
             </article>
@@ -213,5 +190,41 @@ export function BatchGrid({
         })}
       </div>
     </section>
+  );
+}
+
+export function BatchStatus({
+  snapshot,
+  modelLoad,
+}: {
+  snapshot: BatchSchedulerSnapshot;
+  modelLoad?: ModelLoadProgress;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground" data-testid="scheduler-summary">
+        {m.batchSummary({
+          path: pathLabel(snapshot.inferencePath),
+          active: snapshot.activeCount,
+          limit: snapshot.concurrencyLimit,
+          queued: snapshot.queuedCount,
+          done: snapshot.completedCount,
+          failed: snapshot.failedCount,
+          total: snapshot.totalCount,
+        })}
+      </p>
+      {modelLoad && (
+        <div
+          className="rounded-xl border bg-background/70 p-3 text-sm"
+          data-testid="shared-model-progress"
+        >
+          <p className="font-medium">{m.batchSharedModel()}</p>
+          <p className="text-muted-foreground">{progressText(modelLoad)}</p>
+          {modelLoad.percent !== null && modelLoad.status !== "ready" && (
+            <progress className="mt-2 w-full" max={100} value={modelLoad.percent} />
+          )}
+        </div>
+      )}
+    </div>
   );
 }

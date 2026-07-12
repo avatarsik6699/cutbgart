@@ -1,9 +1,21 @@
 import type { BackgroundFill, ProcessedImage } from "../../../entities/processed-image";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/shared/ui";
+import { m } from "@/paraglide/messages";
 import { DEFAULT_COLOR, GRADIENT_PRESETS, TRANSPARENT_FILL } from "../model/types";
 import { useBackgroundFill } from "../model/use-background-fill";
 import { InlineColorPicker } from "./InlineColorPicker";
+
+function gradientName(name: (typeof GRADIENT_PRESETS)[number]["name"]): string {
+  return {
+    Sunset: m.gradientSunset(),
+    Ocean: m.gradientOcean(),
+    Mint: m.gradientMint(),
+    Spotlight: m.gradientSpotlight(),
+    Peach: m.gradientPeach(),
+    Night: m.gradientNight(),
+  }[name];
+}
 
 export function BackgroundFillSelector({
   image,
@@ -42,7 +54,7 @@ export function BackgroundFillSelector({
       className="flex flex-col gap-3 rounded-lg border border-border p-4"
       aria-busy={saving}
     >
-      <legend className="px-1 text-sm font-medium">Background</legend>
+      <legend className="px-1 text-sm font-medium">{m.background()}</legend>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -55,7 +67,7 @@ export function BackgroundFillSelector({
             data-testid="fill-swatch"
             className="size-4 rounded-full border border-border bg-[length:6px_6px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
           />
-          Transparent
+          {m.transparent()}
         </Button>
         <Button
           type="button"
@@ -63,7 +75,7 @@ export function BackgroundFillSelector({
           aria-pressed={fill.type === "color"}
           aria-expanded={colorPickerOpen}
           aria-controls="background-color-picker"
-          aria-label="Background color"
+          aria-label={m.backgroundColor()}
           onClick={() => {
             if (fill.type !== "color") selectColor(currentColor);
             setColorPickerOpen((open) => !open);
@@ -75,7 +87,7 @@ export function BackgroundFillSelector({
             className="size-4 rounded-full border border-border"
             style={{ backgroundColor: currentColor }}
           />
-          Color
+          {m.color()}
         </Button>
         {GRADIENT_PRESETS.map((preset) => (
           <Button
@@ -103,7 +115,7 @@ export function BackgroundFillSelector({
                 backgroundImage: `${preset.fill.kind === "linear" ? "linear-gradient(135deg" : "radial-gradient(circle at center"}, ${preset.fill.stops[0].color}, ${preset.fill.stops[1].color})`,
               }}
             />
-            {preset.name}
+            {gradientName(preset.name)}
           </Button>
         ))}
       </div>
@@ -116,14 +128,14 @@ export function BackgroundFillSelector({
             size="sm"
             onClick={() => setColorPickerOpen(false)}
           >
-            Done
+            {m.done()}
           </Button>
         </div>
       )}
       <label className="flex cursor-pointer flex-col gap-1 text-sm font-medium">
-        Custom image
+        {m.customImage()}
         <input
-          aria-label="Custom background image"
+          aria-label={m.customBackgroundImage()}
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={(event) => {
@@ -141,13 +153,11 @@ export function BackgroundFillSelector({
           disabled={!dirty || saving}
           aria-busy={saving}
         >
-          Save background
+          {m.saveBackground()}
         </Button>
         {(dirty || saving) && (
           <p role="status" className="text-sm text-muted-foreground">
-            {saving
-              ? "Saving background…"
-              : "Unsaved background — save to update the download."}
+            {saving ? m.savingBackground() : m.unsavedBackground()}
           </p>
         )}
       </div>

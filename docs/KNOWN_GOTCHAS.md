@@ -108,6 +108,23 @@
   needs an equivalent hydration guard — prefer waiting on an existing, observable post-mount signal
   over an arbitrary `waitForTimeout`.
 
+### `page.mouse.move()` to a cached `boundingBox()` misses elements below the fold
+
+- **Symptoms**: a Playwright test that reads `locator.boundingBox()` once and then drives a drag
+  with raw `page.mouse.move()`/`.down()`/`.up()` coordinates ends up as a no-op — the target
+  control's state never changes, with no thrown error (e.g. `e2e/home.spec.ts`'s color-palette drag
+  landed on `left: 0%; top: 0%` instead of the dragged-to position after Phase 12's
+  `widgets/tool-workspace` two-column desktop grid moved the control further down the page).
+- **Root cause**: unlike `locator.click()`, raw `page.mouse.move(x, y)` uses viewport-relative
+  coordinates and does **not** auto-scroll the target into view first. If the element sits below the
+  fold when `boundingBox()` is read, the computed coordinates point past the visible viewport and the
+  synthetic pointer events land on nothing.
+- **Fix**: call `await locator.scrollIntoViewIfNeeded()` before reading `boundingBox()` whenever a
+  test drives raw mouse coordinates instead of `locator.click()`/`locator.dragTo()`.
+- **Prevention**: any layout change that can push an existing interactive control further down the
+  page (a new hero section, a wider grid, added chrome) can silently break an existing raw-coordinate
+  drag test — re-run affected specs after layout changes, not just after feature changes.
+
 ### Playwright/e2e is host-only by design — don't try it inside the dev container or CI
 
 - **Symptoms**: `pnpm e2e` (or `npx playwright test`) fails with a missing-browser error

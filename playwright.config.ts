@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const realModelRun = process.env.E2E_REAL_MODEL === "1";
+const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -10,7 +11,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
     actionTimeout: 10_000,
   },
