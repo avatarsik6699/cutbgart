@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "vite dev",
+    "generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy url baseLocale --silent",
     "generate-sitemap": "tsx scripts/generate-sitemap.ts",
     "build": "pnpm generate-sitemap && vite build",
     "start": "node .output/server/index.mjs",

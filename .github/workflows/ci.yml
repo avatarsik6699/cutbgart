@@ -25,6 +25,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Paraglide output is generated and gitignored. A clean runner must
+      # compile it before type-aware ESLint resolves imports from src/paraglide.
+      - run: pnpm generate:i18n
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
