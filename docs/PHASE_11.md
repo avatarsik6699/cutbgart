@@ -288,9 +288,9 @@ feat(phase-11): add background fills and composited downloads
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked (or deferred in Architect Review Notes)
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 11`
-- [ ] Committed atomically on `feat/phase-11` branch
-- [ ] Tag created after merge to main: `git tag -a v0.11.0 -m "Phase 11: Background replacement"`
+- [x] All Scope checkboxes checked (or deferred in Architect Review Notes)
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 11`
+- [x] Committed atomically on `feat/phase-11` branch
+- [x] Tag created after merge to main: `git tag -a v0.11.0 -m "Phase 11: Background replacement"`
