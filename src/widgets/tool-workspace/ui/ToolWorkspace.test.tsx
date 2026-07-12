@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HomePage } from "./HomePage";
+import { ToolWorkspace } from "./ToolWorkspace";
 
 interface PostedMessage {
   type: string;
@@ -76,17 +76,17 @@ afterEach(() => {
   cleanup();
 });
 
-describe("HomePage", () => {
+describe("ToolWorkspace", () => {
   it("renders the idle state with the upload controls", () => {
-    render(<HomePage />);
+    render(<ToolWorkspace />);
 
-    expect(screen.getByTestId("home-page")).toBeDefined();
+    expect(screen.getByTestId("tool-workspace")).toBeDefined();
     expect(screen.getByLabelText("Upload an image")).toBeDefined();
     expect(screen.getByRole("switch")).toBeDefined();
   });
 
   it("shows a validation error for an unsupported file without starting the model pipeline", async () => {
-    render(<HomePage />);
+    render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile({ type: "image/gif" })] },
@@ -98,7 +98,7 @@ describe("HomePage", () => {
   });
 
   it("drives upload -> process -> result -> reset without a page reload", async () => {
-    render(<HomePage />);
+    render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile()] },
@@ -140,7 +140,7 @@ describe("HomePage", () => {
   });
 
   it("edit mask -> correcting -> done returns to result with the corrected composite (Phase 07)", async () => {
-    render(<HomePage />);
+    render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile()] },
@@ -224,7 +224,7 @@ describe("HomePage", () => {
   });
 
   it("shows retry/reset UI when worker-backed mask preparation fails", async () => {
-    render(<HomePage />);
+    render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile()] },

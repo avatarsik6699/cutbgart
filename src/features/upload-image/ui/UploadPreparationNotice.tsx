@@ -1,3 +1,5 @@
+import { m } from "@/paraglide/messages";
+
 export function UploadPreparationNotice({ fileCount }: { fileCount: number }) {
   if (fileCount <= 0) return null;
 
@@ -13,12 +15,8 @@ export function UploadPreparationNotice({ fileCount }: { fileCount: number }) {
           aria-hidden="true"
         />
         <div>
-          <p className="text-sm font-medium">
-            Preparing {fileCount} {fileCount === 1 ? "image" : "images"}…
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Reading files in your browser. Processing will start automatically.
-          </p>
+          <p className="text-sm font-medium">{m.uploadPreparing({ count: fileCount })}</p>
+          <p className="text-xs text-muted-foreground">{m.uploadPreparingHint()}</p>
         </div>
       </div>
       <div className="h-1 bg-muted">

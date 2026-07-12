@@ -1,29 +1,8 @@
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { BrushMode } from "../../../entities/processed-image";
+import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
-
-const MODES: { value: BrushMode; label: string; description: string }[] = [
-  {
-    value: "add",
-    label: "Add",
-    description:
-      "Paint fully opaque — always keeps the area, even where the AI removed it.",
-  },
-  {
-    value: "erase",
-    label: "Erase",
-    description:
-      "Paint fully transparent — always removes the area, even where the AI kept it.",
-  },
-  {
-    value: "restore",
-    label: "Restore",
-    description:
-      "Reset the area back to the AI's original edge — use this to bring back soft " +
-      "details (like hair) instead of forcing them fully opaque with Add.",
-  },
-];
 
 const MIN_BRUSH_RADIUS = 4;
 const MAX_BRUSH_RADIUS = 75;
@@ -72,14 +51,19 @@ export function MaskCorrectionToolbar({
   onZoomOut,
   onResetView,
 }: MaskCorrectionToolbarProps) {
-  const activeModeDescription = MODES.find(
+  const modes: { value: BrushMode; label: string; description: string }[] = [
+    { value: "add", label: m.maskAdd(), description: m.maskAddDescription() },
+    { value: "erase", label: m.maskErase(), description: m.maskEraseDescription() },
+    { value: "restore", label: m.maskRestore(), description: m.maskRestoreDescription() },
+  ];
+  const activeModeDescription = modes.find(
     (option) => option.value === mode,
   )?.description;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-      <div role="group" aria-label="Brush mode" className="flex gap-2">
-        {MODES.map((option) => (
+      <div role="group" aria-label={m.brushMode()} className="flex gap-2">
+        {modes.map((option) => (
           <Button
             key={option.value}
             type="button"
@@ -100,14 +84,14 @@ export function MaskCorrectionToolbar({
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="flex justify-between gap-3">
-          <span>Brush size</span>
+          <span>{m.brushSize()}</span>
           <span className="tabular-nums text-muted-foreground">
             {String(brushSize * 2)} px
           </span>
         </span>
         <input
           type="range"
-          aria-label="Brush size"
+          aria-label={m.brushSize()}
           aria-valuetext={`${String(brushSize * 2)} px diameter`}
           min={MIN_BRUSH_RADIUS}
           max={MAX_BRUSH_RADIUS}
@@ -119,7 +103,7 @@ export function MaskCorrectionToolbar({
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Brush hardness
+        {m.brushHardness()}
         <input
           type="range"
           min={0}
@@ -137,35 +121,35 @@ export function MaskCorrectionToolbar({
           type="button"
           variant="outline"
           aria-keyshortcuts="Control+Z Meta+Z"
-          title="Undo (Ctrl/Cmd+Z)"
+          title={`${m.undo()} (Ctrl/Cmd+Z)`}
           disabled={!canUndo}
           onClick={onUndo}
         >
-          Undo
+          {m.undo()}
         </Button>
         <Button
           type="button"
           variant="outline"
           aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
-          title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)"
+          title={`${m.redo()} (Ctrl/Cmd+Shift+Z or Ctrl+Y)`}
           disabled={!canRedo}
           onClick={onRedo}
         >
-          Redo
+          {m.redo()}
         </Button>
       </div>
 
       <div
         className="flex flex-wrap items-center gap-2"
         role="group"
-        aria-label="View controls"
+        aria-label={m.viewControls()}
       >
         <Button
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Zoom out"
-          title="Zoom out"
+          aria-label={m.zoomOut()}
+          title={m.zoomOut()}
           disabled={!canZoomOut}
           onClick={() => {
             onZoomOut();
@@ -183,8 +167,8 @@ export function MaskCorrectionToolbar({
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Zoom in"
-          title="Zoom in"
+          aria-label={m.zoomIn()}
+          title={m.zoomIn()}
           disabled={!canZoomIn}
           onClick={() => {
             onZoomIn();
@@ -196,8 +180,8 @@ export function MaskCorrectionToolbar({
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Reset view"
-          title="Reset view"
+          aria-label={m.resetView()}
+          title={m.resetView()}
           disabled={zoomPercent === 100 && !canPan}
           onClick={onResetView}
         >

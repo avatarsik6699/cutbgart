@@ -170,7 +170,7 @@ test.describe("mask correction", () => {
       });
     });
 
-    await page.goto("/");
+    await page.goto("/en");
     const uploadInput = page.getByLabel("Upload an image");
     await expect(uploadInput).toBeEnabled();
     await uploadInput.setInputFiles(SAMPLE_IMAGE);
@@ -205,7 +205,7 @@ test.describe("mask correction", () => {
     page,
   }) => {
     await installMockInference(page);
-    await page.goto("/");
+    await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);

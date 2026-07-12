@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 
 import type { BatchItem, BatchSchedulerSnapshot } from "../model/types";
-import { BatchGrid } from "./BatchGrid";
+import { BatchGrid, BatchStatus } from "./BatchGrid";
 
 const snapshot: BatchSchedulerSnapshot = {
   inferencePath: "wasm",
@@ -41,15 +42,18 @@ const createObjectURL = vi.fn(() => "blob:batch-thumbnail");
 const revokeObjectURL = vi.fn();
 
 beforeEach(() => {
-  vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+  vi.spyOn(URL, "createObjectURL").mockImplementation(createObjectURL);
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(revokeObjectURL);
 });
 
 afterEach(() => {
   cleanup();
-  expect(revokeObjectURL).toHaveBeenCalledWith("blob:batch-thumbnail");
+  if (createObjectURL.mock.calls.length) {
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:batch-thumbnail");
+  }
   createObjectURL.mockClear();
   revokeObjectURL.mockClear();
-  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("BatchGrid", () => {
@@ -58,7 +62,6 @@ describe("BatchGrid", () => {
     render(
       <BatchGrid
         items={[makeItem({ status: "result" })]}
-        snapshot={snapshot}
         selectedItemId={null}
         onSelect={onSelect}
         onRetry={vi.fn()}
@@ -66,12 +69,10 @@ describe("BatchGrid", () => {
     );
 
     await waitFor(() => expect(screen.getByTestId("batch-item-thumbnail")).toBeTruthy());
-    expect(screen.getByText("1200 × 800 · Fast")).toBeTruthy();
-    expect(screen.getByText("Select to review")).toBeTruthy();
+    expect(screen.getByText(`1200 × 800 · ${m.qualityFast()}`)).toBeTruthy();
+    expect(screen.getByText(m.batchSelect())).toBeTruthy();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /select marketplace-chair\.jpg for review/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /marketplace-chair\.jpg/i }));
     expect(onSelect).toHaveBeenCalledWith("item-1");
   });
 
@@ -79,7 +80,6 @@ describe("BatchGrid", () => {
     render(
       <BatchGrid
         items={[makeItem({ status: "result" })]}
-        snapshot={snapshot}
         selectedItemId="item-1"
         onSelect={vi.fn()}
         onRetry={vi.fn()}
@@ -87,7 +87,7 @@ describe("BatchGrid", () => {
     );
 
     expect(screen.getByRole("button", { pressed: true })).toBeTruthy();
-    expect(screen.getByText("Selected for review")).toBeTruthy();
+    expect(screen.getByText(m.batchSelected())).toBeTruthy();
   });
 
   it("disables review while queued and explains the live queue state", () => {
@@ -104,17 +104,20 @@ describe("BatchGrid", () => {
             },
           }),
         ]}
-        snapshot={snapshot}
         selectedItemId={null}
         onSelect={onSelect}
         onRetry={vi.fn()}
       />,
     );
 
-    const tile = screen.getByRole("button", { name: /review available when ready/i });
+    const tile = screen.getByRole("button", {
+      name: new RegExp(m.batchReviewWhenReady(), "i"),
+    });
     expect(tile).toHaveProperty("disabled", true);
-    expect(screen.getByText("Waiting · #1 in queue · 1.2s")).toBeTruthy();
-    expect(screen.getByText("Review available when ready")).toBeTruthy();
+    expect(
+      screen.getByText(m.batchWaiting({ position: 1, elapsed: "1.2s" })),
+    ).toBeTruthy();
+    expect(screen.getByText(m.batchReviewWhenReady())).toBeTruthy();
     fireEvent.click(tile);
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -133,15 +136,30 @@ describe("BatchGrid", () => {
             },
           }),
         ]}
-        snapshot={{ ...snapshot, activeCount: 1, queuedCount: 0 }}
         selectedItemId={null}
         onSelect={vi.fn()}
         onRetry={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("Removing background · 3.2s")).toBeTruthy();
+    expect(screen.getByText(m.batchRemoving({ elapsed: "3.2s" }))).toBeTruthy();
     const progress = screen.getByTestId("item-stage-progress");
     expect(progress.getAttribute("value")).toBeNull();
+  });
+
+  it("renders scheduler metadata separately from the image gallery", () => {
+    render(<BatchStatus snapshot={snapshot} />);
+
+    expect(screen.getByTestId("scheduler-summary").textContent).toBe(
+      m.batchSummary({
+        path: "WASM",
+        active: 0,
+        limit: 1,
+        queued: 1,
+        done: 0,
+        failed: 0,
+        total: 1,
+      }),
+    );
   });
 });

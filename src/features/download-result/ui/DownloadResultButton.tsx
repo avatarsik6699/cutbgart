@@ -2,6 +2,7 @@ import { Download } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { trackEvent } from "@/shared/lib/analytics";
+import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
 
 export interface DownloadResultButtonProps {
@@ -47,7 +48,7 @@ export function DownloadResultButton({
       }}
     >
       <Download aria-hidden="true" />
-      Download
+      {m.download()}
     </Button>
   );
 }

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { m } from "@/paraglide/messages";
 
 import type { HexColor } from "../../../entities/processed-image";
 
@@ -82,7 +83,7 @@ export function InlineColorPicker({
       <div
         role="slider"
         tabIndex={0}
-        aria-label="Color saturation and brightness"
+        aria-label={m.colorPalette()}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(hsv.saturation * 100)}
@@ -142,9 +143,9 @@ export function InlineColorPicker({
         />
       </div>
       <label className="flex items-center gap-3 text-sm">
-        <span className="shrink-0">Hue</span>
+        <span className="shrink-0">{m.hue()}</span>
         <input
-          aria-label="Color hue"
+          aria-label={m.colorHue()}
           type="range"
           min={0}
           max={359}

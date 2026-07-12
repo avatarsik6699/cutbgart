@@ -35,6 +35,28 @@ const SCENARIO_PAGES: ScenarioPage[] = [
     testId: "avatar-page",
     h1: /удалить фон для аватарки/i,
   },
+  // English counterparts (Phase 12 F11/F12) — distinct translated slugs, not
+  // just an /en/ prefix of the ru slug, so each is exercised independently.
+  {
+    path: "/en/remove-background-from-product-photo",
+    testId: "product-photo-page",
+    h1: /remove the background from a product photo/i,
+  },
+  {
+    path: "/en/remove-background-from-id-photo",
+    testId: "document-photo-page",
+    h1: /remove the background from an id photo/i,
+  },
+  {
+    path: "/en/remove-background-from-logo",
+    testId: "logo-page",
+    h1: /remove the background from a logo/i,
+  },
+  {
+    path: "/en/remove-background-from-avatar",
+    testId: "avatar-page",
+    h1: /remove the background from an avatar/i,
+  },
 ];
 
 test.beforeEach(async ({ page }) => {
@@ -51,7 +73,9 @@ for (const scenario of SCENARIO_PAGES) {
         page.getByRole("heading", { level: 1, name: scenario.h1 }),
       ).toBeVisible();
       await expect(page.getByRole("switch")).toBeVisible();
-      await expect(page.getByLabel("Upload an image")).toBeAttached();
+      await expect(
+        page.getByLabel(/Upload an image|Загрузить изображения/),
+      ).toBeAttached();
     });
 
     test("the upload -> process path stays reachable through the reused features", async ({
@@ -59,7 +83,7 @@ for (const scenario of SCENARIO_PAGES) {
     }) => {
       await page.goto(scenario.path);
 
-      const uploadInput = page.getByLabel("Upload an image");
+      const uploadInput = page.getByLabel(/Upload an image|Загрузить изображения/);
       // Phase 08 hydration guard: the SSR-visible upload input stays disabled
       // until React handlers attach, so the first real upload cannot be
       // silently dropped before hydration.
@@ -69,7 +93,7 @@ for (const scenario of SCENARIO_PAGES) {
       // A rendered result proves the scenario composition reached the Worker
       // boundary and completed the shared upload/process path.
       await expect(page.getByRole("slider")).toBeVisible();
-      await expect(page.getByRole("group", { name: "Background" })).toBeVisible();
+      await expect(page.getByRole("group", { name: /Background|Фон/ })).toBeVisible();
     });
   });
 }
@@ -79,15 +103,15 @@ test.describe("/udalit-fon-s-foto-tovara (deep critical path)", () => {
     page,
   }) => {
     await page.goto("/udalit-fon-s-foto-tovara");
-    const upload = page.getByLabel("Upload an image");
+    const upload = page.getByLabel("Загрузить изображения");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
 
     await expect(page.getByRole("slider")).toBeVisible();
-    await expect(page.getByRole("button", { name: /download/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /скачать/i })).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download$/i }).click();
+    await page.getByRole("button", { name: /^скачать$/i }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("result.png");
   });
@@ -96,13 +120,11 @@ test.describe("/udalit-fon-s-foto-tovara (deep critical path)", () => {
     page,
   }) => {
     await page.goto("/udalit-fon-s-foto-tovara");
-    const upload = page.getByLabel("Upload an image");
+    const upload = page.getByLabel("Загрузить изображения");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE]);
-    await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
-    await expect(
-      page.getByRole("button", { name: /download all as zip/i }),
-    ).toBeEnabled();
+    await expect(page.getByTestId("scheduler-summary")).toContainText("готово 2");
+    await expect(page.getByRole("button", { name: /^скачать всё$/i })).toBeEnabled();
   });
 });
 
@@ -112,8 +134,65 @@ test.describe("/about", () => {
 
     await expect(page.getByTestId("about-page")).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 1, name: /about bg remove app/i }),
+      page.getByRole("heading", { level: 1, name: /о проекте cutbg/i }),
     ).toBeVisible();
-    await expect(page.getByLabel("Upload an image")).toHaveCount(0);
+    await expect(page.getByLabel(/Upload an image|Загрузить изображения/)).toHaveCount(0);
+  });
+});
+
+test.describe("/en/about", () => {
+  test("renders the English counterpart without the upload tool", async ({ page }) => {
+    await page.goto("/en/about");
+
+    await expect(page.getByTestId("about-page")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: /about cutbg/i }),
+    ).toBeVisible();
+    await expect(page.getByLabel(/Upload an image|Загрузить изображения/)).toHaveCount(0);
+  });
+});
+
+test.describe("language switcher (Phase 12)", () => {
+  test("preserves the current page when toggling locale", async ({ page }) => {
+    await page.goto("/about");
+    await expect(
+      page.getByRole("heading", { level: 1, name: /о проекте cutbg/i }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: /^english$/i }).click();
+    await expect(page).toHaveURL(/\/en\/about\/?$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: /about cutbg/i }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: /русский/i }).click();
+    await expect(page).toHaveURL(/\/about\/?$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: /о проекте cutbg/i }),
+    ).toBeVisible();
+  });
+
+  test("translates the slug (not just the /en/ prefix) on a scenario page", async ({
+    page,
+  }) => {
+    await page.goto("/udalit-fon-s-foto-tovara");
+    await expect(
+      page.getByRole("heading", { level: 1, name: /удалить фон с фото товара/i }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: /^english$/i }).click();
+    await expect(page).toHaveURL(/\/en\/remove-background-from-product-photo\/?$/);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: /remove the background from a product photo/i,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: /русский/i }).click();
+    await expect(page).toHaveURL(/\/udalit-fon-s-foto-tovara\/?$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: /удалить фон с фото товара/i }),
+    ).toBeVisible();
   });
 });

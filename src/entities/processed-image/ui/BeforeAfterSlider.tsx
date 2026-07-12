@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { m } from "@/paraglide/messages";
 
 import type { BackgroundFill, SourceImage } from "../model/types";
 
@@ -11,12 +12,23 @@ export interface BeforeAfterSliderProps {
 
 /** Mirrors `features/remove-background`'s `useObjectUrls` (RemoveBackgroundTestPanel). */
 function useObjectUrl(blob: Blob | null): string | null {
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  const [url, setUrl] = useState<string | null>(null);
+
   useEffect(() => {
+    if (!blob) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the URL state when the external Blob resource is removed.
+      setUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(blob);
+
+    setUrl(nextUrl);
     return () => {
-      if (url) URL.revokeObjectURL(url);
+      URL.revokeObjectURL(nextUrl);
     };
-  }, [url]);
+  }, [blob]);
+
   return url;
 }
 
@@ -32,7 +44,7 @@ export function BeforeAfterSlider({
   before,
   after,
   backgroundFill = { type: "transparent" },
-  alt = "Image before and after background removal",
+  alt = m.beforeAfterAlt(),
 }: BeforeAfterSliderProps) {
   const [position, setPosition] = useState(50);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -128,7 +140,7 @@ export function BeforeAfterSlider({
       )}
       <div
         role="slider"
-        aria-label="Before/after comparison position"
+        aria-label={m.beforeAfterControl()}
         aria-valuenow={Math.round(position)}
         aria-valuemin={0}
         aria-valuemax={100}

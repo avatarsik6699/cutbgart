@@ -1,5 +1,7 @@
 import type { QualityMode } from "../../../entities/processed-image";
-import { Card, CardContent, CardHeader, CardTitle, Switch } from "../../../shared/ui";
+import { Gauge } from "lucide-react";
+import { m } from "@/paraglide/messages";
+import { Switch } from "../../../shared/ui";
 
 export interface QualityModeToggleProps {
   qualityMode: QualityMode;
@@ -13,21 +15,18 @@ export function QualityModeToggle({
   const isMaxQuality = qualityMode === "max";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Quality mode</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <label className="flex items-center gap-3 text-sm">
-          <Switch
-            checked={isMaxQuality}
-            onCheckedChange={(checked) => {
-              onQualityModeChange(checked ? "max" : "fast");
-            }}
-          />
-          {isMaxQuality ? "Max quality" : "Fast"}
-        </label>
-      </CardContent>
-    </Card>
+    <label className="inline-flex items-center gap-3 rounded-full border bg-background/80 px-4 py-2 text-sm shadow-sm backdrop-blur">
+      <Gauge className="size-4 text-primary" aria-hidden="true" />
+      <span className="font-medium">{m.qualityModeLabel()}</span>
+      <Switch
+        checked={isMaxQuality}
+        onCheckedChange={(checked) => {
+          onQualityModeChange(checked ? "max" : "fast");
+        }}
+      />
+      <span className="text-muted-foreground">
+        {isMaxQuality ? m.qualityMax() : m.qualityFast()}
+      </span>
+    </label>
   );
 }

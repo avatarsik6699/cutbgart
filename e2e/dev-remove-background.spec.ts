@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("/dev/remove-background", () => {
+  test.beforeEach(async ({ page }) => {
+    // Capability detection is not under test here. Force the deterministic WASM
+    // branch so a headless Chromium WebGPU adapter probe cannot delay hydration.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "gpu", {
+        configurable: true,
+        value: undefined,
+      });
+    });
+  });
+
   test("renders the harness and the quality toggle", async ({ page }) => {
     await page.goto("/dev/remove-background");
 

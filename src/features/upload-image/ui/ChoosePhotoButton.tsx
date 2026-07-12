@@ -1,6 +1,7 @@
 import { Camera } from "lucide-react";
 import { useCallback } from "react";
 
+import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
 import { validateAndPrepareUpload } from "../model/validate-and-prepare-upload";
 import type { UploadResult } from "../model/types";
@@ -10,6 +11,8 @@ export interface ChoosePhotoButtonProps {
   onUpload: (result: UploadResult) => void;
   onUploads?: (results: Array<{ fileName: string; result: UploadResult }>) => void;
   onPreparationChange?: (fileCount: number) => void;
+  batchMode?: boolean;
+  label?: string;
   className?: string;
 }
 
@@ -22,6 +25,8 @@ export function ChoosePhotoButton({
   onUpload,
   onUploads,
   onPreparationChange,
+  batchMode = false,
+  label,
   className,
 }: ChoosePhotoButtonProps) {
   const handleFile = useCallback(
@@ -45,7 +50,7 @@ export function ChoosePhotoButton({
       )}
     >
       <Camera className="size-4" aria-hidden="true" />
-      Choose photo
+      {label ?? m.choosePhoto()}
       <input
         type="file"
         multiple
@@ -55,7 +60,7 @@ export function ChoosePhotoButton({
         className="sr-only"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          if (files.length > 1 && onUploads) {
+          if ((files.length > 1 || batchMode) && onUploads) {
             onPreparationChange?.(files.length);
             void Promise.all(
               files.map(async (file) => ({

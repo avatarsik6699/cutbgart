@@ -1,6 +1,7 @@
 import { Upload } from "lucide-react";
 import { useCallback, useEffect } from "react";
 
+import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
 import { validateAndPrepareUpload } from "../model/validate-and-prepare-upload";
 import type { UploadResult } from "../model/types";
@@ -12,6 +13,7 @@ export interface UploadDropzoneProps {
   onUpload: (result: UploadResult) => void;
   onUploads?: (results: Array<{ fileName: string; result: UploadResult }>) => void;
   onPreparationChange?: (fileCount: number) => void;
+  batchMode?: boolean;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export function UploadDropzone({
   onUpload,
   onUploads,
   onPreparationChange,
+  batchMode = false,
   className,
 }: UploadDropzoneProps) {
   const handleFile = useCallback(
@@ -41,7 +44,7 @@ export function UploadDropzone({
 
   const handleFiles = useCallback(
     (files: File[]) => {
-      if (files.length === 1 || !onUploads) {
+      if ((files.length === 1 && !batchMode) || !onUploads) {
         if (files[0]) handleFile(files[0]);
         return;
       }
@@ -55,7 +58,7 @@ export function UploadDropzone({
         .then(onUploads)
         .finally(() => onPreparationChange?.(0));
     },
-    [handleFile, onPreparationChange, onUploads],
+    [batchMode, handleFile, onPreparationChange, onUploads],
   );
 
   useEffect(() => {
@@ -64,13 +67,13 @@ export function UploadDropzone({
       const file = Array.from(event.clipboardData?.items ?? [])
         .find((item) => item.kind === "file")
         ?.getAsFile();
-      if (file) handleFile(file);
+      if (file) handleFiles([file]);
     }
     window.addEventListener("paste", handlePaste);
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [disabled, handleFile]);
+  }, [disabled, handleFiles]);
 
   return (
     <div
@@ -90,15 +93,15 @@ export function UploadDropzone({
     >
       <Upload className="size-8 text-muted-foreground" aria-hidden="true" />
       <p className="text-sm text-muted-foreground">
-        Drag and drop an image, paste from clipboard, or{" "}
-        <span className="font-medium text-foreground">click to browse</span>
+        {m.uploadPrompt()}{" "}
+        <span className="font-medium text-foreground">{m.uploadBrowse()}</span>
       </p>
       <input
         type="file"
         multiple
         accept={ACCEPTED_MIME}
         disabled={disabled}
-        aria-label="Upload an image"
+        aria-label={m.uploadAria()}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
         onChange={(event) => {
           handleFiles(Array.from(event.target.files ?? []));

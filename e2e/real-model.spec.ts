@@ -9,10 +9,10 @@ const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
 test("real model smoke: upload -> inference -> result", async ({ page }) => {
   test.setTimeout(6 * 60 * 1000);
   await page.goto("/");
-  const upload = page.getByLabel("Upload an image");
+  const upload = page.getByLabel("Загрузить изображения");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE_IMAGE);
-  await expect(page.getByText(/loading .* model…/i)).toBeVisible();
+  await expect(page.locator("p", { hasText: /загружаем модель/i })).toBeVisible();
   await expect(page.getByRole("slider")).toBeVisible({ timeout: 4 * 60 * 1000 });
-  await expect(page.getByRole("button", { name: /^download$/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^скачать$/i })).toBeVisible();
 });

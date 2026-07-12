@@ -8,6 +8,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    setupFiles: ["./vitest.setup.ts"],
     // Phase 02 adds the first real suite (features/remove-background,
     // SPEC.md §7.7) — an empty suite should now fail the gate instead of
     // silently passing.
