@@ -2,6 +2,7 @@ import { env, pipeline, type ImageSegmentationPipeline } from "@huggingface/tran
 
 import type {
   AlphaMatte,
+  BackgroundFill,
   InferencePath,
   ProcessedImage,
   QualityMode,
@@ -88,6 +89,7 @@ export interface RecompositeRequest {
   requestId: string;
   image: ProcessedImage;
   matte: AlphaMatte;
+  backgroundFill?: BackgroundFill;
 }
 
 export type WorkerRequest =
@@ -126,6 +128,7 @@ export interface ProcessResultResponse {
   type: "process-result";
   requestId: string;
   result: Blob;
+  matte: AlphaMatte;
   durationMs: number;
 }
 
@@ -339,6 +342,7 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
       type: "process-result",
       requestId: request.requestId,
       result: processedImage.result,
+      matte: processedImage.alphaMatte!,
       durationMs: Math.round(performance.now() - startedAt),
     });
   } catch (error) {
@@ -374,7 +378,11 @@ async function handleExtractAlphaMatte(request: ExtractAlphaMatteRequest): Promi
 async function handleRecomposite(request: RecompositeRequest): Promise<void> {
   const startedAt = performance.now();
   try {
-    const result = await recompositeProcessedImage(request.image, request.matte);
+    const result = await recompositeProcessedImage(
+      request.image,
+      request.matte,
+      request.backgroundFill,
+    );
     post({
       type: "recomposite-result",
       requestId: request.requestId,

@@ -24,9 +24,36 @@ export interface AlphaMatte {
   data: Uint8ClampedArray;
 }
 
+export type HexColor = `#${string}`;
+
+export interface BackgroundGradientStop {
+  offset: 0 | 1;
+  color: HexColor;
+}
+
+export type BackgroundFill =
+  | { type: "transparent" }
+  | { type: "color"; value: HexColor }
+  | {
+      type: "gradient";
+      kind: "linear" | "radial";
+      stops: readonly [
+        BackgroundGradientStop & { offset: 0 },
+        BackgroundGradientStop & { offset: 1 },
+      ];
+    }
+  | { type: "image"; blob: Blob };
+
 export interface ProcessedImage {
   source: SourceImage;
   /** Composited PNG-with-alpha, produced via OffscreenCanvas. */
   result: Blob;
+  /** Transparent foreground used for instant background previews. */
+  cutout?: Blob;
   qualityMode: QualityMode;
+  /** Retained in memory so background changes never rerun inference. */
+  alphaMatte?: AlphaMatte;
+  backgroundFill?: BackgroundFill;
+  /** True while the visual preview is newer than the downloadable PNG. */
+  backgroundPending?: boolean;
 }

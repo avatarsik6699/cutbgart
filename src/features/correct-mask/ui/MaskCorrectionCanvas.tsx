@@ -7,6 +7,7 @@ import {
   unionBoundingBox,
   writeAlphaRegion,
   type AlphaMatte,
+  type BackgroundFill,
   type BrushBoundingBox,
   type BrushMode,
   type MaskPatch,
@@ -110,6 +111,7 @@ export interface MaskCanvasHandle {
 export interface MaskCorrectionCanvasProps {
   ref?: Ref<MaskCanvasHandle>;
   sourceImage: SourceImage;
+  backgroundFill?: BackgroundFill;
   /**
    * Matte to seed the working buffer with — read once per `sourceImage`
    * decode, never re-read. Must be a stable object (the pristine
@@ -151,6 +153,7 @@ export interface MaskCorrectionCanvasProps {
 export function MaskCorrectionCanvas({
   ref,
   sourceImage,
+  backgroundFill = { type: "transparent" },
   initialMatte,
   original,
   mode,
@@ -199,6 +202,34 @@ export function MaskCorrectionCanvas({
   // readback stall on every call.
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const brushCursorVisible = pointerInside && !spacePanning && !panning;
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (backgroundFill.type !== "image") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears an externally-owned object URL when the selected fill stops being an image.
+      setBackgroundImageUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(backgroundFill.blob);
+    setBackgroundImageUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [backgroundFill]);
+
+  const backgroundStyle =
+    backgroundFill.type === "color"
+      ? { backgroundColor: backgroundFill.value, backgroundImage: "none" }
+      : backgroundFill.type === "gradient"
+        ? {
+            backgroundImage: `${backgroundFill.kind === "linear" ? "linear-gradient(to right" : "radial-gradient(circle at center"}, ${backgroundFill.stops[0].color}, ${backgroundFill.stops[1].color})`,
+          }
+        : backgroundFill.type === "image" && backgroundImageUrl
+          ? {
+              backgroundImage: `url("${backgroundImageUrl}")`,
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "cover",
+            }
+          : undefined;
 
   function repaintRect(box: BrushBoundingBox): void {
     const imageData = rgbaRef.current;
@@ -563,6 +594,7 @@ export function MaskCorrectionCanvas({
         aria-label="Mask correction canvas — drag to paint corrections"
         className="block w-full touch-none"
         style={{
+          ...backgroundStyle,
           cursor: spacePanning || panning ? "grab" : "none",
           transform: `scale(${String(viewport.zoom)}) translate(${String(
             (-viewport.offsetX / sourceImage.width) * 100,

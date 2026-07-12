@@ -4,6 +4,7 @@ import { trackEvent } from "@/shared/lib/analytics";
 
 import type {
   AlphaMatte,
+  BackgroundFill,
   DeviceCapabilities,
   InferencePath,
   ProcessedImage,
@@ -121,6 +122,11 @@ export interface UseBackgroundRemovalResult {
   extractMatte: (image: ProcessedImage) => Promise<AlphaMatte>;
   /** Re-composites a corrected matte with the source image on the existing worker. */
   recomposite: (image: ProcessedImage, matte: AlphaMatte) => Promise<ProcessedImage>;
+  applyBackgroundFill: (
+    image: ProcessedImage,
+    fill: BackgroundFill,
+  ) => Promise<ProcessedImage>;
+  replaceResult: (image: ProcessedImage) => void;
 }
 
 /**
@@ -261,7 +267,11 @@ export function useBackgroundRemoval(
           const result: ProcessedImage = {
             source: attempt.source,
             result: message.result,
+            cutout: message.result,
             qualityMode: attempt.qualityMode,
+            alphaMatte: message.matte,
+            backgroundFill: { type: "transparent" },
+            backgroundPending: false,
           };
           appendLog(`Processing completed in ${String(message.durationMs)}ms`);
           trackEvent("processing_completed");
@@ -425,9 +435,13 @@ export function useBackgroundRemoval(
   const exitCorrecting = useCallback((result: ProcessedImage) => {
     dispatch({ type: "EXIT_CORRECTING", result });
   }, []);
+  const replaceResult = useCallback((result: ProcessedImage) => {
+    dispatch({ type: "REPLACE_RESULT", result });
+  }, []);
 
   const extractMatte = useCallback(
     (image: ProcessedImage): Promise<AlphaMatte> => {
+      if (image.alphaMatte) return Promise.resolve(image.alphaMatte);
       const requestId = nextRequestId();
       appendLog("Extracting correction matte on worker");
       return new Promise((resolve, reject) => {
@@ -458,6 +472,24 @@ export function useBackgroundRemoval(
     },
     [appendLog, getWorker, nextRequestId],
   );
+  const applyBackgroundFill = useCallback(
+    (image: ProcessedImage, backgroundFill: BackgroundFill) => {
+      const matte = image.alphaMatte;
+      if (!matte) return Promise.reject(new Error("Background matte is unavailable"));
+      return new Promise<ProcessedImage>((resolve, reject) => {
+        const requestId = nextRequestId();
+        pendingRecompositeRequestsRef.current.set(requestId, { resolve, reject });
+        getWorker().postMessage({
+          type: "recomposite",
+          requestId,
+          image,
+          matte,
+          backgroundFill,
+        } satisfies WorkerRequest);
+      });
+    },
+    [getWorker, nextRequestId],
+  );
 
   return {
     state,
@@ -474,5 +506,7 @@ export function useBackgroundRemoval(
     exitCorrecting,
     extractMatte,
     recomposite,
+    applyBackgroundFill,
+    replaceResult,
   };
 }

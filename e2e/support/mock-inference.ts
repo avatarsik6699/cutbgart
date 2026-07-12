@@ -27,11 +27,15 @@ export async function installMockInference(page: Page): Promise<void> {
         image?: {
           source: { blob: Blob; width: number; height: number; format: string };
           result: Blob;
+          cutout?: Blob;
           qualityMode: string;
+          backgroundFill?: unknown;
         };
         matte?: { data: Uint8ClampedArray };
+        backgroundFill?: unknown;
       }): void {
-        queueMicrotask(() => {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
+        queueMicrotask(async () => {
           if (message.type === "load-model") {
             this.emit({
               type: "model-progress",
@@ -55,6 +59,13 @@ export async function installMockInference(page: Page): Promise<void> {
                 type: "process-result",
                 requestId: message.requestId,
                 result: message.source?.blob,
+                matte: {
+                  width: message.source!.width,
+                  height: message.source!.height,
+                  data: new Uint8ClampedArray(
+                    message.source!.width * message.source!.height,
+                  ).fill(255),
+                },
                 durationMs: 1,
               });
             window.setTimeout(emitResult, PROCESS_DELAY_MS);
@@ -76,18 +87,69 @@ export async function installMockInference(page: Page): Promise<void> {
             return;
           }
           if (message.type === "recomposite" && message.image && message.matte) {
-            // Trailing bytes keep the uploaded image decodable while making
-            // the corrected download observably different from the original.
-            const result = new Blob(
-              [message.image.source.blob, message.matte.data.slice(0, 64)],
-              { type: "image/png" },
-            );
-            this.emit({
-              type: "recomposite-result",
-              requestId: message.requestId,
-              result: { ...message.image, result },
-              durationMs: 1,
-            });
+            try {
+              // Trailing bytes keep the uploaded image decodable while making
+              // the corrected download observably different from the original.
+              const canvas = document.createElement("canvas");
+              canvas.width = message.image.source.width;
+              canvas.height = message.image.source.height;
+              const context = canvas.getContext("2d")!;
+              if (message.backgroundFill && typeof message.backgroundFill === "object") {
+                const fill = message.backgroundFill as {
+                  type?: string;
+                  value?: string;
+                  blob?: Blob;
+                  stops?: { color: string }[];
+                };
+                if (fill.type === "color") {
+                  context.fillStyle = fill.value!;
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                } else if (fill.type === "gradient") {
+                  const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+                  gradient.addColorStop(0, fill.stops![0]!.color);
+                  gradient.addColorStop(1, fill.stops![1]!.color);
+                  context.fillStyle = gradient;
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                } else if (fill.type === "image" && fill.blob) {
+                  context.fillStyle = "#22C55E";
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                }
+              }
+              context.fillStyle = "#FFFFFF";
+              context.fillRect(
+                canvas.width / 4,
+                canvas.height / 4,
+                canvas.width / 2,
+                canvas.height / 2,
+              );
+              const result = await new Promise<Blob>((resolve, reject) =>
+                canvas.toBlob(
+                  (blob) =>
+                    blob ? resolve(blob) : reject(new Error("Mock PNG encoding failed")),
+                  "image/png",
+                ),
+              );
+              this.emit({
+                type: "recomposite-result",
+                requestId: message.requestId,
+                result: {
+                  ...message.image,
+                  result,
+                  cutout: message.image.cutout ?? message.image.result,
+                  alphaMatte: message.matte,
+                  backgroundFill: message.backgroundFill ?? message.image.backgroundFill,
+                  backgroundPending: false,
+                },
+                durationMs: 1,
+              });
+            } catch (error) {
+              this.emit({
+                type: "error",
+                requestId: message.requestId,
+                code: "compositing-failed",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
           }
         });
       }

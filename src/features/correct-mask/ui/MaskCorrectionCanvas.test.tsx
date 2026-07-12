@@ -113,6 +113,15 @@ function liveAlphaAt(x: number, y: number): number {
 }
 
 describe("MaskCorrectionCanvas", () => {
+  it("keeps the selected background visible behind the editable matte", async () => {
+    const { canvas } = renderCanvas({
+      backgroundFill: { type: "color", value: "#123456" },
+    });
+    await waitUntilReady();
+
+    expect(canvas.style.backgroundColor).toBe("rgb(18, 52, 86)");
+  });
+
   it("commits one whole gesture as a single patch, not per pointer-move point", async () => {
     const onStrokeCommitted = vi.fn();
     const { canvas } = renderCanvas({ onStrokeCommitted });

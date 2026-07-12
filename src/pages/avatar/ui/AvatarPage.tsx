@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 
-import type { QualityMode } from "../../../entities/processed-image";
+import type { BackgroundFill, QualityMode } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
 import { DownloadResultButton } from "../../../features/download-result";
+import { BackgroundFillSelector } from "../../../features/background-replacement";
 import { DownloadAllButton } from "../../../features/download-result";
 import { BatchGrid, useBatchProcessing } from "../../../features/batch-processing";
 import {
@@ -54,6 +55,8 @@ export function AvatarPage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
   const [preparingFileCount, setPreparingFileCount] = useState(0);
+  const [previewFill, setPreviewFill] = useState<BackgroundFill>({ type: "transparent" });
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -86,6 +89,8 @@ export function AvatarPage() {
     recomputeMaxQuality,
     retry,
     reset,
+    applyBackgroundFill,
+    replaceResult,
   } = useBackgroundRemoval(qualityMode);
   const batch = useBatchProcessing({
     qualityMode,
@@ -100,6 +105,8 @@ export function AvatarPage() {
       return;
     }
     setUploadError(null);
+    setPreviewFill({ type: "transparent" });
+    setBackgroundBusy(false);
     selectFile(sourceImageToFile(result.image));
   }
   function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
@@ -256,9 +263,26 @@ export function AvatarPage() {
 
       {!displayError && state.status === "result" && (
         <div className="flex flex-col gap-4">
-          <BeforeAfterSlider before={state.result.source} after={state.result.result} />
+          <BeforeAfterSlider
+            before={state.result.source}
+            after={state.result.cutout ?? state.result.result}
+            backgroundFill={previewFill}
+          />
+          <BackgroundFillSelector
+            image={{
+              source: state.result.source,
+              backgroundFill: state.result.backgroundFill,
+            }}
+            onPreview={setPreviewFill}
+            onApply={(fill) => applyBackgroundFill(state.result, fill)}
+            onResult={(updated) => {
+              replaceResult(updated);
+              setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
+            }}
+            onBusyChange={setBackgroundBusy}
+          />
           <div className="flex flex-wrap gap-3">
-            <DownloadResultButton image={state.result.result} />
+            <DownloadResultButton image={state.result.result} disabled={backgroundBusy} />
             <Button type="button" variant="outline" onClick={handleReset}>
               Process another image
             </Button>

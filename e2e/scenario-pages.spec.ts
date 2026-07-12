@@ -69,6 +69,7 @@ for (const scenario of SCENARIO_PAGES) {
       // A rendered result proves the scenario composition reached the Worker
       // boundary and completed the shared upload/process path.
       await expect(page.getByRole("slider")).toBeVisible();
+      await expect(page.getByRole("group", { name: "Background" })).toBeVisible();
     });
   });
 }
