@@ -4,3 +4,4 @@ export { UploadDropzone } from "./ui/UploadDropzone";
 export type { UploadDropzoneProps } from "./ui/UploadDropzone";
 export { ChoosePhotoButton } from "./ui/ChoosePhotoButton";
 export type { ChoosePhotoButtonProps } from "./ui/ChoosePhotoButton";
+export { UploadPreparationNotice } from "./ui/UploadPreparationNotice";

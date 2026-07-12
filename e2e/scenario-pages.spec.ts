@@ -90,6 +90,19 @@ test.describe("/udalit-fon-s-foto-tovara (deep critical path)", () => {
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("result.png");
   });
+
+  test("the reused upload surface enters batch mode for multiple files", async ({
+    page,
+  }) => {
+    await page.goto("/udalit-fon-s-foto-tovara");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE]);
+    await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
+    await expect(
+      page.getByRole("button", { name: /download all as zip/i }),
+    ).toBeEnabled();
+  });
 });
 
 test.describe("/about", () => {

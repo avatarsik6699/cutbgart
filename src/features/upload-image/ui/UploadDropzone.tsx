@@ -10,6 +10,8 @@ const ACCEPTED_MIME = "image/jpeg,image/png,image/webp";
 export interface UploadDropzoneProps {
   disabled?: boolean;
   onUpload: (result: UploadResult) => void;
+  onUploads?: (results: Array<{ fileName: string; result: UploadResult }>) => void;
+  onPreparationChange?: (fileCount: number) => void;
   className?: string;
 }
 
@@ -23,13 +25,37 @@ export interface UploadDropzoneProps {
 export function UploadDropzone({
   disabled = false,
   onUpload,
+  onUploads,
+  onPreparationChange,
   className,
 }: UploadDropzoneProps) {
   const handleFile = useCallback(
     (file: File) => {
-      void validateAndPrepareUpload(file).then(onUpload);
+      onPreparationChange?.(1);
+      void validateAndPrepareUpload(file)
+        .then(onUpload)
+        .finally(() => onPreparationChange?.(0));
     },
-    [onUpload],
+    [onPreparationChange, onUpload],
+  );
+
+  const handleFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 1 || !onUploads) {
+        if (files[0]) handleFile(files[0]);
+        return;
+      }
+      onPreparationChange?.(files.length);
+      void Promise.all(
+        files.map(async (file) => ({
+          fileName: file.name,
+          result: await validateAndPrepareUpload(file),
+        })),
+      )
+        .then(onUploads)
+        .finally(() => onPreparationChange?.(0));
+    },
+    [handleFile, onPreparationChange, onUploads],
   );
 
   useEffect(() => {
@@ -59,8 +85,7 @@ export function UploadDropzone({
       onDrop={(event) => {
         event.preventDefault();
         if (disabled) return;
-        const file = event.dataTransfer.files[0];
-        if (file) handleFile(file);
+        handleFiles(Array.from(event.dataTransfer.files));
       }}
     >
       <Upload className="size-8 text-muted-foreground" aria-hidden="true" />
@@ -70,13 +95,13 @@ export function UploadDropzone({
       </p>
       <input
         type="file"
+        multiple
         accept={ACCEPTED_MIME}
         disabled={disabled}
         aria-label="Upload an image"
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) handleFile(file);
+          handleFiles(Array.from(event.target.files ?? []));
           event.target.value = "";
         }}
       />

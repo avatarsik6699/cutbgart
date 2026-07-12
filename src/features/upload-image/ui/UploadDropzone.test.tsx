@@ -43,6 +43,34 @@ describe("UploadDropzone", () => {
     expect(onUpload.mock.calls[0]?.[0]).toMatchObject({ ok: true });
   });
 
+  it("reports preparation immediately and clears it after multiple files are ready", async () => {
+    let finishDecode!: (value: ImageBitmap) => void;
+    const delayedDecode = new Promise<ImageBitmap>((resolve) => {
+      finishDecode = resolve;
+    });
+    vi.mocked(createImageBitmap).mockReturnValueOnce(delayedDecode);
+    const onUploads = vi.fn();
+    const onPreparationChange = vi.fn();
+    render(
+      <UploadDropzone
+        onUpload={vi.fn()}
+        onUploads={onUploads}
+        onPreparationChange={onPreparationChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: { files: [makeFile(), makeFile()] },
+    });
+
+    expect(onPreparationChange).toHaveBeenCalledWith(2);
+    expect(onUploads).not.toHaveBeenCalled();
+    finishDecode({ width: 800, height: 600, close: vi.fn() });
+
+    await waitFor(() => expect(onUploads).toHaveBeenCalled());
+    expect(onPreparationChange).toHaveBeenLastCalledWith(0);
+  });
+
   it("calls onUpload with an error result for an unsupported format", async () => {
     const onUpload = vi.fn();
     render(<UploadDropzone onUpload={onUpload} />);

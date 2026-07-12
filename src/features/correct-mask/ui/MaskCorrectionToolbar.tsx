@@ -25,6 +25,9 @@ const MODES: { value: BrushMode; label: string; description: string }[] = [
   },
 ];
 
+const MIN_BRUSH_RADIUS = 4;
+const MAX_BRUSH_RADIUS = 75;
+
 export interface MaskCorrectionToolbarProps {
   mode: BrushMode;
   onModeChange: (mode: BrushMode) => void;
@@ -96,14 +99,18 @@ export function MaskCorrectionToolbar({
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        Brush size
+        <span className="flex justify-between gap-3">
+          <span>Brush size</span>
+          <span className="tabular-nums text-muted-foreground">
+            {String(brushSize * 2)} px
+          </span>
+        </span>
         <input
           type="range"
-          min={4}
-          // Matches SPEC.md §1.3's 4096px resolution invariant — brush size
-          // should be able to cover a whole image, not just a small dab of
-          // one, on the project's largest accepted source images.
-          max={4096}
+          aria-label="Brush size"
+          aria-valuetext={`${String(brushSize * 2)} px diameter`}
+          min={MIN_BRUSH_RADIUS}
+          max={MAX_BRUSH_RADIUS}
           value={brushSize}
           onChange={(event) => {
             onBrushSizeChange(Number(event.target.value));
@@ -126,10 +133,24 @@ export function MaskCorrectionToolbar({
       </label>
 
       <div className="flex gap-2">
-        <Button type="button" variant="outline" disabled={!canUndo} onClick={onUndo}>
+        <Button
+          type="button"
+          variant="outline"
+          aria-keyshortcuts="Control+Z Meta+Z"
+          title="Undo (Ctrl/Cmd+Z)"
+          disabled={!canUndo}
+          onClick={onUndo}
+        >
           Undo
         </Button>
-        <Button type="button" variant="outline" disabled={!canRedo} onClick={onRedo}>
+        <Button
+          type="button"
+          variant="outline"
+          aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+          title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)"
+          disabled={!canRedo}
+          onClick={onRedo}
+        >
           Redo
         </Button>
       </div>

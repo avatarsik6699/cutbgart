@@ -117,7 +117,13 @@ describe("useBackgroundRemoval", () => {
     expect(track).toHaveBeenCalledWith("model_load_started", undefined);
 
     act(() => {
-      worker.emit({ type: "model-progress", qualityMode: "fast", percent: 50 });
+      worker.emit({
+        type: "model-progress",
+        qualityMode: "fast",
+        percent: 50,
+        loaded: 50,
+        total: 100,
+      });
     });
     await waitFor(() =>
       expect(result.current.state).toMatchObject({

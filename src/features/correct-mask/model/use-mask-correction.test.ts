@@ -1,5 +1,5 @@
-import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MaskPatch } from "../../../entities/processed-image";
 import type { MaskCanvasHandle } from "../ui/MaskCorrectionCanvas";
@@ -23,6 +23,10 @@ function makeCanvasRef() {
 }
 
 const imageSize = { width: 100, height: 50 };
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("useMaskCorrection", () => {
   it("starts with no undo/redo history", () => {
@@ -130,6 +134,82 @@ describe("useMaskCorrection", () => {
     });
 
     expect(handle.applyPatch).not.toHaveBeenCalled();
+  });
+
+  it("supports platform undo and redo keyboard shortcuts while mounted", () => {
+    const { ref, handle } = makeCanvasRef();
+    const { result, unmount } = renderHook(() => useMaskCorrection(ref, imageSize));
+    const patch = makePatch(0, 255);
+
+    act(() => {
+      result.current.commitStroke(patch);
+    });
+
+    const undoEvent = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(undoEvent);
+    });
+    expect(undoEvent.defaultPrevented).toBe(true);
+    expect(handle.applyPatch).toHaveBeenLastCalledWith(patch.box, patch.before);
+
+    const shiftedRedoEvent = new KeyboardEvent("keydown", {
+      key: "Z",
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(shiftedRedoEvent);
+    });
+    expect(shiftedRedoEvent.defaultPrevented).toBe(true);
+    expect(handle.applyPatch).toHaveBeenLastCalledWith(patch.box, patch.after);
+
+    const secondUndoEvent = new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(secondUndoEvent);
+    });
+    expect(secondUndoEvent.defaultPrevented).toBe(true);
+    const controlYEvent = new KeyboardEvent("keydown", {
+      key: "y",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(controlYEvent);
+    });
+    expect(controlYEvent.defaultPrevented).toBe(true);
+    expect(handle.applyPatch).toHaveBeenLastCalledWith(patch.box, patch.after);
+
+    unmount();
+    const afterUnmount = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(afterUnmount);
+    expect(afterUnmount.defaultPrevented).toBe(false);
+  });
+
+  it("does not prevent unavailable history shortcuts", () => {
+    const { ref } = makeCanvasRef();
+    renderHook(() => useMaskCorrection(ref, imageSize));
+    const event = new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      cancelable: true,
+    });
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it("survives the canvas handle being unset (before decode / after unmount)", () => {

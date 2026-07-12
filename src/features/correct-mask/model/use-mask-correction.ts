@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useEffect, useState, type RefObject } from "react";
 
 import type { BrushMode, MaskPatch } from "../../../entities/processed-image";
 import type { MaskCanvasHandle } from "../ui/MaskCorrectionCanvas";
@@ -183,6 +183,32 @@ export function useMaskCorrection(
     setRedoStack((stack) => stack.slice(0, -1));
     setUndoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
   }, [redoStack, canvas]);
+
+  useEffect(() => {
+    function handleHistoryShortcut(event: KeyboardEvent): void {
+      if (event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      const accelerator = event.ctrlKey || event.metaKey;
+      const wantsUndo = accelerator && key === "z" && !event.shiftKey;
+      const wantsRedo =
+        (accelerator && key === "z" && event.shiftKey) ||
+        (event.ctrlKey && !event.metaKey && key === "y" && !event.shiftKey);
+
+      if (wantsUndo && undoStack.length > 0) {
+        event.preventDefault();
+        undo();
+      } else if (wantsRedo && redoStack.length > 0) {
+        event.preventDefault();
+        redo();
+      }
+    }
+
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleHistoryShortcut);
+    };
+  }, [redo, redoStack.length, undo, undoStack.length]);
 
   const zoomIn = useCallback(
     (anchor?: MaskCorrectionViewportPoint) => {

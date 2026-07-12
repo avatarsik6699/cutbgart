@@ -28,6 +28,7 @@
 | PHASE_07 | ✅ done | v0.07.0 | ✅ | 🤖 agent | Manual mask correction |
 | PHASE_08 | ✅ done | v0.08.0 | ✅ | 🤖 agent | Correction editor hardening |
 | PHASE_09 | ✅ done | v0.09.0 | ✅ | 🤖 agent | Correction zoom & pan |
+| PHASE_10 | ✅ done | v0.10.0 | ✅ | 🤖 agent | Batch processing |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -39,7 +40,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `07` · **Phase in progress:** `—`
+**Phase completed:** `10` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -184,6 +185,59 @@ interface MaskCanvasHandle {
 }
 ```
 
+```ts
+// src/features/batch-processing/model/types.ts — Phase 10, per SPEC.md §2.2, §5.2–§5.4
+
+type BatchItemStatus = "queued" | "model-loading" | "processing" | "result" | "error";
+type ProcessingStage = "queued" | "preparing" | "inference" | "compositing" | "complete";
+
+interface ModelLoadProgress {
+  status: "idle" | "checking-cache" | "downloading" | "building-session" | "ready";
+  percent: number | null;
+  loadedBytes: number;
+  totalBytes: number | null;
+  fromCache: boolean | null;
+}
+
+interface ItemProcessingProgress {
+  stage: ProcessingStage;
+  startedAt: number | null;
+  elapsedMs: number;
+  percent: null;
+}
+
+interface BatchItem {
+  id: string;
+  originalFileName: string;
+  source: SourceImage;
+  qualityMode: QualityMode;
+  alphaMatte?: AlphaMatte;
+  processedImage?: ProcessedImage;
+  status: BatchItemStatus;
+  error?: string;
+  enqueuedAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  processingProgress: ItemProcessingProgress;
+}
+
+interface BatchSchedulerSnapshot {
+  inferencePath: InferencePath;
+  concurrencyLimit: 1 | 2;
+  activeCount: number;
+  queuedCount: number;
+  completedCount: number;
+  failedCount: number;
+  totalCount: number;
+}
+
+interface BatchSession {
+  items: BatchItem[];
+  selectedItemId: string | null;
+  modelLoads: Partial<Record<`${QualityMode}:${InferencePath}`, ModelLoadProgress>>;
+}
+```
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -266,6 +320,60 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-12 — Phase 10 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_10 gate passed
+
+### Changes / Decision
+- Added an in-memory multi-image batch session with stable item identity, FIFO scheduling, isolated
+  failures, and bounded inference concurrency (WebGPU: 2; WASM: 1).
+- Added truthful shared model-loading and per-item processing progress, reusable item review and mask
+  correction, per-item PNG downloads, and client-generated pass-through ZIP downloads.
+- Added editor-scoped undo/redo shortcuts and capped the source-space brush footprint at about
+  `150 × 150 px`.
+- Added unit/integration and cross-browser Playwright coverage for the Phase 10 flows; no server
+  endpoint, persistence, analytics event, or environment variable was added.
+
+### Affected Phases / Consequences
+- PHASE_11 may build background replacement on the completed batch/item result contract.
+- No breaking contract change; the Phase 10 additions are client-side and additive.
+
+## 2026-07-12 — Phase 10 batch runtime decisions
+
+**Type**: decision
+**Author**: AI (architect-delegated research)
+**Triggered by**: Architect delegated the Phase 10 ZIP library, bounded-concurrency, and stable-item
+identity decisions after `/phase-init 10` left them for verification.
+
+### Changes / Decision
+- Use `client-zip@^2.5.0` for download-all. It is browser-focused, dependency-free, ships TypeScript
+  declarations, accepts streaming/Blob-like inputs, and deliberately stores rather than recompresses
+  entries. Phase 10 outputs are already-compressed PNGs, so `fflate`/`zip.js` compression features
+  would add CPU, memory, and API surface without material archive-size benefit. Because the app is
+  SSR-rendered, load `client-zip` only inside the browser download action, not in the server graph.
+- Use adaptive inference concurrency: maximum `2` active jobs on WebGPU and `1` on WASM. This keeps
+  bounded parallelism on capable devices while avoiding duplicated memory pressure on the fallback
+  path. Queue order is FIFO; failure always releases a slot. Phase 10 exposes a live, item-derived
+  scheduler summary (path, active/limit, queued, done, failed, total) and keeps transient per-item
+  queue/processing timestamps for local diagnostics only; none of this metadata is persisted or
+  sent to analytics.
+- Give every `BatchItem` a stable `crypto.randomUUID()` at enqueue time and retain its original
+  filename separately. Selection and React keys use the UUID, never array position or filename;
+  sanitized duplicate download names receive numeric suffixes.
+- Surface Transformers.js aggregate model-loading progress as real percent and transferred/total
+  MiB when `progress_total.loaded/total` are available, with explicit cache-check, download,
+  ONNX-session-build, and ready stages. ONNX inference exposes no reliable completion percentage,
+  so per-item processing shows stage + elapsed time with an indeterminate indicator and never
+  simulates percentage progress.
+
+### Affected Phases / Consequences
+- PHASE_10 — the three `[TODO: verify]` markers are resolved; tests must cover both scheduler limits,
+  slot release after failure, stable identity, filename collision handling, and ZIP contents.
+- `docs/STACK.md` now records `client-zip` as the client-side ZIP dependency.
+- No server endpoint, persistence, environment variable, or privacy-contract change.
 
 ## 2026-07-11 — Spec change: point-prompt/SAM removed from MVP; batch/background renumbered
 

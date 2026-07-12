@@ -13,6 +13,8 @@ import {
   type MaskCanvasHandle,
 } from "../../../features/correct-mask";
 import { DownloadResultButton } from "../../../features/download-result";
+import { DownloadAllButton } from "../../../features/download-result";
+import { BatchGrid, useBatchProcessing } from "../../../features/batch-processing";
 import {
   detectDeviceCapabilities,
   useBackgroundRemoval,
@@ -21,6 +23,7 @@ import { QualityModeToggle, useQualityMode } from "../../../features/quality-mod
 import {
   ChoosePhotoButton,
   UploadDropzone,
+  UploadPreparationNotice,
   type UploadResult,
   type UploadValidationError,
 } from "../../../features/upload-image";
@@ -179,6 +182,7 @@ function CorrectionErrorAlert({ error, onRetry, onReset }: CorrectionErrorAlertP
 export function HomePage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
+  const [preparingFileCount, setPreparingFileCount] = useState(0);
   const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
   const [extractingMatte, setExtractingMatte] = useState(false);
   const [finalizingCorrection, setFinalizingCorrection] = useState(false);
@@ -225,6 +229,7 @@ export function HomePage() {
     lightweightMode,
     runInfo,
     logs,
+    modelLoadBytes,
     selectFile,
     recomputeMaxQuality,
     retry,
@@ -234,6 +239,15 @@ export function HomePage() {
     extractMatte,
     recomposite,
   } = useBackgroundRemoval(qualityMode);
+  const batch = useBatchProcessing({
+    qualityMode,
+    inferencePath: deviceCapabilities?.inferencePath ?? "wasm",
+  });
+  const batchModelKey =
+    `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
+  const selectedBatchItem = batch.session.items.find(
+    (item) => item.id === batch.session.selectedItemId,
+  );
   const lastLogMessage = logs.at(-1)?.message;
 
   function handleUpload(result: UploadResult) {
@@ -249,9 +263,19 @@ export function HomePage() {
     selectFile(sourceImageToFile(result.image));
   }
 
+  function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
+    const valid = results.flatMap(({ fileName, result }) =>
+      result.ok ? [{ fileName, source: result.image }] : [],
+    );
+    const invalid = results.find(({ result }) => !result.ok);
+    setUploadError(invalid && !invalid.result.ok ? invalid.result.error : null);
+    if (valid.length) batch.enqueue(valid);
+  }
+
   function handleReset() {
     correctionRunRef.current += 1;
     setUploadError(null);
+    setPreparingFileCount(0);
     setCorrectionError(null);
     setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
@@ -292,6 +316,45 @@ export function HomePage() {
         setExtractingMatte(false);
         setCorrectionError({
           message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
+  }
+
+  function handleBatchEditMask() {
+    if (!selectedBatchItem?.processedImage) return;
+    const image = selectedBatchItem.processedImage;
+    setExtractingMatte(true);
+    void batch
+      .extractMatte(image)
+      .then((matte) => {
+        setExtractingMatte(false);
+        setOriginalMatte(matte);
+      })
+      .catch((error: unknown) => {
+        setExtractingMatte(false);
+        setCorrectionError({
+          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
+  }
+
+  function handleBatchDoneCorrecting(correctedMatte: AlphaMatte) {
+    if (!selectedBatchItem?.processedImage) return;
+    const image = selectedBatchItem.processedImage;
+    setFinalizingCorrection(true);
+    void batch
+      .recomposite(image, correctedMatte)
+      .then((updated) => {
+        setFinalizingCorrection(false);
+        setOriginalMatte(null);
+        batch.replaceResult(selectedBatchItem.id, updated);
+      })
+      .catch((error: unknown) => {
+        setFinalizingCorrection(false);
+        setCorrectionError({
+          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
           action: "retry",
         });
       });
@@ -346,7 +409,9 @@ export function HomePage() {
       </header>
 
       <div aria-live="polite" role="status" className="sr-only">
-        {describeState(state, lightweightMode, uploadError)}
+        {batch.session.items.length
+          ? `${String(batch.snapshot.completedCount)} of ${String(batch.snapshot.totalCount)} batch items complete; ${String(batch.snapshot.failedCount)} failed.`
+          : describeState(state, lightweightMode, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}
@@ -395,10 +460,91 @@ export function HomePage() {
         </div>
       )}
 
-      {!displayError && state.status === "idle" && (
+      {!displayError && state.status === "idle" && !batch.session.items.length && (
         <div className="flex flex-col gap-3">
-          <UploadDropzone onUpload={handleUpload} disabled={!hydrated || busy} />
-          <ChoosePhotoButton onUpload={handleUpload} disabled={!hydrated || busy} />
+          <UploadDropzone
+            onUpload={handleUpload}
+            onUploads={handleUploads}
+            onPreparationChange={setPreparingFileCount}
+            disabled={!hydrated || busy || preparingFileCount > 0}
+          />
+          <ChoosePhotoButton
+            onUpload={handleUpload}
+            onUploads={handleUploads}
+            onPreparationChange={setPreparingFileCount}
+            disabled={!hydrated || busy || preparingFileCount > 0}
+          />
+          <UploadPreparationNotice fileCount={preparingFileCount} />
+        </div>
+      )}
+
+      {!displayError && batch.session.items.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <UploadDropzone
+            onUpload={handleUpload}
+            onUploads={handleUploads}
+            onPreparationChange={setPreparingFileCount}
+            disabled={!hydrated || preparingFileCount > 0}
+          />
+          <UploadPreparationNotice fileCount={preparingFileCount} />
+          <BatchGrid
+            items={batch.session.items}
+            snapshot={batch.snapshot}
+            selectedItemId={batch.session.selectedItemId}
+            modelLoad={batch.session.modelLoads[batchModelKey]}
+            onSelect={batch.selectItem}
+            onRetry={batch.retryItem}
+          />
+          <div className="flex flex-wrap gap-3">
+            <DownloadAllButton items={batch.session.items} />
+            <Button type="button" variant="outline" onClick={batch.reset}>
+              Clear batch
+            </Button>
+          </div>
+          {selectedBatchItem?.processedImage && !originalMatte && (
+            <div
+              className="flex flex-col gap-4"
+              aria-label={`Selected ${selectedBatchItem.originalFileName}`}
+            >
+              <BeforeAfterSlider
+                before={selectedBatchItem.processedImage.source}
+                after={selectedBatchItem.processedImage.result}
+              />
+              <div className="flex flex-wrap gap-3">
+                <DownloadResultButton image={selectedBatchItem.processedImage.result} />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => batch.retryItem(selectedBatchItem.id)}
+                >
+                  Reprocess in {selectedBatchItem.qualityMode === "max" ? "Max" : "Fast"}{" "}
+                  mode
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleBatchEditMask}
+                  disabled={extractingMatte}
+                >
+                  {extractingMatte ? "Preparing…" : "Edit mask"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Reprocessing keeps this item&apos;s saved{" "}
+                {selectedBatchItem.qualityMode === "max" ? "Max" : "Fast"} mode. The
+                Quality mode toggle applies to images added after you change it.
+              </p>
+            </div>
+          )}
+          {selectedBatchItem?.processedImage && originalMatte && (
+            <MaskCorrectionPanel
+              sourceImage={selectedBatchItem.processedImage.source}
+              originalMatte={originalMatte}
+              onDone={handleBatchDoneCorrecting}
+              doneDisabled={finalizingCorrection}
+              onViewAnnouncementChange={setCorrectionViewAnnouncement}
+            />
+          )}
         </div>
       )}
 
@@ -407,6 +553,9 @@ export function HomePage() {
           <p className="text-sm text-muted-foreground">
             Loading {state.qualityMode === "max" ? "max quality" : "fast"} model…{" "}
             {state.progress.toFixed(0)}%
+            {modelLoadBytes.loaded > 0
+              ? ` · ${(modelLoadBytes.loaded / 1_048_576).toFixed(1)}${modelLoadBytes.total ? ` / ${(modelLoadBytes.total / 1_048_576).toFixed(1)}` : ""} MiB`
+              : ""}
             {deviceCapabilities
               ? ` on ${pathLabel(deviceCapabilities.inferencePath)}`
               : ""}

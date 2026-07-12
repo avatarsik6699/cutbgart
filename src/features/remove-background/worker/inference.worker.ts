@@ -97,6 +97,8 @@ export interface ModelProgressResponse {
   type: "model-progress";
   qualityMode: QualityMode;
   percent: number;
+  loaded: number;
+  total: number;
 }
 
 // Granular per-file loading events (initiate/download/done — the aggregate
@@ -203,7 +205,13 @@ function loadSegmenter(
       // usefully — the aggregate percent already covers it.
       progress_callback: (info) => {
         if (info.status === "progress_total") {
-          post({ type: "model-progress", qualityMode, percent: info.progress });
+          post({
+            type: "model-progress",
+            qualityMode,
+            percent: info.progress,
+            loaded: info.loaded,
+            total: info.total,
+          });
         } else if (info.status === "initiate" || info.status === "done") {
           post({
             type: "log",
@@ -275,6 +283,11 @@ function toErrorMessage(error: unknown): string {
 async function handleLoadModel(request: LoadModelRequest): Promise<void> {
   try {
     await loadSegmenter(request.qualityMode, request.inferencePath);
+    post({
+      type: "log",
+      qualityMode: request.qualityMode,
+      message: "building ONNX session",
+    });
     post({
       type: "model-ready",
       qualityMode: request.qualityMode,
