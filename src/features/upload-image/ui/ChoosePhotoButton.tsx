@@ -8,6 +8,8 @@ import type { UploadResult } from "../model/types";
 export interface ChoosePhotoButtonProps {
   disabled?: boolean;
   onUpload: (result: UploadResult) => void;
+  onUploads?: (results: Array<{ fileName: string; result: UploadResult }>) => void;
+  onPreparationChange?: (fileCount: number) => void;
   className?: string;
 }
 
@@ -18,13 +20,18 @@ export interface ChoosePhotoButtonProps {
 export function ChoosePhotoButton({
   disabled = false,
   onUpload,
+  onUploads,
+  onPreparationChange,
   className,
 }: ChoosePhotoButtonProps) {
   const handleFile = useCallback(
     (file: File) => {
-      void validateAndPrepareUpload(file).then(onUpload);
+      onPreparationChange?.(1);
+      void validateAndPrepareUpload(file)
+        .then(onUpload)
+        .finally(() => onPreparationChange?.(0));
     },
-    [onUpload],
+    [onPreparationChange, onUpload],
   );
 
   return (
@@ -41,13 +48,26 @@ export function ChoosePhotoButton({
       Choose photo
       <input
         type="file"
+        multiple
         accept="image/jpeg,image/png,image/webp"
         capture="environment"
         disabled={disabled}
         className="sr-only"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) handleFile(file);
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 1 && onUploads) {
+            onPreparationChange?.(files.length);
+            void Promise.all(
+              files.map(async (file) => ({
+                fileName: file.name,
+                result: await validateAndPrepareUpload(file),
+              })),
+            )
+              .then(onUploads)
+              .finally(() => onPreparationChange?.(0));
+          } else if (files[0]) {
+            handleFile(files[0]);
+          }
           event.target.value = "";
         }}
       />

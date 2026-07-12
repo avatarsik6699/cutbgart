@@ -214,6 +214,21 @@
   smell even where production is fine — dev-mode responsiveness is part of the product for whoever
   develops it. When react-dom 19.3 stable ships, upgrading also removes the underlying footgun.
 
+### Never dispatch external work inside a React functional state updater
+
+- **Symptoms**: work visibly remains `queued` and then jumps directly to `result`, while the Worker
+  was actually busy in the background; counters and per-item stages disagree with real execution.
+- **Root cause**: React Strict Mode may invoke a functional state updater more than once to verify
+  purity. Phase 10's scheduler mutated an external active-job ref and posted to a Worker inside the
+  updater. The first call dispatched work; the repeated call observed the mutated ref and returned
+  the old queued state, which React committed.
+- **Fix**: keep FIFO/active bookkeeping in feature-local refs, select the jobs and post Worker
+  messages outside `setState`, then use a pure updater only to reflect those selected IDs in React
+  state. Verify scheduler tests under `StrictMode`.
+- **Prevention**: functional state updaters must only calculate and return state. Never perform
+  Worker messages, network calls, ref mutation, timers, analytics, or other externally observable
+  work inside them.
+
 <!--
 ### [Title — short, punchy, searchable]
 

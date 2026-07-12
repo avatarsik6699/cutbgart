@@ -7,6 +7,9 @@ import type { Page } from "@playwright/test";
  */
 export async function installMockInference(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    // Keep transitional queue/processing UI observable while remaining much
+    // faster than real model inference.
+    const PROCESS_DELAY_MS = 800;
     class MockInferenceWorker extends EventTarget {
       private source: {
         blob: Blob;
@@ -31,6 +34,13 @@ export async function installMockInference(page: Page): Promise<void> {
         queueMicrotask(() => {
           if (message.type === "load-model") {
             this.emit({
+              type: "model-progress",
+              qualityMode: message.qualityMode,
+              percent: 50,
+              loaded: 5_242_880,
+              total: 10_485_760,
+            });
+            this.emit({
               type: "model-ready",
               qualityMode: message.qualityMode,
               inferencePath: message.inferencePath ?? "wasm",
@@ -40,12 +50,14 @@ export async function installMockInference(page: Page): Promise<void> {
           }
           if (message.type === "process" && message.source) {
             this.source = message.source;
-            this.emit({
-              type: "process-result",
-              requestId: message.requestId,
-              result: message.source.blob,
-              durationMs: 1,
-            });
+            const emitResult = () =>
+              this.emit({
+                type: "process-result",
+                requestId: message.requestId,
+                result: message.source?.blob,
+                durationMs: 1,
+              });
+            window.setTimeout(emitResult, PROCESS_DELAY_MS);
             return;
           }
           if (message.type === "extract-alpha-matte" && this.source) {

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import type { QualityMode } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
 import { DownloadResultButton } from "../../../features/download-result";
+import { DownloadAllButton } from "../../../features/download-result";
+import { BatchGrid, useBatchProcessing } from "../../../features/batch-processing";
 import {
   detectDeviceCapabilities,
   useBackgroundRemoval,
@@ -11,6 +13,7 @@ import { QualityModeToggle, useQualityMode } from "../../../features/quality-mod
 import {
   ChoosePhotoButton,
   UploadDropzone,
+  UploadPreparationNotice,
   type UploadResult,
   type UploadValidationError,
 } from "../../../features/upload-image";
@@ -52,6 +55,7 @@ function sourceImageToFile(image: { blob: Blob; format: string }): File {
 export function ProductPhotoPage() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
+  const [preparingFileCount, setPreparingFileCount] = useState(0);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -76,8 +80,21 @@ export function ProductPhotoPage() {
   }, []);
 
   const { qualityMode, setQualityMode } = useQualityMode(defaultQualityMode);
-  const { state, lightweightMode, selectFile, recomputeMaxQuality, retry, reset } =
-    useBackgroundRemoval(qualityMode);
+  const {
+    state,
+    deviceCapabilities,
+    lightweightMode,
+    selectFile,
+    recomputeMaxQuality,
+    retry,
+    reset,
+  } = useBackgroundRemoval(qualityMode);
+  const batch = useBatchProcessing({
+    qualityMode,
+    inferencePath: deviceCapabilities?.inferencePath ?? "wasm",
+  });
+  const batchKey =
+    `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
 
   function handleUpload(result: UploadResult) {
     if (!result.ok) {
@@ -87,9 +104,17 @@ export function ProductPhotoPage() {
     setUploadError(null);
     selectFile(sourceImageToFile(result.image));
   }
+  function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
+    batch.enqueue(
+      results.flatMap(({ fileName, result }) =>
+        result.ok ? [{ fileName, source: result.image }] : [],
+      ),
+    );
+  }
 
   function handleReset() {
     setUploadError(null);
+    setPreparingFileCount(0);
     reset();
   }
 
@@ -176,10 +201,34 @@ export function ProductPhotoPage() {
         </div>
       )}
 
-      {!displayError && state.status === "idle" && (
+      {!displayError && state.status === "idle" && !batch.session.items.length && (
         <div className="flex flex-col gap-3">
-          <UploadDropzone onUpload={handleUpload} disabled={!hydrated || busy} />
-          <ChoosePhotoButton onUpload={handleUpload} disabled={!hydrated || busy} />
+          <UploadDropzone
+            onUpload={handleUpload}
+            onUploads={handleUploads}
+            onPreparationChange={setPreparingFileCount}
+            disabled={!hydrated || busy || preparingFileCount > 0}
+          />
+          <ChoosePhotoButton
+            onUpload={handleUpload}
+            onUploads={handleUploads}
+            onPreparationChange={setPreparingFileCount}
+            disabled={!hydrated || busy || preparingFileCount > 0}
+          />
+          <UploadPreparationNotice fileCount={preparingFileCount} />
+        </div>
+      )}
+      {batch.session.items.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <BatchGrid
+            items={batch.session.items}
+            snapshot={batch.snapshot}
+            selectedItemId={batch.session.selectedItemId}
+            modelLoad={batch.session.modelLoads[batchKey]}
+            onSelect={batch.selectItem}
+            onRetry={batch.retryItem}
+          />
+          <DownloadAllButton items={batch.session.items} />
         </div>
       )}
 

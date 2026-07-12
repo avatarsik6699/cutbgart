@@ -304,15 +304,14 @@ test.describe("mask correction", () => {
     await page.getByRole("button", { name: "Zoom out" }).click();
     await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
 
-    // Max out the brush radius (also exercises the size slider's own keyboard
-    // operability, SPEC.md §5.4/Phase 07 F6) so every stroke below covers the
-    // whole canvas uniformly — the exact on-screen drag coordinates only need
-    // to land inside the canvas, not on one precise pixel, which is what
-    // "observably changes the composite" (this spec's Gate Checks wording)
-    // actually calls for, not byte-exact pixel addressing (already covered by
-    // entities/processed-image's `applyBrushStroke` unit tests).
-    await page.getByLabel("Brush size").focus();
+    // Max out the bounded brush radius and verify the UI's 150px diameter
+    // contract while also exercising the slider's keyboard operability.
+    const brushSize = page.getByLabel("Brush size");
+    await expect(brushSize).toHaveAttribute("max", "75");
+    await brushSize.focus();
     await page.keyboard.press("End");
+    await expect(brushSize).toHaveValue("75");
+    await expect(brushSize).toHaveAttribute("aria-valuetext", "150 px diameter");
 
     const originalAlpha = await stableCenterAlpha(page);
 
@@ -326,12 +325,18 @@ test.describe("mask correction", () => {
     await dragOnCanvasCenter(page);
     await expect.poll(() => centerAlpha(page)).toBe(255);
 
-    // undo reverts the "add" stroke back to the erased (0) state.
-    await page.getByRole("button", { name: "Undo" }).click();
+    // Cmd/Ctrl+Z reverts the "add" stroke back to the erased (0) state.
+    await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => centerAlpha(page)).toBe(0);
 
-    // redo re-applies the "add" stroke.
-    await page.getByRole("button", { name: "Redo" }).click();
+    // Cmd/Ctrl+Shift+Z re-applies the "add" stroke.
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+    await expect.poll(() => centerAlpha(page)).toBe(255);
+
+    // Ctrl+Y uses the same redo stack.
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => centerAlpha(page)).toBe(0);
+    await page.keyboard.press("Control+y");
     await expect.poll(() => centerAlpha(page)).toBe(255);
 
     // restore -> back to the model's original (pre-correction) alpha.

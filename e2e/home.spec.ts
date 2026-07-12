@@ -63,4 +63,89 @@ test.describe("/ (home)", () => {
     await expect(page.getByLabel("Upload an image")).toBeAttached();
     await expect(page.getByRole("slider")).toHaveCount(0);
   });
+
+  test("batch: upload multiple, select, reprocess, download one and all", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE, SAMPLE_IMAGE]);
+
+    await expect(page.getByTestId("scheduler-summary")).toContainText("3 done");
+    await expect(page.getByText("sample.jpg")).toHaveCount(3);
+    await page.getByText("sample.jpg").first().click();
+    await expect(page.getByRole("slider")).toBeVisible();
+
+    const individual = page.waitForEvent("download");
+    await page.getByRole("button", { name: /^download$/i }).click();
+    expect((await individual).suggestedFilename()).toBe("result.png");
+
+    await page.getByRole("button", { name: /edit mask/i }).click();
+    await expect(
+      page.getByRole("application", { name: /mask correction editor/i }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /^done$/i }).click();
+    await expect(page.getByRole("slider")).toBeVisible();
+
+    await page.getByRole("switch").click();
+    await expect(page.getByRole("switch")).toBeChecked();
+    await expect(
+      page.getByRole("button", { name: /reprocess in fast mode/i }),
+    ).toBeVisible();
+    await expect(page.getByText(/toggle applies to images added after/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /reprocess in fast mode/i }).click();
+    await expect(page.getByTestId("scheduler-summary")).toContainText("3 done");
+
+    const archive = page.waitForEvent("download");
+    await page.getByRole("button", { name: /download all as zip/i }).click();
+    expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
+  });
+
+  test("batch: gives immediate preparation feedback and identifiable interactive tiles", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const nativeCreateImageBitmap = window.createImageBitmap.bind(window);
+      window.createImageBitmap = async (image: ImageBitmapSource) => {
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        return nativeCreateImageBitmap(image);
+      };
+    });
+    await page.goto("/");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+
+    await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE, SAMPLE_IMAGE, SAMPLE_IMAGE]);
+
+    await expect(page.getByTestId("upload-preparation")).toContainText(
+      "Preparing 4 images",
+    );
+    await expect(upload).toBeDisabled();
+    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
+    await expect(page.getByText(/\d+ × \d+ · Fast/)).toHaveCount(4);
+    await expect(page.getByTestId("batch-queue-explanation")).toContainText(
+      /processed in upload order/i,
+    );
+
+    const unavailableTile = page
+      .getByRole("button", { name: /review available when ready/i })
+      .first();
+    await expect(unavailableTile).toBeDisabled();
+    await expect(page.getByText(/#\d+ in queue/).first()).toBeVisible();
+    await expect(page.getByTestId("item-stage-progress")).toBeVisible();
+
+    await expect(page.getByText("Select to review")).toHaveCount(4);
+
+    const firstTile = page
+      .getByRole("button", {
+        name: /select sample\.jpg for review/i,
+      })
+      .first();
+    await firstTile.hover();
+    await firstTile.click();
+    await expect(firstTile).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("Selected for review")).toHaveCount(1);
+  });
 });

@@ -66,6 +66,15 @@ describe("MaskCorrectionToolbar", () => {
     expect(props.onBrushHardnessChange).toHaveBeenCalledWith(0.8);
   });
 
+  it("caps the brush at a 150px diameter and exposes the current diameter", () => {
+    renderToolbar({ brushSize: 75 });
+
+    const size = screen.getByLabelText("Brush size");
+    expect(size).toHaveProperty("max", "75");
+    expect(size.getAttribute("aria-valuetext")).toBe("150 px diameter");
+    expect(screen.getByText("150 px")).toBeDefined();
+  });
+
   it("disables undo/redo buttons when there's no history, and enables them otherwise", () => {
     renderToolbar({ canUndo: false, canRedo: true });
 
@@ -84,6 +93,12 @@ describe("MaskCorrectionToolbar", () => {
 
     expect(props.onUndo).toHaveBeenCalledTimes(1);
     expect(props.onRedo).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Undo" }).getAttribute("aria-keyshortcuts"),
+    ).toBe("Control+Z Meta+Z");
+    expect(
+      screen.getByRole("button", { name: "Redo" }).getAttribute("aria-keyshortcuts"),
+    ).toContain("Control+Y");
   });
 
   it("calls zoom controls and exposes the current zoom level", () => {

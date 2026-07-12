@@ -108,6 +108,7 @@ export interface UseBackgroundRemovalResult {
   runInfo: RunInfo | null;
   /** Timestamped diagnostic trail (file downloads, state transitions, timings) for an optional debug log panel. */
   logs: LogEntry[];
+  modelLoadBytes: { loaded: number; total: number | null };
   selectFile: (file: File) => void;
   recomputeMaxQuality: () => void;
   retry: () => void;
@@ -141,6 +142,10 @@ export function useBackgroundRemoval(
   const [lightweightMode, setLightweightMode] = useState(false);
   const [runInfo, setRunInfo] = useState<RunInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [modelLoadBytes, setModelLoadBytes] = useState({
+    loaded: 0,
+    total: null as number | null,
+  });
   const logIdRef = useRef(0);
 
   const appendLog = useCallback((message: string) => {
@@ -202,6 +207,10 @@ export function useBackgroundRemoval(
           const attempt = lastAttemptRef.current;
           if (attempt && attempt.qualityMode === message.qualityMode) {
             dispatch({ type: "MODEL_PROGRESS", percent: message.percent });
+            setModelLoadBytes({
+              loaded: message.loaded,
+              total: message.total > 0 ? message.total : null,
+            });
           }
           break;
         }
@@ -456,6 +465,7 @@ export function useBackgroundRemoval(
     lightweightMode,
     runInfo,
     logs,
+    modelLoadBytes,
     selectFile,
     recomputeMaxQuality,
     retry,
