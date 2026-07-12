@@ -261,5 +261,5 @@ feat(phase-12): i18n, branding, and responsive tool-workspace layout
 - [x] All automated gate checks green
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 12`
-- [ ] Committed atomically on `feat/phase-12` branch
-- [ ] Tag created after merge to develop: `git tag -a v0.12.0 -m "Phase 12: Localization, Branding & Launch Content"`
+- [x] Committed atomically on `feat/phase-12` branch
+- [x] Tag created after merge to develop: `git tag -a v0.12.0 -m "Phase 12: Localization, Branding & Launch Content"`
