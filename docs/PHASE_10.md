@@ -384,4 +384,4 @@ feat(phase-10): add bounded batch processing and ZIP downloads
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 10`
 - [x] Committed atomically on `feat/phase-10` branch
-- [ ] Tag created after merge to main: `git tag -a v0.10.0 -m "Phase 10: Batch processing"`
+- [x] Tag created after merge to main: `git tag -a v0.10.0 -m "Phase 10: Batch processing"`
