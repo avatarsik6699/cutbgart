@@ -31,7 +31,7 @@
 | PHASE_10 | ✅ done | v0.10.0 | ✅ | 🤖 agent | Batch processing |
 | PHASE_11 | ✅ done | v0.11.0 | ✅ | 🤖 agent | Background replacement |
 | PHASE_12 | ✅ done | v0.12.0 | ✅ | 🤖 agent | Localization, Branding & Launch Content |
-| PHASE_13 | ⏳ pending | v0.13.0 | ⬜ | — | Hardening & Launch |
+| PHASE_13 | ✅ done | v0.13.0 | ✅ | 🤖 agent | Hardening & Launch |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -43,7 +43,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `12` · **Phase in progress:** `—`
+**Phase completed:** `13` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -378,6 +378,30 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-13 — Phase 13 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_13 gate passed, production smoke passed, and GitHub Actions deployment completed
+
+### Changes / Decision
+- Published the production application at `https://cutbg.art` and `https://www.cutbg.art` with
+  nginx, Let's Encrypt TLS, Umami/Postgres, Uptime Kuma, and healthy Docker Compose services.
+- Replaced the four scenario-page placeholder presentations with the architect-provided final
+  assets, preserving their intrinsic dimensions and aspect ratios with a responsive `40rem` cap;
+  added bilingual Playwright coverage for square and portrait examples.
+- Hardened first-certificate bootstrap with Certbot standalone issuance and aligned Compose/CI on
+  `ghcr.io/avatarsik6699/cutbgart:latest`. GitHub Actions run `29211248810` verified lint/test →
+  image build/GHCR publish → authenticated SSH deploy from `main` end to end.
+- Added explicit clean-checkout generation for Paraglide and TanStack Router outputs before CI
+  analysis/build. Cloudflare Web Analytics and the custom R2 model endpoint remain optional and
+  unset until the Cloudflare zone and account resources are provisioned; upstream model fallback
+  remains functional.
+
+### Affected Phases / Consequences
+- Phase plan is complete through PHASE_13; production deploy and launch contracts are active.
+- No server-side product database, public API, or new application environment key was introduced.
 
 ## 2026-07-12 — Phase 12 complete
 
