@@ -32,9 +32,9 @@ export function AvatarPage() {
             src="/images/avatar-example.webp"
             alt={m.avatarExampleAlt()}
             loading="lazy"
-            width={960}
-            height={540}
-            className="w-full rounded-xl border border-border"
+            width={1254}
+            height={1254}
+            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
           />
           <p className="text-sm text-muted-foreground">{m.avatarExampleCaption()}</p>
         </section>

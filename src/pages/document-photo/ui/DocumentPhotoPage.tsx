@@ -32,9 +32,9 @@ export function DocumentPhotoPage() {
             src="/images/document-photo-example.webp"
             alt={m.documentPhotoExampleAlt()}
             loading="lazy"
-            width={960}
-            height={540}
-            className="w-full rounded-xl border border-border"
+            width={1086}
+            height={1448}
+            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
           />
           <p className="text-sm text-muted-foreground">
             {m.documentPhotoExampleCaption()}

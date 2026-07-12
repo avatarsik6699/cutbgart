@@ -1,7 +1,15 @@
 services:
   app:
-    build: .
-    image: bg-remove-app:latest
+    build:
+      context: .
+      args:
+        VITE_MODEL_CDN_BASE_URL: ${VITE_MODEL_CDN_BASE_URL:-}
+        VITE_UMAMI_SCRIPT_URL: ${VITE_UMAMI_SCRIPT_URL:-}
+        VITE_UMAMI_WEBSITE_ID: ${VITE_UMAMI_WEBSITE_ID:-}
+        VITE_CF_BEACON_TOKEN: ${VITE_CF_BEACON_TOKEN:-}
+    # Must match .github/workflows/ci.yml's GHCR publish target so the VPS
+    # deploy job's `docker compose pull` retrieves the image built by CI.
+    image: ghcr.io/avatarsik6699/cutbgart:latest
     restart: unless-stopped
     init: true # tini as PID 1 — correct signal handling, no zombie processes (SPEC.md §8.1)
     environment:

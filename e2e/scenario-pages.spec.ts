@@ -59,6 +59,40 @@ const SCENARIO_PAGES: ScenarioPage[] = [
   },
 ];
 
+interface ScenarioExample {
+  path: string;
+  src: string;
+  width: number;
+  height: number;
+}
+
+const SCENARIO_EXAMPLES: ScenarioExample[] = [
+  {
+    path: "/udalit-fon-s-foto-tovara",
+    src: "/images/product-photo-example.webp",
+    width: 1254,
+    height: 1254,
+  },
+  {
+    path: "/en/remove-background-from-product-photo",
+    src: "/images/product-photo-example.webp",
+    width: 1254,
+    height: 1254,
+  },
+  {
+    path: "/udalit-fon-s-foto-na-dokumenty",
+    src: "/images/document-photo-example.webp",
+    width: 1086,
+    height: 1448,
+  },
+  {
+    path: "/en/remove-background-from-id-photo",
+    src: "/images/document-photo-example.webp",
+    width: 1086,
+    height: 1448,
+  },
+];
+
 test.beforeEach(async ({ page }) => {
   await installMockInference(page);
 });
@@ -95,6 +129,37 @@ for (const scenario of SCENARIO_PAGES) {
       await expect(page.getByRole("slider")).toBeVisible();
       await expect(page.getByRole("group", { name: /Background|Фон/ })).toBeVisible();
     });
+  });
+}
+
+for (const example of SCENARIO_EXAMPLES) {
+  test(`${example.path} preserves the example image dimensions and responsive cap`, async ({
+    page,
+  }) => {
+    await page.goto(example.path);
+
+    const image = page.locator(`img[src="${example.src}"]`);
+    await expect(image).toHaveAttribute("loading", "lazy");
+    await expect(image).toHaveAttribute("width", String(example.width));
+    await expect(image).toHaveAttribute("height", String(example.height));
+
+    await image.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        image.evaluate((element: HTMLImageElement) => ({
+          width: element.naturalWidth,
+          height: element.naturalHeight,
+        })),
+      )
+      .toEqual({ width: example.width, height: example.height });
+
+    const rendered = await image.boundingBox();
+    expect(rendered).not.toBeNull();
+    expect(rendered!.width).toBeLessThanOrEqual(640);
+    expect(rendered!.width / rendered!.height).toBeCloseTo(
+      example.width / example.height,
+      2,
+    );
   });
 }
 

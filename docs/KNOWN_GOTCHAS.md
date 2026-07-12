@@ -281,3 +281,17 @@
 - **Prevention**: [optional — how to avoid hitting it again]
 - **Links**: [optional — docs / issue / PR]
 -->
+# Certbot webroot bootstrap cannot delete nginx's dummy certificate before issuance
+
+- **Symptoms**: the first production deploy reaches Certbot, but Let's Encrypt reports
+  `connection refused` for the HTTP-01 challenge; nginx is restart-looping because
+  `/etc/letsencrypt/live/<domain>/fullchain.pem` no longer exists.
+- **Root cause**: a dummy-certificate bootstrap that starts nginx and then deletes the dummy files
+  assumes nginx will remain alive until issuance finishes. With `restart: unless-stopped`, nginx
+  can restart after deletion, fail its unconditional TLS certificate load, and stop serving port 80
+  before Let's Encrypt requests the challenge.
+- **Fix**: on a new host, keep nginx stopped and run Certbot in `standalone` mode with port 80
+  published; start nginx only after the real certificate exists. Use webroot only for subsequent
+  renewals while nginx is already running.
+- **Prevention**: first-certificate bootstrap and renewal are distinct states. Do not remove a file
+  referenced by the live nginx configuration as an intermediate bootstrap step.

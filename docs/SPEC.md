@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.5` |
-| Date | `2026-07-12` |
+| Document Version | `v1.6` |
+| Date | `2026-07-13` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -213,6 +213,14 @@ at least one scenario-relevant before/after example — thin/duplicate content r
 penalties. The English scenario pages are genuine translations targeting English search intent, not
 a mechanical pass over the Russian copy.
 
+The four launch example assets in `public/images/*-example.webp` are final scenario-specific images,
+not placeholders. Their page presentation must preserve each asset's real intrinsic aspect ratio,
+remain responsive, and never upscale or stretch the bitmap: center the image, use `height: auto`, and
+cap its rendered inline size at `min(100%, 40rem)`. The square product/logo/avatar assets declare
+their actual `1254 × 1254` intrinsic dimensions; the portrait document asset declares `1086 × 1448`.
+Keep the examples below the fold with `loading="lazy"`; explicit intrinsic dimensions reserve the
+correct layout space and prevent CLS while CSS controls the smaller rendered size.
+
 Batch processing (Phase 10) does not introduce a new route: dropping/selecting more than one file on
 any existing page's upload surface (`features/upload-image`) is what enters batch mode, on that same
 page. No dedicated `/batch` URL.
@@ -408,7 +416,9 @@ device, consistent with the "UI must never hang" requirement already stated in �
   the TanStack Router loader/head API.
 - JSON-LD: `WebApplication` on the home page, `HowTo` on scenario pages.
 - Unique `<h1>` per page containing the target scenario phrase.
-- Example images: WebP/AVIF, `loading="lazy"`, below the fold.
+- Example images: scenario-relevant WebP/AVIF assets, `loading="lazy"`, below the fold; preserve
+  intrinsic aspect ratio and dimensions, render responsively without upscaling or stretching, and
+  cap the displayed inline size at `min(100%, 40rem)` (§5.1).
 - `scripts/generate-sitemap.ts` runs at build/CI time, walking the `routes/` tree — prevents a new
   scenario page from being forgotten in the sitemap. From Phase 12, emits both locale URLs per page
   with `hreflang` alternates (§5.5).
@@ -470,7 +480,7 @@ utility function's unit tests.
 | `10` | Batch processing | Process many images in one session without repeating the upload → download loop by hand | `features/batch-processing` slice: parallel upload/processing with bounded concurrency (§7.1), grid/tile overview with per-item status, select-to-review/correct/reprocess via the existing single-image flow, per-item and "download all as ZIP" (§4, §6); per-item error isolation (§7.3); e2e coverage (§7.7) |
 | `11` | Background replacement | Let the user place the cutout on a solid color, gradient, or custom background instead of only transparent PNG | `features/background-replacement` slice: `BackgroundFill` (color/gradient/image) composited via the existing `OffscreenCanvas` pipeline; background-fill selector wired into **result** (§5.3); custom background image stays client-side only (§1.1, §4); e2e coverage (§7.7) |
 | `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
-| `13` | Hardening & Launch | Confidence across the real device matrix, then public availability | Full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
+| `13` | Hardening & Launch | Final SEO-page presentation, confidence across the real device matrix, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 
 ---
 

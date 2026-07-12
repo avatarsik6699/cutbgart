@@ -1,11 +1,5 @@
 # PHASE 13 — Hardening & Launch
 
-> ⚠️ Scaffolded ahead of Phase 12 completing, per architect-approved plan (2026-07-12) that split
-> the original one-line Phase 12 stub into Phase 12 (Localization, Branding & Launch Content) and
-> this phase, renumbered but otherwise unchanged in scope. Do not start implementation until
-> PHASE_12 is `✅ done` — this phase's real-device pass exercises the bilingual, restyled UI Phase 12
-> ships, not the current one.
-
 ## Phase Metadata
 
 | Field | Value |
@@ -20,21 +14,25 @@
 
 ## Phase Goal
 
-Confidence across the real device matrix, then public availability. Full pass over SPEC.md §7.4's
-cross-browser matrix on real devices (not just emulators/headless), a polish pass on anything that
-pass surfaces, and production publish at `cutbg.art` — explicitly not blocked on the separate
-portfolio/donation track (SPEC.md §8, §1.3).
+Finalize the SEO scenario-page image presentation, establish confidence across the real device
+matrix, then make the product publicly available. The phase sizes the architect-provided example
+assets without distortion or layout shift, exercises the launch UI on real target devices, fixes
+issues that pass surfaces, and publishes at `cutbg.art` (SPEC.md §5.1, §7.4, §7.5, §8).
 
 ---
 
 ## Scope
 
+### Frontend
+- [x] `F1` Update all four scenario-page examples to declare each final asset's actual intrinsic dimensions, preserve its aspect ratio with `height: auto`, center it, and cap its responsive rendered inline size at `min(100%, 40rem)` without upscaling or stretching; retain below-the-fold `loading="lazy"` behavior — _Depends on:_ —
+- [x] `F2` Extend Playwright scenario-page coverage to assert the square and portrait examples load with the expected intrinsic aspect ratios and stay within the responsive `40rem` display cap in both locales — _Depends on:_ `F1`
+
 ### Infra
-- [ ] `I1` Execute the full §7.4 real-device test matrix, not emulators: Chrome/Edge desktop (WebGPU + `fp16`), Safari desktop/iOS (WASM + `q8` fallback — real device, not simulator), Android Chrome (WebGPU chipset-dependent with fallback), older/low-power devices (WASM, confirm UI never hangs) — _Depends on:_ —
+- [x] `I1` Execute the full §7.4 real-device test matrix, not emulators: Chrome/Edge desktop (WebGPU + `fp16`), Safari desktop/iOS (WASM + `q8` fallback — real device, not simulator), Android Chrome (WebGPU chipset-dependent with fallback), older/low-power devices (WASM, confirm UI never hangs) — _Depends on:_ `F1`, `F2`
 - [ ] `I2` Production deploy: bring up the existing Docker Compose stack (`nginx`, `app`, `umami` + `umami-db`) on the VPS per SPEC.md §6, confirm TLS (Certbot or `nginx-proxy`+`acme-companion`) and DNS for `cutbg.art`, verify the existing `.github/workflows/ci.yml` build→push→deploy pipeline end to end on a real push to `main` — _Depends on:_ `I1`
 
 ### Other
-- [ ] `T1` Polish pass: fix any UX/perf/correctness issues surfaced by the real-device matrix (`I1`) before publish — _Depends on:_ `I1`
+- [x] `T1` Polish pass: fix any UX/perf/correctness issues surfaced by the real-device matrix (`I1`) before publish — _Depends on:_ `I1`
 
 <!-- Test execution is governed by `## Gate Checks` below + docs/STACK.md § Gate Commands.
      Do not duplicate that list here. -->
@@ -45,6 +43,15 @@ portfolio/donation track (SPEC.md §8, §1.3).
 
 ### Create / modify
 ~~~
+public/images/product-photo-example.webp   (architect-provided final asset; verify dimensions)
+public/images/document-photo-example.webp  (architect-provided final asset; verify dimensions)
+public/images/logo-example.webp            (architect-provided final asset; verify dimensions)
+public/images/avatar-example.webp          (architect-provided final asset; verify dimensions)
+src/pages/product-photo/ui/ProductPhotoPage.tsx
+src/pages/document-photo/ui/DocumentPhotoPage.tsx
+src/pages/logo/ui/LogoPage.tsx
+src/pages/avatar/ui/AvatarPage.tsx
+e2e/scenario-pages.spec.ts
 .github/workflows/ci.yml            (verify only, unless the real-device pass finds a gap)
 docker-compose.yml
 deploy/nginx/                       (TLS/reverse-proxy config, verify only)
@@ -59,7 +66,9 @@ them here.
 - Product feature code (`src/features/*`, `src/entities/*`) unless `T1` finds a genuine device-
   specific bug — this phase hardens and ships what Phases 01–12 already built, it does not add
   product scope
-- `docs/SPEC.md` §1–§6 domain/contract sections (no new features, no new contracts)
+- Scenario-page SEO copy, route metadata, sitemap generation, and JSON-LD — only example-image
+  presentation changes in this phase
+- `docs/SPEC.md` (phase scope is now fixed; implementation must not mutate the contract)
 
 ---
 
@@ -69,7 +78,16 @@ them here.
 
 ### New persistent data (tables / collections / files)
 
-None
+- Architect explicitly deferred the §7.4 physical-device matrix for separate manual execution and
+  accepted `I1`/`T1` without device findings on 2026-07-13; no device-specific product changes were
+  made.
+- First production bootstrap exposed two deploy-path gaps: the dummy-certificate webroot flow could
+  restart nginx without a certificate before ACME validation, and Compose's app image did not match
+  the workflow's GHCR target. The bootstrap now uses Certbot standalone issuance, and Compose/CI use
+  `ghcr.io/avatarsik6699/cutbgart:latest` with ephemeral `GITHUB_TOKEN` registry authentication.
+- Production is live at `cutbg.art` with Umami enabled. Cloudflare Web Analytics and the custom R2
+  model CDN remain unset because no `VITE_CF_BEACON_TOKEN` or populated `cdn.cutbg.art` endpoint was
+  available; model loading continues through the existing upstream fallback.
 
 ### New API endpoints / RPC methods / events
 
@@ -100,8 +118,9 @@ Run `/phase-gate 13` before committing.
 Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
 - infrastructure / bootstrap
 - frontend prep, type-check, unit tests
-- e2e — the existing Playwright cross-browser matrix must stay green; extend it only if `I1`'s
-  real-device pass finds a gap headless/emulated coverage missed
+- e2e — the existing Playwright cross-browser matrix must stay green; `e2e/scenario-pages.spec.ts`
+  must cover the final square and portrait assets' responsive display constraints from SPEC.md
+  §5.1; extend the matrix if `I1` finds a gap headless/emulated coverage missed
 - the default smoke check
 
 ```bash
@@ -127,7 +146,7 @@ None
 ## Atomic Commit Message
 
 ```
-feat(phase-13): real-device hardening pass and production launch
+feat(phase-13): polish SEO images, harden devices, launch
 ```
 
 ---
