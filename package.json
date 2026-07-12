@@ -5,7 +5,9 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "vite dev",
+    "generate:code": "pnpm generate:i18n && pnpm generate:routes",
     "generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy url baseLocale --silent",
+    "generate:routes": "tsr generate",
     "generate-sitemap": "tsx scripts/generate-sitemap.ts",
     "build": "pnpm generate-sitemap && vite build",
     "start": "node .output/server/index.mjs",
@@ -46,6 +48,7 @@
     "@feature-sliced/steiger-plugin": "^0.6.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/router-cli": "^1.167.18",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.1",

@@ -42,7 +42,7 @@ pnpm --version
 ```bash
 # Local dev (no Docker) — default for everyday iteration
 pnpm install
-pnpm generate:i18n              # required on a clean checkout before lint/type-check
+pnpm generate:code              # required on a clean checkout before lint/type-check
 pnpm dev                       # vite dev — TanStack Start dev server
 
 # Container-parity dev session (hot-reload, bind-mounted source) — reach for
@@ -72,7 +72,7 @@ STACK.md` for those.
 | Infrastructure / bootstrap | `docker compose up --build -d app` | Needs Docker + Docker Compose. Scoped to `app` only — `nginx`+`certbot` need a real cert from `deploy/init-letsencrypt.sh`, which requires the real `cutbg.art` DNS record, so they can only be validated on the actual VPS, not in dev/CI. See "TLS / reverse-proxy verification" below. |
 | Migrations | `n/a` | No database in this project (SPEC.md §3) |
 | Backend / unit tests | `n/a` | No separate backend service/test suite — single TS/React codebase; all unit tests run under "Frontend unit tests" below |
-| Frontend prep | `pnpm generate:i18n` | Paraglide output in `src/paraglide/` is generated and gitignored. Run this before type-aware lint/type-check on a clean checkout; Vite's Paraglide plugin still regenerates it for `dev`/`build`. TanStack Start generates its route tree through its Vite plugin automatically. |
+| Frontend prep | `pnpm generate:code` | Paraglide output in `src/paraglide/` and TanStack Router's `src/routeTree.gen.ts` are generated and gitignored. Run this before type-aware lint/type-check on a clean checkout; their Vite plugins still regenerate both for `dev`/`build`. |
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |

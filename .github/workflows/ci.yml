@@ -25,9 +25,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Paraglide output is generated and gitignored. A clean runner must
-      # compile it before type-aware ESLint resolves imports from src/paraglide.
-      - run: pnpm generate:i18n
+      # Paraglide output and TanStack Router's route tree are generated and
+      # gitignored. A clean runner needs both before type-aware ESLint.
+      - run: pnpm generate:code
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
