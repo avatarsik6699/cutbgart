@@ -18,6 +18,8 @@ const configuredUmamiWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID as
   string | undefined;
 const configuredCfBeaconToken = import.meta.env.VITE_CF_BEACON_TOKEN as
   string | undefined;
+const configuredModelLabEnabled = import.meta.env.VITE_ENABLE_MODEL_LAB as
+  string | undefined;
 
 export const env = {
   modelCdnBaseUrl: configuredModelCdnBaseUrl?.replace(/\/+$/, ""),
@@ -27,4 +29,7 @@ export const env = {
   umamiScriptUrl: configuredUmamiScriptUrl,
   umamiWebsiteId: configuredUmamiWebsiteId,
   cfBeaconToken: configuredCfBeaconToken,
+  // Evaluation-only switch (Phase 15). Exact-match parsing keeps accidental
+  // values such as "1" or "TRUE" disabled, especially in production builds.
+  modelLabEnabled: configuredModelLabEnabled === "true",
 };

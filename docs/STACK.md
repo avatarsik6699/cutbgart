@@ -112,6 +112,7 @@ pnpm vitest run            # unit + integration (Testing Library for hooks)
 pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
 pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
 pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
+pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker, never in CI
 ```
@@ -175,6 +176,7 @@ pnpm exec steiger ./src
 # spec for every new user-facing flow (AGENTS.md core rule 8)
 pnpm e2e                  # fast iteration
 pnpm e2e:full             # phase gate, includes one real-model smoke
+pnpm e2e:model-lab-real   # opt-in Phase 15 evaluation; never CI/normal matrix
 
 # Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run
