@@ -11,6 +11,13 @@
 
 ## Gotcha Log
 
+### Cold `model-sync` builds exceed `appleboy/ssh-action`'s default timeout on the VPS
+
+- **Symptoms**: the `main` deploy spends nearly ten minutes in `docker compose --profile maintenance run --rm --build model-sync`, then fails with `Run Command Timeout` while exporting the image even though dependency installation completed.
+- **Root cause**: `appleboy/ssh-action` defaults `command_timeout` to 10 minutes. On the 2 GiB VPS, a cold model-sync image build installs the full lockfile and can consume almost that entire window before Docker exports the image.
+- **Fix**: keep `command_timeout: 30m` on the workflow's SSH deploy step. Re-running is safe: Docker reuses completed build layers and the asset synchronizer skips already-valid files.
+- **Prevention**: do not remove the explicit timeout while the VPS builds `model-sync` locally; if the sync image is later slimmed to install only its runtime dependencies, re-measure a cold build before reducing it.
+
 ### TanStack Start's router.tsx must live at `src/router.tsx`, not nested under `src/app/`
 
 - **Symptoms**: default client/server entry points silently fail to pick up router config (or build/dev breaks) when `router.tsx` is placed anywhere other than directly under `src/`.

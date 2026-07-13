@@ -136,7 +136,9 @@ rather than fabricating a pass.
 
 - The 2 GiB VPS could not complete the synchronizer image's dependency install without starving
   SSH, so the manifest-validated local asset directory was transferred with `rsync`; subsequent CI
-  deploys retain the documented idempotent synchronizer path.
+  deploys retain the documented idempotent synchronizer path. The first `main` deploy confirmed a
+  cold `model-sync` build can exceed `appleboy/ssh-action`'s 10-minute default, so the workflow uses
+  a 30-minute command timeout.
 - Rollout verification exposed two integration details not visible in local Nginx tests:
   Transformers.js 4.2 registry probes omit the requested revision, so the worker pins its remote
   path template for both CDN and fallback; nginx:alpine needs an explicit `.mjs` MIME mapping for
@@ -159,4 +161,4 @@ feat(phase-14): serve pinned models through VPS Cloudflare CDN
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 14`
 - [x] Committed atomically on `feat/phase-14` branch
-- [ ] Tag created after merge to develop: `git tag -a v0.14.0 -m "Phase 14: VPS Model CDN"`
+- [ ] Tag created after merge to `main`: `git tag -a v0.14.0 -m "Phase 14: VPS Model CDN"`
