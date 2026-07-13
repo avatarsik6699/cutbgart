@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.7` |
+| Document Version | `v1.8` |
 | Date | `2026-07-13` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
@@ -65,6 +65,8 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | JPEG / PNG / WebP input, 20 MB hard limit, client-side downscale above 4096px per side | Public API (backlog v2) |
 | Single-image processing with cancel/retry | Mobile app (backlog v2) |
 | Explicit "fast" vs "max quality" model switch, persisted in `localStorage` | Any server endpoint that accepts uploaded images (never — architectural invariant) |
+| Model evaluation lab: compare IS-Net q8/fp32, BEN2 fp16, and MVANet q4 in the browser on the same local images before selecting a new production automatic model (Phase 15) | Domain-specific model training/fine-tuning |
+| Guided object selection with SlimSAM: the user marks the object to preserve with a positive point or box when automatic removal is ambiguous (Phase 16) | |
 | Before/after slider result view, PNG-with-alpha download | Advertising on this domain (never — product decision) |
 | WebGPU with automatic, transparent WASM fallback | Donation/payment on this domain (never — lives on a separate portfolio project) |
 | Explicit error handling for every documented failure mode (§7 NFR) | |
@@ -95,6 +97,7 @@ These are **client-side runtime entities only** — nothing here is persisted se
 DeviceCapabilities → (detected once) informs → QualityMode (default) & InferencePath (WebGPU | WASM)
 SourceImage → [features/remove-background] → AlphaMatte → ProcessedImage (composited, downloadable)
 QualityMode ("fast" | "max") — user-selectable, persisted client-side in localStorage
+EvaluationModelId → [features/model-lab] → BenchmarkRun (development-only, in-memory/exportable)
 BatchSession → holds many BatchItem (each: SourceImage → AlphaMatte → ProcessedImage), in-memory only
 ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (transparent by default)
 ```
@@ -113,6 +116,14 @@ ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (tr
   `BackgroundFill` in place of transparency.
 - **QualityMode** — `"fast"` (default, IS-Net `q8`) or `"max"` (IS-Net `fp32`). Persisted in
   `localStorage`, applied on next visit without re-selection.
+- **EvaluationModelId** (Phase 15) — one of `isnet-q8`, `isnet-fp32`, `ben2-fp16`, or
+  `mvanet-q4`. It exists only inside the opt-in model lab and never changes the production
+  `QualityMode` mapping. Each entry comes from a typed registry with an immutable model revision,
+  dtype, approximate first-download size, supported execution paths, and resource warning.
+- **BenchmarkRun** (Phase 15) — in-memory results for one local `SourceImage` processed by selected
+  evaluation models: load/inference duration, success/failure and generated preview. Export contains
+  technical timings and the user's anonymous pairwise preference only; it never embeds the source
+  image, result pixels, filename, or other image-derived data.
 - **BatchSession** / **BatchItem** (Phase 10) — a `BatchSession` is an in-memory, non-persisted list
   of `BatchItem`s, one per uploaded file; each `BatchItem` independently carries its own
   `SourceImage` → `AlphaMatte` → `ProcessedImage` and processing status (queued / model-loading /
@@ -151,6 +162,10 @@ localStorage:
 Cache Storage (Service Worker, public/sw.js) — cache-first, content-hashed, effectively permanent:
   model weights (.onnx files, IS-Net `q8`/`fp32` dtype variants of the same model)
   ONNX Runtime WASM binaries
+
+Model-lab exports (Phase 15, explicit user download only):
+  benchmark JSON with model IDs, timings, execution path, errors, and pairwise preference;
+  no source/result image bytes and no filename
 ```
 
 No PII, no image data, no processing history is stored anywhere — client or server. A `BatchSession`
@@ -209,6 +224,7 @@ the same rule: the background file never leaves the device either.
 | `/about` | About the project, tech, author link | Does not block launch · `ru` base locale |
 | `/privacy` | Static privacy-policy page fulfilling §7.2's "image never leaves your device" claim; discloses aggregate-only analytics (§7.6), cookie/localStorage usage, Telegram contact | Required (Phase 12) · `ru` base locale |
 | `/en/...` | English counterpart of every row above, same path suffix under the `/en` prefix (e.g. `/en/about`, `/en/privacy`) | Required (Phase 12, §5.5) |
+| `/dev/model-lab` | Internal, `noindex` browser model-comparison lab; enabled only when `VITE_ENABLE_MODEL_LAB=true`, otherwise renders an unavailable state and never loads candidate weights | Phase 15 evaluation-only · not localized · excluded from sitemap |
 
 Every scenario page (both locales) requires unique, substantive body copy (not keyword-shuffled) and
 at least one scenario-relevant before/after example — thin/duplicate content risks search-engine
@@ -235,6 +251,8 @@ page. No dedicated `/batch` URL.
 | `features/upload-image` | `features` | Drag-and-drop (full working area), click-to-browse, clipboard paste, mobile camera capture; format/size/resolution validation; client-side downscale |
 | `features/remove-background` | `features` | Web Worker model init + inference, WebGPU/WASM device detection, `useBackgroundRemoval` hook exposing the state machine (§5.3), `OffscreenCanvas` postprocessing/compositing |
 | `features/quality-mode-toggle` | `features` | Fast/max-quality UI control, reads/writes `localStorage`, passed into `remove-background` as a parameter (not hardcoded) |
+| `features/model-lab` | `features` | (Phase 15) Opt-in browser-only evaluation surface behind `VITE_ENABLE_MODEL_LAB`: run the same local images sequentially through IS-Net q8/fp32, BEN2 fp16, and MVANet q4; compare anonymized previews, record load/inference/error measurements and pairwise preference, export image-free benchmark JSON. It must not alter the production quality toggle or eagerly fetch any model. |
+| `features/select-object` | `features` | (Phase 16) Guided SlimSAM correction: positive point or bounding-box prompt identifies the foreground object to keep; produces an `AlphaMatte` compatible with the existing correction/compositing flow. Loaded only after explicit entry into the mode and kept client-side. |
 | `features/download-result` | `features` | PNG-with-alpha download button; from Phase 10, also a "download all as ZIP" action over a `BatchSession` |
 | `features/correct-mask` | `features` | Brush-based add/erase/restore editing of the current `AlphaMatte`; adjustable brush size/hardness; undo/redo history; zoom/pan on the correction canvas for precise editing (Phase 09); re-composites via the existing `OffscreenCanvas` pipeline in `features/remove-background` — no new inference pass |
 | `features/batch-processing` | `features` | (Phase 10) Parallel upload + processing of multiple images (bounded concurrency, §7.1); grid/tile overview with per-`BatchItem` status; selecting an item enters the existing single-image `result`⇄`correcting` flow (§5.3) for review/correction/reprocess; no parallel state machine |
@@ -345,6 +363,8 @@ be fully bilingual, not translated as an afterthought.
 | i18n | Paraglide JS (`@inlang/paraglide-js`) | Compiler-based message catalogs (`messages/ru.json`, `messages/en.json`); URL-based locale strategy via TanStack Router's `rewrite.input`/`rewrite.output`; see §5.5 |
 | ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
+| Evaluation models (Phase 15) | `onnx-community/BEN2-ONNX` fp16 and `onnx-community/MVANet-ONNX` q4, plus the existing IS-Net q8/fp32 baselines | Experimental only until browser compatibility, memory, latency, and project-image quality are measured. Immutable revisions are mandatory. Candidate weights load from Hugging Face only after explicit lab interaction and are not added to the production VPS manifest before selection. BEN2/MVANet are MIT-licensed. |
+| Guided segmentation (Phase 16) | `Xenova/slimsam-77-uniform` (final dtype/revision selected during phase initialization) | User-prompted segmentation, not automatic background removal. A positive point or bounding box resolves foreground intent for light-on-light and otherwise ambiguous images; exact browser execution-path support must be verified before production activation. Apache-2.0-licensed. |
 | Client-side ZIP (Phase 10) | `[NEEDS_CLARIFICATION: exact library — e.g. fflate or client-zip]` | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
 | Package manager | pnpm | |
 | Containers | Docker + docker-compose: `nginx`, `app` (Node/Nitro SSR), `umami` + `umami-db` (Postgres) | Each service `restart: unless-stopped`; Node container runs with `init: true` (tini as PID 1); `umami-db` has a persistent volume + healthcheck gating `umami` startup |
@@ -367,6 +387,10 @@ be fully bilingual, not translated as an afterthought.
   full precision) — both served from the same `onnx-community/ISNet-ONNX` repo.
 - The two dtype variants cache independently — toggling quality mode mid-session does not re-download
   an already-cached variant.
+- Phase 15 candidate models are opt-in evaluation assets: no preload, no production-CDN manifest
+  entry, and at most one heavy automatic-model pipeline resident at once; dispose the previous
+  pipeline before loading another candidate. Phase 16 applies the same lazy-loading rule to
+  SlimSAM.
 
 ---
 
@@ -382,6 +406,12 @@ Batch processing (Phase 10) runs multiple images' inference in parallel but with
 concurrency** (exact limit decided at Phase 10 `/phase-init`, informed by real-device testing) —
 never "all items at once" — so a large batch cannot exhaust memory or make the UI hang on a weak
 device, consistent with the "UI must never hang" requirement already stated in §7.4.
+
+Phase 15 evaluation runs heavy candidates sequentially with concurrency `1`, records cold-load and
+warm-inference timing separately, and disposes the previous heavy pipeline before switching models.
+The original §1.2 inference target remains the production target for IS-Net modes; experimental
+BEN2/MVANet results are evaluated against measured device-specific latency rather than assumed to
+meet it.
 
 ### 7.2 Security & Privacy
 
@@ -460,6 +490,8 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | E2E (correction zoom/pan) | Enter **correcting** → zoom in → pan → brush stroke lands on the correct source-image pixels despite the view transform → "done" → download reflects the corrected composite | Playwright |
 | E2E (batch processing) | Drop multiple images → grid shows independent per-item progress → select one item → correct/reprocess it → download that item individually and download all as ZIP | Playwright |
 | E2E (background replacement) | In **result**, switch background fill through color → gradient → uploaded image → downloaded PNG reflects the selected fill, not transparency | Playwright |
+| E2E (model lab) | With the lab flag enabled and inference mocked: opt in, select local images/models, run a sequential comparison, choose a pairwise preference, and export image-free benchmark JSON | Playwright |
+| E2E (guided selection) | Enter **select object**, place a positive point and a box, obtain a mask, then continue through existing correction/result/download flow | Playwright |
 | Cross-browser matrix | WebGPU path and WASM fallback separately, must include Safari/iOS | Playwright projects per browser |
 | Visual regression (optional, v2) | UI components across states | Playwright screenshots |
 
@@ -487,21 +519,21 @@ utility function's unit tests.
 | `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
 | `13` | Hardening & Launch | Final SEO-page presentation, confidence across the real device matrix, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 | `14` | VPS Model CDN | Own the production model delivery path without requiring R2 or a payment card, while retaining the proven upstream path as a resilience fallback | Synchronize `models.manifest.json` with pinned ISNet `q8`/`fp32` assets and ONNX Runtime WASM; serve the host asset directory at `cdn.cutbg.art` through Nginx with CORS, byte ranges, and immutable cache headers; document the proxied DNS and Cloudflare Cache Rule; wire `VITE_MODEL_CDN_BASE_URL`; retry pinned model loading through Hugging Face Hub/upstream WASM CDN when the private CDN is unavailable; include the Cloudflare Web Analytics token in production builds; verify CDN headers, primary loading, and fallback |
+| `15` | Browser Model Evaluation Lab | Select the next automatic quality model using reproducible evidence without changing production inference | Typed immutable model registry for IS-Net q8/fp32, BEN2 fp16 and MVANet q4; opt-in development model-lab route behind `VITE_ENABLE_MODEL_LAB`; sequential same-image comparisons with side-by-side previews, cold-load/warm-inference/error/memory-capability observations, pairwise preference and image-free JSON export; focused unit/integration/E2E coverage; written decision record naming BEN2, MVANet, or neither for Phase 16 |
+| `16` | Production Model Modes & Guided Selection | Preserve both existing IS-Net modes, add the Phase-15 winner as an optional heavy automatic mode, and provide user-directed recovery for ambiguous images | User-facing processing-mode selector with model characteristics and capability-aware fallback; lazy single-session loading/disposal for the selected heavy model; SlimSAM positive-point/bounding-box flow producing the existing `AlphaMatte`; continuation into brush correction/result/download; batch concurrency constrained for heavy modes; production CDN manifest and localized E2E updates |
 
 ---
 
 ## 9. Out of Scope
 
 **Backlog v2+ (deliberately deferred, not rejected):**
-- Point-prompt / SAM-style mask correction (click positive/negative regions; heavier client-side
-  segmentation model; deferred because brush correction covers most near-term correction scenarios)
 - Accounts, processing history, cloud storage of results
 - Public API
 - Mobile app
 
 Batch processing and background replacement remain in MVP scope (Phases 10-11, §8). Point-prompt /
-SAM-style correction was removed from MVP scope on 2026-07-11 and returned to backlog v2+; see
-`docs/STATE.md` § Project Log for the superseding spec-change entry.
+SAM-style correction, previously deferred on 2026-07-11, is now approved as the SlimSAM guided
+selection flow in Phase 16 after the Phase 15 automatic-model evaluation.
 
 **Never (product decision, not a phasing choice):**
 - Any server endpoint that accepts uploaded images, in any form

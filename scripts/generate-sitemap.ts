@@ -32,7 +32,7 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const ROUTES_DIR = path.join(REPO_ROOT, "src", "routes");
 const OUTPUT_PATH = path.join(REPO_ROOT, "public", "sitemap.xml");
 
-function isExcludedFile(routeFile: string): boolean {
+export function isExcludedFile(routeFile: string): boolean {
   if (routeFile === "__root.tsx") return true;
   if (!routeFile.endsWith(".tsx")) return true;
   if (routeFile.includes(".test.")) return true;
@@ -40,13 +40,13 @@ function isExcludedFile(routeFile: string): boolean {
   return false;
 }
 
-function routeFileToSegment(routeFile: string): string {
+export function routeFileToSegment(routeFile: string): string {
   const withoutExt = routeFile.replace(/\.tsx$/, "");
   const segments = withoutExt.split(".").filter((segment) => segment !== "index");
   return segments.join("/");
 }
 
-async function collectRoutePaths(
+export async function collectRoutePaths(
   dir: string,
   prefixSegments: string[],
 ): Promise<string[]> {
@@ -90,7 +90,7 @@ function localeOf(routePath: string): Locale {
   return baseLocale;
 }
 
-function buildSitemapXml(routePaths: string[]): string {
+export function buildSitemapXml(routePaths: string[]): string {
   const groups = new Map<string, string[]>();
   for (const routePath of routePaths) {
     const key = canonicalPath(routePath);
@@ -132,4 +132,6 @@ async function main() {
   );
 }
 
-void main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  void main();
+}

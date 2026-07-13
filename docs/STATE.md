@@ -33,6 +33,7 @@
 | PHASE_12 | ✅ done | v0.12.0 | ✅ | 🤖 agent | Localization, Branding & Launch Content |
 | PHASE_13 | ✅ done | v0.13.0 | ✅ | 🤖 agent | Hardening & Launch |
 | PHASE_14 | ✅ done | v0.14.0 | ✅ | 🤖 agent | VPS Model CDN |
+| PHASE_15 | ✅ done | v0.15.0 | ✅ | 🤖 agent | Browser Model Evaluation Lab |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -44,7 +45,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `14` · **Phase in progress:** `—`
+**Phase completed:** `15` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -295,6 +296,31 @@ type ModelSource = "cdn" | "upstream";
 // worker once to Hugging Face + the upstream ONNX Runtime source and retries safely.
 ```
 
+```ts
+// src/features/model-lab/model/types.ts — Phase 15
+type EvaluationModelId = "isnet-q8" | "isnet-fp32" | "ben2-fp16" | "mvanet-q4";
+
+interface EvaluationModelProfile {
+  id: EvaluationModelId;
+  modelId: string;
+  revision: string;
+  dtype: "q8" | "fp32" | "fp16" | "q4";
+  approximateBytes: number;
+  supportedPaths: InferencePath[];
+  license: "AGPL-3.0" | "MIT";
+}
+
+// Exported records contain timings/capabilities/preference only: no filename or image bytes.
+interface BenchmarkMeasurement {
+  modelId: EvaluationModelId;
+  inferencePath: InferencePath;
+  loadMs: number;
+  inferenceMs: number;
+  status: "success" | "error";
+  errorCode?: string;
+}
+```
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -317,6 +343,7 @@ type ModelSource = "cdn" | "upstream";
 |--------|------|------|---------------------|
 | `GET` | `/` | none | SSR HTML page shell rendering the full `pages/home` composition (upload → process → download flow, Phase 04) |
 | `GET` | `/dev/remove-background` | none | SSR HTML shell hosting the isolated `remove-background` test harness (`<div data-testid="remove-background-test-harness">`). Undesigned, `noindex`, dev-only — not a launch page (SPEC.md §5.1) |
+| `GET` | `/dev/model-lab` | none | Phase 15 internal `noindex` browser model-comparison lab. Enabled only by `VITE_ENABLE_MODEL_LAB=true`; otherwise renders an unavailable state and never loads candidate weights. Excluded from the sitemap. |
 | `GET` | `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`, `/udalit-fon-dlya-avatarki` | none | SSR HTML: scenario-specific `pages/*` composition of the same upload → quality-toggle → remove-background → download flow as `/`, plus scenario copy, `HowTo` JSON-LD, and a static before/after example image (Phase 06, SPEC.md §5.1, §7.5) |
 | `GET` | `/about` | none | SSR HTML: static project/tech/author info, no upload tool (Phase 06, SPEC.md §5.1) |
 | `GET` | `/sitemap.xml` | none | Generated at build time by `scripts/generate-sitemap.ts` from the `routes/` tree, excludes `/dev/remove-background` (Phase 06, SPEC.md §7.5) |
@@ -342,6 +369,9 @@ type ModelSource = "cdn" | "upstream";
   → `BeforeAfterSlider` result view → download (`features/download-result`). Replaces the Phase 01
   hello-world placeholder.
 - `/dev/remove-background` — undesigned ML pipeline test harness (Phase 02); exercises upload → both models load → inference → result end to end ahead of the real UI landing in Phase 04.
+- `/dev/model-lab` — approved Phase 15 internal comparison surface for sequential same-image
+  IS-Net/BEN2/MVANet runs, pairwise preference, and image-free benchmark export. It is `noindex`,
+  excluded from the sitemap, and inactive unless the build-time lab flag is enabled.
 - `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`,
   `/udalit-fon-dlya-avatarki` — scenario-specific `pages/*` slices (Phase 06): the same reused
   upload/quality-toggle/remove-background/download features as `/`, wrapped in scenario copy
@@ -362,6 +392,7 @@ type ModelSource = "cdn" | "upstream";
 | `PORT` | `3000` | no — Nitro `node-server` preset default |
 | `NODE_ENV` | `production` | no — standard Node convention for the container build |
 | `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | expected for production builds (Phase 14 VPS-backed Cloudflare CDN); optional in local dev. If unset, or if the configured CDN load fails, the worker uses Transformers.js's upstream Hugging Face/ONNX Runtime sources (SPEC.md §6, §6.1) |
+| `VITE_ENABLE_MODEL_LAB` | `false` | optional Phase 15 build-time flag; only the exact string `true` enables `/dev/model-lab`. Defaults off, especially in production. |
 | `VITE_UMAMI_SCRIPT_URL` | `https://cutbg.art/script.js` | required for production (Phase 05); unset in dev disables script injection |
 | `VITE_UMAMI_WEBSITE_ID` | `3b1e...uuid` | required for production (Phase 05) |
 | `VITE_CF_BEACON_TOKEN` | `abc123token` | required for production (Phase 05, Cloudflare Web Analytics beacon) |
@@ -389,6 +420,58 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-13 — Phase 15 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_15 gate passed and the architect completed the real WebGPU comparison
+
+### Changes / Decision
+- Added the opt-in, `noindex` `/dev/model-lab` with an immutable IS-Net q8/fp32, BEN2 fp16, and
+  MVANet q4 registry, sequential worker execution, capability/timing/error capture, local result
+  previews, pairwise preferences, and privacy-safe JSON export. Candidate weights remain outside
+  production loading, the VPS manifest, sitemap, navigation, analytics, and persistent storage.
+- Verified BEN2 and MVANet in real Chromium/WASM and evaluated 20 outputs from the architect's
+  10-image light-on-light corpus. BEN2 led MVANet 6–1 with three ties and preserved the original
+  pale album substrate substantially better.
+- Verified all four models on the architect's Windows WebGPU device. BEN2 won two difficult images,
+  IS-Net fp32 won two, and MVANet won none. Phase 16 will retain IS-Net q8/fp32, add BEN2 fp16 as
+  an optional heavy automatic mode, exclude MVANet q4, and continue the approved SlimSAM guided
+  selection work.
+- Gate passed: production container build/health, TypeScript, 173 unit tests, seven focused tests,
+  Steiger, model-lab cross-browser E2E, the existing UI matrix (with a clean 26/26 WebKit rerun
+  after a transient Vite `ECONNRESET`), production real-model smoke, candidate real-model smoke,
+  and container-network smoke.
+
+### Affected Phases / Consequences
+- Additive internal evaluation route, types, and build flag; no production inference behavior,
+  public API, server-side persistence, or user-image privacy contract changed.
+- PHASE_16 consumes BEN2 as the selected heavy automatic model and does not need to evaluate MVANet
+  again.
+
+## 2026-07-13 — Browser model evaluation and guided selection approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval to retain both IS-Net modes, compare BEN2/MVANet objectively,
+and add SlimSAM-guided object selection without domain fine-tuning
+
+### Changes / Decision
+- `SPEC.md` §1–§3, §5–§7: added an opt-in, client-only evaluation contract for IS-Net q8,
+  IS-Net fp32, BEN2 fp16, and MVANet q4. Candidate models remain lazy, sequential, upstream-only,
+  and outside production inference until a measured decision is recorded.
+- `SPEC.md` §5 and §6: approved SlimSAM positive-point/bounding-box selection as a distinct guided
+  recovery flow; it produces the existing `AlphaMatte` and remains fully in-browser.
+- `SPEC.md` §8–§9: added Phase 15 (evaluation lab) and Phase 16 (production modes + SlimSAM),
+  and removed SAM-style correction from the deferred backlog. Domain fine-tuning is explicitly out
+  of scope.
+
+### Affected Phases / Consequences
+- PHASE_15 — new phase owns the typed registry, flagged lab, measurements, export, and model decision.
+- PHASE_16 — new phase consumes the Phase-15 winner and implements guided SlimSAM selection.
+- PHASE_01–14 remain valid: the existing IS-Net q8/fp32 production mapping and client-only privacy
+  invariant do not change.
 
 ## 2026-07-13 — Phase 14 complete
 
