@@ -162,4 +162,4 @@ feat(phase-14): serve pinned models through VPS Cloudflare CDN
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 14`
 - [x] Committed atomically on `feat/phase-14` branch
-- [ ] Tag created after merge to `main`: `git tag -a v0.14.0 -m "Phase 14: VPS Model CDN"`
+- [x] Tag created after merge to `main`: `git tag -a v0.14.0 -m "Phase 14: VPS Model CDN"`
