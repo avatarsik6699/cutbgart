@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.6` |
+| Document Version | `v1.7` |
 | Date | `2026-07-13` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
@@ -176,8 +176,10 @@ static/marketing page shells:
 | `GET` | `/sitemap.xml` | none | Generated at build time by `scripts/generate-sitemap.ts` from the `routes/` tree |
 | `GET` | `/robots.txt` | none | Static, fully open, links to `sitemap.xml` |
 
-All model weights and WASM binaries are served from Cloudflare R2 via CDN URL (content-hashed path),
-not from the app's own Nitro server — see §6.
+Model weights and WASM binaries use a pinned, immutable path. Production prefers
+`cdn.cutbg.art` (Nginx static files on the VPS behind Cloudflare Cache); if that source is
+unavailable, the browser retries against Hugging Face Hub and the upstream ONNX Runtime CDN. They
+are never served by the app's own Nitro server — see §6.
 
 Umami's own `/api/heartbeat` (used by uptime monitoring, §7 Observability) belongs to the Umami
 container, not to this app's contract.
@@ -347,9 +349,9 @@ be fully bilingual, not translated as an afterthought.
 | Package manager | pnpm | |
 | Containers | Docker + docker-compose: `nginx`, `app` (Node/Nitro SSR), `umami` + `umami-db` (Postgres) | Each service `restart: unless-stopped`; Node container runs with `init: true` (tini as PID 1); `umami-db` has a persistent volume + healthcheck gating `umami` startup |
 | Reverse proxy / TLS | Nginx; Certbot (cron) or `nginx-proxy` + `acme-companion` | Gzip/Brotli for SSR text responses |
-| CDN / model weight storage | Cloudflare (proxy) + Cloudflare R2 | Model `.onnx` files and ONNX Runtime WASM binaries are **not** in the app Docker image — served from R2 via CDN with a content hash in the path, `Cache-Control: public, max-age=31536000, immutable` |
+| CDN / model weight storage | VPS disk + Nginx behind Cloudflare Cache | `cdn.cutbg.art` is proxied by Cloudflare. Model `.onnx` files and ONNX Runtime WASM binaries are synchronized to a host directory from a pinned manifest, mounted read-only into Nginx, and served with CORS, byte-range support, and `Cache-Control: public, max-age=31536000, immutable`. Hugging Face Hub + the upstream ONNX Runtime CDN remain the automatic runtime fallback; R2 is not required. |
 | VPS | hip-hosting, 1-2 vCPU / 1-2 GB RAM | Server only does SSR of a light page shell (no inference); Umami+Postgres is the component most likely to grow with traffic; scale by upgrading the same provider's tier — no architecture migration needed since the whole stack is Docker Compose |
-| CI/CD | GitHub Actions | On push to `main`: lint → tests → build Docker image → push to GitHub Container Registry → SSH `docker compose pull && docker compose up -d` on the VPS. A separate workflow uploads model weights to R2 only when weights change, not on every code deploy. |
+| CI/CD | GitHub Actions | On push to `main`: lint → tests → build Docker image → push to GitHub Container Registry → SSH deploy on the VPS. The deploy synchronizes pinned model/WASM assets to the VPS before restarting Nginx when the manifest changes; model binaries are not committed or baked into the app image. |
 
 ### 6.1 Model loading & caching (client-side)
 
@@ -358,6 +360,9 @@ be fully bilingual, not translated as an afterthought.
 - `env.useWasmCache = true` is mandatory (otherwise ONNX runtime files re-download every visit).
 - A dedicated Service Worker (`public/sw.js`) cache-first caches model weight files and WASM binaries,
   versioned by content hash in the path.
+- The ISNet repository revision is pinned to an immutable commit SHA in both runtime configuration
+  and `models.manifest.json`; production first tries `VITE_MODEL_CDN_BASE_URL`, then retries the same
+  pinned revision from Hugging Face Hub if the private CDN load fails.
 - `q8` dtype for `"fast"` (~44 MB, library default for CPU inference), `fp32` for `"max"` (~176 MB,
   full precision) — both served from the same `onnx-community/ISNet-ONNX` repo.
 - The two dtype variants cache independently — toggling quality mode mid-session does not re-download
@@ -481,6 +486,7 @@ utility function's unit tests.
 | `11` | Background replacement | Let the user place the cutout on a solid color, gradient, or custom background instead of only transparent PNG | `features/background-replacement` slice: `BackgroundFill` (color/gradient/image) composited via the existing `OffscreenCanvas` pipeline; background-fill selector wired into **result** (§5.3); custom background image stays client-side only (§1.1, §4); e2e coverage (§7.7) |
 | `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
 | `13` | Hardening & Launch | Final SEO-page presentation, confidence across the real device matrix, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
+| `14` | VPS Model CDN | Own the production model delivery path without requiring R2 or a payment card, while retaining the proven upstream path as a resilience fallback | Synchronize `models.manifest.json` with pinned ISNet `q8`/`fp32` assets and ONNX Runtime WASM; serve the host asset directory at `cdn.cutbg.art` through Nginx with CORS, byte ranges, and immutable cache headers; document the proxied DNS and Cloudflare Cache Rule; wire `VITE_MODEL_CDN_BASE_URL`; retry pinned model loading through Hugging Face Hub/upstream WASM CDN when the private CDN is unavailable; include the Cloudflare Web Analytics token in production builds; verify CDN headers, primary loading, and fallback |
 
 ---
 
