@@ -11,6 +11,13 @@
 
 ## Gotcha Log
 
+### Never build `model-sync` from the full application dependency stage
+
+- **Symptoms**: the `main` deploy spends nearly ten minutes in `docker compose --profile maintenance run --rm --build model-sync`, then fails with `Run Command Timeout` while exporting the image even though dependency installation completed.
+- **Root cause**: a `model-sync` stage based on the app's `deps` stage installs all 676 production and development packages on the 2 GiB VPS. That includes an unused 513 MiB `onnxruntime-node` tree whose GPU postinstall dominates the build; the synchronizer itself uses only built-in Node APIs.
+- **Fix**: base `model-sync` directly on Node 24, run the `.ts` script with native type stripping, and download only the manifest-declared pinned ORT runtime variants. Keep the SSH action's normal 10-minute command timeout so a regression fails visibly.
+- **Prevention**: the maintenance stage must not inherit from `deps`, run `pnpm install`, or copy `node_modules`; verify changes with a no-cache `model-sync` target build.
+
 ### TanStack Start's router.tsx must live at `src/router.tsx`, not nested under `src/app/`
 
 - **Symptoms**: default client/server entry points silently fail to pick up router config (or build/dev breaks) when `router.tsx` is placed anywhere other than directly under `src/`.

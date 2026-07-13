@@ -27,9 +27,11 @@ docker compose --profile maintenance run --rm --build model-sync
 docker compose up -d nginx
 ```
 
-The command downloads only files in `models.manifest.json` and copies the installed
-`onnxruntime-web/dist` directory into `deploy/model-assets/`. Re-running it skips existing files;
-pass `--force` after the command separator only when deliberately replacing assets:
+The command downloads only files in `models.manifest.json`, including the pinned ONNX Runtime Web
+variants from its documented jsDelivr release path, into `deploy/model-assets/`. The maintenance
+image runs the TypeScript synchronizer directly on Node 24 and installs no application dependencies.
+Re-running it skips existing files; pass `--force` after the command separator only when deliberately
+replacing assets:
 
 ```bash
 docker compose --profile maintenance run --rm --build model-sync --output=/model-assets --force
