@@ -157,6 +157,30 @@
 - **Prevention**: new UI E2E tests should install the mock inference Worker. Add behavior to the
   single real-model smoke only when it specifically validates the model/CDN boundary.
 
+### Serialize pipeline loads when switching Transformers.js model sources
+
+- **Symptoms**: with two model pipelines loading concurrently, some requests use the private CDN
+  while later requests from the same pipeline unexpectedly use Hugging Face/jsDelivr; CDN fallback
+  becomes intermittent or constructs a session from mixed sources.
+- **Root cause**: Transformers.js exposes `remoteHost` and ONNX `wasmPaths` on one mutable global
+  `env` object. A per-pipeline catch that changes those values can race another pipeline still
+  resolving files.
+- **Fix**: route pipeline creation through Phase 14's `createModelSourceLoader`, which serializes
+  model loads and switches the worker globally from `cdn` to `upstream` at most once. Keep the
+  explicit pinned `revision` on every `pipeline()` call.
+- **Prevention**: do not mutate Transformers.js model/WASM host settings inside independent async
+  loads. Any future multi-source logic must coordinate through the same loader.
+
+### Gitignored generated assets still need an ESLint global ignore
+
+- **Symptoms**: after `pnpm sync-model-assets`, `pnpm lint` reports dozens of missing-rule errors
+  inside `deploy/model-assets/onnxruntime-web/*`, even though that directory is in `.gitignore`.
+- **Root cause**: ESLint flat config does not inherit Git ignore patterns. `eslint .` discovers the
+  upstream ORT JavaScript bundles unless its own global ignore list excludes the host asset mount.
+- **Fix**: keep `deploy/model-assets` in the first, global `ignores` block of `eslint.config.js`.
+- **Prevention**: any future generated/downloaded directory inside the repo must be excluded from
+  both Git and the tools that recursively scan the working tree.
+
 ### Pre-optimize lazily imported dependencies in Vite development
 
 - **Symptoms**: the first real upload reaches "Loading model", then the page unexpectedly reloads
@@ -295,3 +319,28 @@
   renewals while nginx is already running.
 - **Prevention**: first-certificate bootstrap and renewal are distinct states. Do not remove a file
   referenced by the live nginx configuration as an intermediate bootstrap step.
+
+### Transformers.js 4.2 pipeline registry probes can ignore the requested revision
+
+- **Symptoms**: `pipeline(..., { revision: "<sha>" })` still requests
+  `/resolve/main/config.json` during startup; a pinned-only private CDN returns 404 and the loader
+  incorrectly switches to upstream before requesting the actual pinned weights.
+- **Root cause**: Transformers.js 4.2's pipeline registry determines expected files before loading
+  and does not forward `revision` through all of its metadata helpers.
+- **Fix**: keep the explicit pipeline `revision`, and set `env.remotePathTemplate` to the pinned SHA
+  for both the CDN and upstream source in this worker.
+- **Prevention**: real-model tests must assert that every observed ISNet `/resolve/` URL contains the
+  manifest revision, not merely that at least one pinned URL was requested.
+
+### nginx:alpine serves `.mjs` as octet-stream unless configured explicitly
+
+- **Symptoms**: the CDN returns 200 with valid CORS for an ONNX Runtime `.mjs` loader, but the
+  browser reports `Failed to fetch dynamically imported module` and falls back upstream.
+- **Root cause**: the stock Nginx 1.27 Alpine MIME table used here does not map `.mjs`; with
+  `X-Content-Type-Options: nosniff`, browsers correctly reject `application/octet-stream` as an ES
+  module. Cloudflare can retain the old MIME header until the exact URL is purged.
+- **Fix**: declare `application/javascript js mjs`, `application/wasm wasm`, and
+  `application/json json` in the model location, reload Nginx, then purge any already-cached `.mjs`
+  URL.
+- **Prevention**: CDN verification must include the ORT module's browser-observed `Content-Type`,
+  not only status/CORS/cache/range checks for model files.

@@ -34,6 +34,17 @@ services:
       retries: 5
       start_period: 5s
 
+  # Maintenance-only asset synchronizer (Phase 14). It downloads the pinned,
+  # public model files from models.manifest.json and copies the installed ORT
+  # dist files into a host directory. Nginx mounts the result read-only.
+  model-sync:
+    profiles: [maintenance]
+    build:
+      context: .
+      target: model-sync
+    volumes:
+      - ./deploy/model-assets:/model-assets
+
   # Self-hosted Umami (custom event tracking, SPEC.md §7.6) + its own Postgres
   # instance. `umami-db`'s healthcheck gates `umami`'s startup so it never
   # boots against a not-yet-ready database.
@@ -89,6 +100,7 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/app.conf:/etc/nginx/conf.d/app.conf:ro
+      - ./deploy/model-assets:/srv/model-assets:ro
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
 

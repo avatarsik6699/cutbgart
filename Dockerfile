@@ -16,6 +16,14 @@ ENV NODE_ENV=development
 EXPOSE 3000
 CMD ["pnpm", "dev", "--host", "0.0.0.0"]
 
+# One-shot Phase 14 maintenance image. `docker compose --profile maintenance
+# run --rm --build model-sync` writes only public, pinned assets to the host mount.
+FROM deps AS model-sync
+COPY package.json models.manifest.json ./
+COPY scripts/sync-model-assets.ts ./scripts/sync-model-assets.ts
+ENTRYPOINT ["pnpm", "sync-model-assets", "--"]
+CMD ["--output=/model-assets"]
+
 FROM deps AS build
 ARG VITE_MODEL_CDN_BASE_URL
 ARG VITE_UMAMI_SCRIPT_URL

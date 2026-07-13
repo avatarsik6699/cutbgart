@@ -20,3 +20,6 @@ public/sitemap.xml
 coverage
 playwright-report
 test-results
+
+# Public model/WASM binaries synchronized onto the VPS for Nginx (Phase 14)
+deploy/model-assets/

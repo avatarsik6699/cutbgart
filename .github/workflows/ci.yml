@@ -89,10 +89,23 @@ jobs:
       contents: read
       packages: read
     steps:
-      # SPEC.md §8.4: SSH to the VPS, pull the freshly pushed image, restart
-      # the stack. Model-weight upload to R2 (§8.4 step 4) is a separate
-      # workflow, out of scope here — it only runs when weights change,
-      # which doesn't exist until Phase 02.
+      - uses: actions/checkout@v4
+
+      # The VPS is not required to hold GitHub credentials. Copy only the
+      # deployment/model-sync contract through the existing VPS SSH key.
+      - name: Copy Phase 14 deployment configuration
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: ".dockerignore,Dockerfile,docker-compose.yml,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,models.manifest.json,scripts/sync-model-assets.ts,deploy/nginx/app.conf,deploy/init-letsencrypt.sh"
+          target: ${{ secrets.VPS_APP_DIR }}
+          overwrite: true
+
+      # SSH to the VPS, synchronize the pinned Phase 14 model assets, pull the
+      # freshly pushed app image, and restart the stack. The public weights
+      # remain outside the app image.
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         env:
@@ -107,6 +120,7 @@ jobs:
             set -e
             cd ${{ secrets.VPS_APP_DIR }}
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker compose pull
+            docker compose --profile maintenance run --rm --build model-sync
+            docker compose pull app
             docker compose up -d
             docker logout ghcr.io

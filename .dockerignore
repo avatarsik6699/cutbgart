@@ -10,3 +10,4 @@ raw_spec.md
 *.md
 .env
 .env.*
+deploy/model-assets

@@ -14,7 +14,8 @@ import {
   extractAlphaMatte,
   recompositeProcessedImage,
 } from "../lib/compositing";
-import { DTYPES, MODEL_ID } from "../model/model-info";
+import { DTYPES, MODEL_ID, MODEL_REVISION } from "../model/model-info";
+import { createModelSourceLoader, type ModelSource } from "../model/model-source";
 
 // `self` in a real dedicated worker is a `DedicatedWorkerGlobalScope`, but this
 // project's tsconfig only loads the `DOM` lib (for the React app), under which
@@ -34,20 +35,32 @@ const workerScope = globalThis as unknown as WorkerScope;
 // visit instead of being served from the browser cache (SPEC.md §6.1).
 env.useWasmCache = true;
 
-// Serve model weights and ONNX Runtime WASM binaries from our own R2 CDN
-// mirror instead of huggingface.co / jsDelivr directly (SPEC.md §6), but only
-// once that CDN is actually configured (production build arg). Without it,
-// leave Transformers.js on its own upstream defaults — otherwise local
-// `pnpm dev` would silently point at a CDN with nothing uploaded to it yet.
-// The `{model}/resolve/{revision}/` path template is Transformers.js's
-// default — keeping it means the R2 upload workflow only has to mirror the
-// exact HF repo layout under `env.remoteHost`, no custom path scheme needed.
-if (appEnv.modelCdnBaseUrl) {
-  env.remoteHost = `${appEnv.modelCdnBaseUrl}/`;
-  // `wasm` is typed as optional/readonly by `Partial<onnxruntime-common.Env>`,
-  // but Transformers.js always initializes it before user code runs.
-  env.backends.onnx.wasm!.wasmPaths = `${appEnv.modelCdnBaseUrl}/onnxruntime-web/${appEnv.onnxRuntimeWebVersion}/`;
+// Capture Transformers.js's upstream defaults before selecting the Phase 14
+// VPS/Cloudflare CDN. `createModelSourceLoader` serializes pipeline creation:
+// these hosts live on one mutable library-global env object, so changing them
+// concurrently while two models initialize would create mixed-source loads.
+const upstreamRemoteHost = env.remoteHost;
+const upstreamWasmPaths = env.backends.onnx.wasm?.wasmPaths;
+const pinnedRemotePathTemplate = `{model}/resolve/${MODEL_REVISION}/`;
+
+function selectModelSource(source: ModelSource): void {
+  // Transformers.js 4.2's pipeline registry probes expected files without
+  // forwarding the pipeline's `revision`. Force every model request from this
+  // worker (including registry probes on either source) through the pinned SHA.
+  env.remotePathTemplate = pinnedRemotePathTemplate;
+  if (source === "cdn" && appEnv.modelCdnBaseUrl) {
+    env.remoteHost = `${appEnv.modelCdnBaseUrl}/`;
+    env.backends.onnx.wasm!.wasmPaths = `${appEnv.modelCdnBaseUrl}/onnxruntime-web/${appEnv.onnxRuntimeWebVersion}/`;
+  } else {
+    env.remoteHost = upstreamRemoteHost;
+    env.backends.onnx.wasm!.wasmPaths = upstreamWasmPaths;
+  }
 }
+
+const modelSourceLoader = createModelSourceLoader({
+  cdnConfigured: Boolean(appEnv.modelCdnBaseUrl),
+  selectSource: selectModelSource,
+});
 
 // BiRefNet (both `_lite` and full) is unusable in-browser via onnxruntime-web:
 // its Concat/Split-heavy graph exceeds the WebGPU EP's storage-buffer-per-shader
@@ -195,51 +208,63 @@ function loadSegmenter(
   const cacheKey = segmenterCacheKey(qualityMode, inferencePath);
   let cached = segmenters.get(cacheKey);
   if (!cached) {
-    cached = pipeline("image-segmentation", MODEL_ID, {
-      device: inferencePath,
-      // ISNet-ONNX publishes fp32/fp16/int8/uint8/q8 variants, unlike the old
-      // BiRefNet exports — `q8` for "fast" keeps SPEC.md §6.1's original
-      // "q8 on WASM" intent, `fp32` for "max" trades size/speed for precision.
-      dtype: DTYPES[qualityMode],
-      // `info.status` cycles through "initiate" -> "download" -> "progress"
-      // (many, per chunk) -> "done" per file, plus a synthesized
-      // "progress_total" aggregating all files (Transformers.js's
-      // `DefaultProgressCallback`). "progress" is too high-frequency to log
-      // usefully — the aggregate percent already covers it.
-      progress_callback: (info) => {
-        if (info.status === "progress_total") {
-          post({
-            type: "model-progress",
-            qualityMode,
-            percent: info.progress,
-            loaded: info.loaded,
-            total: info.total,
-          });
-        } else if (info.status === "initiate" || info.status === "done") {
-          post({
-            type: "log",
-            qualityMode,
-            message: `${info.status} ${info.file}`,
-          });
+    const createPipeline = () =>
+      pipeline("image-segmentation", MODEL_ID, {
+        revision: MODEL_REVISION,
+        device: inferencePath,
+        // ISNet-ONNX publishes fp32/fp16/int8/uint8/q8 variants, unlike the old
+        // BiRefNet exports — `q8` for "fast" keeps SPEC.md §6.1's original
+        // "q8 on WASM" intent, `fp32` for "max" trades size/speed for precision.
+        dtype: DTYPES[qualityMode],
+        // `info.status` cycles through "initiate" -> "download" -> "progress"
+        // (many, per chunk) -> "done" per file, plus a synthesized
+        // "progress_total" aggregating all files (Transformers.js's
+        // `DefaultProgressCallback`). "progress" is too high-frequency to log
+        // usefully — the aggregate percent already covers it.
+        progress_callback: (info) => {
+          if (info.status === "progress_total") {
+            post({
+              type: "model-progress",
+              qualityMode,
+              percent: info.progress,
+              loaded: info.loaded,
+              total: info.total,
+            });
+          } else if (info.status === "initiate" || info.status === "done") {
+            post({
+              type: "log",
+              qualityMode,
+              message: `${info.status} ${info.file}`,
+            });
+          }
+        },
+      }).then((segmenter) => {
+        // Transformers.js silently constructs the pipeline with `processor:
+        // null` (instead of throwing) if its internal file-existence check for
+        // `preprocessor_config.json` fails for any reason (a transient network
+        // hiccup fetching repo metadata, observed during manual verification of
+        // this phase — the file itself was independently confirmed reachable).
+        // Left unchecked, the pipeline still reports "ready" and only breaks
+        // later, deep inside inference (`this.processor is not a function`),
+        // misclassified as a processing failure instead of a model-load
+        // failure. Fail fast here instead, in the SPEC.md §7.3 "model load
+        // failure" bucket (retry action) — see docs/KNOWN_GOTCHAS.md.
+        if (typeof segmenter.processor !== "function") {
+          throw new Error(
+            `Model "${MODEL_ID}" (${DTYPES[qualityMode]}) loaded without a usable processor — likely a transient failure fetching repo metadata`,
+          );
         }
+        return segmenter;
+      });
+
+    cached = modelSourceLoader.load(createPipeline, {
+      onFallback: (cdnError) => {
+        post({
+          type: "log",
+          qualityMode,
+          message: `model CDN unavailable; retrying pinned revision upstream (${toErrorMessage(cdnError)})`,
+        });
       },
-    }).then((segmenter) => {
-      // Transformers.js silently constructs the pipeline with `processor:
-      // null` (instead of throwing) if its internal file-existence check for
-      // `preprocessor_config.json` fails for any reason (a transient network
-      // hiccup fetching repo metadata, observed during manual verification of
-      // this phase — the file itself was independently confirmed reachable).
-      // Left unchecked, the pipeline still reports "ready" and only breaks
-      // later, deep inside inference (`this.processor is not a function`),
-      // misclassified as a processing failure instead of a model-load
-      // failure. Fail fast here instead, in the SPEC.md §7.3 "model load
-      // failure" bucket (retry action) — see docs/KNOWN_GOTCHAS.md.
-      if (typeof segmenter.processor !== "function") {
-        throw new Error(
-          `Model "${MODEL_ID}" (${DTYPES[qualityMode]}) loaded without a usable processor — likely a transient failure fetching repo metadata`,
-        );
-      }
-      return segmenter;
     });
     // Don't let a failed load permanently poison the cache — otherwise a
     // rejected promise stays cached forever and `retry()` (SPEC.md §7.3)

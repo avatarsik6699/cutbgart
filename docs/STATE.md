@@ -32,6 +32,7 @@
 | PHASE_11 | ✅ done | v0.11.0 | ✅ | 🤖 agent | Background replacement |
 | PHASE_12 | ✅ done | v0.12.0 | ✅ | 🤖 agent | Localization, Branding & Launch Content |
 | PHASE_13 | ✅ done | v0.13.0 | ✅ | 🤖 agent | Hardening & Launch |
+| PHASE_14 | ✅ done | v0.14.0 | ✅ | 🤖 agent | VPS Model CDN |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -43,7 +44,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `13` · **Phase in progress:** `—`
+**Phase completed:** `14` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -285,6 +286,15 @@ type Locale = "ru" | "en";
 // "ru" is the unprefixed base locale; "en" is served under /en/...
 ```
 
+```ts
+// src/features/remove-background/model/model-source.ts — Phase 14
+type ModelSource = "cdn" | "upstream";
+
+// Pipeline creation is serialized because Transformers.js model/WASM hosts are mutable globals.
+// Every model request uses the manifest-pinned ISNet revision; a failed CDN load switches the
+// worker once to Hugging Face + the upstream ONNX Runtime source and retries safely.
+```
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -315,12 +325,13 @@ type Locale = "ru" | "en";
 | `GET` | `/en`, `/en/about`, `/en/privacy` | none | English-locale counterparts of `/`, `/about`, and `/privacy`, localized through Paraglide (Phase 12, SPEC.md §5.5) |
 | `GET` | `/en/remove-background-from-product-photo`, `/en/remove-background-from-id-photo`, `/en/remove-background-from-logo`, `/en/remove-background-from-avatar` | none | English-locale counterparts of the four Russian scenario pages (Phase 12, SPEC.md §5.1, §5.5) |
 | `GET` | `/sitemap.xml` | none | Phase 12 contract: locale-aware build output containing both locale URLs and per-page `hreflang` alternates; supersedes the Phase 06 baseline above |
+| `GET`, `HEAD` | `https://cdn.cutbg.art/models/{manifest-path}` | none | Public pinned ISNet/config/ONNX Runtime asset with CORS, byte ranges, immutable caching, and Cloudflare edge delivery (Phase 14) |
 
 ### DB Schema
 
 - Tables: none yet.
 - Current migration head: `—`
-- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): ONNX model weights (`onnx-community/ISNet-ONNX`, `q8`/`fp32` dtype variants — replaces the original `BiRefNet_lite`/`BiRefNet` pair per the 2026-07-10 model-swap decision below) and ONNX Runtime WASM binaries.
+- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (`onnx-community/ISNet-ONNX`, `q8`/`fp32` dtype variants — replaces the original `BiRefNet_lite`/`BiRefNet` pair per the 2026-07-10 model-swap decision below) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14).
 - Client-side `localStorage` (added Phase 03): `qualityMode: "fast" | "max"` — persisted across visits, no other user data stored client-side (SPEC.md §3).
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
@@ -350,7 +361,7 @@ type Locale = "ru" | "en";
 |-----|---------------|----------|
 | `PORT` | `3000` | no — Nitro `node-server` preset default |
 | `NODE_ENV` | `production` | no — standard Node convention for the container build |
-| `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | required for production builds (Docker build arg once R2 is populated); unset in local dev — worker falls back to Transformers.js's own upstream defaults (SPEC.md §6, §6.1) |
+| `VITE_MODEL_CDN_BASE_URL` | `https://cdn.cutbg.art/models` | expected for production builds (Phase 14 VPS-backed Cloudflare CDN); optional in local dev. If unset, or if the configured CDN load fails, the worker uses Transformers.js's upstream Hugging Face/ONNX Runtime sources (SPEC.md §6, §6.1) |
 | `VITE_UMAMI_SCRIPT_URL` | `https://cutbg.art/script.js` | required for production (Phase 05); unset in dev disables script injection |
 | `VITE_UMAMI_WEBSITE_ID` | `3b1e...uuid` | required for production (Phase 05) |
 | `VITE_CF_BEACON_TOKEN` | `abc123token` | required for production (Phase 05, Cloudflare Web Analytics beacon) |
@@ -378,6 +389,51 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-13 — Phase 14 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_14 gate passed and the public Cloudflare/VPS rollout was verified
+
+### Changes / Decision
+- Published the manifest-pinned ISNet `q8`/`fp32` model and ONNX Runtime Web assets from the VPS at
+  `cdn.cutbg.art/models`, with Let's Encrypt TLS, Cloudflare Cache Rules, CORS, immutable cache
+  headers, byte ranges, and correct JavaScript/WASM MIME types.
+- Replaced the obsolete BiRefNet/R2 upload path with a host-directory synchronizer and CI delivery
+  of the deployment contract; production build variables and the Cloudflare Analytics token are
+  configured in GitHub Actions without hardcoded credentials.
+- Added serialized CDN-to-upstream loading with strict revision pinning, rejection-safe retry, and
+  network-diagnostic real-model coverage. Public checks confirmed `200`, Range `206`, cache `HIT`,
+  CDN-only inference, and successful pinned Hugging Face fallback with an unreachable CDN.
+- Gate passed: production container build/health, TypeScript, 164 unit tests, ESLint (zero errors),
+  formatting, Steiger, 111/111 cross-browser UI tests, serialized real-model smoke, and container
+  smoke. No user image or inference result is stored by the CDN or VPS.
+
+### Affected Phases / Consequences
+- Phase plan is complete through PHASE_14; the VPS-backed model CDN is the preferred production
+  path and the upstream sources remain an automatic resilience path.
+- Additive public-static endpoint and runtime-source contract; no server-side product database or
+  new environment key was introduced.
+
+## 2026-07-13 — VPS-backed model CDN replaces the R2 requirement
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval to plan and implement the card-free model delivery path as Phase 14
+
+### Changes / Decision
+- `SPEC.md` §4, §6, §6.1: production model/WASM delivery now prefers pinned assets on VPS disk,
+  served by Nginx at proxied `cdn.cutbg.art` and cached by Cloudflare; R2 is no longer required.
+- Runtime resilience is explicit: a failed private-CDN load retries the same pinned model revision
+  through Hugging Face Hub and restores the upstream ONNX Runtime WASM source.
+- `SPEC.md` §8: added Phase 14, including manifest sync, deploy automation/configuration, cache
+  headers/rule, production env wiring, analytics token, and primary/fallback verification.
+
+### Affected Phases / Consequences
+- PHASE_14 — new phase owns the infrastructure and runtime implementation.
+- Existing completed phases remain valid: their app behavior and client-only inference invariant does
+  not change, and their upstream model path remains supported.
 
 ## 2026-07-13 — Phase 13 complete
 

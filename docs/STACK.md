@@ -20,7 +20,7 @@
 | Client-side ZIP | `client-zip` v2 (`^2.5.0`) | Phase 10 download-all: dependency-free streaming ZIP assembly with store/pass-through entries; result PNGs are already compressed, so no redundant DEFLATE |
 | Database | None — no persistent server-side store (SPEC.md §3). `umami-db` (Postgres) is analytics-only infra, added in Phase 05 |
 | Cache | None server-side. Client-side: Service Worker (`public/sw.js`, cache-first) for model weights; `localStorage` for the quality-mode preference |
-| Infra | Docker Compose: `nginx` + `app` (Phase 01); `umami` + `umami-db` + `uptime-kuma` added in Phase 05 (uptime-kuma bound to `127.0.0.1` only — reach it via an SSH tunnel to configure monitors/alerts through its own web UI). Cloudflare (proxy + R2) for CDN/model-weight storage. `docker-compose.dev.yml` adds a container-parity dev session — standalone, never merged with the production `docker-compose.yml` |
+| Infra | Docker Compose: `nginx` + `app` (Phase 01); `umami` + `umami-db` + `uptime-kuma` added in Phase 05; maintenance-profile `model-sync` + VPS asset mount added in Phase 14. Cloudflare proxies the app and caches `cdn.cutbg.art/models/*`; R2 is not required. `docker-compose.dev.yml` adds a container-parity dev session — standalone, never merged with the production `docker-compose.yml` |
 | Package managers | pnpm |
 | CI | GitHub Actions → GitHub Container Registry → SSH deploy to VPS |
 
@@ -180,4 +180,9 @@ pnpm e2e:full             # phase gate, includes one real-model smoke
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run
 # it standalone only to inspect/debug its output.
 pnpm generate-sitemap
+
+# Synchronize pinned public model/WASM files into deploy/model-assets/.
+# Prefer the container command on the VPS for dependency/container parity.
+pnpm sync-model-assets --check
+docker compose --profile maintenance run --rm --build model-sync
 ```
