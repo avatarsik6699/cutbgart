@@ -13,7 +13,17 @@
     }
   ],
   "onnxRuntimeWeb": {
-    "$comment": "Must match package.json. The sync script copies the installed package's full dist/ directory because the browser selects the required runtime variant.",
-    "version": "1.27.0"
+    "$comment": "Must match package.json. Only the pinned Emscripten runtime variants selected dynamically by ONNX Runtime Web are synchronized from its documented jsDelivr release path.",
+    "version": "1.27.0",
+    "files": [
+      "ort-wasm-simd-threaded.asyncify.mjs",
+      "ort-wasm-simd-threaded.asyncify.wasm",
+      "ort-wasm-simd-threaded.jsep.mjs",
+      "ort-wasm-simd-threaded.jsep.wasm",
+      "ort-wasm-simd-threaded.jspi.mjs",
+      "ort-wasm-simd-threaded.jspi.wasm",
+      "ort-wasm-simd-threaded.mjs",
+      "ort-wasm-simd-threaded.wasm"
+    ]
   }
 }

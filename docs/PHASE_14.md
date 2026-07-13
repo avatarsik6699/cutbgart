@@ -135,10 +135,11 @@ rather than fabricating a pass.
 ## Implementation Notes
 
 - The 2 GiB VPS could not complete the synchronizer image's dependency install without starving
-  SSH, so the manifest-validated local asset directory was transferred with `rsync`; subsequent CI
-  deploys retain the documented idempotent synchronizer path. The first `main` deploy confirmed a
-  cold `model-sync` build can exceed `appleboy/ssh-action`'s 10-minute default, so the workflow uses
-  a 30-minute command timeout.
+  SSH, so the manifest-validated local asset directory was transferred with `rsync`. The first
+  `main` deploy then hit the SSH action's 10-minute timeout because `model-sync` inherited the full
+  676-package app dependency install, including a 513 MiB `onnxruntime-node` tree it never uses.
+  The maintenance image now runs the built-in-only synchronizer directly on Node 24 and downloads
+  only manifest-declared ORT runtime variants, so no timeout increase or package install is needed.
 - Rollout verification exposed two integration details not visible in local Nginx tests:
   Transformers.js 4.2 registry probes omit the requested revision, so the worker pins its remote
   path template for both CDN and fallback; nginx:alpine needs an explicit `.mjs` MIME mapping for

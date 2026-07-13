@@ -2,7 +2,7 @@
  * Synchronizes the pinned model and ONNX Runtime Web assets declared in
  * models.manifest.json into the host directory mounted read-only by Nginx.
  */
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -17,7 +17,7 @@ export interface ManifestModel {
 
 export interface ModelManifest {
   models: ManifestModel[];
-  onnxRuntimeWeb: { version: string };
+  onnxRuntimeWeb: { version: string; files: string[] };
 }
 
 export interface RemoteAsset {
@@ -32,6 +32,14 @@ export function buildModelAssetPlan(manifest: ModelManifest): RemoteAsset[] {
       relativePath: path.posix.join(model.id, "resolve", model.revision, file),
     })),
   );
+}
+
+export function buildOnnxRuntimeAssetPlan(manifest: ModelManifest): RemoteAsset[] {
+  const { version, files } = manifest.onnxRuntimeWeb;
+  return files.map((file) => ({
+    source: `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/${file}`,
+    relativePath: path.posix.join("onnxruntime-web", version, file),
+  }));
 }
 
 export function validateManifest(manifest: ModelManifest, ortVersion: string): void {
@@ -62,6 +70,21 @@ export function validateManifest(manifest: ModelManifest, ortVersion: string): v
     throw new Error(
       `Manifest ONNX Runtime Web ${manifest.onnxRuntimeWeb.version} does not match package.json ${ortVersion}`,
     );
+  }
+  const requiredRuntimeFiles = [
+    "ort-wasm-simd-threaded.asyncify.mjs",
+    "ort-wasm-simd-threaded.asyncify.wasm",
+    "ort-wasm-simd-threaded.jsep.mjs",
+    "ort-wasm-simd-threaded.jsep.wasm",
+    "ort-wasm-simd-threaded.jspi.mjs",
+    "ort-wasm-simd-threaded.jspi.wasm",
+    "ort-wasm-simd-threaded.mjs",
+    "ort-wasm-simd-threaded.wasm",
+  ];
+  for (const required of requiredRuntimeFiles) {
+    if (!manifest.onnxRuntimeWeb.files.includes(required)) {
+      throw new Error(`Manifest is missing ONNX Runtime Web file: ${required}`);
+    }
   }
 }
 
@@ -103,35 +126,6 @@ async function downloadAsset(
   console.log(`synced: ${asset.relativePath}`);
 }
 
-async function syncOnnxRuntimeWeb(
-  manifest: ModelManifest,
-  outputDir: string,
-  force: boolean,
-): Promise<void> {
-  const version = manifest.onnxRuntimeWeb.version;
-  const sourceDir = path.join(REPO_ROOT, "node_modules", "onnxruntime-web", "dist");
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const relativePath = path.posix.join("onnxruntime-web", version, entry.name);
-    const target = path.join(outputDir, ...relativePath.split("/"));
-    if (!force && (await fileExists(target))) {
-      console.log(`skip (exists): ${relativePath}`);
-      continue;
-    }
-    await mkdir(path.dirname(target), { recursive: true });
-    const temporary = `${target}.tmp-${String(process.pid)}`;
-    try {
-      await writeFile(temporary, await readFile(path.join(sourceDir, entry.name)));
-      await rename(temporary, target);
-    } catch (error) {
-      await rm(temporary, { force: true });
-      throw error;
-    }
-    console.log(`synced: ${relativePath}`);
-  }
-}
-
 async function loadInputs(): Promise<{
   manifest: ModelManifest;
   ortVersion: string;
@@ -170,7 +164,9 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   for (const asset of buildModelAssetPlan(manifest)) {
     await downloadAsset(asset, outputDir, force);
   }
-  await syncOnnxRuntimeWeb(manifest, outputDir, force);
+  for (const asset of buildOnnxRuntimeAssetPlan(manifest)) {
+    await downloadAsset(asset, outputDir, force);
+  }
   console.log(`Model assets are ready in ${outputDir}`);
 }
 
