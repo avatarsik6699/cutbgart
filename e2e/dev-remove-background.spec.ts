@@ -12,15 +12,15 @@ test.describe("/dev/remove-background", () => {
     });
   });
 
-  test("renders the harness and the quality toggle", async ({ page }) => {
+  test("renders the harness and processing modes", async ({ page }) => {
     await page.goto("/dev/remove-background");
 
     await expect(page.getByTestId("remove-background-test-harness")).toBeVisible();
     await expect(page.getByText(/^state: idle$/)).toBeVisible();
-    await expect(page.getByRole("switch")).toBeVisible();
+    await expect(page.getByRole("radio")).toHaveCount(3);
   });
 
-  test("toggling quality mode persists across reloads", async ({ page }) => {
+  test("IS-Net preference persists while BEN2 remains session-only", async ({ page }) => {
     await page.goto("/dev/remove-background");
 
     // Device-capability detection resolves in a post-hydration effect and
@@ -31,17 +31,15 @@ test.describe("/dev/remove-background", () => {
     // don't catch that race).
     await expect(page.getByText(/^device: (?!detecting)/)).toBeVisible();
 
-    const toggle = page.getByRole("switch");
-    await expect(toggle).toBeVisible();
-
-    const wasChecked = (await toggle.getAttribute("data-checked")) !== null;
-
-    await toggle.click();
-
-    const expectedStoredMode = wasChecked ? "fast" : "max";
+    const precise = page.locator('input[type="radio"][value="isnet-fp32"]');
+    await precise.click();
     await expect
       .poll(() => page.evaluate(() => window.localStorage.getItem("qualityMode")))
-      .toBe(expectedStoredMode);
+      .toBe("max");
+    await page.locator('input[type="radio"][value="ben2-fp16"]').click();
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem("qualityMode")))
+      .toBe("max");
 
     await page.reload();
 
@@ -51,9 +49,6 @@ test.describe("/dev/remove-background", () => {
     // wait for the same post-hydration signal before reading the attribute.
     await expect(page.getByText(/^device: (?!detecting)/)).toBeVisible();
 
-    const toggleAfterReload = page.getByRole("switch");
-    await expect
-      .poll(() => toggleAfterReload.getAttribute("data-checked"))
-      .toBe(wasChecked ? null : "");
+    await expect(page.locator('input[type="radio"][value="isnet-fp32"]')).toBeChecked();
   });
 });

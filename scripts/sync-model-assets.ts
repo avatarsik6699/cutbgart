@@ -43,27 +43,40 @@ export function buildOnnxRuntimeAssetPlan(manifest: ModelManifest): RemoteAsset[
 }
 
 export function validateManifest(manifest: ModelManifest, ortVersion: string): void {
-  if (manifest.models.length !== 1) {
-    throw new Error("models.manifest.json must declare exactly one shared ISNet model");
-  }
-  const model = manifest.models[0];
-  if (!model) {
-    throw new Error("models.manifest.json does not declare ISNet");
-  }
-  if (model.id !== "onnx-community/ISNet-ONNX") {
-    throw new Error(`Unexpected model id: ${model.id}`);
-  }
-  if (!/^[0-9a-f]{40}$/.test(model.revision)) {
-    throw new Error("Model revision must be an immutable 40-character Git SHA");
-  }
-  for (const required of [
-    "config.json",
-    "preprocessor_config.json",
-    "onnx/model_quantized.onnx",
-    "onnx/model.onnx",
-  ]) {
-    if (!model.files.includes(required)) {
-      throw new Error(`Manifest is missing required file: ${required}`);
+  const requirements = new Map<string, string[]>([
+    [
+      "onnx-community/ISNet-ONNX",
+      [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model_quantized.onnx",
+        "onnx/model.onnx",
+      ],
+    ],
+    [
+      "onnx-community/BEN2-ONNX",
+      ["config.json", "preprocessor_config.json", "onnx/model_fp16.onnx"],
+    ],
+    [
+      "Xenova/slimsam-77-uniform",
+      [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/vision_encoder_quantized.onnx",
+        "onnx/prompt_encoder_mask_decoder_quantized.onnx",
+      ],
+    ],
+  ]);
+  for (const [id, files] of requirements) {
+    const model = manifest.models.find((candidate) => candidate.id === id);
+    if (!model) throw new Error(`models.manifest.json does not declare ${id}`);
+    if (!/^[0-9a-f]{40}$/.test(model.revision)) {
+      throw new Error(`${id} revision must be an immutable 40-character Git SHA`);
+    }
+    for (const required of files) {
+      if (!model.files.includes(required)) {
+        throw new Error(`${id} is missing required file: ${required}`);
+      }
     }
   }
   if (manifest.onnxRuntimeWeb.version !== ortVersion) {

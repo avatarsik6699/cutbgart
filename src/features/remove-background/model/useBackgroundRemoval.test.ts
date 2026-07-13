@@ -209,6 +209,50 @@ describe("useBackgroundRemoval", () => {
     await waitFor(() => expect(result.current.lightweightMode).toBe(true));
   });
 
+  it("surfaces BEN2 fallback and records the actual q8 result without retry looping", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval("ben2-fp16"));
+    act(() => result.current.selectFile(makeFile()));
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "fallback-to-isnet",
+        qualityMode: "ben2-fp16",
+        reason: "device-out-of-memory",
+      }),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "ben2-fp16",
+        inferencePath: "wasm",
+        dtype: "q8",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "process")).toBe(true),
+    );
+    const process = worker.posted.find((message) => message.type === "process");
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: process?.requestId,
+        result: new Blob(["png"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+        actualMode: "isnet-q8",
+      }),
+    );
+    await waitFor(() => expect(result.current.state.status).toBe("result"));
+    expect(result.current.ben2FallbackNotice).toBe(true);
+    if (result.current.state.status === "result")
+      expect(result.current.state.result.qualityMode).toBe("isnet-q8");
+    expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(1);
+  });
+
   it("surfaces a worker error with a retry action, and retry() re-issues the request", async () => {
     const { result } = renderHook(() => useBackgroundRemoval());
 

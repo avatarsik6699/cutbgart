@@ -11,6 +11,18 @@
 
 ## Gotcha Log
 
+### A mocked ML result does not prove that the browser rendered the result
+
+- **Symptoms**: guided-selection E2E is green because the mock worker returned an `AlphaMatte` and
+  an “accept” button appeared, while a real user sees no point, box, or mask on the image.
+- **Root cause**: tests asserted state transitions but never asserted the visible prompt and canvas
+  overlay. The matte could remain in hook state without ever reaching the rendering component.
+- **Fix**: guided E2E must assert the immediate point marker, live box during pointer drag, final
+  box marker, painted mask canvas, and clearing those visuals on replacement. The serialized real
+  smoke also asserts marker and mask rendering after the actual SlimSAM response.
+- **Prevention**: for ML/canvas flows, pair worker-message assertions with a user-visible artifact;
+  a status string or enabled action alone is not behavioral proof.
+
 ### Never build `model-sync` from the full application dependency stage
 
 - **Symptoms**: the `main` deploy spends nearly ten minutes in `docker compose --profile maintenance run --rm --build model-sync`, then fails with `Run Command Timeout` while exporting the image even though dependency installation completed.

@@ -10,6 +10,10 @@ export async function installMockInference(page: Page): Promise<void> {
     // Keep transitional queue/processing UI observable while remaining much
     // faster than real model inference.
     const PROCESS_DELAY_MS = 800;
+    Object.defineProperty(window, "__mockInferencePosts", {
+      configurable: true,
+      value: [] as Array<{ type: string; qualityMode?: string; promptType?: string }>,
+    });
     class MockInferenceWorker extends EventTarget {
       private source: {
         blob: Blob;
@@ -34,9 +38,26 @@ export async function installMockInference(page: Page): Promise<void> {
         matte?: { data: Uint8ClampedArray };
         backgroundFill?: unknown;
       }): void {
+        (
+          window as unknown as {
+            __mockInferencePosts: Array<{
+              type: string;
+              qualityMode?: string;
+              promptType?: string;
+            }>;
+          }
+        ).__mockInferencePosts.push({
+          type: message.type,
+          qualityMode: message.qualityMode,
+          promptType: (message as { prompt?: { type?: string } }).prompt?.type,
+        });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
           if (message.type === "load-model") {
+            const ben2Fallback =
+              message.qualityMode === "ben2-fp16" &&
+              ((window as unknown as { __mockBen2Failure?: boolean }).__mockBen2Failure ||
+                message.inferencePath === "wasm");
             this.emit({
               type: "model-progress",
               qualityMode: message.qualityMode,
@@ -44,6 +65,16 @@ export async function installMockInference(page: Page): Promise<void> {
               loaded: 5_242_880,
               total: 10_485_760,
             });
+            if (ben2Fallback) {
+              this.emit({
+                type: "fallback-to-isnet",
+                qualityMode: message.qualityMode,
+                reason: (window as unknown as { __mockBen2Failure?: boolean })
+                  .__mockBen2Failure
+                  ? "device-out-of-memory"
+                  : "webgpu-unavailable",
+              });
+            }
             this.emit({
               type: "model-ready",
               qualityMode: message.qualityMode,
@@ -52,6 +83,40 @@ export async function installMockInference(page: Page): Promise<void> {
             });
             return;
           }
+          if (message.type === "encode" && message.source) {
+            if (
+              (window as unknown as { __mockGuidedWorkerCrash?: boolean })
+                .__mockGuidedWorkerCrash
+            ) {
+              this.dispatchEvent(
+                new ErrorEvent("error", {
+                  message: "Guided worker failed to load",
+                  cancelable: true,
+                }),
+              );
+              return;
+            }
+            this.source = message.source;
+            this.emit({ type: "status", status: "loading-model", progress: 50 });
+            this.emit({ type: "status", status: "encoding-image" });
+            this.emit({ type: "status", status: "ready-for-prompt" });
+            return;
+          }
+          if (message.type === "prompt" && this.source) {
+            this.emit({ type: "status", status: "predicting-mask" });
+            this.emit({
+              type: "preview",
+              matte: {
+                width: this.source.width,
+                height: this.source.height,
+                data: new Uint8ClampedArray(this.source.width * this.source.height).fill(
+                  255,
+                ),
+              },
+            });
+            return;
+          }
+          if (message.type === "reset") return;
           if (message.type === "process" && message.source) {
             this.source = message.source;
             const emitResult = () =>
@@ -67,6 +132,13 @@ export async function installMockInference(page: Page): Promise<void> {
                   ).fill(255),
                 },
                 durationMs: 1,
+                actualMode:
+                  message.qualityMode === "ben2-fp16" &&
+                  ((window as unknown as { __mockBen2Failure?: boolean })
+                    .__mockBen2Failure ||
+                    message.inferencePath === "wasm")
+                    ? "isnet-q8"
+                    : message.qualityMode,
               });
             window.setTimeout(emitResult, PROCESS_DELAY_MS);
             return;

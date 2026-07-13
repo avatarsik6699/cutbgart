@@ -10,6 +10,21 @@
         "onnx/model.onnx",
         "onnx/model_quantized.onnx"
       ]
+    },
+    {
+      "id": "onnx-community/BEN2-ONNX",
+      "revision": "c552aa82688edce09f0ac9d2e31ad53d9d629010",
+      "files": ["config.json", "preprocessor_config.json", "onnx/model_fp16.onnx"]
+    },
+    {
+      "id": "Xenova/slimsam-77-uniform",
+      "revision": "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      "files": [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/vision_encoder_quantized.onnx",
+        "onnx/prompt_encoder_mask_decoder_quantized.onnx"
+      ]
     }
   ],
   "onnxRuntimeWeb": {

@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { QualityMode } from "../../../entities/processed-image";
@@ -12,15 +12,15 @@ describe("useQualityMode", () => {
   it("defaults to the provided defaultMode when nothing is stored", () => {
     const { result } = renderHook(() => useQualityMode("max"));
 
-    expect(result.current.qualityMode).toBe("max");
+    expect(result.current.qualityMode).toBe("isnet-fp32");
   });
 
-  it("uses the stored preference over defaultMode when one exists", () => {
+  it("uses the stored preference over defaultMode when one exists", async () => {
     window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "max");
 
     const { result } = renderHook(() => useQualityMode("fast"));
 
-    expect(result.current.qualityMode).toBe("max");
+    await waitFor(() => expect(result.current.qualityMode).toBe("isnet-fp32"));
   });
 
   it("ignores an invalid stored value and falls back to defaultMode", () => {
@@ -28,17 +28,17 @@ describe("useQualityMode", () => {
 
     const { result } = renderHook(() => useQualityMode("fast"));
 
-    expect(result.current.qualityMode).toBe("fast");
+    expect(result.current.qualityMode).toBe("isnet-q8");
   });
 
   it("setQualityMode updates state and persists to localStorage", () => {
     const { result } = renderHook(() => useQualityMode("fast"));
 
     act(() => {
-      result.current.setQualityMode("max");
+      result.current.setQualityMode("isnet-fp32");
     });
 
-    expect(result.current.qualityMode).toBe("max");
+    expect(result.current.qualityMode).toBe("isnet-fp32");
     expect(window.localStorage.getItem(QUALITY_MODE_STORAGE_KEY)).toBe("max");
   });
 
@@ -48,11 +48,11 @@ describe("useQualityMode", () => {
       { initialProps: { defaultMode: "fast" } },
     );
 
-    expect(result.current.qualityMode).toBe("fast");
+    expect(result.current.qualityMode).toBe("isnet-q8");
 
     rerender({ defaultMode: "max" });
 
-    expect(result.current.qualityMode).toBe("max");
+    expect(result.current.qualityMode).toBe("isnet-fp32");
   });
 
   it("does not override an explicit user choice when defaultMode changes later", () => {
@@ -62,11 +62,19 @@ describe("useQualityMode", () => {
     );
 
     act(() => {
-      result.current.setQualityMode("fast");
+      result.current.setQualityMode("isnet-q8");
     });
 
     rerender({ defaultMode: "max" });
 
-    expect(result.current.qualityMode).toBe("fast");
+    expect(result.current.qualityMode).toBe("isnet-q8");
+  });
+
+  it("keeps BEN2 session-only without changing the IS-Net preference", () => {
+    window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "max");
+    const { result } = renderHook(() => useQualityMode("fast"));
+    act(() => result.current.setQualityMode("ben2-fp16"));
+    expect(result.current.qualityMode).toBe("ben2-fp16");
+    expect(window.localStorage.getItem(QUALITY_MODE_STORAGE_KEY)).toBe("max");
   });
 });

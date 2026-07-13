@@ -1,6 +1,8 @@
 # VPS model CDN deployment
 
-Phase 14 serves pinned, public ISNet and ONNX Runtime Web assets from the VPS through Cloudflare.
+Phase 14 serves pinned, public model and ONNX Runtime Web assets from the VPS through Cloudflare.
+The manifest now includes IS-Net q8/fp32, BEN2 fp16, and SlimSAM q8. BEN2 and SlimSAM remain lazy:
+their immutable files are requested only after the corresponding user selection.
 No R2 account, payment method, or object-storage credential is involved.
 
 ## 1. Cloudflare DNS and TLS
@@ -90,3 +92,7 @@ Run `pnpm e2e:real-model` against a production build configured with the CDN. Th
 whether model requests used `cdn.cutbg.art` or the automatic upstream fallback. To verify fallback,
 build once with a deliberately unreachable `VITE_MODEL_CDN_BASE_URL`, then run the same serialized
 smoke and confirm successful inference plus Hugging Face requests.
+
+For Phase 16, also run `pnpm e2e:phase-16-real` on the representative weak and powerful devices
+and record non-image-derived observations in `docs/PHASE_16_DEVICE_MATRIX.md`. The command is
+host-only and must not be added to Docker or CI.

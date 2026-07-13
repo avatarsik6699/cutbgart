@@ -69,7 +69,7 @@ describe("BatchGrid", () => {
     );
 
     await waitFor(() => expect(screen.getByTestId("batch-item-thumbnail")).toBeTruthy());
-    expect(screen.getByText(`1200 × 800 · ${m.qualityFast()}`)).toBeTruthy();
+    expect(screen.getByText(`1200 × 800 · ${m.processingModeFast()}`)).toBeTruthy();
     expect(screen.getByText(m.batchSelect())).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /marketplace-chair\.jpg/i }));

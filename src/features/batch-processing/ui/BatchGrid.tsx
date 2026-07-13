@@ -152,7 +152,11 @@ export function BatchGrid({
                   </span>
                   <span className="mt-1 block truncate text-xs text-muted-foreground">
                     {item.source.width} × {item.source.height} ·{" "}
-                    {item.qualityMode === "max" ? m.qualityMax() : m.qualityFast()}
+                    {item.qualityMode === "max" || item.qualityMode === "isnet-fp32"
+                      ? m.processingModePrecise()
+                      : item.qualityMode === "ben2-fp16"
+                        ? m.processingModeBen2()
+                        : m.processingModeFast()}
                   </span>
                   <span
                     className="mt-2 block text-xs text-muted-foreground"

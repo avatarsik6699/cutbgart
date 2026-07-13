@@ -22,6 +22,7 @@
     "e2e": "tsx scripts/run-e2e.ts",
     "e2e:real-model": "E2E_REAL_MODEL=1 tsx scripts/run-e2e.ts e2e/real-model.spec.ts --project=chromium --workers=1",
     "e2e:model-lab-real": "VITE_ENABLE_MODEL_LAB=true E2E_MODEL_LAB_REAL=1 tsx scripts/run-e2e.ts e2e/model-lab.real.spec.ts --project=chromium --workers=1",
+    "e2e:phase-16-real": "E2E_PHASE16_REAL=1 tsx scripts/run-e2e.ts e2e/phase-16.real.spec.ts --project=chromium --workers=1",
     "e2e:full": "pnpm e2e && pnpm e2e:real-model",
     "sync-model-assets": "node scripts/sync-model-assets.ts",
     "prepare": "husky"
