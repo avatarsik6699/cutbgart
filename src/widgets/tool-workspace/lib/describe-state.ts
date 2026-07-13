@@ -27,7 +27,12 @@ export function describeState(
     case "idle":
       return m.stateIdle();
     case "model-loading": {
-      const modeLabel = state.qualityMode === "max" ? m.qualityMax() : m.qualityFast();
+      const modeLabel =
+        state.qualityMode === "max" || state.qualityMode === "isnet-fp32"
+          ? m.processingModePrecise()
+          : state.qualityMode === "ben2-fp16"
+            ? m.processingModeBen2()
+            : m.processingModeFast();
       return m.stateLoading({
         mode: lightweightMode ? `${modeLabel} · WASM` : modeLabel,
         progress: Math.round(state.progress),

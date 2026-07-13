@@ -95,7 +95,7 @@ function createInferenceWorker(): Worker {
 export function useBatchProcessing({
   qualityMode,
   inferencePath,
-  concurrencyLimit = inferencePath === "webgpu" ? 2 : 1,
+  concurrencyLimit = qualityMode === "ben2-fp16" ? 1 : inferencePath === "webgpu" ? 2 : 1,
   workerFactory = createInferenceWorker,
 }: UseBatchProcessingOptions) {
   const [session, setSession] = useState<BatchSession>(emptySession);
@@ -130,9 +130,24 @@ export function useBatchProcessing({
   const dispatchQueued = useCallback(() => {
     const worker = workerRef.current;
     if (!modelReadyRef.current || !worker) return;
+    const firstQueued = queueRef.current[0];
+    const nextMode = firstQueued
+      ? workRef.current.get(firstQueued)?.qualityMode
+      : undefined;
+    const activeMode = [...activeRef.current]
+      .map((id) => workRef.current.get(id)?.qualityMode)
+      .find(Boolean);
+    // Model switches wait for the previous mode's active work to settle. The
+    // worker can then dispose the old ONNX session before loading the new one.
+    if (activeMode && nextMode && activeMode !== nextMode) return;
     const available = concurrencyLimit - activeRef.current.size;
     if (available <= 0) return;
-    const queuedIds = queueRef.current.splice(0, available);
+    const queuedIds: string[] = [];
+    while (queuedIds.length < available && queueRef.current.length) {
+      const id = queueRef.current[0]!;
+      if (nextMode && workRef.current.get(id)?.qualityMode !== nextMode) break;
+      queuedIds.push(queueRef.current.shift()!);
+    }
     if (!queuedIds.length) return;
     const started = performance.now();
     for (const id of queuedIds) {
@@ -354,6 +369,7 @@ export function useBatchProcessing({
   }, [concurrencyLimit, inferencePath, qualityMode, session.items]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronizes the React snapshot with the external Worker queue.
     dispatchQueued();
   }, [dispatchQueued, session.items]);
 

@@ -40,7 +40,8 @@ export type RemoveBackgroundAction =
   | { type: "RESET" }
   | { type: "ENTER_CORRECTING" }
   | { type: "EXIT_CORRECTING"; result: ProcessedImage }
-  | { type: "REPLACE_RESULT"; result: ProcessedImage };
+  | { type: "REPLACE_RESULT"; result: ProcessedImage }
+  | { type: "ADOPT_RESULT"; result: ProcessedImage };
 
 export const initialRemoveBackgroundState: RemoveBackgroundState = { status: "idle" };
 
@@ -55,6 +56,9 @@ export function removeBackgroundReducer(
   }
   if (action.type === "RESET") {
     return { status: "idle" };
+  }
+  if (action.type === "ADOPT_RESULT") {
+    return { status: "result", result: action.result };
   }
 
   switch (state.status) {

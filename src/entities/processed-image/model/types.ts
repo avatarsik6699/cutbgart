@@ -1,4 +1,11 @@
-export type QualityMode = "fast" | "max";
+/** Explicit production model selected for automatic background removal. */
+export type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+
+/**
+ * `fast`/`max` remain accepted at the worker boundary for backwards-compatible
+ * sessions and tests. New UI code always emits an `AutomaticModelMode`.
+ */
+export type QualityMode = AutomaticModelMode | "fast" | "max";
 
 export type InferencePath = "webgpu" | "wasm";
 

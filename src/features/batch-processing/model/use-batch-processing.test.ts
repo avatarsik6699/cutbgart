@@ -26,6 +26,87 @@ const source = {
 };
 
 describe("useBatchProcessing", () => {
+  it("forces BEN2 batches to one active inference", async () => {
+    const worker = new FakeWorker();
+    const workerFactory = () => worker as unknown as Worker;
+    const { result } = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "ben2-fp16",
+        inferencePath: "webgpu",
+        workerFactory,
+      }),
+    );
+    act(() =>
+      result.current.enqueue(
+        [1, 2].map((number) => ({ fileName: `${number}.jpg`, source })),
+      ),
+    );
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "ben2-fp16",
+        inferencePath: "webgpu",
+        dtype: "fp16",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        1,
+      ),
+    );
+    expect(result.current.snapshot.concurrencyLimit).toBe(1);
+  });
+
+  it("settles active work before dispatching a different model mode", async () => {
+    const worker = new FakeWorker();
+    const workerFactory = () => worker as unknown as Worker;
+    const { result, rerender } = renderHook(
+      ({ qualityMode }: { qualityMode: "isnet-q8" | "isnet-fp32" }) =>
+        useBatchProcessing({ qualityMode, inferencePath: "webgpu", workerFactory }),
+      { initialProps: { qualityMode: "isnet-q8" as "isnet-q8" | "isnet-fp32" } },
+    );
+    act(() => result.current.enqueue([{ fileName: "q8.jpg", source }]));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "isnet-q8",
+        inferencePath: "webgpu",
+        dtype: "q8",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        1,
+      ),
+    );
+    const first = worker.posted.find((message) => message.type === "process")!;
+    rerender({ qualityMode: "isnet-fp32" });
+    act(() => result.current.enqueue([{ fileName: "fp32.jpg", source }]));
+    expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(1);
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: first.requestId,
+        result: new Blob(["png"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        2,
+      ),
+    );
+    expect(
+      worker.posted.filter((message) => message.type === "process")[1]?.qualityMode,
+    ).toBe("isnet-fp32");
+  });
   it("keeps the batch worker when the global mode changes", async () => {
     const worker = new FakeWorker();
     const workerFactory = () => worker as unknown as Worker;

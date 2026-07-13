@@ -28,6 +28,10 @@ import {
 } from "../../../features/remove-background";
 import { QualityModeToggle, useQualityMode } from "../../../features/quality-mode-toggle";
 import {
+  ObjectSelectionCanvas,
+  useObjectSelection,
+} from "../../../features/select-object";
+import {
   ChoosePhotoButton,
   UploadDropzone,
   UploadPreparationNotice,
@@ -42,6 +46,12 @@ import { ProcessingLog } from "./ProcessingLog";
 
 function pathLabel(path: "webgpu" | "wasm"): string {
   return path === "webgpu" ? "WebGPU" : "WASM";
+}
+
+function modeLabel(mode: QualityMode): string {
+  if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
+  if (mode === "ben2-fp16") return m.processingModeBen2();
+  return m.processingModeFast();
 }
 
 interface MaskCorrectionSlotsProps {
@@ -246,6 +256,8 @@ export function ToolWorkspace() {
   // only once this effect actually runs — i.e. only once hydration has
   // completed and the upload controls' own handlers are live.
   const [hydrated, setHydrated] = useState(false);
+  const [guidedEntry, setGuidedEntry] = useState(false);
+  const guided = useObjectSelection();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate hydration flag (see comment above): it must flip exactly once, only after hydration completes on the client; the one extra render is the point, not an accident.
@@ -276,6 +288,7 @@ export function ToolWorkspace() {
     runInfo,
     logs,
     modelLoadBytes,
+    ben2FallbackNotice,
     selectFile,
     recomputeMaxQuality,
     retry,
@@ -286,10 +299,17 @@ export function ToolWorkspace() {
     recomposite,
     applyBackgroundFill,
     replaceResult,
+    adoptResult,
   } = useBackgroundRemoval(qualityMode);
   const batch = useBatchProcessing({
     qualityMode,
     inferencePath: deviceCapabilities?.inferencePath ?? "wasm",
+    concurrencyLimit:
+      qualityMode === "ben2-fp16"
+        ? 1
+        : deviceCapabilities?.inferencePath === "webgpu"
+          ? 2
+          : 1,
   });
   const batchModelKey =
     `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
@@ -310,7 +330,8 @@ export function ToolWorkspace() {
       return;
     }
     setUploadError(null);
-    selectFile(sourceImageToFile(result.image));
+    if (guidedEntry) guided.start(result.image);
+    else selectFile(sourceImageToFile(result.image));
   }
 
   function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
@@ -334,7 +355,37 @@ export function ToolWorkspace() {
     setFinalizingCorrection(false);
     setPreviewFill({ type: "transparent" });
     setBackgroundBusy(false);
+    setGuidedEntry(false);
+    guided.reset();
     reset();
+  }
+
+  function handleAcceptGuided() {
+    if (!guided.state.source || !guided.state.matte) return;
+    const seed = {
+      source: guided.state.source,
+      result: guided.state.source.blob,
+      qualityMode: "isnet-q8" as const,
+      alphaMatte: guided.state.matte,
+      backgroundFill: { type: "transparent" as const },
+    };
+    setFinalizingCorrection(true);
+    void recomposite(seed, guided.state.matte)
+      .then((result) => {
+        setFinalizingCorrection(false);
+        setOriginalMatte(guided.state.matte);
+        adoptResult(result);
+        enterCorrecting();
+        guided.reset();
+        setGuidedEntry(false);
+      })
+      .catch((error: unknown) => {
+        setFinalizingCorrection(false);
+        setCorrectionError({
+          message: error instanceof Error ? error.message : String(error),
+          action: "retry",
+        });
+      });
   }
 
   function handleRetry() {
@@ -482,17 +533,34 @@ export function ToolWorkspace() {
   let railNode: ReactNode = null;
 
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
-    surfaceNode = (
+    surfaceNode = guided.state.source ? (
+      <ObjectSelectionCanvas
+        source={guided.state.source}
+        status={guided.state.status}
+        matte={guided.state.matte}
+        prompt={guided.state.prompt}
+        progress={guided.state.progress}
+        error={guided.state.error}
+        onPrompt={guided.prompt}
+        onAccept={handleAcceptGuided}
+        onReplace={guided.replacePrompt}
+        onRetry={guided.retry}
+        onCancel={() => {
+          guided.reset();
+          setGuidedEntry(false);
+        }}
+      />
+    ) : (
       <div className="flex flex-col gap-3">
         <UploadDropzone
           onUpload={handleUpload}
-          onUploads={handleUploads}
+          onUploads={guidedEntry ? undefined : handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <ChoosePhotoButton
           onUpload={handleUpload}
-          onUploads={handleUploads}
+          onUploads={guidedEntry ? undefined : handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
@@ -540,6 +608,7 @@ export function ToolWorkspace() {
           <QualityModeToggle
             qualityMode={qualityMode}
             onQualityModeChange={setQualityMode}
+            disabled={!hydrated}
           />
           <div
             className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto [&>*]:h-9"
@@ -662,10 +731,7 @@ export function ToolWorkspace() {
               onClick={() => batch.retryItem(selectedBatchItem.id)}
             >
               {m.reprocessMode({
-                mode:
-                  selectedBatchItem.qualityMode === "max"
-                    ? m.qualityMax()
-                    : m.qualityFast(),
+                mode: modeLabel(selectedBatchItem.qualityMode),
               })}
             </Button>
             <Button
@@ -679,10 +745,7 @@ export function ToolWorkspace() {
           </div>
           <p className="text-xs text-muted-foreground">
             {m.batchQualityHint({
-              mode:
-                selectedBatchItem.qualityMode === "max"
-                  ? m.qualityMax()
-                  : m.qualityFast(),
+              mode: modeLabel(selectedBatchItem.qualityMode),
             })}
           </p>
         </div>
@@ -706,7 +769,7 @@ export function ToolWorkspace() {
       <div className="flex flex-col gap-2">
         <p className="text-sm text-muted-foreground">
           {m.loadingModel({
-            mode: state.qualityMode === "max" ? m.qualityMax() : m.qualityFast(),
+            mode: modeLabel(state.qualityMode),
             progress: state.progress.toFixed(0),
           })}
           {modelLoadBytes.loaded > 0
@@ -774,11 +837,12 @@ export function ToolWorkspace() {
           <Button type="button" variant="outline" onClick={handleReset}>
             {m.processAnother()}
           </Button>
-          {state.result.qualityMode !== "max" && (
-            <Button type="button" variant="secondary" onClick={recomputeMaxQuality}>
-              {m.recomputeMax()}
-            </Button>
-          )}
+          {state.result.qualityMode !== "max" &&
+            state.result.qualityMode !== "isnet-fp32" && (
+              <Button type="button" variant="secondary" onClick={recomputeMaxQuality}>
+                {m.recomputeMax()}
+              </Button>
+            )}
           <Button
             type="button"
             variant="secondary"
@@ -877,12 +941,63 @@ export function ToolWorkspace() {
           : ""}
       </div>
 
-      {!batchActive && (
+      {!batchActive && !guided.state.source && (
         <div className="[grid-area:toggle]">
-          <QualityModeToggle
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-          />
+          {state.status === "idle" && (
+            <fieldset className="mb-3 space-y-2" data-testid="processing-method-selector">
+              <legend className="text-sm font-semibold">
+                {m.processingMethodLabel()}
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={guidedEntry ? "outline" : "default"}
+                  className="h-auto justify-start whitespace-normal p-3 text-left"
+                  aria-pressed={!guidedEntry}
+                  disabled={!hydrated}
+                  onClick={() => setGuidedEntry(false)}
+                >
+                  <span>
+                    <span className="block font-medium">{m.automaticMethod()}</span>
+                    <span className="mt-1 block text-xs font-normal opacity-80">
+                      {m.automaticMethodHint()}
+                    </span>
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={guidedEntry ? "default" : "outline"}
+                  className="h-auto justify-start whitespace-normal p-3 text-left"
+                  aria-pressed={guidedEntry}
+                  disabled={!hydrated}
+                  onClick={() => setGuidedEntry(true)}
+                >
+                  <span>
+                    <span className="block font-medium">{m.guidedMethod()}</span>
+                    <span className="mt-1 block text-xs font-normal opacity-80">
+                      {m.guidedMethodHint()}
+                    </span>
+                  </span>
+                </Button>
+              </div>
+            </fieldset>
+          )}
+          {!guidedEntry && (
+            <QualityModeToggle
+              qualityMode={qualityMode}
+              onQualityModeChange={setQualityMode}
+              disabled={!hydrated}
+            />
+          )}
+          {state.status === "idle" && guidedEntry && (
+            <div
+              role="status"
+              className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm"
+            >
+              <p className="font-medium">{m.guidedMethodMeta()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{m.guidedUploadHint()}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -896,6 +1011,15 @@ export function ToolWorkspace() {
         <p className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground [grid-area:notice]">
           Running in lightweight mode — WebGPU is unavailable
           {runInfo ? " for this model" : ""}, using the slower WASM path.
+        </p>
+      )}
+
+      {ben2FallbackNotice && !displayError && (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 [grid-area:notice]"
+        >
+          {m.processingFallbackNotice()}
         </p>
       )}
 

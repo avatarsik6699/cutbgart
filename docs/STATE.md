@@ -34,6 +34,11 @@
 | PHASE_13 | ✅ done | v0.13.0 | ✅ | 🤖 agent | Hardening & Launch |
 | PHASE_14 | ✅ done | v0.14.0 | ✅ | 🤖 agent | VPS Model CDN |
 | PHASE_15 | ✅ done | v0.15.0 | ✅ | 🤖 agent | Browser Model Evaluation Lab |
+| PHASE_16 | ✅ done | v0.16.0 | ✅ | 🤖 agent | Production Model Modes & Guided Selection |
+| PHASE_17 | ⏳ pending | v0.17.0 | ⬜ | — | Iterative Guided Object Editor |
+| PHASE_18 | ⏳ pending | v0.18.0 | ⬜ | — | Browser Interactive Matting Lab |
+| PHASE_19 | ⏳ pending | v0.19.0 | ⬜ | — | Production Trimap & Alpha Refinement |
+| PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Device Hardening |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -45,7 +50,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `15` · **Phase in progress:** `—`
+**Phase completed:** `16` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -321,6 +326,52 @@ interface BenchmarkMeasurement {
 }
 ```
 
+```ts
+// Phase 16 — explicit production modes and guided object selection
+type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+type QualityMode = AutomaticModelMode | "fast" | "max"; // legacy worker aliases remain accepted
+
+interface ProductionModelProfile {
+  id: AutomaticModelMode;
+  modelId: "onnx-community/ISNet-ONNX" | "onnx-community/BEN2-ONNX";
+  revision: string;
+  dtype: "q8" | "fp32" | "fp16";
+  approximateBytes: number;
+  supportedPaths: readonly InferencePath[];
+  relativeSpeed: "fast" | "balanced" | "slow";
+  requiresWebGPU: boolean;
+}
+
+type SelectionPrompt =
+  | { type: "point"; x: number; y: number; label: 1 }
+  | { type: "box"; xMin: number; yMin: number; xMax: number; yMax: number };
+
+type ObjectSelectionStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready-for-prompt"
+  | "predicting-mask"
+  | "preview"
+  | "error";
+
+interface GuidedModelProfile {
+  modelId: "Xenova/slimsam-77-uniform";
+  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4";
+  dtype: "q8";
+  approximateBytes: 13_840_000;
+  supportedPaths: readonly ["wasm"];
+  license: "Apache-2.0";
+}
+```
+
+Phase 16 pins IS-Net q8/fp32, BEN2 fp16, and SlimSAM q8 to immutable revisions. BEN2 is an
+explicit, session-only WebGPU mode that falls back once to IS-Net q8 when capability, model, or OOM
+checks fail. SlimSAM is loaded only after explicit guided-selection entry, reuses one image
+embedding for replacement point/box prompts, and hands the accepted source-sized `AlphaMatte` to
+the existing brush/background/download pipeline. One automatic pipeline and at most one explicitly
+entered guided pipeline may coexist, but heavy inference is serialized and disposed on mode exit.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -358,8 +409,8 @@ interface BenchmarkMeasurement {
 
 - Tables: none yet.
 - Current migration head: `—`
-- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (`onnx-community/ISNet-ONNX`, `q8`/`fp32` dtype variants — replaces the original `BiRefNet_lite`/`BiRefNet` pair per the 2026-07-10 model-swap decision below) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14).
-- Client-side `localStorage` (added Phase 03): `qualityMode: "fast" | "max"` — persisted across visits, no other user data stored client-side (SPEC.md §3).
+- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (IS-Net q8/fp32 plus explicitly loaded BEN2 fp16 and SlimSAM q8 as of Phase 16) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the same immutable revision from upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14/16).
+- Client-side `localStorage` (added Phase 03, retained by Phase 16): `qualityMode: "fast" | "max"` persists only the corresponding IS-Net q8/fp32 preference. BEN2 and guided-selection state remain session-only; no other user data is stored client-side (SPEC.md §3).
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -420,6 +471,68 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-13 — Phase 16 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_16 gate passed and the architect requested a local merge without deployment
+
+### Changes / Decision
+- Replaced the two-option quality toggle with explicit IS-Net q8, IS-Net fp32, and opt-in BEN2 fp16
+  production modes, truthful size/speed/capability copy, serialized model lifecycle, and a single
+  capability/model/OOM fallback to IS-Net q8 that preserves the local image.
+- Added a lazy SlimSAM q8 point-or-box guided flow with responsive coordinate mapping, same-image
+  embedding reuse, source-sized `AlphaMatte` output, accessible controls, and continuation through
+  the existing brush correction, background replacement, batch, and download pipeline.
+- Added immutable BEN2/SlimSAM manifest entries and fixed the production worker's bootstrap source
+  selection so IS-Net registry probes and weights also use its pinned commit SHA rather than
+  `resolve/main`.
+- Gate passed: production container build/health and container-network smoke; generated code,
+  TypeScript, Steiger, manifest verification, ESLint, Prettier, 186 unit tests, deterministic
+  cross-browser E2E (138 passed, 3 intentionally skipped), pinned real IS-Net inference, and the
+  serialized Phase-16 real BEN2-fallback plus SlimSAM point/box smoke. Two Phase-12 language-link
+  tests were also rerun in isolation (2/2 passed) after a transient Vite module-load failure under
+  parallel Mobile Safari emulation.
+
+### Affected Phases / Consequences
+- Additive client-only contract: no image endpoint, server-side persistence, analytics payload,
+  account, or new environment variable was introduced.
+- Representative physical weak/WASM and powerful/WebGPU acceptance is deliberately not claimed by
+  this local closeout. Per SPEC v1.9 it is consolidated into Phase 20 and remains mandatory before
+  deploying the combined Phases 16–19 pipeline.
+- PHASE_17 may build cumulative positive/negative prompts and semantic strokes on the completed
+  single-point/box guided baseline.
+
+## 2026-07-13 — Iterative guided matting pipeline approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval of the researched multi-prompt, semantic-brush, trimap/matting,
+and foreground-edge pipeline and request to plan it after Phase 16
+
+### Changes / Decision
+- `SPEC.md` v1.9 extends guided correction from Phase 16's one positive point or target box into a
+  staged human-in-the-loop pipeline: cumulative positive/negative prompts and semantic strokes,
+  multiple object layers, local progressive merge, confidence-aware trimaps, optional alpha
+  refinement, and foreground-colour decontamination. The existing pixel brush remains the final
+  exact correction layer.
+- Added Phases 17–20: Iterative Guided Object Editor; Browser Interactive Matting Lab; Production
+  Trimap & Alpha Refinement; Foreground Edge Quality & Device Hardening. Evaluation precedes any
+  production model addition, non-production-compatible licenses are evidence-only, and failures
+  retain a deterministic guided-fusion fallback.
+- Phase 16 keeps its implemented one-point/box contract. Its available-host real-model smoke is the
+  merge criterion for this no-deploy closeout; the explicitly unproven representative physical
+  weak/powerful matrix is consolidated into Phase 20 and remains mandatory before Phases 16–19 are
+  deployed together.
+
+### Affected Phases / Consequences
+- PHASE_16 — gate evidence wording is narrowed to what the development host actually proves; no
+  product behavior or implementation scope is retroactively expanded.
+- PHASE_17–20 — new pending phases own the approved iterative editor, evaluation, production
+  refiner, edge quality, and consolidated physical-device acceptance.
+- PHASE_01–15 remain valid; Current Contract is unchanged because the new entities are planned, not
+  yet implemented.
 
 ## 2026-07-13 — Phase 15 complete
 

@@ -1,10 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import type { QualityMode } from "../../../entities/processed-image";
+import type { AutomaticModelMode, QualityMode } from "../../../entities/processed-image";
 
 export const QUALITY_MODE_STORAGE_KEY = "qualityMode";
 
-function readStoredQualityMode(): QualityMode | null {
+function readStoredQualityMode(): AutomaticModelMode | null {
   // TanStack Start renders this hook on the server first (no `window`) before
   // hydrating on the client — SPEC.md's `localStorage` persistence is
   // necessarily client-only.
@@ -12,12 +12,12 @@ function readStoredQualityMode(): QualityMode | null {
     return null;
   }
   const stored = window.localStorage.getItem(QUALITY_MODE_STORAGE_KEY);
-  return stored === "fast" || stored === "max" ? stored : null;
+  return stored === "fast" ? "isnet-q8" : stored === "max" ? "isnet-fp32" : null;
 }
 
 export interface UseQualityModeResult {
-  qualityMode: QualityMode;
-  setQualityMode: (mode: QualityMode) => void;
+  qualityMode: AutomaticModelMode;
+  setQualityMode: (mode: AutomaticModelMode) => void;
 }
 
 /**
@@ -31,21 +31,39 @@ export interface UseQualityModeResult {
  * that avoids an extra commit.
  */
 export function useQualityMode(defaultMode: QualityMode): UseQualityModeResult {
-  const [qualityMode, setQualityModeState] = useState<QualityMode>(
-    () => readStoredQualityMode() ?? defaultMode,
-  );
-  const [trackedDefaultMode, setTrackedDefaultMode] = useState(defaultMode);
+  const normalizedDefault =
+    defaultMode === "max" || defaultMode === "isnet-fp32" ? "isnet-fp32" : "isnet-q8";
+  const [qualityMode, setQualityModeState] =
+    useState<AutomaticModelMode>(normalizedDefault);
+  const [trackedDefaultMode, setTrackedDefaultMode] = useState(normalizedDefault);
+  const [hasExplicitChoice, setHasExplicitChoice] = useState(false);
 
-  if (defaultMode !== trackedDefaultMode) {
-    setTrackedDefaultMode(defaultMode);
-    if (readStoredQualityMode() === null) {
-      setQualityModeState(defaultMode);
+  useEffect(() => {
+    const stored = readStoredQualityMode();
+    if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is client-only; applying it after hydration keeps the SSR/client markup identical.
+      setHasExplicitChoice(true);
+      setQualityModeState(stored);
+    }
+  }, []);
+
+  if (normalizedDefault !== trackedDefaultMode) {
+    setTrackedDefaultMode(normalizedDefault);
+    if (!hasExplicitChoice) {
+      setQualityModeState(normalizedDefault);
     }
   }
 
-  const setQualityMode = useCallback((mode: QualityMode) => {
+  const setQualityMode = useCallback((mode: AutomaticModelMode) => {
+    setHasExplicitChoice(true);
     setQualityModeState(mode);
-    window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, mode);
+    // BEN2 is intentionally session-only. Preserve the established storage
+    // contract only when an IS-Net preference is explicitly selected.
+    if (mode === "isnet-q8") {
+      window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "fast");
+    } else if (mode === "isnet-fp32") {
+      window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "max");
+    }
   }, []);
 
   return { qualityMode, setQualityMode };

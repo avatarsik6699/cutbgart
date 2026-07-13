@@ -1,4 +1,5 @@
 export type {
+  AutomaticModelMode,
   BackgroundFill,
   BackgroundGradientStop,
   HexColor,

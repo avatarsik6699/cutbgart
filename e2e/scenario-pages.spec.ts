@@ -106,7 +106,7 @@ for (const scenario of SCENARIO_PAGES) {
       await expect(
         page.getByRole("heading", { level: 1, name: scenario.h1 }),
       ).toBeVisible();
-      await expect(page.getByRole("switch")).toBeVisible();
+      await expect(page.getByTestId("processing-mode-selector")).toBeVisible();
       await expect(
         page.getByLabel(/Upload an image|Загрузить изображения/),
       ).toBeAttached();

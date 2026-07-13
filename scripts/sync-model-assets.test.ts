@@ -19,6 +19,21 @@ const manifest: ModelManifest = {
         "onnx/model.onnx",
       ],
     },
+    {
+      id: "onnx-community/BEN2-ONNX",
+      revision: "c552aa82688edce09f0ac9d2e31ad53d9d629010",
+      files: ["config.json", "preprocessor_config.json", "onnx/model_fp16.onnx"],
+    },
+    {
+      id: "Xenova/slimsam-77-uniform",
+      revision: "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      files: [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/vision_encoder_quantized.onnx",
+        "onnx/prompt_encoder_mask_decoder_quantized.onnx",
+      ],
+    },
   ],
   onnxRuntimeWeb: {
     version: "1.27.0",
@@ -56,6 +71,24 @@ describe("model asset manifest", () => {
         "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort-wasm-simd-threaded.asyncify.mjs",
       relativePath: "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.asyncify.mjs",
     });
+  });
+
+  it("maps BEN2 and SlimSAM immutable assets without bundling binaries", () => {
+    const plan = buildModelAssetPlan(manifest);
+    expect(
+      plan.some((asset) =>
+        asset.relativePath.includes(
+          "BEN2-ONNX/resolve/c552aa82688edce09f0ac9d2e31ad53d9d629010/onnx/model_fp16.onnx",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      plan.some((asset) =>
+        asset.relativePath.includes(
+          "slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/onnx/vision_encoder_quantized.onnx",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("rejects an incomplete ONNX Runtime asset set", () => {

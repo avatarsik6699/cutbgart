@@ -82,7 +82,7 @@ describe("ToolWorkspace", () => {
 
     expect(screen.getByTestId("tool-workspace")).toBeDefined();
     expect(screen.getByLabelText("Upload an image")).toBeDefined();
-    expect(screen.getByRole("switch")).toBeDefined();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
   it("shows a validation error for an unsupported file without starting the model pipeline", async () => {
