@@ -38,7 +38,7 @@
 | PHASE_17 | ⏳ pending | v0.17.0 | ⬜ | — | Iterative Guided Object Editor |
 | PHASE_18 | ⏳ pending | v0.18.0 | ⬜ | — | Browser Interactive Matting Lab |
 | PHASE_19 | ⏳ pending | v0.19.0 | ⬜ | — | Production Trimap & Alpha Refinement |
-| PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Device Hardening |
+| PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Runtime Hardening |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -471,6 +471,60 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-13 — Device incident feedback remains fully manual
+
+**Type**: decision
+**Author**: AI (spec-sync)
+**Triggered by**: architect clarification that users will report incidents directly in Telegram
+and may attach a photo, without any product or infrastructure support workflow
+
+### Changes / Decision
+- `SPEC.md` v1.11 keeps device-compatibility feedback entirely manual through the existing Telegram
+  channel. Users may voluntarily send the affected image, screenshot, and ordinary environment
+  description outside the application's processing path.
+- No diagnostic snapshot/export, incident form, upload endpoint, automated collection, device
+  registry, new analytics event/payload, support storage, backend, or infrastructure is planned.
+- When a report is reproducible, the normal development response is a focused regression test or
+  documented compatibility rule; there is no separate incident subsystem.
+- PHASE_20 retains runtime hardening but no longer includes a diagnostic-reporting feature or
+  diagnostic infrastructure.
+
+### Affected Phases / Consequences
+- PHASE_17–20 — validation remains automated and available-host-based; real-device reports are
+  handled manually and only generate product/test work when a concrete issue is reproduced.
+- The v1.10 Project Log reference below to a locally generated diagnostic snapshot is superseded by
+  this clarification. The physical-device matrix remains removed from release gates.
+- Current runtime, API, analytics, persistence, and infrastructure contracts are unchanged.
+
+## 2026-07-13 — Physical-device lab removed from release gates
+
+**Type**: decision
+**Author**: AI (spec-sync)
+**Triggered by**: architect decision that the project has no resources for a representative
+physical-device test lab and will investigate concrete devices from real-user feedback
+
+### Changes / Decision
+- `SPEC.md` v1.10 removes the representative physical weak/WASM and powerful/WebGPU matrix from
+  phase, merge, and deployment prerequisites. Coverage claims remain limited to environments that
+  actually ran.
+- Inference changes instead require configured cross-browser E2E, available-host real-model smoke,
+  focused capability/fallback/resource-disposal checks, and applicable quality, latency, and memory
+  regression thresholds.
+- Real-device compatibility becomes incident-first: voluntarily shared, locally generated,
+  image-free diagnostics support reproduction; a reproduced incident must produce a focused
+  regression or documented compatibility rule. Passive analytics remain aggregate-only.
+- PHASE_20 is renamed **Foreground Edge Quality & Runtime Hardening** and owns this sustainable
+  validation/incident-response contract plus edge-quality work, not a hardware inventory.
+
+### Affected Phases / Consequences
+- PHASE_16 — its available-host evidence remains valid; the previously deferred physical matrix is
+  no longer an outstanding prerequisite.
+- PHASE_17–20 — may proceed and deploy after their reproducible automated, quality, and
+  available-host gates pass; unavailable physical hardware does not create a blocker.
+- The earlier v1.9 Project Log statements that made Phase 20's physical matrix mandatory are
+  superseded by this decision and retained below only as append-only history.
+- Current runtime contract is unchanged; this changes future validation and release policy only.
 
 ## 2026-07-13 — Phase 16 complete
 

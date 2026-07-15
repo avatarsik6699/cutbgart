@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.9` |
+| Document Version | `v1.11` |
 | Date | `2026-07-13` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
@@ -429,9 +429,10 @@ longest side) are downscaled client-side before inference; the output mask is up
 original resolution before final PNG compositing, to avoid degrading the source image's quality.
 
 Batch processing (Phase 10) runs multiple images' inference in parallel but with **bounded
-concurrency** (exact limit decided at Phase 10 `/phase-init`, informed by real-device testing) —
-never "all items at once" — so a large batch cannot exhaust memory or make the UI hang on a weak
-device, consistent with the "UI must never hang" requirement already stated in §7.4.
+concurrency** (the existing policy allows `2` active WebGPU jobs or `1` WASM job and is tuned only
+from reproducible runtime evidence) — never "all items at once" — so a large batch cannot exhaust
+memory or make the UI hang on a weak device, consistent with the "UI must never hang" requirement
+already stated in §7.4.
 
 Phase 15 evaluation runs heavy candidates sequentially with concurrency `1`, records cold-load and
 warm-inference timing separately, and disposes the previous heavy pipeline before switching models.
@@ -471,21 +472,35 @@ pipeline is disposed before the next heavy stage loads.
 | Interactive prompt/refinement request is superseded | Ignore or cancel the stale result; only the latest prompt revision may update the visible mask |
 | Optional matting/refinement model is unsupported, fails, or exhausts memory | Dispose it, preserve source/prompts/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
 
-### 7.4 Cross-Browser Support Matrix (mandatory test coverage)
+### 7.4 Cross-Browser and Runtime Validation
 
-| Browser/device | Inference path | Test priority |
-|-----------------|-----------------|----------------|
-| Chrome/Edge desktop | WebGPU + `fp16` | High |
-| Safari desktop/iOS (limited WebGPU support) | WASM + `q8` fallback | High — requires testing on a real device, not just emulation |
-| Android Chrome | WebGPU (chipset-dependent) with fallback | Medium |
-| Older/low-power devices | WASM, expect degraded time | Medium — UI must never hang |
+The project does not maintain a physical-device lab, and a representative physical-device matrix
+is not a phase, merge, or deployment prerequisite. Compatibility claims must remain limited to the
+environments that were actually exercised.
 
-Every phase that changes inference still runs its available-host real-model smoke before merge.
-When representative physical hardware is not available, the phase must record that limitation
-instead of claiming coverage; closely related model/pipeline changes may consolidate the physical
-weak/powerful device matrix into an explicit later hardening phase, but that matrix must pass before
-the consolidated functionality is deployed. Phases 16–19 use this rule and Phase 20 owns their
-representative physical-device acceptance.
+| Environment | Inference/runtime path | Required evidence |
+|-------------|------------------------|-------------------|
+| Configured Chromium project | Deterministic WebGPU and WASM/fallback branches | Full user-flow E2E; available-host real-model smoke for inference changes |
+| Configured Firefox project | Deterministic supported/fallback branches | User-flow, canvas interaction, state recovery, and download E2E |
+| Configured WebKit project | Deterministic WASM/fallback branches | User-flow, canvas interaction, state recovery, and download E2E; this is browser-engine coverage, not a claim that physical Safari/iOS hardware was tested |
+| Available development host | Its real detected WebGPU or WASM path | Serialized real-model smoke, capability report, classified failures, and measured timing for inference changes |
+| Synthetic weak/OOM conditions | Injected capability, allocation, and worker failures | Deterministic fallback, cancellation, resource-disposal, and UI-responsiveness tests |
+
+Every phase that changes inference must pass the configured cross-browser E2E suite, its
+available-host real-model smoke, focused capability/fallback tests, and the applicable quality,
+latency, and memory regression thresholds. Lack of a particular physical device is recorded as an
+unverified environment, not carried forward as a release blocker.
+
+Real-device compatibility is handled manually after release. A user may contact the existing
+Telegram feedback channel and voluntarily attach the affected source/result image, a screenshot,
+and ordinary browser/device details. This support interaction happens outside the application's
+processing path and does not create an image-upload or incident-submission endpoint. Reproduce the
+problem as closely as practical, classify the runtime/model path from the supplied description, and
+add the smallest durable automated regression or documented compatibility rule when reproducible.
+
+No diagnostic snapshot/export feature, automated incident collection, device registry, new
+analytics payload, support storage, backend, or infrastructure is planned for this workflow.
+Existing passive analytics remain aggregate counters only.
 
 ### 7.5 SEO
 
@@ -536,12 +551,12 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | E2E (guided selection) | Enter **select object**, place a positive point and a box, obtain a mask, then continue through existing correction/result/download flow | Playwright |
 | E2E (iterative guidance) | Starting from an automatic or guided result, combine positive/negative points, box, semantic keep/remove strokes, undo/redo, multiple object layers, and alternative masks; stale prompt responses never overwrite the latest revision | Playwright |
 | Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
-| Cross-browser matrix | WebGPU path and WASM fallback separately, must include Safari/iOS | Playwright projects per browser |
+| Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
 | Visual regression (optional, v2) | UI components across states | Playwright screenshots |
 
-Priority: critical-path E2E and the cross-browser matrix outrank unit coverage percentage — the cost
-of "broken on Safari" or "hangs on a weak Android device" is higher than the cost of a gap in a small
-utility function's unit tests.
+Priority: critical-path E2E, available-host real-model smoke, and the configured cross-browser
+matrix outrank unit coverage percentage. Device-specific user reports are converted into focused
+regressions after reproduction rather than anticipated through an unavailable hardware lab.
 
 ---
 
@@ -561,14 +576,14 @@ utility function's unit tests.
 | `10` | Batch processing | Process many images in one session without repeating the upload → download loop by hand | `features/batch-processing` slice: parallel upload/processing with bounded concurrency (§7.1), grid/tile overview with per-item status, select-to-review/correct/reprocess via the existing single-image flow, per-item and "download all as ZIP" (§4, §6); per-item error isolation (§7.3); e2e coverage (§7.7) |
 | `11` | Background replacement | Let the user place the cutout on a solid color, gradient, or custom background instead of only transparent PNG | `features/background-replacement` slice: `BackgroundFill` (color/gradient/image) composited via the existing `OffscreenCanvas` pipeline; background-fill selector wired into **result** (§5.3); custom background image stays client-side only (§1.1, §4); e2e coverage (§7.7) |
 | `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
-| `13` | Hardening & Launch | Final SEO-page presentation, confidence across the real device matrix, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
+| `13` | Hardening & Launch | Final SEO-page presentation, available-host cross-browser confidence, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; available-host §7.4 validation with incident-driven follow-up for device-specific reports; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 | `14` | VPS Model CDN | Own the production model delivery path without requiring R2 or a payment card, while retaining the proven upstream path as a resilience fallback | Synchronize `models.manifest.json` with pinned ISNet `q8`/`fp32` assets and ONNX Runtime WASM; serve the host asset directory at `cdn.cutbg.art` through Nginx with CORS, byte ranges, and immutable cache headers; document the proxied DNS and Cloudflare Cache Rule; wire `VITE_MODEL_CDN_BASE_URL`; retry pinned model loading through Hugging Face Hub/upstream WASM CDN when the private CDN is unavailable; include the Cloudflare Web Analytics token in production builds; verify CDN headers, primary loading, and fallback |
 | `15` | Browser Model Evaluation Lab | Select the next automatic quality model using reproducible evidence without changing production inference | Typed immutable model registry for IS-Net q8/fp32, BEN2 fp16 and MVANet q4; opt-in development model-lab route behind `VITE_ENABLE_MODEL_LAB`; sequential same-image comparisons with side-by-side previews, cold-load/warm-inference/error/memory-capability observations, pairwise preference and image-free JSON export; focused unit/integration/E2E coverage; written decision record naming BEN2, MVANet, or neither for Phase 16 |
 | `16` | Production Model Modes & Guided Selection | Preserve both existing IS-Net modes, add the Phase-15 winner as an optional heavy automatic mode, and provide user-directed recovery for ambiguous images | User-facing processing-mode selector with model characteristics and capability-aware fallback; lazy single-session loading/disposal for the selected heavy model; SlimSAM positive-point/bounding-box flow producing the existing `AlphaMatte`; continuation into brush correction/result/download; batch concurrency constrained for heavy modes; production CDN manifest and localized E2E updates |
 | `17` | Iterative Guided Object Editor | Turn Phase 16's one-shot selection into a predictable human-in-the-loop object editor without adding another heavy model | Cumulative positive/negative points; target box combined with points; semantic keep/remove strokes sampled into prompts and retained as hard constraints; per-object mask layers and union; alternative candidate selection; prompt undo/redo; previous-mask/local progressive merge; deterministic fusion with the selected automatic `AlphaMatte`; existing pixel brush remains the final exact editor |
 | `18` | Browser Interactive Matting Lab | Select or reject a trimap/alpha refiner and lightweight prompt-model alternatives using reproducible browser evidence before production integration | Extend the opt-in model lab with pinned ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and selected lightweight promptable candidates; license gate; image-free export; alpha/boundary quality corpus; cold/warm timing, peak-memory/OOM, WebGPU/WASM/operator compatibility, quantization impact, and a written winner-or-none decision for Phase 19 |
 | `19` | Production Trimap & Alpha Refinement | Convert automatic + guided intent into high-quality soft alpha while retaining a safe weak-device path | Confidence/disagreement-driven trimap; hard positive/negative constraints; adaptive unknown band; target/focus crop inference; production integration of the Phase-18 winner only if evidence supports it; deterministic no-new-model fusion fallback; one-heavy-stage-at-a-time lifecycle; CDN pins; localized UI/E2E through correction, background replacement, and download |
-| `20` | Foreground Edge Quality & Device Hardening | Remove residual colour spill/edge artifacts and establish deploy confidence for the full hybrid pipeline | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; representative physical weak/WASM and powerful/WebGPU matrix covering Phases 16–19; quality-regression corpus and interaction/latency/memory thresholds; privacy-safe aggregate counters only; no deploy until the matrix is accepted |
+| `20` | Foreground Edge Quality & Runtime Hardening | Remove residual colour spill/edge artifacts and establish maintainable release confidence for the full hybrid pipeline without requiring a physical-device lab | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; configured cross-browser and available-host real-model coverage for the Phases 16–19 pipeline; quality-regression corpus and interaction/latency/memory thresholds; manual triage of voluntarily supplied Telegram reports and focused regression coverage only for reproducible incidents; aggregate counters only; no diagnostic-reporting feature or mandatory physical-device matrix |
 
 ---
 
@@ -600,8 +615,6 @@ authorize domain-specific training/fine-tuning or any server-side inference.
 - Final list of shadcn/ui components to copy into `shared/ui` for MVP (minimum known so far: button,
   slider, toast/notification, dialog for mobile menu if needed).
 - Exact client-side ZIP library for Phase 10's "download all" (§6).
-- Phase 10's batch concurrency limit (§7.1) — needs real-device testing to set responsibly rather
-  than guessing a number ahead of time.
 - Phase 18 must decide whether quantized ViTMatte preserves alpha quality sufficiently for
   production and whether Composition-1k, Distinctions-646, a different compatible candidate, or
   no added model wins on the project corpus.

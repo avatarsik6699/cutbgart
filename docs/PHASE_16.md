@@ -39,12 +39,12 @@ accessible tool workspace and design system.
 - [x] `F6` Add the accessible guided-selection UI inside the existing tool flow: explicit entry, point/box tool choice, pointer and keyboard-operable prompting, replace/retry/cancel actions, loading/error announcements, and coordinate mapping that remains correct on responsive/zoomed canvases — _Depends on:_ `F5`
 - [x] `F7` Feed the accepted SlimSAM matte into the existing brush editor and preserve the established correction → result → background replacement → individual/ZIP download behavior without uploading or persisting image-derived data — _Depends on:_ `F6`
 - [x] `F8` Add focused registry/lifecycle/fallback/prompt-coordinate/mask-conversion tests plus localized Playwright coverage for all three model modes, warm reuse, WebGPU→IS-Net fallback, OOM recovery, point and box prompts, and continuation through brush correction/download — _Depends on:_ `F3`, `F4`, `F7`
-- [x] `F9` Run and record the serialized available-host real-browser check for guarded BEN2 fallback plus real SlimSAM point/box inference, and keep the unproven representative weak/WASM and powerful/WebGPU coverage explicit in the device report for the consolidated Phase-20 pre-deploy matrix — _Depends on:_ `F8`, `I2`
+- [x] `F9` Run and record the serialized available-host real-browser check for guarded BEN2 fallback plus real SlimSAM point/box inference, and state precisely which runtime path the available host did and did not exercise without treating unavailable physical hardware as a future deploy gate — _Depends on:_ `F8`, `I2`
 
 ### Infra
 
 - [x] `I1` Add manifest-pinned BEN2 fp16 and SlimSAM q8 assets to the production VPS/CDN sync contract, retain immutable paths/CORS/range/cache headers and pinned upstream fallback, and verify that neither model is bundled into the app image or fetched before explicit use — _Depends on:_ —
-- [x] `I2` Add a host-only serialized Phase-16 real-model Playwright command and device-matrix report; keep it out of Docker and CI while retaining the standard deterministic cross-browser suite — _Depends on:_ `I1`
+- [x] `I2` Add a host-only serialized Phase-16 real-model Playwright command and runtime-evidence report; keep it out of Docker and CI while retaining the standard deterministic cross-browser suite — _Depends on:_ `I1`
 
 <!-- Test execution is governed by `## Gate Checks` below + docs/STACK.md § Gate Commands. -->
 
@@ -181,8 +181,9 @@ Production model pins:
   public selector; absent/failed WebGPU or OOM falls back once to IS-Net q8.
 - SlimSAM q8: the points-and-boxes revision above (~13.8 MB ONNX weights). It intentionally uses
   the quantized WASM path because that pinned branch has fp32/quantized graphs but no fp16 graphs;
-  the available-host real-browser compatibility and mask geometry check passed in `F9`; the
-  representative physical-device quality matrix remains explicitly unproven until Phase 20.
+  the available-host real-browser compatibility and mask geometry check passed in `F9`. No broader
+  physical-device claim is made; SPEC v1.11 handles device-specific gaps from user incidents rather
+  than a mandatory laboratory matrix.
 
 Pipeline lifecycle invariant: one automatic pipeline and at most one explicitly entered guided
 pipeline may exist, but heavy work is never concurrent. Before switching a heavy model, await
@@ -212,11 +213,10 @@ pnpm sync-model-assets --check
 ```
 
 `pnpm e2e:phase-16-real` is host-only and serialized; never run it in Docker or CI. Record the
-available-host result and all unproven device classes in `docs/PHASE_16_DEVICE_MATRIX.md`. Per the
-architect's SPEC v1.9 consolidation decision, Phase 16 may close without deployment after this real
-smoke passes; Phase 20 must complete the representative weak/WASM and powerful/WebGPU matrix for
-mode switching, warm reuse, disposal, BEN2 WebGPU, WebGPU/OOM fallback, and guided quality on
-light-on-light/ambiguous examples before the Phases 16–19 pipeline is deployed.
+available-host result and its actual capability path in `docs/PHASE_16_DEVICE_MATRIX.md`. Phase 16
+closed after this smoke passed. SPEC v1.11 supersedes the earlier deferred-matrix rule: unavailable
+physical hardware is not a later deployment prerequisite, while reproducible device-specific user
+reports must be converted into focused regression coverage or a documented compatibility rule.
 
 The default container-network smoke remains sufficient because Phase 16 adds no route or server
 endpoint.
@@ -236,8 +236,9 @@ endpoint.
   q8 graphs minimize download and memory pressure; actual browser support remains a gate result,
   not an assumption.
 - The architect approved closing Phase 16 locally without deployment on the available-host real
-  smoke. Representative physical weak/powerful hardware coverage is not claimed: SPEC v1.9 assigns
-  that consolidated pre-deploy acceptance to Phase 20 after the full interactive pipeline exists.
+  smoke. Representative physical weak/powerful hardware coverage is not claimed. The former SPEC
+  v1.9 plan to consolidate that matrix into Phase 20 was superseded by SPEC v1.11's available-host
+  and incident-driven compatibility policy.
 
 ---
 
