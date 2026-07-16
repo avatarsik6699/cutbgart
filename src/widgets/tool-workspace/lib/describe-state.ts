@@ -1,4 +1,5 @@
 import type { RemoveBackgroundState } from "../../../features/remove-background";
+import type { ObjectSelectionStatus } from "../../../features/select-object";
 import type { UploadValidationError } from "../../../features/upload-image";
 import { m } from "@/paraglide/messages";
 
@@ -9,6 +10,20 @@ function uploadErrorMessage(error: UploadValidationError): string {
   }
   if (error.code === "exceeds-size-limit") return m.uploadTooLarge();
   return m.uploadResolutionError();
+}
+
+export function describeGuidedState(
+  status: ObjectSelectionStatus,
+  progress: number | null,
+): string {
+  if (status === "loading-model")
+    return m.guidedLoadingModel({ progress: String(Math.round(progress ?? 0)) });
+  if (status === "encoding-image") return m.guidedEncodingImage();
+  if (status === "predicting-mask") return m.guidedPredictingMask();
+  if (status === "preview") return m.guidedPreviewReady();
+  if (status === "error") return m.guidedError();
+  if (status === "idle") return m.stateIdle();
+  return m.guidedReady();
 }
 
 /**

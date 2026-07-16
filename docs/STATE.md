@@ -35,7 +35,7 @@
 | PHASE_14 | ✅ done | v0.14.0 | ✅ | 🤖 agent | VPS Model CDN |
 | PHASE_15 | ✅ done | v0.15.0 | ✅ | 🤖 agent | Browser Model Evaluation Lab |
 | PHASE_16 | ✅ done | v0.16.0 | ✅ | 🤖 agent | Production Model Modes & Guided Selection |
-| PHASE_17 | ⏳ pending | v0.17.0 | ⬜ | — | Iterative Guided Object Editor |
+| PHASE_17 | ✅ done | v0.17.0 | ✅ | 🤖 agent | Iterative Guided Object Editor |
 | PHASE_18 | ⏳ pending | v0.18.0 | ⬜ | — | Browser Interactive Matting Lab |
 | PHASE_19 | ⏳ pending | v0.19.0 | ⬜ | — | Production Trimap & Alpha Refinement |
 | PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Runtime Hardening |
@@ -50,7 +50,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `16` · **Phase in progress:** `—`
+**Phase completed:** `17` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -372,6 +372,93 @@ embedding for replacement point/box prompts, and hands the accepted source-sized
 the existing brush/background/download pipeline. One automatic pipeline and at most one explicitly
 entered guided pipeline may coexist, but heavy inference is serialized and disposed on mode exit.
 
+```ts
+// Phase 17 — iterative guided object editor; all values are session-only
+type PromptPointLabel = 0 | 1;
+type SemanticStrokeMode = "keep" | "remove";
+
+interface GuidedPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: PromptPointLabel;
+}
+
+interface GuidedBox {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+}
+
+interface SemanticStroke {
+  id: string;
+  mode: SemanticStrokeMode;
+  points: readonly { x: number; y: number }[];
+  radius: number;
+}
+
+interface GuidedMaskCandidate {
+  id: string;
+  matte: AlphaMatte;
+  score: number | null;
+  differenceRatio: number;
+}
+
+interface ObjectMaskLayer {
+  id: string;
+  points: readonly GuidedPoint[];
+  targetBox: GuidedBox | null;
+  strokes: readonly SemanticStroke[];
+  candidates: readonly GuidedMaskCandidate[];
+  selectedCandidateId: string | null;
+  acceptedMatte: AlphaMatte | null;
+}
+
+type PromptHistoryEntry =
+  | { type: "point-added"; layerId: string; point: GuidedPoint }
+  | { type: "box-changed"; layerId: string; before: GuidedBox | null; after: GuidedBox | null }
+  | { type: "stroke-added"; layerId: string; stroke: SemanticStroke }
+  | { type: "candidate-selected"; layerId: string; beforeId: string | null; afterId: string | null }
+  | { type: "layer-added"; layerId: string }
+  | {
+      type: "layer-removed";
+      layerId: string;
+      promptData: {
+        points: readonly GuidedPoint[];
+        targetBox: GuidedBox | null;
+        strokes: readonly SemanticStroke[];
+        selectedCandidateId: string | null;
+      };
+      index: number;
+    }
+  | { type: "layer-selected"; beforeId: string; afterId: string };
+
+interface PromptSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  layers: readonly ObjectMaskLayer[];
+  activeLayerId: string;
+  revision: number;
+  history: readonly PromptHistoryEntry[];
+  redo: readonly PromptHistoryEntry[];
+}
+
+interface IterativeSelectionPrompt {
+  revision: number;
+  points: readonly GuidedPoint[];
+  box: GuidedBox | null;
+  previousMask: AlphaMatte | null;
+}
+```
+
+Phase 17 expands SlimSAM guidance to cumulative positive/negative points, one target box and
+semantic keep/remove strokes per object layer, ranked alternative masks, bounded delta-only
+undo/redo, and latest-revision-wins worker responses. Accepted layer masks are unioned over the
+automatic base matte; explicit semantic constraints win. Invalid model scores remain `null` rather
+than becoming invented confidence values. All prompts, candidates, masks, embeddings, and history
+remain browser-memory-only and are released with the guided session.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -411,6 +498,8 @@ entered guided pipeline may coexist, but heavy inference is serialized and dispo
 - Current migration head: `—`
 - Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (IS-Net q8/fp32 plus explicitly loaded BEN2 fp16 and SlimSAM q8 as of Phase 16) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the same immutable revision from upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14/16).
 - Client-side `localStorage` (added Phase 03, retained by Phase 16): `qualityMode: "fast" | "max"` persists only the corresponding IS-Net q8/fp32 preference. BEN2 and guided-selection state remain session-only; no other user data is stored client-side (SPEC.md §3).
+- Phase 17 iterative prompts, object layers, candidates, semantic strokes, and undo/redo history are
+  session-only and never enter Cache Storage, `localStorage`, analytics, logs, or server storage.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -435,6 +524,9 @@ entered guided pipeline may coexist, but heavy inference is serialized and dispo
   invariant, aggregate-only analytics, and the Telegram privacy contact.
 - The home and scenario tools now share `widgets/tool-workspace`: a single-column mobile/tablet
   flow and a two-column desktop preview/control layout, with no new domain entity or persistence.
+- Phase 17 evolves the same workspace's guided mode into an iterative object editor reachable from
+  direct guidance or an automatic result. It returns the unioned source-sized matte to the existing
+  exact correction, background, batch, and download flow without adding a route.
 
 ### Env Config
 
@@ -471,6 +563,56 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-16 — Phase 17 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_17 functional gate passed and the architect explicitly accepted the final
+external-model gate exception, requesting local merge without deployment
+
+### Changes / Decision
+- Replaced one-shot guided selection with cumulative positive/negative points, target boxes,
+  semantic keep/remove strokes, alternative mask candidates, multiple object layers, bounded
+  delta-only undo/redo, and latest-revision-wins SlimSAM orchestration.
+- Added deterministic fusion over the existing automatic matte, explicit constraint precedence,
+  accessible/localized explanations for layers, mask scores and blue kept-area overlays, robust
+  invalid-score handling, prompt-history hotkeys, and StrictMode-safe blob preview lifecycle.
+- Gate evidence: production container build/health and container-network smoke passed; generated
+  code, TypeScript, ESLint, Steiger, 198 unit tests, 26 focused tests, the 192-pass configured
+  cross-browser matrix, the 8-pass Phase-17 matrix, and real IS-Net inference through the production
+  CDN passed. The serialized real SlimSAM smoke also passed earlier on this host and is recorded in
+  `PHASE_17_RUNTIME_EVIDENCE.md`.
+- During the final repeat, Hugging Face returned 503/504/timeouts while SlimSAM was not yet present
+  on the undeployed production CDN. The architect explicitly accepted that external outage as a
+  non-blocking gate exception; no deployment or model sync was performed.
+
+### Affected Phases / Consequences
+- Additive client-only contract: no endpoint, persistent data, analytics payload, model pin, or
+  environment variable was added.
+- PHASE_18 may consume the completed iterative guided-editor baseline for browser matting research.
+- Remote publication and deployment remain deferred under the 2026-07-15 local-only decision.
+
+## 2026-07-15 — Phases 17–20 remain local until final manual acceptance
+
+**Type**: decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: architect requested completing all remaining phases and local verification before
+publishing the accumulated work or deploying it
+
+### Changes / Decision
+- PHASE_17–20 are developed, gated, reviewed, committed, merged, and tagged locally. No branch,
+  `main` commit, or phase tag is pushed to a remote during this sequence.
+- No deployment is performed after an individual remaining phase. The architect manually tests the
+  completed local pipeline through PHASE_20 first.
+- Push to remote `main` and production deployment require explicit architect approval after all four
+  phases are complete, their automated gates pass, and local manual acceptance is finished.
+
+### Affected Phases / Consequences
+- PHASE_17–20 — local commits, merges, tags, and phase lifecycle documentation continue normally;
+  remote publication and deployment are deliberately deferred until the consolidated acceptance.
+- CI/CD triggered by a push to `main` is intentionally not exercised during intermediate phases;
+  host-only gates and local container-parity smoke checks remain mandatory as defined in STACK.md.
 
 ## 2026-07-13 — Device incident feedback remains fully manual
 

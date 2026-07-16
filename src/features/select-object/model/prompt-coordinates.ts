@@ -1,5 +1,5 @@
 import type { AlphaMatte } from "../../../entities/processed-image";
-import type { SelectionPrompt } from "./types";
+import type { GuidedBox, GuidedMaskCandidate, GuidedPoint } from "./types";
 
 export interface DisplayRect {
   left: number;
@@ -19,38 +19,62 @@ export function displayPointToNormalized(
   };
 }
 
-export function normalizedPromptToPixels(
-  prompt: SelectionPrompt,
+export function normalizedPointToPixels(
+  point: Pick<GuidedPoint, "x" | "y" | "label">,
   width: number,
   height: number,
-): SelectionPrompt {
-  if (prompt.type === "point") {
-    return { type: "point", x: prompt.x * width, y: prompt.y * height, label: 1 };
-  }
+): { x: number; y: number; label: 0 | 1 } {
+  return { x: point.x * width, y: point.y * height, label: point.label };
+}
+
+export function normalizedBoxToPixels(
+  box: GuidedBox,
+  width: number,
+  height: number,
+): GuidedBox {
   return {
-    type: "box",
-    xMin: Math.min(prompt.xMin, prompt.xMax) * width,
-    yMin: Math.min(prompt.yMin, prompt.yMax) * height,
-    xMax: Math.max(prompt.xMin, prompt.xMax) * width,
-    yMax: Math.max(prompt.yMin, prompt.yMax) * height,
+    xMin: Math.min(box.xMin, box.xMax) * width,
+    yMin: Math.min(box.yMin, box.yMax) * height,
+    xMax: Math.max(box.xMin, box.xMax) * width,
+    yMax: Math.max(box.yMin, box.yMax) * height,
   };
 }
 
-export function bestIouMatte(
+export function maskCandidates(
   masks: ArrayLike<number>,
   scores: ArrayLike<number>,
   width: number,
   height: number,
-): AlphaMatte {
-  let best = 0;
-  for (let index = 1; index < scores.length; index++) {
-    if ((scores[index] ?? -Infinity) > (scores[best] ?? -Infinity)) best = index;
-  }
+  revision: number,
+): GuidedMaskCandidate[] {
   const pixels = width * height;
-  const offset = best * pixels;
-  const data = new Uint8ClampedArray(pixels);
-  for (let pixel = 0; pixel < pixels; pixel++) {
-    data[pixel] = (masks[offset + pixel] ?? 0) > 0 ? 255 : 0;
-  }
-  return { width, height, data };
+  const candidates = Array.from(
+    { length: Math.min(scores.length, Math.floor(masks.length / pixels)) },
+    (_, index) => {
+      const data = new Uint8ClampedArray(pixels);
+      for (let pixel = 0; pixel < pixels; pixel += 1)
+        data[pixel] = (masks[index * pixels + pixel] ?? 0) > 0 ? 255 : 0;
+      const rawScore = scores[index];
+      return {
+        id: `candidate-${String(revision)}-${String(index)}`,
+        matte: { width, height, data } satisfies AlphaMatte,
+        score:
+          typeof rawScore === "number" &&
+          Number.isFinite(rawScore) &&
+          rawScore >= 0 &&
+          rawScore <= 1
+            ? rawScore
+            : null,
+        differenceRatio: 0,
+      };
+    },
+  ).sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+  const recommended = candidates[0]?.matte.data;
+  if (!recommended) return candidates;
+  return candidates.map((candidate) => {
+    let differentPixels = 0;
+    for (let index = 0; index < pixels; index += 1)
+      if (candidate.matte.data[index] !== recommended[index]) differentPixels += 1;
+    return { ...candidate, differenceRatio: differentPixels / pixels };
+  });
 }

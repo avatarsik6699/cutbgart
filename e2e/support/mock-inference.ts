@@ -12,7 +12,13 @@ export async function installMockInference(page: Page): Promise<void> {
     const PROCESS_DELAY_MS = 800;
     Object.defineProperty(window, "__mockInferencePosts", {
       configurable: true,
-      value: [] as Array<{ type: string; qualityMode?: string; promptType?: string }>,
+      value: [] as Array<{
+        type: string;
+        qualityMode?: string;
+        promptType?: string;
+        revision?: number;
+        pointLabels?: number[];
+      }>,
     });
     class MockInferenceWorker extends EventTarget {
       private source: {
@@ -21,6 +27,7 @@ export async function installMockInference(page: Page): Promise<void> {
         height: number;
         format: string;
       } | null = null;
+      private guidedPromptCount = 0;
 
       postMessage(message: {
         type: string;
@@ -37,6 +44,12 @@ export async function installMockInference(page: Page): Promise<void> {
         };
         matte?: { data: Uint8ClampedArray };
         backgroundFill?: unknown;
+        revision?: number;
+        prompt?: {
+          revision: number;
+          points: Array<{ label: number }>;
+          box: unknown;
+        };
       }): void {
         (
           window as unknown as {
@@ -44,12 +57,16 @@ export async function installMockInference(page: Page): Promise<void> {
               type: string;
               qualityMode?: string;
               promptType?: string;
+              revision?: number;
+              pointLabels?: number[];
             }>;
           }
         ).__mockInferencePosts.push({
           type: message.type,
           qualityMode: message.qualityMode,
-          promptType: (message as { prompt?: { type?: string } }).prompt?.type,
+          promptType: message.prompt ? (message.prompt.box ? "box" : "point") : undefined,
+          revision: message.revision ?? message.prompt?.revision,
+          pointLabels: message.prompt?.points.map((point) => point.label),
         });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
@@ -97,49 +114,94 @@ export async function installMockInference(page: Page): Promise<void> {
               return;
             }
             this.source = message.source;
-            this.emit({ type: "status", status: "loading-model", progress: 50 });
-            this.emit({ type: "status", status: "encoding-image" });
-            this.emit({ type: "status", status: "ready-for-prompt" });
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "loading-model",
+              progress: 50,
+            });
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "encoding-image",
+            });
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "ready-for-prompt",
+            });
             return;
           }
-          if (message.type === "prompt" && this.source) {
-            this.emit({ type: "status", status: "predicting-mask" });
-            this.emit({
-              type: "preview",
-              matte: {
-                width: this.source.width,
-                height: this.source.height,
-                data: new Uint8ClampedArray(this.source.width * this.source.height).fill(
-                  255,
-                ),
-              },
-            });
+          if (message.type === "prompt" && message.prompt && this.source) {
+            this.guidedPromptCount += 1;
+            const revision = message.prompt.revision;
+            const source = this.source;
+            const respond = () => {
+              this.emit({ type: "status", revision, status: "predicting-mask" });
+              this.emit({
+                type: "candidates",
+                revision,
+                candidates: [0.92, 0.78, 0.61].map((score, index) => {
+                  const pixelCount = source.width * source.height;
+                  const differenceRatio = index * 0.2;
+                  const data = new Uint8ClampedArray(pixelCount).fill(255);
+                  data.fill(0, 0, Math.floor(pixelCount * differenceRatio));
+                  return {
+                    id: `mock-${String(revision)}-${String(index)}`,
+                    score: (window as unknown as { __mockInvalidGuidedScores?: boolean })
+                      .__mockInvalidGuidedScores
+                      ? null
+                      : score,
+                    differenceRatio,
+                    matte: { width: source.width, height: source.height, data },
+                  };
+                }),
+              });
+            };
+            const delayFirst =
+              (window as unknown as { __mockDelayFirstGuidedResponse?: boolean })
+                .__mockDelayFirstGuidedResponse && this.guidedPromptCount === 1;
+            if (delayFirst) window.setTimeout(respond, 250);
+            else respond();
             return;
           }
           if (message.type === "reset") return;
           if (message.type === "process" && message.source) {
             this.source = message.source;
-            const emitResult = () =>
-              this.emit({
-                type: "process-result",
-                requestId: message.requestId,
-                result: message.source?.blob,
-                matte: {
-                  width: message.source!.width,
-                  height: message.source!.height,
-                  data: new Uint8ClampedArray(
-                    message.source!.width * message.source!.height,
-                  ).fill(255),
-                },
-                durationMs: 1,
-                actualMode:
-                  message.qualityMode === "ben2-fp16" &&
-                  ((window as unknown as { __mockBen2Failure?: boolean })
-                    .__mockBen2Failure ||
-                    message.inferencePath === "wasm")
-                    ? "isnet-q8"
-                    : message.qualityMode,
-              });
+            const emitResult = () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = message.source!.width;
+              canvas.height = message.source!.height;
+              const context = canvas.getContext("2d")!;
+              context.fillStyle = "#FFFFFF";
+              context.fillRect(0, 0, canvas.width, canvas.height);
+              canvas.toBlob((result) => {
+                if (!result) {
+                  this.emit({ type: "error", message: "Mock PNG encoding failed" });
+                  return;
+                }
+                this.emit({
+                  type: "process-result",
+                  requestId: message.requestId,
+                  result,
+                  matte: {
+                    width: message.source!.width,
+                    height: message.source!.height,
+                    data: new Uint8ClampedArray(
+                      message.source!.width * message.source!.height,
+                    ).fill(255),
+                  },
+                  durationMs: 1,
+                  actualMode:
+                    message.qualityMode === "ben2-fp16" &&
+                    ((window as unknown as { __mockBen2Failure?: boolean })
+                      .__mockBen2Failure ||
+                      message.inferencePath === "wasm")
+                      ? "isnet-q8"
+                      : message.qualityMode,
+                });
+              }, "image/png");
+            };
             window.setTimeout(emitResult, PROCESS_DELAY_MS);
             return;
           }

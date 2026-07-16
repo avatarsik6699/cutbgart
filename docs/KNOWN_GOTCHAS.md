@@ -11,6 +11,18 @@
 
 ## Gotcha Log
 
+### A memoized blob URL can be revoked during React StrictMode's development remount
+
+- **Symptoms**: an image backed by a `Blob` works initially, then shows only its alt text after
+  entering the editor in development; production or a non-StrictMode test may appear unaffected.
+- **Root cause**: render memoization keeps the same object URL while an effect cleanup revokes it.
+  React StrictMode intentionally runs setup, cleanup, and setup again, so the second setup reuses an
+  already-revoked URL.
+- **Fix**: create the object URL in the same callback-ref/effect setup that owns it, assign it to the
+  image there, and revoke that exact URL in the matching cleanup.
+- **Prevention**: lifecycle tests for blob-backed previews must render under `StrictMode` and verify
+  that the current image URL was not revoked; browser coverage should also assert `naturalWidth > 0`.
+
 ### A mocked ML result does not prove that the browser rendered the result
 
 - **Symptoms**: guided-selection E2E is green because the mock worker returned an `AlphaMatte` and

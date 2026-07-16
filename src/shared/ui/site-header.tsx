@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 
@@ -42,8 +43,19 @@ function LanguageSwitcher() {
 }
 
 function SiteHeader({ className }: { className?: string }) {
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this marker is intentionally false in SSR and the first client render, then exposes when header links are safe to drive in hydration-sensitive browsers.
+    setHydrated(true);
+  }, []);
+
   return (
-    <header data-slot="site-header" className={cn("border-b border-border", className)}>
+    <header
+      data-slot="site-header"
+      data-hydrated={hydrated}
+      className={cn("border-b border-border", className)}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 sm:px-8">
         <Link to="/" aria-label={m.brandName()} className="shrink-0">
           <img src="/logo.png" alt={m.brandName()} className="h-8 w-auto sm:h-9" />

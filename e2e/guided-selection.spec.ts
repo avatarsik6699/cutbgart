@@ -21,7 +21,9 @@ async function enterGuided(page: import("@playwright/test").Page) {
   await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   await expect(page.getByTestId("guided-selection")).toBeVisible();
-  await expect(page.getByText(/Choose a point or draw a box/)).toBeVisible();
+  await expect(
+    page.getByTestId("guided-selection").getByText(/Choose a point or draw a box/),
+  ).toBeVisible();
   await expect(page.getByTestId("processing-mode-selector")).toHaveCount(0);
 }
 
@@ -29,7 +31,7 @@ test("point prompt continues through brush correction and download", async ({ pa
   await enterGuided(page);
   const image = page.getByRole("img", { name: /guided object selection/ });
   await image.click();
-  await expect(page.getByTestId("guided-point-marker")).toBeVisible();
+  await expect(page.getByTestId("guided-positive-marker")).toBeVisible();
   await expect(page.getByTestId("guided-mask-overlay")).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept and refine/ })).toBeVisible();
   await page.getByRole("button", { name: /Accept and refine/ }).click();
@@ -55,7 +57,9 @@ test("box prompt maps a responsive drag and can be replaced", async ({ page }) =
   await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.8);
   await expect(page.getByTestId("guided-box-draft")).toBeVisible();
   await page.mouse.up();
-  await expect(page.getByText(/Mask ready/i)).toBeVisible();
+  await expect(
+    page.getByTestId("guided-selection").locator('p[role="status"]:not(.sr-only)'),
+  ).toContainText(/Mask ready/i);
   await expect(page.getByTestId("guided-box-marker")).toBeVisible();
   await expect(page.getByTestId("guided-mask-overlay")).toBeVisible();
   const prompts = await page.evaluate(
@@ -64,10 +68,12 @@ test("box prompt maps a responsive drag and can be replaced", async ({ page }) =
         .__mockInferencePosts,
   );
   expect(prompts.some((post) => post.promptType === "box")).toBe(true);
-  await page.getByRole("button", { name: /Replace prompt/ }).click();
+  await page.getByRole("button", { name: /Clear object prompts/ }).click();
   await expect(page.getByTestId("guided-box-marker")).toHaveCount(0);
   await expect(page.getByTestId("guided-mask-overlay")).toHaveCount(0);
-  await expect(page.getByText(/Choose a point or draw a box/)).toBeVisible();
+  await expect(
+    page.getByTestId("guided-selection").getByText(/Choose a point or draw a box/),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Cancel guided selection/ }).click();
   await expect(page.getByLabel("Upload an image")).toBeAttached();
 });
@@ -92,5 +98,7 @@ test("localizes the guided method and recovers from a worker crash", async ({ pa
       false;
   });
   await page.getByRole("button", { name: /Повторить/ }).click();
-  await expect(page.getByText(/Укажите точку или нарисуйте рамку/)).toBeVisible();
+  await expect(
+    page.getByTestId("guided-selection").getByText(/Укажите точку или нарисуйте рамку/),
+  ).toBeVisible();
 });
