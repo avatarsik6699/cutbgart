@@ -40,7 +40,7 @@ import {
 } from "../../../features/upload-image";
 import { Button } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
-import { describeState } from "../lib/describe-state";
+import { describeGuidedState, describeState } from "../lib/describe-state";
 import { sourceImageToFile } from "../lib/source-image-to-file";
 import { ProcessingLog } from "./ProcessingLog";
 
@@ -361,14 +361,18 @@ export function ToolWorkspace() {
   }
 
   function handleAcceptGuided() {
-    if (!guided.state.source || !guided.state.matte) return;
-    const seed = {
-      source: guided.state.source,
-      result: guided.state.source.blob,
-      qualityMode: "isnet-q8" as const,
-      alphaMatte: guided.state.matte,
-      backgroundFill: { type: "transparent" as const },
-    };
+    const session = guided.state.session;
+    if (!session || !guided.state.matte) return;
+    const seed =
+      state.status === "result"
+        ? state.result
+        : {
+            source: session.source,
+            result: session.source.blob,
+            qualityMode: "isnet-q8" as const,
+            alphaMatte: guided.state.matte,
+            backgroundFill: { type: "transparent" as const },
+          };
     setFinalizingCorrection(true);
     void recomposite(seed, guided.state.matte)
       .then((result) => {
@@ -381,6 +385,23 @@ export function ToolWorkspace() {
       })
       .catch((error: unknown) => {
         setFinalizingCorrection(false);
+        setCorrectionError({
+          message: error instanceof Error ? error.message : String(error),
+          action: "retry",
+        });
+      });
+  }
+
+  function handleGuideAutomaticResult() {
+    if (state.status !== "result") return;
+    setExtractingMatte(true);
+    void extractMatte(state.result)
+      .then((matte) => {
+        setExtractingMatte(false);
+        guided.start(state.result.source, matte);
+      })
+      .catch((error: unknown) => {
+        setExtractingMatte(false);
         setCorrectionError({
           message: error instanceof Error ? error.message : String(error),
           action: "retry",
@@ -532,25 +553,36 @@ export function ToolWorkspace() {
   let surfaceNode: ReactNode = null;
   let railNode: ReactNode = null;
 
+  const guidedCanvas = guided.state.session ? (
+    <ObjectSelectionCanvas
+      session={guided.state.session}
+      status={guided.state.status}
+      matteRef={guided.matteRef}
+      matteRevision={guided.state.session.revision}
+      hasMatte={Boolean(guided.state.matte)}
+      progress={guided.state.progress}
+      error={guided.state.error}
+      onPoint={guided.addPoint}
+      onBox={guided.setBox}
+      onStroke={guided.addStroke}
+      onAddLayer={guided.addLayer}
+      onSelectLayer={guided.selectLayer}
+      onRemoveLayer={guided.removeLayer}
+      onSelectCandidate={guided.selectCandidate}
+      onUndo={guided.undo}
+      onRedo={guided.redo}
+      onResetLayer={guided.resetLayer}
+      onAccept={handleAcceptGuided}
+      onRetry={guided.retry}
+      onCancel={() => {
+        guided.reset();
+        setGuidedEntry(false);
+      }}
+    />
+  ) : null;
+
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
-    surfaceNode = guided.state.source ? (
-      <ObjectSelectionCanvas
-        source={guided.state.source}
-        status={guided.state.status}
-        matte={guided.state.matte}
-        prompt={guided.state.prompt}
-        progress={guided.state.progress}
-        error={guided.state.error}
-        onPrompt={guided.prompt}
-        onAccept={handleAcceptGuided}
-        onReplace={guided.replacePrompt}
-        onRetry={guided.retry}
-        onCancel={() => {
-          guided.reset();
-          setGuidedEntry(false);
-        }}
-      />
-    ) : (
+    surfaceNode = guidedCanvas ?? (
       <div className="flex flex-col gap-3">
         <UploadDropzone
           onUpload={handleUpload}
@@ -567,6 +599,11 @@ export function ToolWorkspace() {
         <UploadPreparationNotice fileCount={preparingFileCount} />
       </div>
     );
+  }
+
+  if (!displayError && guidedCanvas) {
+    surfaceNode = guidedCanvas;
+    railNode = null;
   }
 
   // Batch base content — independent of whether the selected item is
@@ -809,7 +846,7 @@ export function ToolWorkspace() {
     );
   }
 
-  if (!displayError && state.status === "result") {
+  if (!displayError && state.status === "result" && !guided.state.session) {
     surfaceNode = (
       <BeforeAfterSlider
         before={state.result.source}
@@ -850,6 +887,14 @@ export function ToolWorkspace() {
             disabled={extractingMatte || backgroundBusy}
           >
             {extractingMatte ? m.preparing() : m.editMask()}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleGuideAutomaticResult}
+            disabled={extractingMatte || backgroundBusy}
+          >
+            {extractingMatte ? m.preparing() : m.guidedRefineResult()}
           </Button>
         </div>
         {correctionError && (
@@ -929,19 +974,21 @@ export function ToolWorkspace() {
       className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">
-        {batch.session.items.length
-          ? m.batchCompleteAnnouncement({
-              done: batch.snapshot.completedCount,
-              total: batch.snapshot.totalCount,
-              failed: batch.snapshot.failedCount,
-            })
-          : describeState(state, lightweightMode, uploadError)}
+        {guided.state.session
+          ? describeGuidedState(guided.state.status, guided.state.progress)
+          : batch.session.items.length
+            ? m.batchCompleteAnnouncement({
+                done: batch.snapshot.completedCount,
+                total: batch.snapshot.totalCount,
+                failed: batch.snapshot.failedCount,
+              })
+            : describeState(state, lightweightMode, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}
       </div>
 
-      {!batchActive && !guided.state.source && (
+      {!batchActive && !guided.state.session && (
         <div className="[grid-area:toggle]">
           {state.status === "idle" && (
             <fieldset className="mb-3 space-y-2" data-testid="processing-method-selector">

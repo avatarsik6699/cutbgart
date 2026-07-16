@@ -113,6 +113,7 @@ pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
 pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
 pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
 pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
+pnpm e2e:phase-17-real     # Phase 17 only: serialized iterative SlimSAM runtime evidence
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker, never in CI
 ```

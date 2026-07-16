@@ -47,11 +47,13 @@ test("Phase 16 real models: BEN2 lifecycle and SlimSAM point/box", async ({
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   const guidedImage = page.getByRole("img", { name: /guided object selection/i });
   await expect(guidedImage).toBeVisible({ timeout: 4 * 60_000 });
-  await expect(page.getByText(/Choose a point or draw a box/i)).toBeVisible({
+  await expect(
+    page.getByTestId("guided-selection").getByText(/Choose a point or draw a box/i),
+  ).toBeVisible({
     timeout: 4 * 60_000,
   });
   await guidedImage.press("Enter");
-  await expect(page.getByTestId("guided-point-marker")).toBeVisible();
+  await expect(page.getByTestId("guided-positive-marker")).toBeVisible();
   const accept = page.getByRole("button", { name: /Accept and refine/ });
   await expect(accept.or(page.getByRole("alert"))).toBeVisible({
     timeout: 3 * 60_000,
