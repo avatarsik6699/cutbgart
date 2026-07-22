@@ -2,53 +2,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AlphaMatte,
-  InferencePath,
   RefinementConstraintMap,
   SourceImage,
 } from "../../../entities/processed-image";
-import { deterministicRefinement } from "./deterministic-fusion";
-import { computeMattingInputSize, computeRefinementCrop } from "./focus-crop";
-import { buildRefinementTrimap } from "./trimap";
 import type {
-  MatteRefinementRequest,
-  MatteRefinementWorkerResponse,
-  MattingRefinementError,
-  MattingFallback,
-  MattingRefinementMode,
-  MattingRefinementResult,
-  MattingRefinementStatus,
+  ForegroundRefinementError,
+  ForegroundRefinementResult,
+  ForegroundRefinementStatus,
+  ForegroundRefinementWorkerResponse,
 } from "./types";
 
-export interface MatteRefinementState {
-  status: MattingRefinementStatus;
+export interface ForegroundRefinementState {
+  status: ForegroundRefinementStatus;
   progress: number | null;
-  result: MattingRefinementResult | null;
-  error: MattingRefinementError | null;
+  result: ForegroundRefinementResult | null;
+  error: ForegroundRefinementError | null;
   fallbackReason: string | null;
-  fallback: MattingFallback | null;
 }
 
-const initialState: MatteRefinementState = {
+const initialState: ForegroundRefinementState = {
   status: "idle",
   progress: null,
   result: null,
   error: null,
   fallbackReason: null,
-  fallback: null,
 };
 
-export interface StartMatteRefinementInput {
+export interface StartForegroundRefinementInput {
   source: SourceImage;
-  priorMatte: AlphaMatte;
-  guidedMatte?: AlphaMatte | null;
+  matte: AlphaMatte;
   constraints?: RefinementConstraintMap | null;
-  mode: MattingRefinementMode;
-  path: InferencePath;
+  componentCleanup?: boolean;
 }
 
-export function useMatteRefinement(
+export function useForegroundRefinement(
   workerFactory = () =>
-    new Worker(new URL("../worker/refine-matte.worker.ts", import.meta.url), {
+    new Worker(new URL("../worker/refine-foreground.worker.ts", import.meta.url), {
       type: "module",
     }),
 ) {
@@ -63,7 +52,7 @@ export function useMatteRefinement(
     const worker = workerFactory();
     worker.addEventListener(
       "message",
-      (event: MessageEvent<MatteRefinementWorkerResponse>) => {
+      (event: MessageEvent<ForegroundRefinementWorkerResponse>) => {
         const message = event.data;
         if (message.type === "disposed") {
           pendingDisposeRef.current.get(message.requestId)?.();
@@ -74,7 +63,7 @@ export function useMatteRefinement(
         if (message.type === "progress") {
           setState((current) => ({
             ...current,
-            status: message.stage === "loading" ? "loading-model" : "refining",
+            status: "refining",
             progress: message.percent,
           }));
         } else if (message.type === "fallback") {
@@ -83,7 +72,6 @@ export function useMatteRefinement(
             status: "fallback",
             progress: null,
             fallbackReason: message.reason,
-            fallback: message.from === "maximum" ? "balanced" : "wasm",
           }));
         } else if (message.type === "result") {
           setState((current) => ({
@@ -92,7 +80,6 @@ export function useMatteRefinement(
             progress: null,
             result: message.result,
             error: null,
-            fallback: message.result.fallback,
             fallbackReason: message.result.fallbackReason ?? current.fallbackReason,
           }));
         } else if (message.type === "error") {
@@ -112,68 +99,22 @@ export function useMatteRefinement(
   const start = useCallback(
     ({
       source,
-      priorMatte,
-      guidedMatte = null,
+      matte,
       constraints = null,
-      mode,
-      path,
-    }: StartMatteRefinementInput) => {
+      componentCleanup = true,
+    }: StartForegroundRefinementInput) => {
+      const worker = getWorker();
+      const previousRequest = activeRequestRef.current;
+      if (previousRequest)
+        worker.postMessage({ type: "cancel", requestId: previousRequest });
       requestCounterRef.current += 1;
-      const requestId = `matte-${String(requestCounterRef.current)}`;
+      const requestId = `foreground-${String(requestCounterRef.current)}`;
       activeRequestRef.current = requestId;
       setState({ ...initialState, status: "preparing" });
-      try {
-        const trimap = buildRefinementTrimap({
-          automaticMatte: priorMatte,
-          guidedMatte,
-          constraints,
-        });
-        const crop = computeRefinementCrop(trimap);
-        if (!crop) {
-          setState({
-            ...initialState,
-            status: "applying",
-            result: {
-              matte: deterministicRefinement({
-                priorMatte,
-                guidedMatte,
-                trimap,
-                constraints,
-              }),
-              requestedMode: mode,
-              actualMode: "deterministic",
-              actualPath: null,
-              inputSize: { width: 0, height: 0 },
-              fallback: "deterministic",
-            },
-            fallback: "deterministic",
-          });
-          return;
-        }
-        const request: MatteRefinementRequest = {
-          requestId,
-          source,
-          priorMatte,
-          guidedMatte,
-          constraints,
-          trimap,
-          crop,
-          inputSize: computeMattingInputSize(crop),
-          requestedMode: mode,
-          requestedPath: path,
-        };
-        getWorker().postMessage({ type: "refine", request });
-      } catch (error) {
-        setState({
-          ...initialState,
-          status: "error",
-          error: {
-            code: "invalid-input",
-            message: error instanceof Error ? error.message : String(error),
-            recoverable: false,
-          },
-        });
-      }
+      worker.postMessage({
+        type: "refine-foreground",
+        request: { requestId, source, matte, constraints, componentCleanup },
+      });
     },
     [getWorker],
   );
@@ -201,7 +142,7 @@ export function useMatteRefinement(
     const worker = workerRef.current;
     if (!worker) return Promise.resolve();
     requestCounterRef.current += 1;
-    const requestId = `dispose-${String(requestCounterRef.current)}`;
+    const requestId = `dispose-foreground-${String(requestCounterRef.current)}`;
     return new Promise((resolve) => {
       pendingDisposeRef.current.set(requestId, resolve);
       worker.postMessage({ type: "dispose", requestId });
@@ -209,12 +150,15 @@ export function useMatteRefinement(
   }, []);
 
   const reset = useCallback(() => {
-    cancel();
+    const requestId = activeRequestRef.current;
+    if (requestId) workerRef.current?.postMessage({ type: "cancel", requestId });
+    activeRequestRef.current = null;
+    setState(initialState);
     workerRef.current?.terminate();
     workerRef.current = null;
     for (const resolve of pendingDisposeRef.current.values()) resolve();
     pendingDisposeRef.current.clear();
-  }, [cancel]);
+  }, []);
 
   useEffect(() => reset, [reset]);
   return { state, start, cancel, prepareNext, finishApplying, release, reset };

@@ -91,8 +91,13 @@ export function syntheticAlphaAt(
 export function buildSyntheticCasePixels(
   category: MattingCorpusCategory,
   size = SIZE,
-): { pixels: Uint8ClampedArray; groundTruth: AlphaMatte } {
+): {
+  pixels: Uint8ClampedArray;
+  expectedForeground: Uint8ClampedArray;
+  groundTruth: AlphaMatte;
+} {
   const pixels = new Uint8ClampedArray(size * size * 4);
+  const expectedForeground = new Uint8ClampedArray(size * size * 4);
   const alpha = new Uint8ClampedArray(size * size);
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
@@ -101,13 +106,21 @@ export function buildSyntheticCasePixels(
       alpha[index] = clampByte(amount * 255);
       const background = category === "light-on-light" ? 239 : 226;
       const foreground = category === "light-on-light" ? 250 : 42;
+      expectedForeground[index * 4] = foreground;
+      expectedForeground[index * 4 + 1] = 112;
+      expectedForeground[index * 4 + 2] = 184;
+      expectedForeground[index * 4 + 3] = 255;
       pixels[index * 4] = clampByte(background * (1 - amount) + foreground * amount);
       pixels[index * 4 + 1] = clampByte(background * (1 - amount) + 112 * amount);
       pixels[index * 4 + 2] = clampByte(background * (1 - amount) + 184 * amount);
       pixels[index * 4 + 3] = 255;
     }
   }
-  return { pixels, groundTruth: { width: size, height: size, data: alpha } };
+  return {
+    pixels,
+    expectedForeground,
+    groundTruth: { width: size, height: size, data: alpha },
+  };
 }
 
 async function pixelsToPngBlob(

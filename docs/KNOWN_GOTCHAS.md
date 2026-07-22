@@ -336,6 +336,36 @@
 - **Prevention**: [optional — how to avoid hitting it again]
 - **Links**: [optional — docs / issue / PR]
 -->
+
+### ViTMatte padding is not resizing — large focus crops can overflow ONNX Runtime Web
+
+- **Symptoms**: Balanced refinement returns the deterministic fallback with
+  `OrtRun ... SafeIntOnOverflow`; Maximum logs the same error twice because fp32 and its q8 fallback
+  receive the same large crop. Smaller images work on the same browser and model path.
+- **Root cause**: Transformers.js' ViTMatte processor pads width/height to `size_divisibility: 32`
+  but does not resize. Passing a near-source-sized crop can therefore create an unexpectedly large
+  four-channel float tensor and model intermediates. Reproduced on WASM with a 2086×2253 crop,
+  padded to 2112×2272, while a 400×400 control succeeded.
+- **Fix**: bound the model-input pixel budget before processor invocation, preserve aspect ratio,
+  and let source-crop restoration resample soft alpha back to the original coordinates. A WebGPU
+  execution failure still gets one explicit WASM retry; size bounding is backend-independent.
+- **Prevention**: real-model coverage must include an image-free generated large-input case and
+  assert the posted model-input dimensions, actual path, fallback classification, and restored
+  source-sized matte. Tiny fixtures prove graph loading only, not production-size safety.
+
+### Paraglide and route generation must finish before tests consume generated modules
+
+- **Symptoms**: an otherwise unrelated full Vitest run suddenly reports broad UI failures such as
+  missing `@/paraglide/runtime` imports or an undefined `m` messages namespace while
+  `pnpm generate:code` is running in parallel.
+- **Root cause**: Paraglide and TanStack Router regenerate their output trees non-atomically. A
+  concurrent test, typecheck, or build can resolve a generated module while that tree is between
+  removal and replacement.
+- **Fix**: finish `pnpm generate:code` first, then start Vitest, TypeScript, lint, or the production
+  build. The Phase 20 gate's sequential rerun completed with 59 test files and 252 tests passing.
+- **Prevention**: generation may be parallelized internally by its own scripts, but never run it
+  concurrently with commands that import `src/paraglide` or the generated route tree.
+
 # Certbot webroot bootstrap cannot delete nginx's dummy certificate before issuance
 
 - **Symptoms**: the first production deploy reaches Certbot, but Let's Encrypt reports

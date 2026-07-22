@@ -127,7 +127,10 @@ test("iteratively combines prompts, candidates, layers, stale revisions, correct
   expect(posts.some((post) => post.pointLabels?.includes(0))).toBe(true);
   expect(posts.filter((post) => post.type === "encode")).toHaveLength(2);
   await page.getByRole("button", { name: /Accept and refine/ }).click();
-  await page.getByRole("button", { name: /Skip and edit with brush/ }).click();
+  await page
+    .getByTestId("matte-refinement-controls")
+    .getByRole("button", { name: /Skip and edit with brush/ })
+    .click();
   await expect(
     page.getByRole("application", { name: /mask correction editor/i }),
   ).toBeVisible();
@@ -154,7 +157,10 @@ test("starts guidance from an automatic matte and preserves the correction flow"
   await guidedImage.press("Enter");
   await expect(page.getByTestId("guided-candidates")).toBeVisible();
   await page.getByRole("button", { name: /Accept and refine/ }).click();
-  await page.getByRole("button", { name: /Skip and edit with brush/ }).click();
+  await page
+    .getByTestId("matte-refinement-controls")
+    .getByRole("button", { name: /Skip and edit with brush/ })
+    .click();
   await expect(
     page.getByRole("application", { name: /mask correction editor/i }),
   ).toBeVisible();

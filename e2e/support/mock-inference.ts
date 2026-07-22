@@ -19,6 +19,8 @@ export async function installMockInference(page: Page): Promise<void> {
         revision?: number;
         pointLabels?: number[];
         requestedMode?: string;
+        componentCleanup?: boolean;
+        sourceIsOriginal?: boolean;
       }>,
     });
     class MockInferenceWorker extends EventTarget {
@@ -53,13 +55,21 @@ export async function installMockInference(page: Page): Promise<void> {
         };
         request?: {
           requestId: string;
-          requestedMode: "balanced" | "maximum";
-          requestedPath: "webgpu" | "wasm";
-          priorMatte: {
+          requestedMode?: "balanced" | "maximum";
+          requestedPath?: "webgpu" | "wasm";
+          inputSize?: { width: number; height: number };
+          priorMatte?: {
             width: number;
             height: number;
             data: Uint8ClampedArray;
           };
+          source?: { blob: Blob; width: number; height: number; format: string };
+          matte?: {
+            width: number;
+            height: number;
+            data: Uint8ClampedArray;
+          };
+          componentCleanup?: boolean;
         };
       }): void {
         (
@@ -71,6 +81,8 @@ export async function installMockInference(page: Page): Promise<void> {
               revision?: number;
               pointLabels?: number[];
               requestedMode?: string;
+              componentCleanup?: boolean;
+              sourceIsOriginal?: boolean;
             }>;
           }
         ).__mockInferencePosts.push({
@@ -80,6 +92,13 @@ export async function installMockInference(page: Page): Promise<void> {
           revision: message.revision ?? message.prompt?.revision,
           pointLabels: message.prompt?.points.map((point) => point.label),
           requestedMode: message.request?.requestedMode,
+          componentCleanup: message.request?.componentCleanup,
+          sourceIsOriginal:
+            message.type === "refine-foreground" && message.request?.source
+              ? message.request.source.blob ===
+                (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                  .__mockOriginalSourceBlob
+              : undefined,
         });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
@@ -114,6 +133,9 @@ export async function installMockInference(page: Page): Promise<void> {
             return;
           }
           if (message.type === "encode" && message.source) {
+            (
+              window as unknown as { __mockOriginalSourceBlob?: Blob }
+            ).__mockOriginalSourceBlob = message.source.blob;
             if (
               (window as unknown as { __mockGuidedWorkerCrash?: boolean })
                 .__mockGuidedWorkerCrash
@@ -186,8 +208,9 @@ export async function installMockInference(page: Page): Promise<void> {
             });
             return;
           }
-          if (message.type === "refine" && message.request) {
+          if (message.type === "refine" && message.request?.priorMatte) {
             const request = message.request;
+            const priorMatte = request.priorMatte!;
             const maximumFailure = Boolean(
               (window as unknown as { __mockMattingMaximumFailure?: boolean })
                 .__mockMattingMaximumFailure,
@@ -195,6 +218,13 @@ export async function installMockInference(page: Page): Promise<void> {
             const balancedFailure = Boolean(
               (window as unknown as { __mockMattingBalancedFailure?: boolean })
                 .__mockMattingBalancedFailure,
+            );
+            const balancedWebGpuFailure = Boolean(
+              (
+                window as unknown as {
+                  __mockMattingBalancedWebGpuFailure?: boolean;
+                }
+              ).__mockMattingBalancedWebGpuFailure,
             );
             this.emit({
               type: "progress",
@@ -208,7 +238,24 @@ export async function installMockInference(page: Page): Promise<void> {
                 requestId: request.requestId,
                 from: "maximum",
                 to: "balanced",
+                fromPath: request.requestedPath,
+                toPath:
+                  request.requestedPath === "webgpu" ? "wasm" : request.requestedPath,
                 reason: "mock WebGPU failure",
+              });
+            } else if (
+              request.requestedMode === "balanced" &&
+              request.requestedPath === "webgpu" &&
+              balancedWebGpuFailure
+            ) {
+              this.emit({
+                type: "fallback",
+                requestId: request.requestId,
+                from: "balanced",
+                to: "balanced",
+                fromPath: "webgpu",
+                toPath: "wasm",
+                reason: "mock WebGPU execution failure",
               });
             }
             const deterministic = balancedFailure;
@@ -217,8 +264,8 @@ export async function installMockInference(page: Page): Promise<void> {
               requestId: request.requestId,
               result: {
                 matte: {
-                  ...request.priorMatte,
-                  data: request.priorMatte.data.slice(),
+                  ...priorMatte,
+                  data: priorMatte.data.slice(),
                 },
                 requestedMode: request.requestedMode,
                 actualMode: deterministic
@@ -226,12 +273,73 @@ export async function installMockInference(page: Page): Promise<void> {
                   : request.requestedMode === "maximum" && maximumFailure
                     ? "balanced"
                     : request.requestedMode,
-                actualPath: deterministic ? null : request.requestedPath,
+                actualPath: deterministic
+                  ? null
+                  : balancedWebGpuFailure
+                    ? "wasm"
+                    : request.requestedPath,
+                inputSize: request.inputSize,
                 fallback: deterministic
                   ? "deterministic"
                   : request.requestedMode === "maximum" && maximumFailure
                     ? "balanced"
-                    : "none",
+                    : balancedWebGpuFailure
+                      ? "wasm"
+                      : "none",
+              },
+            });
+            return;
+          }
+          if (
+            message.type === "refine-foreground" &&
+            message.request?.source &&
+            message.request.matte
+          ) {
+            const request = message.request;
+            const source = request.source!;
+            const matte = request.matte!;
+            if (
+              (window as unknown as { __mockForegroundFailure?: boolean })
+                .__mockForegroundFailure
+            ) {
+              this.emit({
+                type: "error",
+                requestId: request.requestId,
+                error: {
+                  code: "processing-failed",
+                  message: "private mock diagnostic",
+                  recoverable: true,
+                },
+              });
+              return;
+            }
+            const unchanged = Boolean(
+              (window as unknown as { __mockForegroundUnchanged?: boolean })
+                .__mockForegroundUnchanged,
+            );
+            this.emit({
+              type: "progress",
+              requestId: request.requestId,
+              percent: 50,
+            });
+            this.emit({
+              type: "result",
+              requestId: request.requestId,
+              result: {
+                foreground: source.blob,
+                matte: {
+                  ...matte,
+                  data: matte.data.slice(),
+                },
+                dirtyPatch: null,
+                requestedPath: "decontaminate",
+                actualPath: unchanged ? "unchanged" : "decontaminate",
+                fallback: unchanged ? "no-soft-edge" : "none",
+                ...(unchanged
+                  ? { fallbackReason: "private no-soft-edge diagnostic" }
+                  : {}),
+                durationMs: 1,
+                memoryBytes: "unavailable",
               },
             });
             return;
@@ -239,6 +347,9 @@ export async function installMockInference(page: Page): Promise<void> {
           if (message.type === "reset") return;
           if (message.type === "process" && message.source) {
             this.source = message.source;
+            (
+              window as unknown as { __mockOriginalSourceBlob?: Blob }
+            ).__mockOriginalSourceBlob = message.source.blob;
             const emitResult = () => {
               const canvas = document.createElement("canvas");
               canvas.width = message.source!.width;
