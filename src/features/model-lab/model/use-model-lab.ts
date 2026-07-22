@@ -51,7 +51,7 @@ async function requestedInferencePath(): Promise<InferencePath> {
   }
 }
 
-async function collectCapabilities(): Promise<ModelLabCapabilities> {
+export async function collectCapabilities(): Promise<ModelLabCapabilities> {
   const nav = navigator as Navigator & NavigatorDeviceMemory;
   return {
     requestedPath: await requestedInferencePath(),

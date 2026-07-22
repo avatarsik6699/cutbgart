@@ -2,23 +2,30 @@ import { defineConfig, devices } from "@playwright/test";
 
 const realModelRun = process.env.E2E_REAL_MODEL === "1";
 const modelLabRealRun = process.env.E2E_MODEL_LAB_REAL === "1";
+const mattingLabRealRun = process.env.E2E_MATTING_LAB_REAL === "1";
 const phase16RealRun = process.env.E2E_PHASE16_REAL === "1";
 const phase17RealRun = process.env.E2E_PHASE17_REAL === "1";
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: phase17RealRun
-    ? "**/phase-17.real.spec.ts"
-    : phase16RealRun
-      ? "**/phase-16.real.spec.ts"
-      : modelLabRealRun
-        ? "**/model-lab.real.spec.ts"
-        : realModelRun
-          ? "**/real-model.spec.ts"
-          : "**/*.spec.ts",
+  testMatch: mattingLabRealRun
+    ? "**/matting-lab.real.spec.ts"
+    : phase17RealRun
+      ? "**/phase-17.real.spec.ts"
+      : phase16RealRun
+        ? "**/phase-16.real.spec.ts"
+        : modelLabRealRun
+          ? "**/model-lab.real.spec.ts"
+          : realModelRun
+            ? "**/real-model.spec.ts"
+            : "**/*.spec.ts",
   testIgnore:
-    phase17RealRun || phase16RealRun || modelLabRealRun || realModelRun
+    mattingLabRealRun ||
+    phase17RealRun ||
+    phase16RealRun ||
+    modelLabRealRun ||
+    realModelRun
       ? []
       : ["**/real-model.spec.ts", "**/*.real.spec.ts"],
   fullyParallel: true,
