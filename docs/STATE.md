@@ -38,7 +38,7 @@
 | PHASE_17 | ✅ done | v0.17.0 | ✅ | 🤖 agent | Iterative Guided Object Editor |
 | PHASE_18 | ✅ done | v0.18.0 | ✅ | 🤖 agent | Browser Interactive Matting Lab |
 | PHASE_19 | ✅ done | v0.19.0 | ✅ | 🤖 agent | Production Trimap & Alpha Refinement |
-| PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Runtime Hardening |
+| PHASE_20 | ✅ done | v0.20.0 | ✅ | 🤖 agent | Foreground Edge Quality & Runtime Hardening |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -50,7 +50,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `19` · **Phase in progress:** `20`
+**Phase completed:** `20` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -523,6 +523,47 @@ balanced may fall back only to deterministic fusion. Automatic, guided, and ViTM
 are serialized with explicit disposal acknowledgements, and the refined matte continues through the
 existing brush, background, batch, and download flows.
 
+```ts
+// Phase 20 — session-only foreground cleanup and bounded matting runtime
+type MattingFallback = "none" | "balanced" | "wasm" | "deterministic";
+
+interface MattingInputSize {
+  width: number;
+  height: number;
+}
+
+type ForegroundCleanupPath = "decontaminate" | "edge-aware-fallback" | "unchanged";
+type ForegroundCleanupFallback =
+  | "none"
+  | "no-soft-edge"
+  | "no-background-samples"
+  | "processing-failed";
+
+interface DirtyPixelPatch {
+  bounds: PixelRect;
+  rgba: Uint8ClampedArray;
+}
+
+interface ForegroundRefinementResult {
+  foreground: Blob;
+  matte: AlphaMatte;
+  dirtyPatch: DirtyPixelPatch | null;
+  requestedPath: "decontaminate";
+  actualPath: ForegroundCleanupPath;
+  fallback: ForegroundCleanupFallback;
+  durationMs: number;
+  memoryBytes: number | "unavailable";
+}
+```
+
+Phase 20 bounds every ViTMatte input to at most 1024×1024 while preserving aspect ratio and restores
+the soft alpha to source-crop dimensions. Balanced WebGPU execution failure retries Balanced/WASM
+once; Maximum remains a finite fp32 → q8 → q8/WASM chain before deterministic fusion. Optional
+foreground decontamination changes RGB only in safe soft-edge regions, keeps source alpha and hard
+constraints exact, is reversible/non-accumulating, and reports localized applied, unchanged, or
+recoverable-error outcomes. `ProcessedImage.foreground` is an optional browser-memory colour layer;
+the current `AlphaMatte` remains the compositing-alpha authority.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -570,6 +611,9 @@ existing brush, background, batch, and download flows.
 - Phase 19 trimaps, focus crops, constraints, refined mattes, and model sessions remain in memory
   and are discarded on reset/reload. Cache Storage may retain only immutable public model assets;
   the runtime evidence record is image-free.
+- Phase 20 foreground samples, corrected colour buffers, edge/component masks, dirty patches, and
+  worker sessions remain in browser-tab memory and are discarded on reset/reload. Only image-free
+  quality/runtime observations persist; no filename, prompt, pixel sample, or user image is stored.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -603,6 +647,9 @@ existing brush, background, batch, and download flows.
 - Phase 19 adds bilingual `balanced`/`maximum` soft-edge refinement to automatic results, accepted
   guided results, and a selected settled batch item. It is lazy, reports actual path/fallback, and
   preserves entry to exact correction, backgrounds, individual/ZIP downloads, and reset.
+- Phase 20 adds optional bilingual edge-colour cleanup after alpha refinement and before the exact
+  brush. Automatic, accepted-guided, refined, and selected settled-batch results expose accessible
+  applied/unchanged/error outcomes while keeping background and download output byte-consistent.
 
 ### Env Config
 
@@ -639,6 +686,64 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-22 — Phase 20 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_20 automated gate passed and the architect requested documentation,
+completion of all remaining fixes, and local fixation without a remote push
+
+### Changes / Decision
+- Added deterministic, off-main-thread foreground-colour estimation, conservative soft-edge
+  decontamination, connected-component cleanup, dirty patches, cancellation/disposal, exact hard
+  constraints, non-accumulating reruns, and one source for preview/download recomposition.
+- Added bilingual optional cleanup controls with accessible applied/unchanged/recoverable-error
+  outcomes across automatic, guided, refined, and selected settled-batch flows.
+- Fixed the supplied large-image incident by bounding ViTMatte input to 1024×1024, restoring matte
+  dimensions, and adding finite Balanced WebGPU→WASM and Maximum fp32→q8→q8/WASM recovery.
+- Enforced the eight-category synthetic quality gate and available-host runtime thresholds. The
+  exact serialized real run passed on WASM: automatic 20,929 ms; Balanced 4,947/158 ms cold/warm;
+  Maximum 19,121/165 ms; cleanup 187 ms; generated 2500×2500 input bounded to 1024×1024 and restored
+  in 15,710.4 ms without fallback. Memory remained honestly `unavailable`.
+- COOP/COEP remains deferred because no isolated A/B benefit or complete production resource
+  compatibility evidence justified changing headers. No backend, route, model asset, analytics
+  payload, diagnostic intake, or persistent user data was added.
+- Gate evidence passed: production container build/health/smoke, 252 unit tests, TypeScript, lint
+  (zero errors; one pre-existing Fast Refresh warning), Prettier, Steiger, model-manifest sync, 248
+  cross-browser E2E tests with 4 expected feature-flag skips, real IS-Net smoke, and the real Phase
+  20 hybrid/runtime test.
+
+### Affected Phases / Consequences
+- Phase 20 closes the planned roadmap with an additive, client-only foreground-quality layer and
+  durable large-input/fallback compatibility rules. No next phase is inferred.
+- WebGPU on the available host and physical Firefox/Safari/iOS/Android devices remain unverified;
+  deterministic engine coverage is not presented as a physical-device claim.
+
+## 2026-07-22 — Large-image ViTMatte runtime incident accepted for Phase 20
+
+**Type**: feedback
+**Author**: architect + AI reproduction
+**Triggered by**: a voluntarily supplied local image failed both Balanced and Maximum soft-edge
+refinement while a smaller control image succeeded
+
+### Changes / Decision
+- Reproduced the failure without persisting the image or filename: a 2500×2500 source generated a
+  2086×2253 focus crop, which Transformers.js padded to 2112×2272 and passed unchanged to ViTMatte;
+  ONNX Runtime Web WASM then failed with `OrtRun`/`SafeIntOnOverflow`. A 400×400 control completed
+  on Balanced/WASM with no fallback.
+- Root cause is the missing inference-size bound, not upload misuse or a corrupt JPEG. The current
+  processor pads to a multiple of 32 but does not resize, despite Phase 19's bounded-crop intent.
+- Phase 20 review must bound and restore ViTMatte input, cover the large-input path without
+  committing private fixtures, complete Balanced WebGPU→WASM recovery, and make foreground-cleanup
+  applied/unchanged/error outcomes visible without raw diagnostics.
+- The architect authorized conservative corpus/runtime thresholds and completion of all remaining
+  Phase-20 work. Thresholds are release regression gates, not promises for untested hardware.
+
+### Affected Phases / Consequences
+- PHASE_20 owns the compatibility fix, focused regression, runtime evidence, and durable gotcha.
+- PHASE_19 remains historically complete; its runtime evidence used a 1×1 fixture and therefore did
+  not exercise source-sized ViTMatte memory/shape behavior.
 
 ## 2026-07-22 — Phase 19 complete
 

@@ -10,10 +10,17 @@ export {
   getMattingModel,
   recommendMattingMode,
 } from "./model/model-registry";
+export {
+  computeMattingInputSize,
+  computeRefinementCrop,
+  MAX_MATTING_INPUT_PIXELS,
+  MAX_MATTING_INPUT_SIDE,
+} from "./model/focus-crop";
 export type {
   MatteRefinementRequest,
   MatteRefinementWorkerRequest,
   MatteRefinementWorkerResponse,
+  MattingInputSize,
   MattingFallback,
   MattingModelProfile,
   MattingModelVariantId,

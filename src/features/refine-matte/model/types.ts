@@ -41,17 +41,24 @@ export interface MatteRefinementRequest {
   constraints: RefinementConstraintMap | null;
   trimap: Trimap;
   crop: PixelRect;
+  inputSize: MattingInputSize;
   requestedMode: MattingRefinementMode;
   requestedPath: InferencePath;
 }
 
-export type MattingFallback = "none" | "balanced" | "deterministic";
+export interface MattingInputSize {
+  width: number;
+  height: number;
+}
+
+export type MattingFallback = "none" | "balanced" | "wasm" | "deterministic";
 
 export interface MattingRefinementResult {
   matte: AlphaMatte;
   requestedMode: MattingRefinementMode;
   actualMode: MattingRefinementMode | "deterministic";
   actualPath: InferencePath | null;
+  inputSize: MattingInputSize;
   fallback: MattingFallback;
   fallbackReason?: string;
 }
@@ -86,8 +93,10 @@ export type MatteRefinementWorkerResponse =
   | {
       type: "fallback";
       requestId: string;
-      from: "maximum";
-      to: "balanced";
+      from: MattingRefinementMode;
+      to: MattingRefinementMode;
+      fromPath: InferencePath;
+      toPath: InferencePath;
       reason: string;
     }
   | { type: "result"; requestId: string; result: MattingRefinementResult }

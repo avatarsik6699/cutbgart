@@ -84,6 +84,26 @@ export interface MattingQualityMeasurement {
   interactionsToAccept: number | null;
 }
 
+export interface ForegroundEdgeMetricSet {
+  sad: number;
+  mse: number;
+  gradient: number;
+  connectivity: number;
+  boundaryIou: number;
+  colourSpill: number;
+}
+
+export interface ForegroundEdgeQualityMeasurement {
+  caseOrdinal: number;
+  baseline: ForegroundEdgeMetricSet;
+  refined: ForegroundEdgeMetricSet;
+  /** `refined - baseline`; negative is improvement for errors, positive for IoU. */
+  delta: ForegroundEdgeMetricSet;
+  interactionsToAccept: number;
+  latencyMs: number;
+  memoryBytes: number | "unavailable";
+}
+
 export type InteractiveEvaluationErrorCode =
   | "license-rejected"
   | "operator-unsupported"

@@ -101,14 +101,18 @@ export function MatteRefinementControls({
         >
           {fallback === "deterministic"
             ? m.matteRefinementDeterministicFallback()
-            : m.matteRefinementFallback()}
+            : fallback === "wasm"
+              ? m.matteRefinementWasmFallback()
+              : m.matteRefinementFallback()}
         </p>
       )}
       {busy && (
         <div className="space-y-2" role="status">
           <p className="text-sm text-muted-foreground">
             {status === "fallback"
-              ? m.matteRefinementFallback()
+              ? fallback === "wasm"
+                ? m.matteRefinementWasmFallback()
+                : m.matteRefinementFallback()
               : m.matteRefinementProgress({
                   progress: String(Math.round(progress ?? 0)),
                 })}

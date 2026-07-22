@@ -80,6 +80,12 @@ export interface ProcessedImage {
   result: Blob;
   /** Transparent foreground used for instant background previews. */
   cutout?: Blob;
+  /**
+   * Optional source-sized foreground colour layer produced by edge cleanup.
+   * Its RGB values may differ from `source`, but its alpha remains the source
+   * alpha; `alphaMatte` is still the only compositing-alpha authority.
+   */
+  foreground?: Blob;
   qualityMode: QualityMode;
   /** Retained in memory so background changes never rerun inference. */
   alphaMatte?: AlphaMatte;

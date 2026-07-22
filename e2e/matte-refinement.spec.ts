@@ -86,6 +86,27 @@ test("balanced failure uses the localized deterministic fallback", async ({ page
   await expect(page.getByRole("slider", { name: /до и после/i })).toBeVisible();
 });
 
+test("balanced WebGPU execution failure retries once on WASM", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "gpu", {
+      configurable: true,
+      value: {
+        requestAdapter: () => Promise.resolve({ features: new Set(["shader-f16"]) }),
+      },
+    });
+    Object.defineProperty(window, "__mockMattingBalancedWebGpuFailure", {
+      configurable: true,
+      value: true,
+    });
+  });
+  await automaticResult(page);
+  const controls = page.getByTestId("matte-refinement-controls");
+  await controls.getByRole("radio", { name: /Balanced/ }).click();
+  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
+  await expect(controls.getByText(/same Balanced model on WASM/i)).toBeVisible();
+  await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
+});
+
 test("an accepted guided result can enter refinement before the exact brush", async ({
   page,
 }) => {

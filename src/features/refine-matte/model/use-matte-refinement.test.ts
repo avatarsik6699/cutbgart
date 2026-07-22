@@ -50,8 +50,9 @@ describe("useMatteRefinement", () => {
       }),
     );
     const first = worker.posted[0] as {
-      request: { requestId: string };
+      request: { requestId: string; inputSize: { width: number; height: number } };
     };
+    expect(first.request.inputSize).toEqual({ width: 3, height: 1 });
     act(() =>
       result.current.start({
         source,
@@ -72,6 +73,7 @@ describe("useMatteRefinement", () => {
           requestedMode: "maximum",
           actualMode: "maximum",
           actualPath: "webgpu",
+          inputSize: { width: 3, height: 1 },
           fallback: "none",
         },
       });
@@ -80,6 +82,8 @@ describe("useMatteRefinement", () => {
         requestId: second.request.requestId,
         from: "maximum",
         to: "balanced",
+        fromPath: "webgpu",
+        toPath: "wasm",
         reason: "device lost",
       });
     });
@@ -93,6 +97,7 @@ describe("useMatteRefinement", () => {
           requestedMode: "balanced",
           actualMode: "balanced",
           actualPath: "wasm",
+          inputSize: { width: 3, height: 1 },
           fallback: "none",
         },
       }),
@@ -169,6 +174,7 @@ describe("useMatteRefinement", () => {
           requestedMode: "balanced",
           actualMode: "balanced",
           actualPath: "wasm",
+          inputSize: { width: 3, height: 1 },
           fallback: "none",
         },
       }),

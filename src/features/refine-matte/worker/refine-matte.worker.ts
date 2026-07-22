@@ -17,8 +17,13 @@ import {
   type ModelSource,
 } from "../../../shared/lib/model-source-loader";
 import { deterministicRefinement } from "../model/deterministic-fusion";
-import { restoreRefinedCrop } from "../model/focus-crop";
+import {
+  MAX_MATTING_INPUT_PIXELS,
+  MAX_MATTING_INPUT_SIDE,
+  restoreRefinedCrop,
+} from "../model/focus-crop";
 import { getMattingModel } from "../model/model-registry";
+import { nextMattingAttempt } from "../model/runtime-policy";
 import type {
   MatteRefinementRequest,
   MatteRefinementWorkerRequest,
@@ -193,7 +198,7 @@ function alphaToRawImage(matte: AlphaMatte | Trimap): RawImage {
 async function cropSource(request: MatteRefinementRequest): Promise<Blob> {
   const bitmap = await createImageBitmap(request.source.blob);
   try {
-    const canvas = new OffscreenCanvas(request.crop.width, request.crop.height);
+    const canvas = new OffscreenCanvas(request.inputSize.width, request.inputSize.height);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("2D OffscreenCanvas is unavailable");
     context.drawImage(
@@ -204,8 +209,8 @@ async function cropSource(request: MatteRefinementRequest): Promise<Blob> {
       request.crop.height,
       0,
       0,
-      request.crop.width,
-      request.crop.height,
+      request.inputSize.width,
+      request.inputSize.height,
     );
     return canvas.convertToBlob({ type: "image/png" });
   } finally {
@@ -214,20 +219,45 @@ async function cropSource(request: MatteRefinementRequest): Promise<Blob> {
 }
 
 function cropTrimap(request: MatteRefinementRequest): Trimap {
-  const data = new Uint8ClampedArray(request.crop.width * request.crop.height);
-  for (let y = 0; y < request.crop.height; y += 1) {
-    const start = (request.crop.y + y) * request.trimap.width + request.crop.x;
-    data.set(
-      request.trimap.data.subarray(start, start + request.crop.width),
-      y * request.crop.width,
+  const { width, height } = request.inputSize;
+  const data = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = Math.min(
+      request.crop.height - 1,
+      Math.floor(((y + 0.5) * request.crop.height) / height),
     );
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.min(
+        request.crop.width - 1,
+        Math.floor(((x + 0.5) * request.crop.width) / width),
+      );
+      data[y * width + x] =
+        request.trimap.data[
+          (request.crop.y + sourceY) * request.trimap.width + request.crop.x + sourceX
+        ] ?? 0;
+    }
   }
   return {
-    width: request.crop.width,
-    height: request.crop.height,
+    width,
+    height,
     data,
-    unknownBounds: { x: 0, y: 0, width: request.crop.width, height: request.crop.height },
+    unknownBounds: { x: 0, y: 0, width, height },
   };
+}
+
+function validateInputSize(request: MatteRefinementRequest): void {
+  const { width, height } = request.inputSize;
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    width > MAX_MATTING_INPUT_SIDE ||
+    height > MAX_MATTING_INPUT_SIDE ||
+    width * height > MAX_MATTING_INPUT_PIXELS
+  ) {
+    throw new Error("ViTMatte input size exceeds the bounded inference budget");
+  }
 }
 
 function predictedAlpha(alphas: Tensor): AlphaMatte {
@@ -251,6 +281,7 @@ async function infer(
   mode: MattingRefinementMode,
   path: InferencePath,
 ): Promise<AlphaMatte> {
+  validateInputSize(request);
   const resource = await loadModel(request.requestId, mode, path).catch((error) => {
     throw new Error(errorMessage(error), { cause: error });
   });
@@ -296,27 +327,33 @@ async function handleRefine(request: MatteRefinementRequest): Promise<void> {
   activeRequestId = request.requestId;
   let mode = request.requestedMode;
   let path = request.requestedPath;
-  let fallback: "none" | "balanced" = "none";
+  let fallback: "none" | "balanced" | "wasm" = "none";
   try {
-    let matte: AlphaMatte;
-    try {
-      matte = await infer(request, mode, path);
-    } catch (maximumError) {
-      if (mode !== "maximum" || errorMessage(maximumError) === "cancelled") {
-        throw maximumError;
+    let matte: AlphaMatte | null = null;
+    while (!matte) {
+      try {
+        matte = await infer(request, mode, path);
+      } catch (attemptError) {
+        if (errorMessage(attemptError) === "cancelled") throw attemptError;
+        const fromMode = mode;
+        const fromPath = path;
+        const next = nextMattingAttempt({ mode, path }, isWebGpuError(attemptError));
+        if (!next) throw attemptError;
+        await disposeActive();
+        mode = next.mode;
+        path = next.path;
+        if (fromMode === "maximum") fallback = "balanced";
+        else if (fromPath === "webgpu" && path === "wasm") fallback = "wasm";
+        post({
+          type: "fallback",
+          requestId: request.requestId,
+          from: fromMode,
+          to: mode,
+          fromPath,
+          toPath: path,
+          reason: errorMessage(attemptError),
+        });
       }
-      await disposeActive();
-      fallback = "balanced";
-      mode = "balanced";
-      if (isWebGpuError(maximumError)) path = "wasm";
-      post({
-        type: "fallback",
-        requestId: request.requestId,
-        from: "maximum",
-        to: "balanced",
-        reason: errorMessage(maximumError),
-      });
-      matte = await infer(request, mode, path);
     }
     if (activeRequestId !== request.requestId) return;
     post({
@@ -327,6 +364,7 @@ async function handleRefine(request: MatteRefinementRequest): Promise<void> {
         requestedMode: request.requestedMode,
         actualMode: mode,
         actualPath: path,
+        inputSize: request.inputSize,
         fallback,
       },
     });
@@ -342,6 +380,7 @@ async function handleRefine(request: MatteRefinementRequest): Promise<void> {
         requestedMode: request.requestedMode,
         actualMode: "deterministic",
         actualPath: null,
+        inputSize: request.inputSize,
         fallback: "deterministic",
         fallbackReason: errorMessage(error),
       },

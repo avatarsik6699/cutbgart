@@ -96,8 +96,9 @@ export async function compositeProcessedImage(
   matte: AlphaMatte,
   qualityMode: QualityMode,
   backgroundFill: BackgroundFill = { type: "transparent" },
+  foreground?: Blob,
 ): Promise<ProcessedImage> {
-  const bitmap = await createImageBitmap(source.blob);
+  const bitmap = await createImageBitmap(foreground ?? source.blob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -125,6 +126,7 @@ export async function compositeProcessedImage(
     source,
     result,
     cutout,
+    ...(foreground ? { foreground } : {}),
     qualityMode,
     alphaMatte: matte,
     backgroundFill,
@@ -170,5 +172,11 @@ export async function recompositeProcessedImage(
   matte: AlphaMatte,
   backgroundFill: BackgroundFill = image.backgroundFill ?? { type: "transparent" },
 ): Promise<ProcessedImage> {
-  return compositeProcessedImage(image.source, matte, image.qualityMode, backgroundFill);
+  return compositeProcessedImage(
+    image.source,
+    matte,
+    image.qualityMode,
+    backgroundFill,
+    image.foreground,
+  );
 }

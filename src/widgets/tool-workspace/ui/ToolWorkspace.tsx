@@ -41,6 +41,10 @@ import {
   type MattingRefinementMode,
 } from "../../../features/refine-matte";
 import {
+  ForegroundRefinementControls,
+  useForegroundRefinement,
+} from "../../../features/refine-foreground";
+import {
   ChoosePhotoButton,
   UploadDropzone,
   UploadPreparationNotice,
@@ -273,6 +277,8 @@ export function ToolWorkspace() {
   const guided = useObjectSelection();
   const refinement = useMatteRefinement();
   const finishRefinementApplying = refinement.finishApplying;
+  const foregroundRefinement = useForegroundRefinement();
+  const finishForegroundApplying = foregroundRefinement.finishApplying;
   const [refinementMode, setRefinementMode] = useState<MattingRefinementMode>("balanced");
   const refinementContextRef = useRef<{
     guidedMatte: AlphaMatte | null;
@@ -284,6 +290,12 @@ export function ToolWorkspace() {
     | null
   >(null);
   const appliedRefinementRef = useRef<AlphaMatte | null>(null);
+  const foregroundTargetRef = useRef<
+    | { kind: "single"; image: ProcessedImage }
+    | { kind: "batch"; itemId: string; image: ProcessedImage }
+    | null
+  >(null);
+  const appliedForegroundRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate hydration flag (see comment above): it must flip exactly once, only after hydration completes on the client; the one extra render is the point, not an accident.
@@ -349,10 +361,13 @@ export function ToolWorkspace() {
   const lastLogMessage = logs.at(-1)?.message;
 
   async function releaseRefinementBeforeHeavyWork() {
-    await refinement.release();
+    await Promise.all([refinement.release(), foregroundRefinement.release()]);
     refinement.reset();
+    foregroundRefinement.reset();
     refinementTargetRef.current = null;
     appliedRefinementRef.current = null;
+    foregroundTargetRef.current = null;
+    appliedForegroundRef.current = null;
   }
 
   function handleUpload(result: UploadResult) {
@@ -401,7 +416,10 @@ export function ToolWorkspace() {
     refinementContextRef.current = { guidedMatte: null, constraints: null };
     refinementTargetRef.current = null;
     appliedRefinementRef.current = null;
+    foregroundTargetRef.current = null;
+    appliedForegroundRef.current = null;
     void refinement.release().then(refinement.reset);
+    void foregroundRefinement.release().then(foregroundRefinement.reset);
     guided.reset();
     reset();
   }
@@ -467,8 +485,13 @@ export function ToolWorkspace() {
     const priorMatte = seed.alphaMatte;
     if (!priorMatte) return;
     refinement.prepareNext();
-    void Promise.all([releaseInference(), guided.release()]).then(() => {
-      refinementTargetRef.current = { kind: "single", image: seed };
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      foregroundRefinement.release().then(foregroundRefinement.reset),
+    ]).then(() => {
+      const cleanSeed = { ...seed, foreground: undefined };
+      refinementTargetRef.current = { kind: "single", image: cleanSeed };
       appliedRefinementRef.current = null;
       refinement.start({
         source: seed.source,
@@ -496,8 +519,10 @@ export function ToolWorkspace() {
       releaseInference(),
       guided.release(),
       batch.releaseInference(),
+      foregroundRefinement.release().then(foregroundRefinement.reset),
     ]).then(() => {
-      refinementTargetRef.current = { kind: "batch", itemId, image: seed };
+      const cleanSeed = { ...seed, foreground: undefined };
+      refinementTargetRef.current = { kind: "batch", itemId, image: cleanSeed };
       appliedRefinementRef.current = null;
       refinement.start({
         source: seed.source,
@@ -533,6 +558,84 @@ export function ToolWorkspace() {
     recomposite,
     finishRefinementApplying,
     refinement.state.result,
+    replaceResult,
+  ]);
+
+  function startSingleForegroundRefinement(
+    image: ProcessedImage,
+    componentCleanup: boolean,
+  ) {
+    const matte = image.alphaMatte;
+    if (!matte) return;
+    foregroundRefinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      refinement.release().then(refinement.reset),
+    ]).then(() => {
+      const seed = { ...image, foreground: undefined };
+      foregroundTargetRef.current = { kind: "single", image: seed };
+      appliedForegroundRef.current = null;
+      foregroundRefinement.start({
+        source: seed.source,
+        matte,
+        constraints: refinementContextRef.current.constraints,
+        componentCleanup,
+      });
+    });
+  }
+
+  function startBatchForegroundRefinement(
+    itemId: string,
+    image: ProcessedImage,
+    componentCleanup: boolean,
+  ) {
+    const matte = image.alphaMatte;
+    if (!matte || batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
+    foregroundRefinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      refinement.release().then(refinement.reset),
+      batch.releaseInference(),
+    ]).then(() => {
+      const seed = { ...image, foreground: undefined };
+      foregroundTargetRef.current = { kind: "batch", itemId, image: seed };
+      appliedForegroundRef.current = null;
+      foregroundRefinement.start({
+        source: seed.source,
+        matte,
+        componentCleanup,
+      });
+    });
+  }
+
+  useEffect(() => {
+    const result = foregroundRefinement.state.result;
+    const target = foregroundTargetRef.current;
+    if (!result || !target || appliedForegroundRef.current === result.foreground) return;
+    appliedForegroundRef.current = result.foreground;
+    const apply = target.kind === "single" ? recomposite : batch.recomposite;
+    const image = { ...target.image, foreground: result.foreground };
+    void apply(image, result.matte)
+      .then((updated) => {
+        if (foregroundTargetRef.current !== target) return;
+        if (target.kind === "single") replaceResult(updated);
+        else batch.replaceResult(target.itemId, updated);
+        finishForegroundApplying();
+      })
+      .catch((error: unknown) => {
+        finishForegroundApplying();
+        setCorrectionError({
+          message: `Could not apply foreground cleanup: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
+  }, [
+    batch,
+    finishForegroundApplying,
+    foregroundRefinement.state.result,
+    recomposite,
     replaceResult,
   ]);
 
@@ -614,6 +717,8 @@ export function ToolWorkspace() {
       setCorrectionViewAnnouncement("");
       refinement.cancel();
       refinementTargetRef.current = null;
+      foregroundRefinement.cancel();
+      foregroundTargetRef.current = null;
     }
     batch.selectItem(id);
   }
@@ -759,7 +864,10 @@ export function ToolWorkspace() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              void refinement.release().then(refinement.reset);
+              void Promise.all([
+                refinement.release().then(refinement.reset),
+                foregroundRefinement.release().then(foregroundRefinement.reset),
+              ]);
               batch.reset();
             }}
             className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -875,6 +983,23 @@ export function ToolWorkspace() {
               )
             }
             onCancel={refinement.cancel}
+            onSkip={handleBatchEditMask}
+          />
+          <ForegroundRefinementControls
+            status={foregroundRefinement.state.status}
+            progress={foregroundRefinement.state.progress}
+            fallbackReason={foregroundRefinement.state.fallbackReason}
+            result={foregroundRefinement.state.result}
+            error={foregroundRefinement.state.error}
+            disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
+            onStart={(componentCleanup) =>
+              startBatchForegroundRefinement(
+                selectedBatchItem.id,
+                selectedBatchItem.processedImage!,
+                componentCleanup,
+              )
+            }
+            onCancel={foregroundRefinement.cancel}
             onSkip={handleBatchEditMask}
           />
           <BackgroundFillSelector
@@ -1022,6 +1147,18 @@ export function ToolWorkspace() {
           onCancel={refinement.cancel}
           onSkip={handleEditMask}
         />
+        <ForegroundRefinementControls
+          status={foregroundRefinement.state.status}
+          progress={foregroundRefinement.state.progress}
+          fallbackReason={foregroundRefinement.state.fallbackReason}
+          result={foregroundRefinement.state.result}
+          error={foregroundRefinement.state.error}
+          onStart={(componentCleanup) =>
+            startSingleForegroundRefinement(state.result, componentCleanup)
+          }
+          onCancel={foregroundRefinement.cancel}
+          onSkip={handleEditMask}
+        />
         <BackgroundFillSelector
           image={{
             source: state.result.source,
@@ -1146,17 +1283,22 @@ export function ToolWorkspace() {
       className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">
-        {refinement.state.status !== "idle" && refinement.state.status !== "result"
-          ? describeRefinementState(refinement.state.status, refinement.state.progress)
-          : guided.state.session
-            ? describeGuidedState(guided.state.status, guided.state.progress)
-            : batch.session.items.length
-              ? m.batchCompleteAnnouncement({
-                  done: batch.snapshot.completedCount,
-                  total: batch.snapshot.totalCount,
-                  failed: batch.snapshot.failedCount,
-                })
-              : describeState(state, lightweightMode, uploadError)}
+        {foregroundRefinement.state.status !== "idle" &&
+        foregroundRefinement.state.status !== "result"
+          ? m.foregroundRefinementProgress({
+              progress: String(Math.round(foregroundRefinement.state.progress ?? 0)),
+            })
+          : refinement.state.status !== "idle" && refinement.state.status !== "result"
+            ? describeRefinementState(refinement.state.status, refinement.state.progress)
+            : guided.state.session
+              ? describeGuidedState(guided.state.status, guided.state.progress)
+              : batch.session.items.length
+                ? m.batchCompleteAnnouncement({
+                    done: batch.snapshot.completedCount,
+                    total: batch.snapshot.totalCount,
+                    failed: batch.snapshot.failedCount,
+                  })
+                : describeState(state, lightweightMode, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}

@@ -4,6 +4,36 @@ import type {
   RefinementConstraintMap,
   Trimap,
 } from "../../../entities/processed-image";
+import type { MattingInputSize } from "./types";
+
+export const MAX_MATTING_INPUT_SIDE = 1024;
+export const MAX_MATTING_INPUT_PIXELS = 1024 * 1024;
+
+/**
+ * ViTMatte's processor pads but does not resize. Keep its four-channel float
+ * input and intermediate tensors bounded independently of source resolution.
+ */
+export function computeMattingInputSize(
+  crop: Pick<PixelRect, "width" | "height">,
+): MattingInputSize {
+  if (crop.width <= 0 || crop.height <= 0) {
+    throw new Error("Matting input crop dimensions must be positive");
+  }
+  const sideScale = Math.min(
+    1,
+    MAX_MATTING_INPUT_SIDE / crop.width,
+    MAX_MATTING_INPUT_SIDE / crop.height,
+  );
+  const pixelScale = Math.min(
+    1,
+    Math.sqrt(MAX_MATTING_INPUT_PIXELS / (crop.width * crop.height)),
+  );
+  const scale = Math.min(sideScale, pixelScale);
+  return {
+    width: Math.max(1, Math.round(crop.width * scale)),
+    height: Math.max(1, Math.round(crop.height * scale)),
+  };
+}
 
 export function computeRefinementCrop(trimap: Trimap, padding = 32): PixelRect | null {
   const bounds = trimap.unknownBounds;
