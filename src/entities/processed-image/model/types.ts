@@ -31,6 +31,29 @@ export interface AlphaMatte {
   data: Uint8ClampedArray;
 }
 
+export type TrimapValue = 0 | 128 | 255;
+export type HardConstraintValue = -1 | 0 | 1;
+
+export interface PixelRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Trimap {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+  unknownBounds: PixelRect | null;
+}
+
+export interface RefinementConstraintMap {
+  width: number;
+  height: number;
+  data: Int8Array;
+}
+
 export type HexColor = `#${string}`;
 
 export interface BackgroundGradientStop {

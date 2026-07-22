@@ -76,6 +76,19 @@ describe("useObjectSelection", () => {
         }
       ).prompt.previousMask?.data[0],
     ).toBe(128);
+    let released = false;
+    let releasePromise!: Promise<void>;
+    act(() => {
+      releasePromise = result.current.release().then(() => {
+        released = true;
+      });
+    });
+    const dispose = worker.posted.at(-1) as { revision: number };
+    expect(dispose).toMatchObject({ type: "dispose" });
+    expect(released).toBe(false);
+    act(() => worker.emit({ type: "disposed", revision: dispose.revision }));
+    await releasePromise;
+    expect(released).toBe(true);
     act(() => result.current.reset());
     expect(worker.terminated).toBe(true);
   });

@@ -34,6 +34,16 @@ const manifest: ModelManifest = {
         "onnx/prompt_encoder_mask_decoder_quantized.onnx",
       ],
     },
+    {
+      id: "Xenova/vitmatte-small-distinctions-646",
+      revision: "358d428c452e5e0cd52955011a8b51944731d28e",
+      files: [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model_quantized.onnx",
+        "onnx/model.onnx",
+      ],
+    },
   ],
   onnxRuntimeWeb: {
     version: "1.27.0",
@@ -86,6 +96,13 @@ describe("model asset manifest", () => {
       plan.some((asset) =>
         asset.relativePath.includes(
           "slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/onnx/vision_encoder_quantized.onnx",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      plan.some((asset) =>
+        asset.relativePath.includes(
+          "vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/onnx/model.onnx",
         ),
       ),
     ).toBe(true);

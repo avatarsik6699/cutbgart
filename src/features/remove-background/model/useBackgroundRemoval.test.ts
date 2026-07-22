@@ -68,6 +68,26 @@ afterEach(() => {
 });
 
 describe("useBackgroundRemoval", () => {
+  it("waits for automatic model disposal acknowledgement", async () => {
+    const { result } = renderHook(() => useBackgroundRemoval());
+    act(() => result.current.selectFile(makeFile()));
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    let released = false;
+    let promise!: Promise<void>;
+    act(() => {
+      promise = result.current.releaseInference().then(() => {
+        released = true;
+      });
+    });
+    const dispose = worker.posted.at(-1)!;
+    expect(dispose.type).toBe("dispose");
+    expect(released).toBe(false);
+    act(() => worker.emit({ type: "disposed", requestId: dispose.requestId }));
+    await promise;
+    expect(released).toBe(true);
+  });
+
   it("rejects an unsupported file format without touching the worker", async () => {
     const { result } = renderHook(() => useBackgroundRemoval());
 

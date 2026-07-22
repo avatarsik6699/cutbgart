@@ -130,6 +130,8 @@ export interface UseBackgroundRemovalResult {
   ) => Promise<ProcessedImage>;
   replaceResult: (image: ProcessedImage) => void;
   adoptResult: (image: ProcessedImage) => void;
+  /** Disposes the active automatic ONNX session before another heavy stage starts. */
+  releaseInference: () => Promise<void>;
 }
 
 /**
@@ -174,6 +176,7 @@ export function useBackgroundRemoval(
   const pendingRecompositeRequestsRef = useRef(
     new Map<string, PendingWorkerRequest<ProcessedImage>>(),
   );
+  const pendingDisposeRequestsRef = useRef(new Map<string, () => void>());
   const lastAttemptRef = useRef<{
     source: SourceImage;
     qualityMode: QualityMode;
@@ -315,6 +318,11 @@ export function useBackgroundRemoval(
           pendingRecompositeRequestsRef.current.delete(message.requestId);
           appendLog(`Correction composite updated in ${String(message.durationMs)}ms`);
           pending.resolve(message.result);
+          break;
+        }
+        case "disposed": {
+          pendingDisposeRequestsRef.current.get(message.requestId)?.();
+          pendingDisposeRequestsRef.current.delete(message.requestId);
           break;
         }
         case "error": {
@@ -518,6 +526,15 @@ export function useBackgroundRemoval(
     },
     [getWorker, nextRequestId],
   );
+  const releaseInference = useCallback((): Promise<void> => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.resolve();
+    const requestId = nextRequestId();
+    return new Promise((resolve) => {
+      pendingDisposeRequestsRef.current.set(requestId, resolve);
+      worker.postMessage({ type: "dispose", requestId } satisfies WorkerRequest);
+    });
+  }, [nextRequestId]);
 
   return {
     state,
@@ -538,5 +555,6 @@ export function useBackgroundRemoval(
     applyBackgroundFill,
     replaceResult,
     adoptResult,
+    releaseInference,
   };
 }

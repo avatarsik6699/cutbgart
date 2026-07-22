@@ -118,7 +118,8 @@ export const GUIDED_MODEL: GuidedModelProfile = {
 export type SelectObjectWorkerRequest =
   | { type: "encode"; revision: number; source: SourceImage }
   | { type: "prompt"; prompt: IterativeSelectionPrompt }
-  | { type: "reset"; revision: number };
+  | { type: "reset"; revision: number }
+  | { type: "dispose"; revision: number };
 
 export type SelectObjectWorkerResponse =
   | {
@@ -128,4 +129,5 @@ export type SelectObjectWorkerResponse =
       progress?: number;
     }
   | { type: "candidates"; revision: number; candidates: GuidedMaskCandidate[] }
+  | { type: "disposed"; revision: number }
   | { type: "error"; revision: number; message: string };

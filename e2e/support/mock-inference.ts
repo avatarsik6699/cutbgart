@@ -18,6 +18,7 @@ export async function installMockInference(page: Page): Promise<void> {
         promptType?: string;
         revision?: number;
         pointLabels?: number[];
+        requestedMode?: string;
       }>,
     });
     class MockInferenceWorker extends EventTarget {
@@ -50,6 +51,16 @@ export async function installMockInference(page: Page): Promise<void> {
           points: Array<{ label: number }>;
           box: unknown;
         };
+        request?: {
+          requestId: string;
+          requestedMode: "balanced" | "maximum";
+          requestedPath: "webgpu" | "wasm";
+          priorMatte: {
+            width: number;
+            height: number;
+            data: Uint8ClampedArray;
+          };
+        };
       }): void {
         (
           window as unknown as {
@@ -59,6 +70,7 @@ export async function installMockInference(page: Page): Promise<void> {
               promptType?: string;
               revision?: number;
               pointLabels?: number[];
+              requestedMode?: string;
             }>;
           }
         ).__mockInferencePosts.push({
@@ -67,6 +79,7 @@ export async function installMockInference(page: Page): Promise<void> {
           promptType: message.prompt ? (message.prompt.box ? "box" : "point") : undefined,
           revision: message.revision ?? message.prompt?.revision,
           pointLabels: message.prompt?.points.map((point) => point.label),
+          requestedMode: message.request?.requestedMode,
         });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
@@ -165,6 +178,64 @@ export async function installMockInference(page: Page): Promise<void> {
             else respond();
             return;
           }
+          if (message.type === "dispose") {
+            this.emit({
+              type: "disposed",
+              requestId: message.requestId,
+              revision: message.revision,
+            });
+            return;
+          }
+          if (message.type === "refine" && message.request) {
+            const request = message.request;
+            const maximumFailure = Boolean(
+              (window as unknown as { __mockMattingMaximumFailure?: boolean })
+                .__mockMattingMaximumFailure,
+            );
+            const balancedFailure = Boolean(
+              (window as unknown as { __mockMattingBalancedFailure?: boolean })
+                .__mockMattingBalancedFailure,
+            );
+            this.emit({
+              type: "progress",
+              requestId: request.requestId,
+              stage: "loading",
+              percent: 50,
+            });
+            if (request.requestedMode === "maximum" && maximumFailure) {
+              this.emit({
+                type: "fallback",
+                requestId: request.requestId,
+                from: "maximum",
+                to: "balanced",
+                reason: "mock WebGPU failure",
+              });
+            }
+            const deterministic = balancedFailure;
+            this.emit({
+              type: "result",
+              requestId: request.requestId,
+              result: {
+                matte: {
+                  ...request.priorMatte,
+                  data: request.priorMatte.data.slice(),
+                },
+                requestedMode: request.requestedMode,
+                actualMode: deterministic
+                  ? "deterministic"
+                  : request.requestedMode === "maximum" && maximumFailure
+                    ? "balanced"
+                    : request.requestedMode,
+                actualPath: deterministic ? null : request.requestedPath,
+                fallback: deterministic
+                  ? "deterministic"
+                  : request.requestedMode === "maximum" && maximumFailure
+                    ? "balanced"
+                    : "none",
+              },
+            });
+            return;
+          }
           if (message.type === "reset") return;
           if (message.type === "process" && message.source) {
             this.source = message.source;
@@ -184,13 +255,17 @@ export async function installMockInference(page: Page): Promise<void> {
                   type: "process-result",
                   requestId: message.requestId,
                   result,
-                  matte: {
-                    width: message.source!.width,
-                    height: message.source!.height,
-                    data: new Uint8ClampedArray(
+                  matte: (() => {
+                    const data = new Uint8ClampedArray(
                       message.source!.width * message.source!.height,
-                    ).fill(255),
-                  },
+                    ).fill(255);
+                    data.fill(128, 0, Math.max(1, message.source!.width));
+                    return {
+                      width: message.source!.width,
+                      height: message.source!.height,
+                      data,
+                    };
+                  })(),
                   durationMs: 1,
                   actualMode:
                     message.qualityMode === "ben2-fp16" &&

@@ -1,7 +1,8 @@
 // Cache-first caching for ML model weights and ONNX Runtime Web WASM binaries
 // fetched from the preferred VPS/Cloudflare CDN or upstream fallback
-// (SPEC.md §3, §6.1). Both ISNet dtype variants and the WASM runtime cache independently —
-// each lives at its own content-hashed URL (HF commit SHA / package version
+// (SPEC.md §3, §6.1). The production ISNet, BEN2, SlimSAM, and ViTMatte
+// variants and the WASM runtime cache independently — each lives at its own
+// content-hashed URL (HF commit SHA / package version
 // segment), so per-URL Cache Storage entries already give that for free with
 // no extra bookkeeping in this file.
 const CACHE_NAME = "bg-remove-model-cache-v1";

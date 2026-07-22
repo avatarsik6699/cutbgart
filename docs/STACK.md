@@ -115,6 +115,7 @@ pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CD
 pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
 pnpm e2e:phase-17-real     # Phase 17 only: serialized iterative SlimSAM runtime evidence
 pnpm e2e:matting-lab-real  # Phase 18 only: serialized ViTMatte alpha/runtime evidence
+pnpm e2e:phase-19-real     # Phase 19 only: serialized production q8/fp32 refinement evidence
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker, never in CI
 ```
@@ -180,6 +181,7 @@ pnpm e2e                  # fast iteration
 pnpm e2e:full             # phase gate, includes one real-model smoke
 pnpm e2e:model-lab-real   # opt-in Phase 15 evaluation; never CI/normal matrix
 pnpm e2e:matting-lab-real # opt-in Phase 18 ViTMatte evaluation; never CI/normal matrix
+pnpm e2e:phase-19-real    # opt-in Phase 19 production refiner; never CI/normal matrix
 
 # Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run

@@ -37,7 +37,7 @@
 | PHASE_16 | ✅ done | v0.16.0 | ✅ | 🤖 agent | Production Model Modes & Guided Selection |
 | PHASE_17 | ✅ done | v0.17.0 | ✅ | 🤖 agent | Iterative Guided Object Editor |
 | PHASE_18 | ✅ done | v0.18.0 | ✅ | 🤖 agent | Browser Interactive Matting Lab |
-| PHASE_19 | ⏳ pending | v0.19.0 | ⬜ | — | Production Trimap & Alpha Refinement |
+| PHASE_19 | ✅ done | v0.19.0 | ✅ | 🤖 agent | Production Trimap & Alpha Refinement |
 | PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Runtime Hardening |
 
 <!-- Add new rows here via /phase-init N -->
@@ -50,7 +50,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `18` · **Phase in progress:** `—`
+**Phase completed:** `19` · **Phase in progress:** `20`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -491,6 +491,38 @@ an image-free schema-v2 export. EfficientSAM-Ti and MobileSAM remain evidence-on
 verified immutable first-party browser ONNX graph was found. Production inference remains unchanged;
 the evidence record selects Distinctions-646 q8/fp32 as Phase-19 `balanced`/`maximum` inputs.
 
+```ts
+// Phase 19 — production trimap and soft-alpha refinement; all values are session-only
+type MattingRefinementMode = "balanced" | "maximum";
+type MattingModelVariantId =
+  | "vitmatte-small-distinctions646-q8"
+  | "vitmatte-small-distinctions646-fp32";
+type TrimapValue = 0 | 128 | 255;
+type HardConstraintValue = -1 | 0 | 1;
+
+interface Trimap {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+  unknownBounds: PixelRect | null;
+}
+
+interface RefinementConstraintMap {
+  width: number;
+  height: number;
+  data: Int8Array;
+}
+
+type MattingFallback = "none" | "balanced" | "deterministic";
+```
+
+Phase 19 adds selected-only, lazy Distinctions-646 q8/fp32 production refinement over an adaptive
+trimap focus crop. The latest hard keep/remove constraint is re-applied after model output; pixels
+outside the crop retain the prior alpha. Maximum may retry balanced once, then deterministic fusion;
+balanced may fall back only to deterministic fusion. Automatic, guided, and ViTMatte heavy stages
+are serialized with explicit disposal acknowledgements, and the refined matte continues through the
+existing brush, background, batch, and download flows.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -528,13 +560,16 @@ the evidence record selects Distinctions-646 q8/fp32 as Phase-19 `balanced`/`max
 
 - Tables: none yet.
 - Current migration head: `—`
-- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (IS-Net q8/fp32 plus explicitly loaded BEN2 fp16 and SlimSAM q8 as of Phase 16) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the same immutable revision from upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14/16).
+- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (IS-Net q8/fp32, explicitly loaded BEN2 fp16 and SlimSAM q8, plus selected-only ViTMatte Distinctions-646 q8/fp32 as of Phase 19) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the same immutable revision from upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14/16/19). Partial `206` range probes are never cached.
 - Client-side `localStorage` (added Phase 03, retained by Phase 16): `qualityMode: "fast" | "max"` persists only the corresponding IS-Net q8/fp32 preference. BEN2 and guided-selection state remain session-only; no other user data is stored client-side (SPEC.md §3).
 - Phase 17 iterative prompts, object layers, candidates, semantic strokes, and undo/redo history are
   session-only and never enter Cache Storage, `localStorage`, analytics, logs, or server storage.
 - Phase 18 matting corpus inputs/previews/results remain in memory. Only an explicit image-free JSON
   export and the repository evidence record persist; neither contains image bytes, filenames,
   prompt coordinates, or other private image-derived identifiers.
+- Phase 19 trimaps, focus crops, constraints, refined mattes, and model sessions remain in memory
+  and are discarded on reset/reload. Cache Storage may retain only immutable public model assets;
+  the runtime evidence record is image-free.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -565,6 +600,9 @@ the evidence record selects Distinctions-646 q8/fp32 as Phase-19 `balanced`/`max
 - Phase 17 evolves the same workspace's guided mode into an iterative object editor reachable from
   direct guidance or an automatic result. It returns the unioned source-sized matte to the existing
   exact correction, background, batch, and download flow without adding a route.
+- Phase 19 adds bilingual `balanced`/`maximum` soft-edge refinement to automatic results, accepted
+  guided results, and a selected settled batch item. It is lazy, reports actual path/fallback, and
+  preserves entry to exact correction, backgrounds, individual/ZIP downloads, and reset.
 
 ### Env Config
 
@@ -601,6 +639,37 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-22 — Phase 19 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_19 automated gate passed with both production ViTMatte variants and the
+selected-only lifecycle verified on the available host
+
+### Changes / Decision
+- Added production Distinctions-646 q8 `balanced` and fp32 `maximum` refinement over deterministic
+  trimaps and bounded focus crops, with hard constraints re-applied after source-sized restoration.
+- Integrated lazy bilingual refinement into automatic, accepted-guided, and selected settled-batch
+  results while preserving exact correction, background replacement, individual/ZIP download, and
+  reset flows.
+- Added explicit automatic/guided/ViTMatte disposal acknowledgements, selected-only warm reuse,
+  maximum → balanced → deterministic recovery, shared CDN-to-pinned-upstream loading, immutable
+  manifest entries, and full-response-only Service Worker caching.
+- Available-host evidence completed both q8/fp32 cold and warm WASM runs with no fallback, preserved
+  the hard foreground constraint, and honestly recorded peak memory and WebGPU as unavailable.
+- Gate evidence: production container build/health/smoke, generated code, TypeScript, Steiger, 228
+  unit tests, 50 focused tests, 20 focused cross-browser refinement passes, 212 default-disabled
+  cross-browser passes with 12 expected skips, real IS-Net inference, and serialized real q8/fp32
+  ViTMatte refinement all passed.
+
+### Affected Phases / Consequences
+- PHASE_20 can consume the two production refinement modes, actual-path/fallback metadata, hard
+  constraint precedence, and one-heavy-stage lifecycle for foreground-colour decontamination and
+  final device/runtime hardening.
+- No route, server endpoint, database, analytics payload, or persistent private image data was
+  added. Production CDN deployment remains deferred under the existing local-only Phase 17–20
+  decision.
 
 ## 2026-07-22 — Phase 18 complete
 

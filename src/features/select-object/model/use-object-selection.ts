@@ -56,6 +56,7 @@ export function useObjectSelection(
   const matteRef = useRef<AlphaMatte | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const revisionRef = useRef(0);
+  const pendingReleaseRef = useRef<(() => void) | null>(null);
 
   const commitState = useCallback((next: ObjectSelectionState) => {
     stateRef.current = next;
@@ -83,6 +84,11 @@ export function useObjectSelection(
       (event: MessageEvent<SelectObjectWorkerResponse>) => {
         const message = event.data;
         if (message.revision !== revisionRef.current) return;
+        if (message.type === "disposed") {
+          pendingReleaseRef.current?.();
+          pendingReleaseRef.current = null;
+          return;
+        }
         if (message.type === "status") {
           commitState({
             ...stateRef.current,
@@ -324,6 +330,16 @@ export function useObjectSelection(
     commitState(initialState);
   }, [commitState]);
 
+  const release = useCallback((): Promise<void> => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.resolve();
+    revisionRef.current += 1;
+    return new Promise((resolve) => {
+      pendingReleaseRef.current = resolve;
+      worker.postMessage({ type: "dispose", revision: revisionRef.current });
+    });
+  }, []);
+
   useEffect(() => reset, [reset]);
   return {
     state,
@@ -341,6 +357,7 @@ export function useObjectSelection(
     resetLayer,
     replacePrompt: resetLayer,
     retry,
+    release,
     reset,
   };
 }
