@@ -36,7 +36,7 @@
 | PHASE_15 | ✅ done | v0.15.0 | ✅ | 🤖 agent | Browser Model Evaluation Lab |
 | PHASE_16 | ✅ done | v0.16.0 | ✅ | 🤖 agent | Production Model Modes & Guided Selection |
 | PHASE_17 | ✅ done | v0.17.0 | ✅ | 🤖 agent | Iterative Guided Object Editor |
-| PHASE_18 | ⏳ pending | v0.18.0 | ⬜ | — | Browser Interactive Matting Lab |
+| PHASE_18 | ✅ done | v0.18.0 | ✅ | 🤖 agent | Browser Interactive Matting Lab |
 | PHASE_19 | ⏳ pending | v0.19.0 | ⬜ | — | Production Trimap & Alpha Refinement |
 | PHASE_20 | ⏳ pending | v0.20.0 | ⬜ | — | Foreground Edge Quality & Runtime Hardening |
 
@@ -50,7 +50,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `17` · **Phase in progress:** `—`
+**Phase completed:** `18` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -459,6 +459,38 @@ automatic base matte; explicit semantic constraints win. Invalid model scores re
 than becoming invented confidence values. All prompts, candidates, masks, embeddings, and history
 remain browser-memory-only and are released with the guided session.
 
+```ts
+// src/features/model-lab/model/types.ts — Phase 18; evaluation-only, never a production mapping
+type MattingEvaluationModelId =
+  | "vitmatte-small-composition1k-q8"
+  | "vitmatte-small-composition1k-fp32"
+  | "vitmatte-small-distinctions646-q8"
+  | "vitmatte-small-distinctions646-fp32";
+
+type LightweightPromptEvaluationModelId = "efficient-sam-ti" | "mobile-sam-vit-t";
+type InteractiveEvaluationModelId =
+  | MattingEvaluationModelId
+  | LightweightPromptEvaluationModelId;
+
+type CandidateEligibility = "production-eligible" | "evidence-only" | "rejected-license";
+
+interface InteractiveMattingBenchmarkExport {
+  schemaVersion: 2;
+  capabilities: ModelLabCapabilities;
+  candidates: InteractiveEvaluationModelProfile[];
+  corpusCaseCount: number;
+  quality: MattingQualityMeasurement[];
+  runtime: InteractiveRuntimeMeasurement[];
+  decision: InteractiveEvaluationModelId | "none";
+}
+```
+
+Phase 18 extends the opt-in lab with immutable ViTMatte q8/fp32 profiles, deterministic trimap/crop
+preparation, alpha/boundary metrics, classified runtime outcomes, sequential pipeline disposal, and
+an image-free schema-v2 export. EfficientSAM-Ti and MobileSAM remain evidence-only because no
+verified immutable first-party browser ONNX graph was found. Production inference remains unchanged;
+the evidence record selects Distinctions-646 q8/fp32 as Phase-19 `balanced`/`maximum` inputs.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -500,6 +532,9 @@ remain browser-memory-only and are released with the guided session.
 - Client-side `localStorage` (added Phase 03, retained by Phase 16): `qualityMode: "fast" | "max"` persists only the corresponding IS-Net q8/fp32 preference. BEN2 and guided-selection state remain session-only; no other user data is stored client-side (SPEC.md §3).
 - Phase 17 iterative prompts, object layers, candidates, semantic strokes, and undo/redo history are
   session-only and never enter Cache Storage, `localStorage`, analytics, logs, or server storage.
+- Phase 18 matting corpus inputs/previews/results remain in memory. Only an explicit image-free JSON
+  export and the repository evidence record persist; neither contains image bytes, filenames,
+  prompt coordinates, or other private image-derived identifiers.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -512,6 +547,9 @@ remain browser-memory-only and are released with the guided session.
 - `/dev/model-lab` — approved Phase 15 internal comparison surface for sequential same-image
   IS-Net/BEN2/MVANet runs, pairwise preference, and image-free benchmark export. It is `noindex`,
   excluded from the sitemap, and inactive unless the build-time lab flag is enabled.
+- Phase 18 extends `/dev/model-lab` with sequential ViTMatte trimap/alpha evaluation, deterministic
+  local corpus scoring, resource/license disclosure, classified unsupported/OOM recovery, and
+  image-free schema-v2 export. It adds no public route or production model fetch.
 - `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`,
   `/udalit-fon-dlya-avatarki` — scenario-specific `pages/*` slices (Phase 06): the same reused
   upload/quality-toggle/remove-background/download features as `/`, wrapped in scenario copy
@@ -563,6 +601,58 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-22 — Phase 18 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_18 automated gate passed after architect-supplied WebGPU evidence and final
+dual-variant policy approval
+
+### Changes / Decision
+- Extended the opt-in model lab with pinned ViTMatte Composition-1k and Distinctions-646 q8/fp32
+  variants, deterministic trimap/crop corpus generation, alpha/boundary metrics, classified runtime
+  failures, sequential disposal/cancellation, and privacy-safe schema-v2 export.
+- Recorded successful WASM and architect-supplied WebGPU matrices. Both paths completed all 32
+  ViTMatte case/model runs; unavailable peak-memory APIs remain explicitly `unavailable`.
+- Closed Phase 18 with Distinctions-646 q8 as Phase-19 `balanced`/fallback and fp32 as the
+  WebGPU-oriented `maximum` mode. No Phase-18 production model/CDN mapping was changed.
+- Gate evidence: production container build/health and smoke, generated code, TypeScript, Steiger,
+  208 unit tests, 15 focused tests, 12 enabled-lab browser passes, 192 default-disabled
+  cross-browser passes, real IS-Net inference, and the serialized real ViTMatte smoke passed.
+
+### Affected Phases / Consequences
+- PHASE_19 receives the dual-variant policy, pinned graph identities, resource disclosures, hard
+  trimap constraints, selected-only lifecycle, and fp32 → q8 → deterministic fallback contract.
+- PHASE_20 must validate both refinement modes and fallback behavior in the complete pipeline.
+- The phase is additive and evaluation-only: no API, database, persistent user data, analytics
+  payload, public route, or production model asset was added.
+
+## 2026-07-22 — Dual-variant ViTMatte refinement approved
+
+**Type**: spec-change
+**Author**: `v.godlevskiy` (via AI spec-sync)
+**Triggered by**: architect review of the Phase-18 WebGPU benchmark and explicit request to retain
+both q8 and fp32 in the Phase-19 architecture
+
+### Changes / Decision
+- Phase 19 will expose Distinctions-646 q8 as the compact/WASM-safe `balanced` mode and fp32 as the
+  best-soft-alpha `maximum` mode recommended on confirmed WebGPU when the user accepts the larger
+  first download.
+- These are selected-only alternatives, not an ensemble: no eager dual download, no concurrent
+  residence, and no blending. Cache Storage may retain either graph after explicit use.
+- The bounded recovery chain is fp32 → q8 → deterministic guided fusion. Each transition preserves
+  source pixels, prompts, trimap, and the prior matte, disposes the failed pipeline, and never loops.
+
+### Affected Phases / Consequences
+- PHASE_18 — its evidence record now combines the automated WASM run with the architect-supplied
+  WebGPU export and produces a production variant policy rather than a single winner.
+- PHASE_19 — its future phase contract must include pre-load size disclosure, capability-aware mode
+  recommendation, explicit user choice, selected-only lazy loading/disposal, refinement concurrency
+  `1`, CDN pins for both graphs, and deterministic fallback/disposal tests.
+- PHASE_20 — must validate both refinement modes and the fallback chain in the full hybrid pipeline.
+- The shipped contract through PHASE_17 is unchanged; no endpoint, persistence, analytics payload,
+  or Phase-18 production model asset is added by this specification update.
 
 ## 2026-07-16 — Phase 17 complete
 

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import {
   Button,
@@ -15,12 +15,14 @@ import {
 } from "../model/model-registry";
 import type { BenchmarkPreference } from "../model/types";
 import { useModelLab } from "../model/use-model-lab";
+import { InteractiveMattingLab } from "./InteractiveMattingLab";
 
 function formatDuration(value: number): string {
   return value === 0 ? "warm" : `${(value / 1000).toFixed(2)} с`;
 }
 
 export function ModelLab() {
+  const [mattingRunning, setMattingRunning] = useState(false);
   const {
     state,
     capabilities,
@@ -45,8 +47,9 @@ export function ModelLab() {
   );
 
   const isRunning = state.status === "running";
+  const controlsDisabled = isRunning || mattingRunning;
   const canRun =
-    !isRunning && state.images.length > 0 && state.selectedModelIds.length >= 2;
+    !controlsDisabled && state.images.length > 0 && state.selectedModelIds.length >= 2;
 
   return (
     <main
@@ -75,6 +78,8 @@ export function ModelLab() {
         </p>
       </header>
 
+      <InteractiveMattingLab disabled={isRunning} onRunningChange={setMattingRunning} />
+
       <section aria-labelledby="model-selection-title" className="space-y-3">
         <h2 id="model-selection-title" className="text-xl font-semibold">
           1. Модели
@@ -92,7 +97,7 @@ export function ModelLab() {
                         name="evaluation-model"
                         value={model.id}
                         checked={checked}
-                        disabled={isRunning}
+                        disabled={controlsDisabled}
                         onChange={(event) =>
                           setModelSelected(model.id, event.target.checked)
                         }
@@ -131,7 +136,7 @@ export function ModelLab() {
           type="file"
           multiple
           accept="image/jpeg,image/png,image/webp"
-          disabled={isRunning}
+          disabled={controlsDisabled}
           onChange={(event) => {
             void selectFiles(Array.from(event.target.files ?? []));
             event.target.value = "";
@@ -160,7 +165,12 @@ export function ModelLab() {
               Отменить
             </Button>
           )}
-          <Button type="button" variant="ghost" disabled={isRunning} onClick={reset}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={controlsDisabled}
+            onClick={reset}
+          >
             Сбросить
           </Button>
         </div>

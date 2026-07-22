@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.11` |
-| Date | `2026-07-13` |
+| Document Version | `v1.12` |
+| Date | `2026-07-22` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -68,7 +68,7 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Model evaluation lab: compare IS-Net q8/fp32, BEN2 fp16, and MVANet q4 in the browser on the same local images before selecting a new production automatic model (Phase 15) | Domain-specific model training/fine-tuning |
 | Guided object selection with SlimSAM: the user marks the object to preserve with a positive point or box when automatic removal is ambiguous (Phase 16) | |
 | Iterative guided correction: cumulative positive/negative points, target boxes, semantic keep/remove strokes, multiple object layers, mask alternatives, and local correction of an existing automatic matte (Phase 17) | |
-| Optional client-side trimap/alpha refinement and foreground-edge decontamination selected only after browser model evaluation and capability checks (Phases 18–20) | |
+| Optional client-side trimap/alpha refinement with `balanced` q8 and `maximum` fp32 modes, plus foreground-edge decontamination, selected only after browser model evaluation and capability checks (Phases 18–20) | |
 | Before/after slider result view, PNG-with-alpha download | Advertising on this domain (never — product decision) |
 | WebGPU with automatic, transparent WASM fallback | Donation/payment on this domain (never — lives on a separate portfolio project) |
 | Explicit error handling for every documented failure mode (§7 NFR) | |
@@ -102,7 +102,7 @@ QualityMode ("fast" | "max") — user-selectable, persisted client-side in local
 EvaluationModelId → [features/model-lab] → BenchmarkRun (development-only, in-memory/exportable)
 BatchSession → holds many BatchItem (each: SourceImage → AlphaMatte → ProcessedImage), in-memory only
 ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (transparent by default)
-PromptSession + automatic AlphaMatte → SemanticMask + Trimap → refined AlphaMatte
+PromptSession + automatic AlphaMatte + MattingRefinementMode → SemanticMask + Trimap → refined AlphaMatte
 ```
 
 - **SourceImage** — the user's uploaded file (in-memory only; validated for format/size/resolution,
@@ -149,6 +149,12 @@ PromptSession + automatic AlphaMatte → SemanticMask + Trimap → refined Alpha
   derived from prompt constraints, boundaries, and disagreement with the automatic `AlphaMatte`.
   A trimap-aware refiner may alter only the unknown band; explicit foreground/background strokes
   remain hard constraints.
+- **MattingRefinementMode** (Phase 19) — session-only `"balanced" | "maximum"` choice for the same
+  Distinctions-646 matting family. `balanced` selects q8 (~27.5 MB) and is the weak-device/WASM
+  default and fallback; `maximum` selects fp32 (~103.9 MB) for the best measured soft-alpha quality
+  and is recommended on a confirmed WebGPU path. Only the selected variant is fetched and at most
+  one matting pipeline is resident; switching modes disposes the previous pipeline before loading
+  the other variant.
 - **DeviceCapabilities** — detected once per session (`navigator.gpu.requestAdapter()`); determines
   inference path (WebGPU + `fp16`-capable adapter required, or WASM) and the default `QualityMode`
   for weak devices. WebGPU probing was force-disabled for a period after the originally-shipped
@@ -172,8 +178,11 @@ is a direct consequence of the "inference is client-side only, no accounts" inva
 localStorage:
   qualityMode: "fast" | "max"     # persisted across visits, no other user data stored client-side
 
+In-memory session state (Phase 19):
+  mattingRefinementMode: "balanced" | "maximum"  # never persisted; capability-aware initial value
+
 Cache Storage (Service Worker, public/sw.js) — cache-first, content-hashed, effectively permanent:
-  model weights (.onnx files, IS-Net `q8`/`fp32` dtype variants of the same model)
+  model weights (.onnx files, IS-Net and selected ViTMatte `q8`/`fp32` dtype variants)
   ONNX Runtime WASM binaries
 
 Model-lab exports (Phase 15, explicit user download only):
@@ -266,7 +275,7 @@ page. No dedicated `/batch` URL.
 | `features/quality-mode-toggle` | `features` | Fast/max-quality UI control, reads/writes `localStorage`, passed into `remove-background` as a parameter (not hardcoded) |
 | `features/model-lab` | `features` | (Phase 15) Opt-in browser-only evaluation surface behind `VITE_ENABLE_MODEL_LAB`: run the same local images sequentially through IS-Net q8/fp32, BEN2 fp16, and MVANet q4; compare anonymized previews, record load/inference/error measurements and pairwise preference, export image-free benchmark JSON. It must not alter the production quality toggle or eagerly fetch any model. |
 | `features/select-object` | `features` | Phase 16 starts with one SlimSAM positive point or bounding box. Phase 17 evolves it into an iterative prompt session with cumulative positive/negative points, target box + point combinations, semantic keep/remove strokes, multiple object layers, alternative-mask selection, undo/redo, and local progressive merge against an existing automatic matte. Loaded only after explicit entry and kept client-side. |
-| `features/refine-matte` | `features` | (Phases 18–19) Builds a confidence-aware trimap from automatic alpha, guided semantic masks, and hard user constraints, then optionally runs the browser-evaluated matting winner only on the target/unknown crop. Weak or unsupported devices retain a deterministic no-new-model fusion path. |
+| `features/refine-matte` | `features` | (Phases 18–19) Builds a confidence-aware trimap from automatic alpha, guided semantic masks, and hard user constraints, then optionally runs the selected Distinctions-646 q8 (`balanced`) or fp32 (`maximum`) variant only on the target/unknown crop. It discloses first-download size before loading, fetches only the chosen variant, keeps one matting pipeline resident, and falls back fp32 → q8 → deterministic no-new-model fusion without losing user work. |
 | `features/refine-foreground` | `features` | (Phase 20) Optional foreground-color estimation/decontamination and conservative edge-aware cleanup after alpha refinement; never changes explicit prompt constraints and always preserves the final pixel-level correction path. |
 | `features/download-result` | `features` | PNG-with-alpha download button; from Phase 10, also a "download all as ZIP" action over a `BatchSession` |
 | `features/correct-mask` | `features` | Brush-based add/erase/restore editing of the current `AlphaMatte`; adjustable brush size/hardness; undo/redo history; zoom/pan on the correction canvas for precise editing (Phase 09); re-composites via the existing `OffscreenCanvas` pipeline in `features/remove-background` — no new inference pass |
@@ -310,8 +319,10 @@ idle → model-loading → ready → processing → result ⇄ guiding → refin
   or semantic keep/remove strokes. Prompt inference is latest-request-wins, runs after a completed
   gesture rather than on every pointer move, and updates only the intended object/local region.
 - **refining** (Phase 19) — derives a trimap and optionally predicts soft alpha only inside the
-  target/unknown crop. Unsupported, failed, or memory-constrained refinement falls back to the
-  deterministic guided fusion result without losing prompts, source pixels, or the prior matte.
+  target/unknown crop. Before the first model fetch, the UI exposes `balanced` q8 and `maximum`
+  fp32 with their approximate download sizes and capability-aware recommendation. A maximum-mode
+  failure disposes fp32 and retries q8 once; a q8 failure continues with deterministic guided
+  fusion without losing prompts, source pixels, the trimap, or the prior matte.
 - **correcting** — user brushes corrections (add/erase/restore-to-model-output) onto the current
   `AlphaMatte`; adjustable brush size/hardness; undo/redo; zoom/pan the canvas for precise editing
   on high-resolution images (Phase 09) — zoom/pan is a view-only transform of the correction canvas,
@@ -387,7 +398,7 @@ be fully bilingual, not translated as an afterthought.
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
 | Evaluation models (Phase 15) | `onnx-community/BEN2-ONNX` fp16 and `onnx-community/MVANet-ONNX` q4, plus the existing IS-Net q8/fp32 baselines | Experimental only until browser compatibility, memory, latency, and project-image quality are measured. Immutable revisions are mandatory. Candidate weights load from Hugging Face only after explicit lab interaction and are not added to the production VPS manifest before selection. BEN2/MVANet are MIT-licensed. |
 | Guided segmentation (Phase 16) | `Xenova/slimsam-77-uniform` (final dtype/revision selected during phase initialization) | User-prompted segmentation, not automatic background removal. A positive point or bounding box resolves foreground intent for light-on-light and otherwise ambiguous images; exact browser execution-path support must be verified before production activation. Apache-2.0-licensed. |
-| Interactive matting candidates (Phase 18) | ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 plus any lightweight promptable alternatives that pass license review | Evaluation-only until pinned ONNX browser compatibility, alpha quality, latency, peak memory, and weak-device fallback are measured. Research-only/non-commercial licenses are not production eligible. |
+| Interactive matting (Phases 18–19) | Phase-18 evaluation: ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and licensed lightweight alternatives. Phase-19 production: pinned Distinctions-646 q8 + fp32 variants. | Phase-18 evidence selects q8 as the compact/WASM-safe `balanced` path and fp32 as the best-quality WebGPU-oriented `maximum` path. The variants are alternatives, not an ensemble: never eagerly fetch or concurrently retain both. Research-only/non-commercial licenses are not production eligible. |
 | Client-side ZIP (Phase 10) | `[NEEDS_CLARIFICATION: exact library — e.g. fflate or client-zip]` | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
 | Package manager | pnpm | |
 | Containers | Docker + docker-compose: `nginx`, `app` (Node/Nitro SSR), `umami` + `umami-db` (Postgres) | Each service `restart: unless-stopped`; Node container runs with `init: true` (tini as PID 1); `umami-db` has a persistent volume + healthcheck gating `umami` startup |
@@ -417,6 +428,11 @@ be fully bilingual, not translated as an afterthought.
 - Phase 18 matting candidates follow the same isolation rule: explicit lab opt-in, immutable
   revisions, sequential execution, no production manifest entry, and no public-flow fetch before a
   measured Phase-19 selection. A model that lacks production-compatible licensing is evidence-only.
+- Phase 19 pins both Distinctions-646 variants in the production manifest but fetches neither on
+  page/component mount. `balanced` lazily loads q8 (~27.5 MB); `maximum` lazily loads fp32
+  (~103.9 MB). Cache Storage may retain both after separate explicit uses, but runtime memory holds
+  only the selected matting pipeline. A mode switch first settles/cancels active work and disposes
+  the old pipeline/tensors/session before loading the other variant.
 
 ---
 
@@ -447,6 +463,12 @@ promptable, and matting pipelines never perform heavy inference concurrently. Ca
 retain more than one warm session only after measured peak-memory evidence; otherwise the previous
 pipeline is disposed before the next heavy stage loads.
 
+Phase-19 matting refinement has concurrency `1`, including batch use. Its capability-aware initial
+mode is `maximum` on a confirmed WebGPU path and `balanced` on WASM or an unknown/weak path; missing
+advisory APIs such as `navigator.deviceMemory` alone never disable an explicit maximum-mode choice.
+The user's explicit selection wins until a classified load, operator, WebGPU, inference, or OOM
+failure triggers the bounded fallback policy in §7.3.
+
 ### 7.2 Security & Privacy
 
 - No server endpoint anywhere accepts image files — see §4 (architectural invariant, not a
@@ -470,7 +492,8 @@ pipeline is disposed before the next heavy stage loads.
 | Device out-of-memory during inference | Caught explicitly; clear message suggesting a lower resolution |
 | One `BatchItem` fails during batch processing (Phase 10) | Isolated per-item error state in the grid tile; does not cancel or block the rest of the batch |
 | Interactive prompt/refinement request is superseded | Ignore or cancel the stale result; only the latest prompt revision may update the visible mask |
-| Optional matting/refinement model is unsupported, fails, or exhausts memory | Dispose it, preserve source/prompts/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
+| Maximum fp32 matting is unsupported, fails, or exhausts memory | Dispose fp32, preserve source/prompts/trimap/prior matte, show a localized notice, and retry the q8 variant once; never loop or keep both pipelines resident |
+| Balanced q8 matting is unsupported, fails, or exhausts memory | Dispose q8, preserve source/prompts/trimap/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
 
 ### 7.4 Cross-Browser and Runtime Validation
 
@@ -550,6 +573,7 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | E2E (model lab) | With the lab flag enabled and inference mocked: opt in, select local images/models, run a sequential comparison, choose a pairwise preference, and export image-free benchmark JSON | Playwright |
 | E2E (guided selection) | Enter **select object**, place a positive point and a box, obtain a mask, then continue through existing correction/result/download flow | Playwright |
 | E2E (iterative guidance) | Starting from an automatic or guided result, combine positive/negative points, box, semantic keep/remove strokes, undo/redo, multiple object layers, and alternative masks; stale prompt responses never overwrite the latest revision | Playwright |
+| E2E (matting refinement) | Before any refiner fetch, choose capability-recommended or explicit `balanced`/`maximum`; verify q8/fp32 graph selection, no eager/concurrent dual load, fp32 → q8 → deterministic fallback, warm cache/session reuse, hard trimap constraints, and continuation through correction/background/download | Playwright + focused worker/hook tests |
 | Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
 | Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
 | Visual regression (optional, v2) | UI components across states | Playwright screenshots |
@@ -581,8 +605,8 @@ regressions after reproduction rather than anticipated through an unavailable ha
 | `15` | Browser Model Evaluation Lab | Select the next automatic quality model using reproducible evidence without changing production inference | Typed immutable model registry for IS-Net q8/fp32, BEN2 fp16 and MVANet q4; opt-in development model-lab route behind `VITE_ENABLE_MODEL_LAB`; sequential same-image comparisons with side-by-side previews, cold-load/warm-inference/error/memory-capability observations, pairwise preference and image-free JSON export; focused unit/integration/E2E coverage; written decision record naming BEN2, MVANet, or neither for Phase 16 |
 | `16` | Production Model Modes & Guided Selection | Preserve both existing IS-Net modes, add the Phase-15 winner as an optional heavy automatic mode, and provide user-directed recovery for ambiguous images | User-facing processing-mode selector with model characteristics and capability-aware fallback; lazy single-session loading/disposal for the selected heavy model; SlimSAM positive-point/bounding-box flow producing the existing `AlphaMatte`; continuation into brush correction/result/download; batch concurrency constrained for heavy modes; production CDN manifest and localized E2E updates |
 | `17` | Iterative Guided Object Editor | Turn Phase 16's one-shot selection into a predictable human-in-the-loop object editor without adding another heavy model | Cumulative positive/negative points; target box combined with points; semantic keep/remove strokes sampled into prompts and retained as hard constraints; per-object mask layers and union; alternative candidate selection; prompt undo/redo; previous-mask/local progressive merge; deterministic fusion with the selected automatic `AlphaMatte`; existing pixel brush remains the final exact editor |
-| `18` | Browser Interactive Matting Lab | Select or reject a trimap/alpha refiner and lightweight prompt-model alternatives using reproducible browser evidence before production integration | Extend the opt-in model lab with pinned ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and selected lightweight promptable candidates; license gate; image-free export; alpha/boundary quality corpus; cold/warm timing, peak-memory/OOM, WebGPU/WASM/operator compatibility, quantization impact, and a written winner-or-none decision for Phase 19 |
-| `19` | Production Trimap & Alpha Refinement | Convert automatic + guided intent into high-quality soft alpha while retaining a safe weak-device path | Confidence/disagreement-driven trimap; hard positive/negative constraints; adaptive unknown band; target/focus crop inference; production integration of the Phase-18 winner only if evidence supports it; deterministic no-new-model fusion fallback; one-heavy-stage-at-a-time lifecycle; CDN pins; localized UI/E2E through correction, background replacement, and download |
+| `18` | Browser Interactive Matting Lab | Select or reject a trimap/alpha refiner and lightweight prompt-model alternatives using reproducible browser evidence before production integration | Extend the opt-in model lab with pinned ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and selected lightweight promptable candidates; license gate; image-free export; alpha/boundary quality corpus; cold/warm timing, peak-memory/OOM, WebGPU/WASM/operator compatibility, quantization impact, and a written production variant policy for Phase 19 |
+| `19` | Production Trimap & Alpha Refinement | Convert automatic + guided intent into high-quality soft alpha while retaining both maximum-quality and safe weak-device paths | Confidence/disagreement-driven trimap; hard positive/negative constraints; adaptive unknown band; target/focus crop inference; Distinctions-646 q8 `balanced` and fp32 `maximum` modes with pre-load size disclosure and capability-aware recommendation; selected-only lazy loading and one-heavy-stage lifecycle; fp32 → q8 → deterministic fallback; CDN pins; localized UI/E2E through correction, background replacement, and download |
 | `20` | Foreground Edge Quality & Runtime Hardening | Remove residual colour spill/edge artifacts and establish maintainable release confidence for the full hybrid pipeline without requiring a physical-device lab | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; configured cross-browser and available-host real-model coverage for the Phases 16–19 pipeline; quality-regression corpus and interaction/latency/memory thresholds; manual triage of voluntarily supplied Telegram reports and focused regression coverage only for reproducible incidents; aggregate counters only; no diagnostic-reporting feature or mandatory physical-device matrix |
 
 ---
@@ -615,8 +639,5 @@ authorize domain-specific training/fine-tuning or any server-side inference.
 - Final list of shadcn/ui components to copy into `shared/ui` for MVP (minimum known so far: button,
   slider, toast/notification, dialog for mobile menu if needed).
 - Exact client-side ZIP library for Phase 10's "download all" (§6).
-- Phase 18 must decide whether quantized ViTMatte preserves alpha quality sufficiently for
-  production and whether Composition-1k, Distinctions-646, a different compatible candidate, or
-  no added model wins on the project corpus.
 - Enabling cross-origin isolation for WASM multithreading remains optional research for Phase 20;
   any COOP/COEP change must first prove compatibility with CDN assets, analytics, and public pages.
