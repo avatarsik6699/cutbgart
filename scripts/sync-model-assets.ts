@@ -66,6 +66,15 @@ export function validateManifest(manifest: ModelManifest, ortVersion: string): v
         "onnx/prompt_encoder_mask_decoder_quantized.onnx",
       ],
     ],
+    [
+      "Xenova/vitmatte-small-distinctions-646",
+      [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model_quantized.onnx",
+        "onnx/model.onnx",
+      ],
+    ],
   ]);
   for (const [id, files] of requirements) {
     const model = manifest.models.find((candidate) => candidate.id === id);

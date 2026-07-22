@@ -1,5 +1,6 @@
 import type { RemoveBackgroundState } from "../../../features/remove-background";
 import type { ObjectSelectionStatus } from "../../../features/select-object";
+import type { MattingRefinementStatus } from "../../../features/refine-matte";
 import type { UploadValidationError } from "../../../features/upload-image";
 import { m } from "@/paraglide/messages";
 
@@ -24,6 +25,17 @@ export function describeGuidedState(
   if (status === "error") return m.guidedError();
   if (status === "idle") return m.stateIdle();
   return m.guidedReady();
+}
+
+export function describeRefinementState(
+  status: MattingRefinementStatus,
+  progress: number | null,
+): string {
+  if (status === "fallback") return m.matteRefinementFallback();
+  if (status === "result") return m.stateResult();
+  if (status === "error") return m.matteRefinementDeterministicFallback();
+  if (status === "idle") return m.stateIdle();
+  return m.matteRefinementProgress({ progress: String(Math.round(progress ?? 0)) });
 }
 
 /**

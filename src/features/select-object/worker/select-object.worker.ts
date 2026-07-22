@@ -229,6 +229,10 @@ async function predict(prompt: IterativeSelectionPrompt): Promise<void> {
 
 scope.addEventListener("message", (event) => {
   const request = event.data;
+  if (request.type === "dispose") {
+    void disposeAll().then(() => post({ type: "disposed", revision: request.revision }));
+    return;
+  }
   if (request.type === "reset") {
     void disposeAll().then(() =>
       post({ type: "status", revision: request.revision, status: "idle" }),

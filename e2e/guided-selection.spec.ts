@@ -35,6 +35,7 @@ test("point prompt continues through brush correction and download", async ({ pa
   await expect(page.getByTestId("guided-mask-overlay")).toBeVisible();
   await expect(page.getByRole("button", { name: /Accept and refine/ })).toBeVisible();
   await page.getByRole("button", { name: /Accept and refine/ }).click();
+  await page.getByRole("button", { name: /Skip and edit with brush/ }).click();
   await expect(
     page.getByRole("application", { name: /mask correction editor/i }),
   ).toBeVisible();

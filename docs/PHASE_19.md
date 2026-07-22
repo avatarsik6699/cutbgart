@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `19` |
 | Title | Production Trimap & Alpha Refinement |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.19.0` |
 | Depends on | PHASE_18 gate passing |
 
@@ -32,49 +32,49 @@ tool-workspace controls, status notices, and accessibility patterns.
 
 ### Frontend
 
-- [ ] `F1` Add production `Trimap`, hard refinement-constraint, focus-crop, mode/profile, status,
+- [x] `F1` Add production `Trimap`, hard refinement-constraint, focus-crop, mode/profile, status,
   request/response, result, and classified-error contracts. Keep cross-feature domain values in
   `entities/processed-image`; the new `features/refine-matte` slice must not import another
   `features/*` slice directly — _Depends on:_ —
-- [ ] `F2` Implement deterministic confidence/disagreement trimap construction from the existing
+- [x] `F2` Implement deterministic confidence/disagreement trimap construction from the existing
   automatic matte, optional guided matte, and explicit keep/remove constraints; derive an adaptive
   unknown boundary band, apply the latest hard constraint last, and cover empty/full/disconnected,
   thin/translucent, holes, small-target, and dimension-mismatch cases — _Depends on:_ `F1`
-- [ ] `F3` Implement bounded target/focus-crop preparation and restoration: infer only the padded
+- [x] `F3` Implement bounded target/focus-crop preparation and restoration: infer only the padded
   unknown region, retain the prior source-sized alpha outside it, resample alpha without turning it
   into a binary mask, and re-apply definite foreground/background constraints after restoration —
   _Depends on:_ `F2`
-- [ ] `F4` Add a production-only Distinctions-646 registry with the immutable Phase-18 revision,
+- [x] `F4` Add a production-only Distinctions-646 registry with the immutable Phase-18 revision,
   q8 `balanced` (~27.5 MB) and fp32 `maximum` (~103.9 MB) graph identities, WebGPU/WASM support,
   resource disclosures, and a capability recommendation that prefers maximum on confirmed WebGPU
   and balanced on WASM/unknown paths without using missing `deviceMemory` as a hard prohibition —
   _Depends on:_ `F1`
-- [ ] `F5` Add the matting worker and hook orchestration: no worker/model fetch before explicit
+- [x] `F5` Add the matting worker and hook orchestration: no worker/model fetch before explicit
   refinement; latest-request-wins cancellation; real load progress; warm reuse of the selected
   variant; selected-only pipeline residency; deterministic disposal before mode/stage switches;
   and result metadata that reports requested/actual mode, inference path, and fallback — _Depends
   on:_ `F3`, `F4`, `I1`
-- [ ] `F6` Implement the bounded failure policy. Maximum-mode load/operator/WebGPU/inference/OOM
+- [x] `F6` Implement the bounded failure policy. Maximum-mode load/operator/WebGPU/inference/OOM
   failure disposes fp32 and retries q8 once; a WebGPU-specific failure makes that retry use WASM,
   while other failures may retain the viable detected path. A q8 failure disposes the model and
   returns deterministic guided fusion. Every branch preserves source, prompts, trimap, prior matte,
   background choice, and access to the exact pixel brush; no silent loop — _Depends on:_ `F5`
-- [ ] `F7` Expose explicit release/suspend hooks for the existing automatic and guided workers and
+- [x] `F7` Expose explicit release/suspend hooks for the existing automatic and guided workers and
   orchestrate them from `widgets/tool-workspace`: settle/cancel current work and dispose the prior
   heavy model before loading ViTMatte; dispose ViTMatte before a new automatic/guided run. Do not
   create same-layer feature imports or allow automatic, SlimSAM, and ViTMatte inference to overlap —
   _Depends on:_ `F5`
-- [ ] `F8` Add bilingual, keyboard-accessible refinement UI before the first fetch: `balanced` and
+- [x] `F8` Add bilingual, keyboard-accessible refinement UI before the first fetch: `balanced` and
   `maximum` choices with approximate sizes and capability-aware recommendation, progress/cancel,
   explicit skip-to-deterministic/brush action, and localized fallback notices. Support entry from an
   automatic result, accepted guided result, and selected completed batch item; successful output
   continues through the existing correction, background replacement, individual/ZIP download, and
   process-another-image flows — _Depends on:_ `F6`, `F7`
-- [ ] `F9` Keep refinement and refined batch work at concurrency `1`; isolate a failed batch item,
+- [x] `F9` Keep refinement and refined batch work at concurrency `1`; isolate a failed batch item,
   reject stale results after item switches/resets, and release source-sized/crop buffers, tensors,
   object URLs, and workers on replacement, cancellation, unmount, or reset — _Depends on:_ `F7`,
   `F8`
-- [ ] `F10` Add focused unit/integration coverage for trimap/crop/constraint invariants, mode
+- [x] `F10` Add focused unit/integration coverage for trimap/crop/constraint invariants, mode
   recommendation, graph selection, no eager or concurrent dual loading, warm reuse, lifecycle
   disposal, every fallback edge, stale response rejection, and batch isolation; add deterministic
   Playwright coverage across the configured browser matrix for automatic and guided refinement,
@@ -83,16 +83,16 @@ tool-workspace controls, status notices, and accessibility patterns.
 
 ### Infra
 
-- [ ] `I1` Add `Xenova/vitmatte-small-distinctions-646` at revision
+- [x] `I1` Add `Xenova/vitmatte-small-distinctions-646` at revision
   `358d428c452e5e0cd52955011a8b51944731d28e` to `models.manifest.json` with `config.json`,
   `preprocessor_config.json`, `onnx/model_quantized.onnx`, and `onnx/model.onnx`; extend manifest
   validation/asset-plan tests and document VPS sync. Do not commit model binaries or preload either
   graph — _Depends on:_ —
-- [ ] `I2` Reuse the production CDN → pinned Hugging Face fallback and the generic Service Worker
+- [x] `I2` Reuse the production CDN → pinned Hugging Face fallback and the generic Service Worker
   cache-first policy for both graphs. Verify that only the explicitly chosen URL is requested, each
   full response caches independently after use, range probes are not cached, and a CDN failure does
   not change the immutable model revision — _Depends on:_ `I1`, `F5`
-- [ ] `I3` Add a host-only serialized `pnpm e2e:phase-19-real` command and image-free runtime
+- [x] `I3` Add a host-only serialized `pnpm e2e:phase-19-real` command and image-free runtime
   evidence for both production variants on the available actual WebGPU/WASM path. Record cold/warm
   timing, requested/actual path, classified fallback, and `unavailable` memory honestly; keep the
   command out of Docker and CI — _Depends on:_ `F10`, `I2`
@@ -278,6 +278,7 @@ interface MattingRefinementResult {
   actualMode: MattingRefinementMode | "deterministic";
   actualPath: InferencePath | null;
   fallback: MattingFallback;
+  fallbackReason?: string;
 }
 
 type MattingRefinementErrorCode =
@@ -359,9 +360,9 @@ feat(phase-19): add dual-mode alpha refinement
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked (or deferred in Architect Review Notes)
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 19`
-- [ ] Committed atomically on `feat/phase-19` branch
-- [ ] Tag created after merge to `main`: `git tag -a v0.19.0 -m "Phase 19: Production Trimap & Alpha Refinement"`
+- [x] All Scope checkboxes checked (or deferred in Architect Review Notes)
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 19`
+- [x] Committed atomically on `feat/phase-19` branch
+- [x] Tag created after merge to `main`: `git tag -a v0.19.0 -m "Phase 19: Production Trimap & Alpha Refinement"`

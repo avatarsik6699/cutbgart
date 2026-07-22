@@ -11,12 +11,15 @@ import type {
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
 import {
+  createModelSourceLoader,
+  type ModelSource,
+} from "../../../shared/lib/model-source-loader";
+import {
   compositeProcessedImage,
   extractAlphaMatte,
   recompositeProcessedImage,
 } from "../lib/compositing";
 import { getProductionModel, normalizeModelMode } from "../model/model-info";
-import { createModelSourceLoader, type ModelSource } from "../model/model-source";
 
 // `self` in a real dedicated worker is a `DedicatedWorkerGlobalScope`, but this
 // project's tsconfig only loads the `DOM` lib (for the React app), under which
@@ -106,8 +109,17 @@ export interface RecompositeRequest {
   backgroundFill?: BackgroundFill;
 }
 
+export interface DisposeRequest {
+  type: "dispose";
+  requestId: string;
+}
+
 export type WorkerRequest =
-  LoadModelRequest | ProcessRequest | ExtractAlphaMatteRequest | RecompositeRequest;
+  | LoadModelRequest
+  | ProcessRequest
+  | ExtractAlphaMatteRequest
+  | RecompositeRequest
+  | DisposeRequest;
 
 export interface ModelProgressResponse {
   type: "model-progress";
@@ -167,6 +179,11 @@ export interface RecompositeResultResponse {
   durationMs: number;
 }
 
+export interface DisposedResponse {
+  type: "disposed";
+  requestId: string;
+}
+
 export type WorkerErrorCode =
   | "model-load-failed"
   | "device-out-of-memory"
@@ -190,6 +207,7 @@ export type WorkerResponse =
   | ProcessResultResponse
   | AlphaMatteResultResponse
   | RecompositeResultResponse
+  | DisposedResponse
   | WorkerErrorResponse;
 
 interface ActiveSegmenter {
@@ -493,13 +511,17 @@ async function handleRecomposite(request: RecompositeRequest): Promise<void> {
 
 workerScope.addEventListener("message", (event) => {
   const request = event.data;
-  if (request.type === "load-model") {
+  if (request.type === "dispose") {
+    void disposeActiveSegmenter().then(() =>
+      post({ type: "disposed", requestId: request.requestId }),
+    );
+  } else if (request.type === "load-model") {
     void handleLoadModel(request);
   } else if (request.type === "process") {
     void handleProcess(request);
   } else if (request.type === "extract-alpha-matte") {
     void handleExtractAlphaMatte(request);
-  } else {
+  } else if (request.type === "recomposite") {
     void handleRecomposite(request);
   }
 });

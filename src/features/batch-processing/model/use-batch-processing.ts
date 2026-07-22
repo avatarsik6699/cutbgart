@@ -31,7 +31,8 @@ type BatchWorkerRequest =
       image: ProcessedImage;
       matte: AlphaMatte;
       backgroundFill?: BackgroundFill;
-    };
+    }
+  | { type: "dispose"; requestId: string };
 type BatchWorkerResponse =
   | {
       type: "model-progress";
@@ -67,7 +68,8 @@ type BatchWorkerResponse =
     }
   | { type: "error"; requestId?: string; message: string; code: string }
   | { type: "log"; qualityMode: QualityMode; message: string }
-  | { type: "fallback-to-wasm"; qualityMode: QualityMode };
+  | { type: "fallback-to-wasm"; qualityMode: QualityMode }
+  | { type: "disposed"; requestId: string };
 
 export interface BatchUpload {
   fileName: string;
@@ -119,6 +121,7 @@ export function useBatchProcessing({
       { resolve: (image: ProcessedImage) => void; reject: (error: Error) => void }
     >(),
   );
+  const pendingDisposalsRef = useRef(new Map<string, () => void>());
 
   const updateItem = useCallback((id: string, update: (item: BatchItem) => BatchItem) => {
     setSession((current) => ({
@@ -275,6 +278,10 @@ export function useBatchProcessing({
           pendingCompositesRef.current.delete(message.requestId);
           pending.resolve(message.result);
         }
+      } else if (message.type === "disposed") {
+        pendingDisposalsRef.current.get(message.requestId)?.();
+        pendingDisposalsRef.current.delete(message.requestId);
+        modelReadyRef.current = false;
       } else if (message.type === "process-result") {
         activeRef.current.delete(message.requestId);
         updateItem(message.requestId, (item) => ({
@@ -526,6 +533,15 @@ export function useBatchProcessing({
     workRef.current.clear();
     setSession(emptySession);
   }, []);
+  const releaseInference = useCallback((): Promise<void> => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.resolve();
+    const requestId = `batch-dispose-${crypto.randomUUID()}`;
+    return new Promise((resolve) => {
+      pendingDisposalsRef.current.set(requestId, resolve);
+      worker.postMessage({ type: "dispose", requestId } satisfies BatchWorkerRequest);
+    });
+  }, []);
   const snapshot = useMemo(
     () => deriveBatchSchedulerSnapshot(session, inferencePath, concurrencyLimit),
     [concurrencyLimit, inferencePath, session],
@@ -540,6 +556,7 @@ export function useBatchProcessing({
     extractMatte,
     recomposite,
     applyBackgroundFill,
+    releaseInference,
     reset,
   };
 }

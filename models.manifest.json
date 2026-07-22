@@ -25,6 +25,16 @@
         "onnx/vision_encoder_quantized.onnx",
         "onnx/prompt_encoder_mask_decoder_quantized.onnx"
       ]
+    },
+    {
+      "id": "Xenova/vitmatte-small-distinctions-646",
+      "revision": "358d428c452e5e0cd52955011a8b51944731d28e",
+      "files": [
+        "config.json",
+        "preprocessor_config.json",
+        "onnx/model_quantized.onnx",
+        "onnx/model.onnx"
+      ]
     }
   ],
   "onnxRuntimeWeb": {

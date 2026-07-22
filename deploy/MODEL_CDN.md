@@ -1,8 +1,11 @@
 # VPS model CDN deployment
 
 Phase 14 serves pinned, public model and ONNX Runtime Web assets from the VPS through Cloudflare.
-The manifest now includes IS-Net q8/fp32, BEN2 fp16, and SlimSAM q8. BEN2 and SlimSAM remain lazy:
-their immutable files are requested only after the corresponding user selection.
+The manifest now includes IS-Net q8/fp32, BEN2 fp16, SlimSAM q8, and the selected ViTMatte
+Distinctions-646 q8/fp32 refiners. BEN2, SlimSAM, and both ViTMatte graphs remain lazy: their
+immutable files are requested only after the corresponding user selection. The two ViTMatte
+variants are alternatives; sync deploys both to the VPS, while the browser fetches and caches only
+the explicitly selected graph.
 No R2 account, payment method, or object-storage credential is involved.
 
 ## 1. Cloudflare DNS and TLS
