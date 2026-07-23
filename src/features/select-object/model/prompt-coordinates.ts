@@ -59,12 +59,7 @@ export function maskCandidates(
         id: `candidate-${String(revision)}-${String(index)}`,
         matte: { width, height, data } satisfies AlphaMatte,
         score:
-          typeof rawScore === "number" &&
-          Number.isFinite(rawScore) &&
-          rawScore >= 0 &&
-          rawScore <= 1
-            ? rawScore
-            : null,
+          typeof rawScore === "number" && Number.isFinite(rawScore) ? rawScore : null,
         differenceRatio: 0,
       };
     },

@@ -2,6 +2,7 @@ import { m } from "@/paraglide/messages";
 import { Button } from "../../../shared/ui";
 import type { ObjectSelectionStatus, PromptSession } from "../model/types";
 
+/** @deprecated Phase-17 compatibility UI tool set. */
 export type GuidedTool = "positive" | "negative" | "box" | "keep" | "remove";
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
   onCancel: () => void;
 }
 
+/** @deprecated Phase-17 compatibility UI; use `GuidedBrushControls` in production. */
 export function ObjectSelectionControls({
   tool,
   onToolChange,

@@ -1,5 +1,5 @@
 import type { RemoveBackgroundState } from "../../../features/remove-background";
-import type { ObjectSelectionStatus } from "../../../features/select-object";
+import type { GuidedBrushStatus } from "../../../features/select-object";
 import type { MattingRefinementStatus } from "../../../features/refine-matte";
 import type { UploadValidationError } from "../../../features/upload-image";
 import { m } from "@/paraglide/messages";
@@ -14,17 +14,18 @@ function uploadErrorMessage(error: UploadValidationError): string {
 }
 
 export function describeGuidedState(
-  status: ObjectSelectionStatus,
+  status: GuidedBrushStatus,
   progress: number | null,
 ): string {
   if (status === "loading-model")
     return m.guidedLoadingModel({ progress: String(Math.round(progress ?? 0)) });
   if (status === "encoding-image") return m.guidedEncodingImage();
-  if (status === "predicting-mask") return m.guidedPredictingMask();
-  if (status === "preview") return m.guidedPreviewReady();
-  if (status === "error") return m.guidedError();
+  if (status === "predicting") return m.guidedBrushRecomputing();
+  if (status === "preview") return m.guidedBrushPreviewReady();
+  if (status === "dirty") return m.guidedBrushDirty();
+  if (status === "error") return m.guidedBrushError();
   if (status === "idle") return m.stateIdle();
-  return m.guidedReady();
+  return m.guidedBrushReady();
 }
 
 export function describeRefinementState(

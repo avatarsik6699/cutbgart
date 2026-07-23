@@ -72,13 +72,15 @@ test("accepted guided result can clean colours, enter the exact brush, and downl
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /Указать точкой или рамкой/ }).click();
+  await page.getByRole("button", { name: /Указать кистью/ }).click();
   await page.getByLabel("Загрузить изображения").setInputFiles(SAMPLE);
   const image = page.getByRole("img", {
-    name: /Исходное изображение для выбора объекта/i,
+    name: /коррекции объекта кистью/i,
   });
   await expect(image).toBeVisible();
-  await image.click();
+  await image.press("Enter");
+  await page.getByRole("button", { name: /Пересчитать маску/ }).click();
+  await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
   await page.getByRole("button", { name: /Принять и уточнить/ }).click();
 
   const controls = page.getByTestId("foreground-refinement-controls");

@@ -189,6 +189,24 @@
       "log";
   }
 
+  .tool-workspace-guided {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "toggle"
+      "info"
+      "notice"
+      "error"
+      "batch-header"
+      "surface"
+      "rail"
+      "batch"
+      "log";
+  }
+
+  .tool-workspace-guided > * {
+    min-width: 0;
+  }
+
   @media (min-width: 64rem) {
     .tool-workspace-batch {
       grid-template-areas:

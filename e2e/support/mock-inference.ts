@@ -18,6 +18,7 @@ export async function installMockInference(page: Page): Promise<void> {
         promptType?: string;
         revision?: number;
         pointLabels?: number[];
+        promptPoints?: Array<{ x: number; y: number; label: number }>;
         requestedMode?: string;
         componentCleanup?: boolean;
         sourceIsOriginal?: boolean;
@@ -50,7 +51,7 @@ export async function installMockInference(page: Page): Promise<void> {
         revision?: number;
         prompt?: {
           revision: number;
-          points: Array<{ label: number }>;
+          points: Array<{ x: number; y: number; label: number }>;
           box: unknown;
         };
         request?: {
@@ -80,6 +81,7 @@ export async function installMockInference(page: Page): Promise<void> {
               promptType?: string;
               revision?: number;
               pointLabels?: number[];
+              promptPoints?: Array<{ x: number; y: number; label: number }>;
               requestedMode?: string;
               componentCleanup?: boolean;
               sourceIsOriginal?: boolean;
@@ -91,14 +93,19 @@ export async function installMockInference(page: Page): Promise<void> {
           promptType: message.prompt ? (message.prompt.box ? "box" : "point") : undefined,
           revision: message.revision ?? message.prompt?.revision,
           pointLabels: message.prompt?.points.map((point) => point.label),
+          promptPoints: message.prompt?.points.map((point) => ({ ...point })),
           requestedMode: message.request?.requestedMode,
           componentCleanup: message.request?.componentCleanup,
           sourceIsOriginal:
-            message.type === "refine-foreground" && message.request?.source
-              ? message.request.source.blob ===
+            message.type === "encode" && message.source
+              ? message.source.blob ===
                 (window as unknown as { __mockOriginalSourceBlob?: Blob })
                   .__mockOriginalSourceBlob
-              : undefined,
+              : message.type === "refine-foreground" && message.request?.source
+                ? message.request.source.blob ===
+                  (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                    .__mockOriginalSourceBlob
+                : undefined,
         });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
@@ -169,6 +176,12 @@ export async function installMockInference(page: Page): Promise<void> {
           }
           if (message.type === "prompt" && message.prompt && this.source) {
             this.guidedPromptCount += 1;
+            const promptSequence =
+              ((window as unknown as { __mockGuidedPromptSequence?: number })
+                .__mockGuidedPromptSequence ?? 0) + 1;
+            (
+              window as unknown as { __mockGuidedPromptSequence: number }
+            ).__mockGuidedPromptSequence = promptSequence;
             const revision = message.prompt.revision;
             const source = this.source;
             const respond = () => {
@@ -178,16 +191,37 @@ export async function installMockInference(page: Page): Promise<void> {
                 revision,
                 candidates: [0.92, 0.78, 0.61].map((score, index) => {
                   const pixelCount = source.width * source.height;
-                  const differenceRatio = index * 0.2;
-                  const data = new Uint8ClampedArray(pixelCount).fill(255);
-                  data.fill(0, 0, Math.floor(pixelCount * differenceRatio));
+                  const collapsed = Boolean(
+                    (
+                      window as unknown as {
+                        __mockCollapseGuidedCandidates?: boolean;
+                      }
+                    ).__mockCollapseGuidedCandidates,
+                  );
+                  const boundaryTolerant = Boolean(
+                    (
+                      window as unknown as {
+                        __mockBoundaryTolerantGuidedCandidate?: boolean;
+                      }
+                    ).__mockBoundaryTolerantGuidedCandidate,
+                  );
+                  const data = new Uint8ClampedArray(pixelCount);
+                  if (collapsed) data.fill(255);
+                  else if (boundaryTolerant && index === 0)
+                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                      data[pixel] =
+                        pixel % source.width >= Math.floor(source.width / 2) ? 255 : 0;
+                  else if (index === 0) data.fill(255);
+                  else if (index === 2)
+                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                      data[pixel] = pixel % 2 ? 255 : 0;
                   return {
-                    id: `mock-${String(revision)}-${String(index)}`,
+                    id: `mock-${String(promptSequence)}-${String(revision)}-${String(index)}`,
                     score: (window as unknown as { __mockInvalidGuidedScores?: boolean })
                       .__mockInvalidGuidedScores
                       ? null
                       : score,
-                    differenceRatio,
+                    differenceRatio: index === 0 ? 0 : 1,
                     matte: { width: source.width, height: source.height, data },
                   };
                 }),
@@ -195,7 +229,7 @@ export async function installMockInference(page: Page): Promise<void> {
             };
             const delayFirst =
               (window as unknown as { __mockDelayFirstGuidedResponse?: boolean })
-                .__mockDelayFirstGuidedResponse && this.guidedPromptCount === 1;
+                .__mockDelayFirstGuidedResponse && promptSequence === 1;
             if (delayFirst) window.setTimeout(respond, 250);
             else respond();
             return;
@@ -370,7 +404,20 @@ export async function installMockInference(page: Page): Promise<void> {
                     const data = new Uint8ClampedArray(
                       message.source!.width * message.source!.height,
                     ).fill(255);
-                    data.fill(128, 0, Math.max(1, message.source!.width));
+                    if (
+                      (
+                        window as unknown as {
+                          __mockBoundaryTolerantGuidedCandidate?: boolean;
+                        }
+                      ).__mockBoundaryTolerantGuidedCandidate
+                    )
+                      for (let pixel = 0; pixel < data.length; pixel += 1)
+                        data[pixel] =
+                          pixel % message.source!.width <
+                          Math.floor(message.source!.width / 2)
+                            ? 0
+                            : 255;
+                    else data.fill(128, 0, Math.max(1, message.source!.width));
                     return {
                       width: message.source!.width,
                       height: message.source!.height,
