@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { createPromptSession } from "./prompt-session";
-import { createRefinementConstraints } from "./refinement-constraints";
+import {
+  createGuidedBrushConstraints,
+  createRefinementConstraints,
+} from "./refinement-constraints";
+import { createGuidedBrushSession } from "./guided-brush-session";
 
 describe("guided refinement constraints", () => {
   it("returns null without explicit strokes", () => {
@@ -42,5 +46,26 @@ describe("guided refinement constraints", () => {
       ],
     });
     expect(map?.data[3 * 7 + 3]).toBe(0);
+  });
+
+  it("builds downstream constraints from the Phase-21 brush session", () => {
+    const source = {
+      blob: new Blob(),
+      width: 7,
+      height: 7,
+      format: "image/png" as const,
+    };
+    const session = {
+      ...createGuidedBrushSession(source),
+      strokes: [
+        {
+          id: "keep",
+          mode: "keep" as const,
+          points: [{ x: 0.5, y: 0.5 }],
+          radius: 1,
+        },
+      ],
+    };
+    expect(createGuidedBrushConstraints(session)?.data[3 * 7 + 3]).toBe(1);
   });
 });

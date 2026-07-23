@@ -1,4 +1,8 @@
-import type { AlphaMatte } from "../../../entities/processed-image";
+import type {
+  AlphaMatte,
+  PixelRect,
+  RefinementConstraintMap,
+} from "../../../entities/processed-image";
 import { semanticStrokeToPatch } from "./semantic-stroke";
 import type { GuidedBox, ObjectMaskLayer } from "./types";
 
@@ -147,5 +151,55 @@ export function fuseGuidedMattes({
             data[y * width + x] = patch.mode === "keep" ? 255 : 0;
         }
     }
+  return { width, height, data };
+}
+
+export interface GuidedBrushFusionInput {
+  baseMatte: AlphaMatte | null;
+  candidate: AlphaMatte;
+  constraints: RefinementConstraintMap;
+  influenceMask: Uint8Array;
+  editRegion: PixelRect;
+}
+
+/**
+ * Phase-21 primary fusion. The model may propose a source-sized mask, but an
+ * automatic base is replaced only in the union of compact stroke-shaped
+ * influence zones. Binary user intent is applied last and is authoritative.
+ */
+export function fuseGuidedBrushCandidate({
+  baseMatte,
+  candidate,
+  constraints,
+  influenceMask,
+  editRegion,
+}: GuidedBrushFusionInput): AlphaMatte {
+  const { width, height } = candidate;
+  assertDimensions(candidate, width, height);
+  if (
+    constraints.width !== width ||
+    constraints.height !== height ||
+    constraints.data.length !== width * height
+  )
+    throw new Error("Guided constraints do not match the candidate dimensions");
+  if (influenceMask.length !== width * height)
+    throw new Error("Guided influence mask does not match the candidate dimensions");
+  if (baseMatte) assertDimensions(baseMatte, width, height);
+  const data = baseMatte?.data.slice() ?? candidate.data.slice();
+  if (baseMatte) {
+    const minX = Math.max(0, Math.floor(editRegion.x));
+    const minY = Math.max(0, Math.floor(editRegion.y));
+    const maxX = Math.min(width, Math.ceil(editRegion.x + editRegion.width));
+    const maxY = Math.min(height, Math.ceil(editRegion.y + editRegion.height));
+    for (let y = minY; y < maxY; y += 1)
+      for (let x = minX; x < maxX; x += 1) {
+        const index = y * width + x;
+        if (influenceMask[index]) data[index] = candidate.data[index]!;
+      }
+  }
+  constraints.data.forEach((intent, index) => {
+    if (intent === 1) data[index] = 255;
+    else if (intent === 0) data[index] = 0;
+  });
   return { width, height, data };
 }

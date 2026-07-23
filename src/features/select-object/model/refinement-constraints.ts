@@ -1,6 +1,7 @@
 import type { RefinementConstraintMap } from "../../../entities/processed-image";
 import { semanticStrokeToPatch } from "./semantic-stroke";
-import type { PromptSession, SemanticStroke } from "./types";
+import { consolidateGuidedBrushStrokes } from "./guided-brush-sampling";
+import type { GuidedBrushSession, PromptSession, SemanticStroke } from "./types";
 
 function applyStroke(map: RefinementConstraintMap, stroke: SemanticStroke): void {
   const patch = semanticStrokeToPatch(stroke, map.width, map.height);
@@ -37,4 +38,17 @@ export function createRefinementConstraints(
     }
   }
   return map.data.some((value) => value !== -1) ? map : null;
+}
+
+export function createGuidedBrushConstraints(
+  session: GuidedBrushSession,
+): RefinementConstraintMap | null {
+  const consolidated = consolidateGuidedBrushStrokes(
+    session.strokes,
+    session.source.width,
+    session.source.height,
+  );
+  return consolidated.keepCount || consolidated.removeCount
+    ? consolidated.constraints
+    : null;
 }

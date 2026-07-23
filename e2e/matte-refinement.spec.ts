@@ -111,11 +111,13 @@ test("an accepted guided result can enter refinement before the exact brush", as
   page,
 }) => {
   await page.goto("/en");
-  await page.getByRole("button", { name: /Point or box/ }).click();
+  await page.getByRole("button", { name: /Guide with a brush/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
-  const image = page.getByRole("img", { name: /guided object selection/i });
+  const image = page.getByRole("img", { name: /brush-guided object correction/i });
   await expect(image).toBeVisible();
-  await image.click();
+  await image.press("Enter");
+  await page.getByRole("button", { name: /Recompute mask/ }).click();
+  await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
   await page.getByRole("button", { name: /Accept and refine/ }).click();
   const controls = page.getByTestId("matte-refinement-controls");
   await expect(controls).toBeVisible();

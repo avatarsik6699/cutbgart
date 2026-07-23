@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.12` |
-| Date | `2026-07-22` |
+| Document Version | `v1.13` |
+| Date | `2026-07-23` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -68,6 +68,7 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Model evaluation lab: compare IS-Net q8/fp32, BEN2 fp16, and MVANet q4 in the browser on the same local images before selecting a new production automatic model (Phase 15) | Domain-specific model training/fine-tuning |
 | Guided object selection with SlimSAM: the user marks the object to preserve with a positive point or box when automatic removal is ambiguous (Phase 16) | |
 | Iterative guided correction: cumulative positive/negative points, target boxes, semantic keep/remove strokes, multiple object layers, mask alternatives, and local correction of an existing automatic matte (Phase 17) | |
+| Brush-guided correction: the primary guided path is reduced to one translucent semantic brush with `keep` (green) and `remove` (red) modes, explicit model recomputation, and visual mask alternatives; Phase-17 points, boxes, and manual object-layer controls remain as legacy compatibility code rather than the default user journey (Phase 21) | |
 | Optional client-side trimap/alpha refinement with `balanced` q8 and `maximum` fp32 modes, plus foreground-edge decontamination, selected only after browser model evaluation and capability checks (Phases 18–20) | |
 | Before/after slider result view, PNG-with-alpha download | Advertising on this domain (never — product decision) |
 | WebGPU with automatic, transparent WASM fallback | Donation/payment on this domain (never — lives on a separate portfolio project) |
@@ -88,7 +89,7 @@ There is no account system and no server-side authorization surface. The only "r
 
 | Role | Capabilities | Restrictions |
 |------|-------------|--------------|
-| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose an automatic or guided processing method, refine object intent with points/boxes/semantic strokes, correct final alpha pixels with the brush editor, replace the background, and download PNG result(s) individually or as a ZIP | No accounts, no persistence of results beyond the browser session |
+| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose an automatic method or guide SlimSAM with a green/red semantic brush, compare visual mask alternatives, correct final alpha pixels with the exact brush editor, replace the background, and download PNG result(s) individually or as a ZIP | No accounts, no persistence of results beyond the browser session |
 | `AI_Agent` | Implements phases, runs gate checks | No push to main/develop |
 
 ### 2.2 Key Entities
@@ -102,7 +103,8 @@ QualityMode ("fast" | "max") — user-selectable, persisted client-side in local
 EvaluationModelId → [features/model-lab] → BenchmarkRun (development-only, in-memory/exportable)
 BatchSession → holds many BatchItem (each: SourceImage → AlphaMatte → ProcessedImage), in-memory only
 ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (transparent by default)
-PromptSession + automatic AlphaMatte + MattingRefinementMode → SemanticMask + Trimap → refined AlphaMatte
+PromptSession + GuidedBrushSession + automatic AlphaMatte + MattingRefinementMode
+  → SemanticMask + Trimap → refined AlphaMatte
 ```
 
 - **SourceImage** — the user's uploaded file (in-memory only; validated for format/size/resolution,
@@ -143,7 +145,15 @@ PromptSession + automatic AlphaMatte + MattingRefinementMode → SemanticMask + 
   negative points, one target box per object layer, positive/negative semantic strokes, candidate
   selection, and undo/redo history. Multiple disconnected foreground objects are represented as
   separate layers whose accepted masks are unioned; prompt coordinates, strokes, masks, and
-  embeddings are never persisted or sent to analytics.
+  embeddings are never persisted or sent to analytics. From Phase 21 this remains an internal
+  compatibility/orchestration substrate; the public primary flow does not expose points, boxes, or
+  manual layer management.
+- **GuidedBrushSession** (Phase 21) — the public semantic-guidance state for one source image:
+  source/base matte, one internal prompt layer, cumulative `keep`/`remove` brush strokes, brush
+  radius, bounded undo/redo, dirty/recomputed revision, local edit region, model candidates, and the
+  selected candidate. Brush opacity is presentational only; every covered pixel expresses binary
+  foreground/background intent. Direct guided entry requires at least one `keep` stroke before
+  recomputation; correction of an automatic result accepts either mode. Nothing is persisted.
 - **SemanticMask / Trimap** (Phases 17–19) — `SemanticMask` identifies which object regions should
   be retained; `Trimap` classifies definite foreground, definite background, and an unknown band
   derived from prompt constraints, boundaries, and disagreement with the automatic `AlphaMatte`.
@@ -274,7 +284,7 @@ page. No dedicated `/batch` URL.
 | `features/remove-background` | `features` | Web Worker model init + inference, WebGPU/WASM device detection, `useBackgroundRemoval` hook exposing the state machine (§5.3), `OffscreenCanvas` postprocessing/compositing |
 | `features/quality-mode-toggle` | `features` | Fast/max-quality UI control, reads/writes `localStorage`, passed into `remove-background` as a parameter (not hardcoded) |
 | `features/model-lab` | `features` | (Phase 15) Opt-in browser-only evaluation surface behind `VITE_ENABLE_MODEL_LAB`: run the same local images sequentially through IS-Net q8/fp32, BEN2 fp16, and MVANet q4; compare anonymized previews, record load/inference/error measurements and pairwise preference, export image-free benchmark JSON. It must not alter the production quality toggle or eagerly fetch any model. |
-| `features/select-object` | `features` | Phase 16 starts with one SlimSAM positive point or bounding box. Phase 17 evolves it into an iterative prompt session with cumulative positive/negative points, target box + point combinations, semantic keep/remove strokes, multiple object layers, alternative-mask selection, undo/redo, and local progressive merge against an existing automatic matte. Loaded only after explicit entry and kept client-side. |
+| `features/select-object` | `features` | Phase 16 starts with one SlimSAM positive point or bounding box and Phase 17 evolves it into a multi-prompt/layer editor. Phase 21 supersedes that public UI with one semantic brush whose green `keep` and red `remove` strokes are consolidated into a compact constraint map and a bounded total prompt sample, followed only by explicit recomputation. The same pinned SlimSAM embedding/worker, latest-revision guard, candidate masks, constraints, and final exact-brush continuation are reused. Point/box/manual-layer UI is retained as legacy source for rollback and compatibility; production-unreferenced UI exports are marked `@deprecated`, while reused internal session/worker APIs are not. |
 | `features/refine-matte` | `features` | (Phases 18–19) Builds a confidence-aware trimap from automatic alpha, guided semantic masks, and hard user constraints, then optionally runs the selected Distinctions-646 q8 (`balanced`) or fp32 (`maximum`) variant only on the target/unknown crop. It discloses first-download size before loading, fetches only the chosen variant, keeps one matting pipeline resident, and falls back fp32 → q8 → deterministic no-new-model fusion without losing user work. |
 | `features/refine-foreground` | `features` | (Phase 20) Optional foreground-color estimation/decontamination and conservative edge-aware cleanup after alpha refinement; never changes explicit prompt constraints and always preserves the final pixel-level correction path. |
 | `features/download-result` | `features` | PNG-with-alpha download button; from Phase 10, also a "download all as ZIP" action over a `BatchSession` |
@@ -314,10 +324,19 @@ idle → model-loading → ready → processing → result ⇄ guiding → refin
   "edit mask" entry point into **correcting**, and (Phase 11) a background-fill selector
   (transparent/color/gradient/image) that affects both the composited preview and the downloaded PNG
   without introducing a new top-level state.
-- **guiding** (Phase 17) — starts from a source image or existing result and retains the current
-  automatic matte while the user accumulates object-level positive/negative points, target boxes,
-  or semantic keep/remove strokes. Prompt inference is latest-request-wins, runs after a completed
-  gesture rather than on every pointer move, and updates only the intended object/local region.
+- **guiding** (Phases 17, 21) — starts from a source image or existing result and retains the current
+  automatic matte. Phase 21's primary UI exposes only a translucent semantic brush with green
+  `keep` and red `remove` modes, adjustable size, undo/redo, clear-markings, and an explicit
+  "recompute" action. Painting, undo, and redo only update the visible markings and dirty state;
+  inference never runs during pointer movement or implicitly after a gesture. Recompute converts
+  the consolidated markings into one bounded total set of positive/negative SlimSAM prompt samples,
+  ignores stale revisions, ranks up to three materially different masks against the user's intent,
+  and previews the selected result. Direct entry requires at least one green stroke. For an
+  automatic base, model changes are fused only inside a brush-derived, bounded local edit region;
+  pixels outside remain byte-for-byte unchanged and explicit constraints apply last. The pinned
+  decoder has no previous-mask input, so continuity is deterministic local fusion rather than a
+  false claim of recurrent model refinement. Phase-17 point/box/manual-layer controls are not part
+  of the primary user journey.
 - **refining** (Phase 19) — derives a trimap and optionally predicts soft alpha only inside the
   target/unknown crop. Before the first model fetch, the UI exposes `balanced` q8 and `maximum`
   fp32 with their approximate download sizes and capability-aware recommendation. A maximum-mode
@@ -332,6 +351,58 @@ idle → model-loading → ready → processing → result ⇄ guiding → refin
   persisted beyond the in-memory session.
 - **error** — reachable from any state; always carries a concrete message and an action (retry/reset),
   never a bare "something went wrong."
+
+Phase-21 brush guidance adds these browser-memory-only contracts:
+
+```ts
+type GuidedBrushMode = "keep" | "remove";
+type GuidedBrushStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready"
+  | "dirty"
+  | "predicting"
+  | "preview"
+  | "error";
+
+interface GuidedBrushStroke {
+  id: string;
+  mode: GuidedBrushMode;
+  points: readonly { x: number; y: number }[]; // normalized source coordinates
+  radius: number; // source-image pixels; overlay opacity is visual only
+}
+
+interface GuidedBrushCandidate {
+  id: string;
+  matte: AlphaMatte;
+  modelRankScore: number | null; // any finite raw iou_scores value; never shown as a percentage
+  intentScore: number; // 0..1 agreement with pre-constraint keep/remove markings
+  differenceRatio: number; // candidate difference inside the local edit region only
+}
+
+interface GuidedBrushSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  strokes: readonly GuidedBrushStroke[];
+  brushRadius: number;
+  status: GuidedBrushStatus;
+  revision: number;
+  computedRevision: number | null;
+  editRegion: PixelRect | null;
+  candidates: readonly GuidedBrushCandidate[];
+  selectedCandidateId: string | null;
+  history: readonly GuidedBrushStroke[]; // bounded gesture deltas
+  redo: readonly GuidedBrushStroke[];
+}
+```
+
+Candidate order is deterministic and intent-first: compare pre-hard-constraint agreement with all
+green/red markings, then use a finite raw SlimSAM ranking value only as a tie-breaker, then prefer
+continuity with an automatic base inside the edit region. A raw score outside `0..1` remains usable
+for internal ordering but is never converted into a confidence percentage. Alternatives whose
+local `differenceRatio` is below `0.001` (0.1%) are treated as materially identical and collapsed.
+Hard constraints are applied only after candidate evaluation and always win.
 
 Batch processing (Phase 10) does not add a new top-level state to this diagram. A `BatchSession` runs
 one independent instance of `model-loading → ready → processing → result` per `BatchItem`, in
@@ -355,6 +426,10 @@ does not block or cancel the others (§7.3).
 - The background-fill selector (Phase 11) is a standard keyboard-operable control set (color picker,
   gradient presets, file input for the custom image) — no new interaction pattern beyond what §5.4
   already requires elsewhere.
+- The Phase-21 semantic brush exposes keyboard-operable `keep`/`remove`, brush-size, undo/redo,
+  clear, recompute, candidate, and accept controls. Red/green markings use translucent colour plus
+  textual/icon labels so intent is not communicated by colour alone; the canvas announces dirty,
+  processing, candidate-ready, and error states through `aria-live`.
 
 ### 5.5 Internationalization (Phase 12)
 
@@ -397,7 +472,7 @@ be fully bilingual, not translated as an afterthought.
 | ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
 | Evaluation models (Phase 15) | `onnx-community/BEN2-ONNX` fp16 and `onnx-community/MVANet-ONNX` q4, plus the existing IS-Net q8/fp32 baselines | Experimental only until browser compatibility, memory, latency, and project-image quality are measured. Immutable revisions are mandatory. Candidate weights load from Hugging Face only after explicit lab interaction and are not added to the production VPS manifest before selection. BEN2/MVANet are MIT-licensed. |
-| Guided segmentation (Phase 16) | `Xenova/slimsam-77-uniform` (final dtype/revision selected during phase initialization) | User-prompted segmentation, not automatic background removal. A positive point or bounding box resolves foreground intent for light-on-light and otherwise ambiguous images; exact browser execution-path support must be verified before production activation. Apache-2.0-licensed. |
+| Guided segmentation (Phases 16–17, 21) | `Xenova/slimsam-77-uniform` pinned q8/WASM | User-prompted segmentation, not automatic background removal. Phase 21 reuses the same image embedding and decoder but derives a bounded positive/negative point set from consolidated semantic brush markings. The decoder's `iou_scores` are an internal ranking signal, not a user-facing correctness percentage, and the graph does not accept a previous mask. Apache-2.0-licensed. |
 | Interactive matting (Phases 18–19) | Phase-18 evaluation: ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and licensed lightweight alternatives. Phase-19 production: pinned Distinctions-646 q8 + fp32 variants. | Phase-18 evidence selects q8 as the compact/WASM-safe `balanced` path and fp32 as the best-quality WebGPU-oriented `maximum` path. The variants are alternatives, not an ensemble: never eagerly fetch or concurrently retain both. Research-only/non-commercial licenses are not production eligible. |
 | Client-side ZIP (Phase 10) | `[NEEDS_CLARIFICATION: exact library — e.g. fflate or client-zip]` | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
 | Package manager | pnpm | |
@@ -433,6 +508,8 @@ be fully bilingual, not translated as an afterthought.
   (~103.9 MB). Cache Storage may retain both after separate explicit uses, but runtime memory holds
   only the selected matting pipeline. A mode switch first settles/cancels active work and disposes
   the old pipeline/tensors/session before loading the other variant.
+- Phase 21 adds no model or model asset. It reuses the pinned Phase-16 SlimSAM q8 graphs, cached
+  same-image embedding, serialized heavy-work lifecycle, CDN/upstream fallback, and session cleanup.
 
 ---
 
@@ -463,6 +540,13 @@ promptable, and matting pipelines never perform heavy inference concurrently. Ca
 retain more than one warm session only after measured peak-memory evidence; otherwise the previous
 pipeline is disposed before the next heavy stage loads.
 
+Phase-21 brush guidance consolidates every visible stroke into one compact constraint map before
+sampling. The SlimSAM decoder receives at most `32` representative prompt points for the entire
+current brush session, balanced across available `keep` and `remove` intent; it never receives
+`32 × stroke-count`. Recompute is explicit and serialized. Candidate comparison and difference
+measurement are restricted to the brush-derived edit region so a small but important boundary
+change is not diluted by unrelated image pixels.
+
 Phase-19 matting refinement has concurrency `1`, including batch use. Its capability-aware initial
 mode is `maximum` on a confirmed WebGPU path and `balanced` on WASM or an unknown/weak path; missing
 advisory APIs such as `navigator.deviceMemory` alone never disable an explicit maximum-mode choice.
@@ -492,6 +576,9 @@ failure triggers the bounded fallback policy in §7.3.
 | Device out-of-memory during inference | Caught explicitly; clear message suggesting a lower resolution |
 | One `BatchItem` fails during batch processing (Phase 10) | Isolated per-item error state in the grid tile; does not cancel or block the rest of the batch |
 | Interactive prompt/refinement request is superseded | Ignore or cancel the stale result; only the latest prompt revision may update the visible mask |
+| Brush-guided recompute has no green intent and no automatic base | Keep the session and markings, do not call SlimSAM, and explain that at least one green `keep` stroke is required to identify an object |
+| SlimSAM candidate scores are non-finite, outside `0..1`, or absent | Never show an "estimate unavailable" message or invent a percentage. Use any finite raw value only as an internal ranking signal; otherwise rank deterministically by pre-constraint agreement with green/red markings and continuity with the base inside the edit region |
+| Brush-guided candidates are pixel-identical or materially indistinguishable inside the edit region | Show one result and state that no meaningfully different alternatives were produced; do not render redundant choices |
 | Maximum fp32 matting is unsupported, fails, or exhausts memory | Dispose fp32, preserve source/prompts/trimap/prior matte, show a localized notice, and retry the q8 variant once; never loop or keep both pipelines resident |
 | Balanced q8 matting is unsupported, fails, or exhausts memory | Dispose q8, preserve source/prompts/trimap/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
 
@@ -573,6 +660,7 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | E2E (model lab) | With the lab flag enabled and inference mocked: opt in, select local images/models, run a sequential comparison, choose a pairwise preference, and export image-free benchmark JSON | Playwright |
 | E2E (guided selection) | Enter **select object**, place a positive point and a box, obtain a mask, then continue through existing correction/result/download flow | Playwright |
 | E2E (iterative guidance) | Starting from an automatic or guided result, combine positive/negative points, box, semantic keep/remove strokes, undo/redo, multiple object layers, and alternative masks; stale prompt responses never overwrite the latest revision | Playwright |
+| E2E (brush-guided correction) | From both direct upload and an automatic result, paint translucent green/red markings, adjust brush size, undo/redo/clear without implicit inference, explicitly recompute, compare only materially different visual candidates, accept one, and continue through matting/edge cleanup/exact brush/background/download; stale responses never overwrite newer markings | Playwright |
 | E2E (matting refinement) | Before any refiner fetch, choose capability-recommended or explicit `balanced`/`maximum`; verify q8/fp32 graph selection, no eager/concurrent dual load, fp32 → q8 → deterministic fallback, warm cache/session reuse, hard trimap constraints, and continuation through correction/background/download | Playwright + focused worker/hook tests |
 | Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
 | Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
@@ -608,6 +696,7 @@ regressions after reproduction rather than anticipated through an unavailable ha
 | `18` | Browser Interactive Matting Lab | Select or reject a trimap/alpha refiner and lightweight prompt-model alternatives using reproducible browser evidence before production integration | Extend the opt-in model lab with pinned ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and selected lightweight promptable candidates; license gate; image-free export; alpha/boundary quality corpus; cold/warm timing, peak-memory/OOM, WebGPU/WASM/operator compatibility, quantization impact, and a written production variant policy for Phase 19 |
 | `19` | Production Trimap & Alpha Refinement | Convert automatic + guided intent into high-quality soft alpha while retaining both maximum-quality and safe weak-device paths | Confidence/disagreement-driven trimap; hard positive/negative constraints; adaptive unknown band; target/focus crop inference; Distinctions-646 q8 `balanced` and fp32 `maximum` modes with pre-load size disclosure and capability-aware recommendation; selected-only lazy loading and one-heavy-stage lifecycle; fp32 → q8 → deterministic fallback; CDN pins; localized UI/E2E through correction, background replacement, and download |
 | `20` | Foreground Edge Quality & Runtime Hardening | Remove residual colour spill/edge artifacts and establish maintainable release confidence for the full hybrid pipeline without requiring a physical-device lab | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; configured cross-browser and available-host real-model coverage for the Phases 16–19 pipeline; quality-regression corpus and interaction/latency/memory thresholds; manual triage of voluntarily supplied Telegram reports and focused regression coverage only for reproducible incidents; aggregate counters only; no diagnostic-reporting feature or mandatory physical-device matrix |
+| `21` | Brush-Guided Object Correction | Replace the technically exposed Phase-17 guided editor with one predictable semantic brush while reusing the proven SlimSAM runtime and preserving the exact final editor | Primary bilingual `keep`/`remove` translucent brush UI with size, undo/redo, clear, explicit recompute, visual candidate previews, direct-entry green-intent validation, and continuation through the existing pipeline; consolidated constraint map and at most 32 balanced prompt samples per session; intent/local-continuity candidate ranking without user-facing SlimSAM percentages; brush-region-only fusion over an automatic base; retained legacy point/box/layer source with selective `@deprecated` annotations only for production-unreferenced UI; focused unit/component/E2E plus host-only real-model evidence; no new model asset, API, persistence, analytics payload, or environment variable |
 
 ---
 
@@ -622,8 +711,11 @@ Batch processing and background replacement remain in MVP scope (Phases 10-11, �
 SAM-style correction, previously deferred on 2026-07-11, is now approved as the SlimSAM guided
 selection flow in Phase 16 after the Phase 15 automatic-model evaluation.
 Its iterative multi-prompt, semantic-brush, trimap/matting, and foreground-decontamination evolution
-is approved as Phases 17–20. These phases may evaluate third-party pretrained models but do not
-authorize domain-specific training/fine-tuning or any server-side inference.
+is approved as Phases 17–20. Phase 21 supersedes only the public guided-editor interaction with a
+brush-only semantic workflow: the Phase-17 point/box/manual-layer implementation is retained as
+legacy compatibility source, while reused internal worker/session contracts remain active. These
+phases may evaluate third-party pretrained models but do not authorize domain-specific
+training/fine-tuning or any server-side inference.
 
 **Never (product decision, not a phasing choice):**
 - Any server endpoint that accepts uploaded images, in any form

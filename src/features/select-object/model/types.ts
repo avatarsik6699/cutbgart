@@ -1,4 +1,71 @@
-import type { AlphaMatte, SourceImage } from "../../../entities/processed-image";
+import type {
+  AlphaMatte,
+  PixelRect,
+  SourceImage,
+} from "../../../entities/processed-image";
+
+export type GuidedBrushMode = "keep" | "remove";
+
+export type GuidedBrushStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready"
+  | "dirty"
+  | "predicting"
+  | "preview"
+  | "error";
+
+export interface GuidedBrushStroke {
+  id: string;
+  mode: GuidedBrushMode;
+  points: readonly { x: number; y: number }[];
+  /** Source-image pixels. Overlay opacity is presentational only. */
+  radius: number;
+}
+
+export interface GuidedBrushCandidate {
+  id: string;
+  matte: AlphaMatte;
+  /** Any finite raw `iou_scores` value; never a public accuracy percentage. */
+  modelRankScore: number | null;
+  /** Pre-hard-constraint agreement with visible keep/remove markings. */
+  intentScore: number;
+  /** Difference from the leading candidate inside `editRegion` only. */
+  differenceRatio: number;
+  /** Selected-pixel share inside `editRegion`; used only for honest contour descriptions. */
+  foregroundRatio: number;
+}
+
+export interface GuidedBrushSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  strokes: readonly GuidedBrushStroke[];
+  brushRadius: number;
+  status: GuidedBrushStatus;
+  revision: number;
+  computedRevision: number | null;
+  editRegion: PixelRect | null;
+  candidates: readonly GuidedBrushCandidate[];
+  selectedCandidateId: string | null;
+  /** Bounded gesture deltas; no full-resolution matte snapshots. */
+  history: readonly GuidedBrushStroke[];
+  redo: readonly GuidedBrushStroke[];
+}
+
+export type GuidedBrushCandidateSummary = Omit<GuidedBrushCandidate, "matte">;
+
+/**
+ * Render-safe projection. Full-resolution candidate mattes stay behind the
+ * hook's stable ref/state boundary and never cross a changing React prop.
+ */
+export interface GuidedBrushViewSession extends Omit<
+  GuidedBrushSession,
+  "baseMatte" | "candidates"
+> {
+  hasBaseMatte: boolean;
+  candidates: readonly GuidedBrushCandidateSummary[];
+}
 
 export type PromptPointLabel = 0 | 1;
 
@@ -28,6 +95,7 @@ export interface SemanticStroke {
 export interface GuidedMaskCandidate {
   id: string;
   matte: AlphaMatte;
+  /** @internal Raw model ranking signal; never display as confidence. */
   score: number | null;
   differenceRatio: number;
 }

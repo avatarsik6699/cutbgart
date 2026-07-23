@@ -62,6 +62,7 @@ function boxStyle(start: Point, end: Point) {
   };
 }
 
+/** @deprecated Phase-17 compatibility UI; use `GuidedBrushCanvas` in production. */
 export function ObjectSelectionCanvas(props: Props) {
   const { session, status, matteRef, matteRevision, progress, error, onUndo, onRedo } =
     props;

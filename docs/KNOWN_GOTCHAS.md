@@ -11,6 +11,38 @@
 
 ## Gotcha Log
 
+### An awaited editor transition can resurrect a cancelled session
+
+- **Symptoms**: guided correction reopens after Reset, a result from the previously selected batch
+  item is applied to the current item, or the guided UI disappears on item switch while its worker
+  remains alive.
+- **Root cause**: releasing another model, extracting a matte, and recompositing an accepted result
+  are separate asynchronous steps. Clearing React state does not cancel their promises; a late
+  continuation can still mutate the workspace using its captured target.
+- **Fix**: give the whole transition one monotonic run token, check it after every `await` and before
+  every state mutation, and increment it on reset, cancel, item switch, batch clear, replacement
+  upload, and unmount. Explicitly reset the guided hook when its batch target leaves scope.
+- **Prevention**: any new multi-step editor transition must have target identity plus a run token;
+  disabling a button is UX protection, not stale-completion protection.
+
+### SlimSAM `iou_scores` is not a user-facing accuracy percentage
+
+- **Symptoms**: mask alternatives intermittently show "SlimSAM quality estimate unavailable", or
+  the first candidate is called recommended even though no valid estimate exists; changing prompts
+  may make the message appear or disappear without an actionable explanation.
+- **Root cause**: the SAM decoder returns raw `iou_scores` output used to rank masks. The Phase-17
+  adapter treated only finite values inside `0..1` as displayable and converted everything else to
+  `null`, but the model/library contract does not make this value a stable, calibrated user
+  correctness percentage. With all values `null`, decoder order still made candidate 1 look
+  recommended.
+- **Fix**: Phase 21 removes model-score copy from the public UI. Rank candidates by pre-constraint
+  agreement with green/red semantic markings, use any finite raw model value only as an internal
+  tie-breaker, compare alternatives inside the local edit region, and collapse materially identical
+  masks.
+- **Prevention**: never expose raw model ranking/logit output as accuracy or confidence unless the
+  exact pinned model contract and calibration evidence support that claim. A missing internal
+  ranking signal must not create a user-facing task with no possible user action.
+
 ### A memoized blob URL can be revoked during React StrictMode's development remount
 
 - **Symptoms**: an image backed by a `Blob` works initially, then shows only its alt text after
@@ -302,6 +334,19 @@
 - **Prevention**: functional state updaters must only calculate and return state. Never perform
   Worker messages, network calls, ref mutation, timers, analytics, or other externally observable
   work inside them.
+
+### A bounded undo stack does not bound the live brush document
+
+- **Symptoms**: long guided-brush sessions become progressively slower and retain more memory even
+  though the undo history reports a fixed limit; very dense pointer input can also create a single
+  stroke with thousands of nearly identical points.
+- **Root cause**: slicing `history` to its last N entries does not remove older strokes from the
+  active `strokes` collection, and raw `pointermove` frequency has no inherent upper bound.
+- **Fix**: enforce the same explicit cap on active guided strokes and history, simplify points by
+  source-space distance while painting, and hard-cap points per committed stroke. Surface those
+  limits in the UI rather than silently implying an unlimited session.
+- **Prevention**: every interactive editor needs separate, tested bounds for its live document,
+  per-gesture payload, undo/redo metadata, model input, and full-resolution result buffers.
 
 ### A hook value derived from a ref read during render silently freezes in `renderHook` tests
 

@@ -39,6 +39,7 @@
 | PHASE_18 | ✅ done | v0.18.0 | ✅ | 🤖 agent | Browser Interactive Matting Lab |
 | PHASE_19 | ✅ done | v0.19.0 | ✅ | 🤖 agent | Production Trimap & Alpha Refinement |
 | PHASE_20 | ✅ done | v0.20.0 | ✅ | 🤖 agent | Foreground Edge Quality & Runtime Hardening |
+| PHASE_21 | ✅ done | v0.21.0 | ✅ | 🤖 agent | Brush-Guided Object Correction |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -50,7 +51,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `20` · **Phase in progress:** `—`
+**Phase completed:** `21` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -564,6 +565,59 @@ constraints exact, is reversible/non-accumulating, and reports localized applied
 recoverable-error outcomes. `ProcessedImage.foreground` is an optional browser-memory colour layer;
 the current `AlphaMatte` remains the compositing-alpha authority.
 
+```ts
+// Phase 21 — brush-guided object correction; all values are session-only
+type GuidedBrushMode = "keep" | "remove";
+type GuidedBrushStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready"
+  | "dirty"
+  | "predicting"
+  | "preview"
+  | "error";
+
+interface GuidedBrushStroke {
+  id: string;
+  mode: GuidedBrushMode;
+  points: readonly { x: number; y: number }[];
+  radius: number;
+}
+
+interface GuidedBrushCandidate {
+  id: string;
+  matte: AlphaMatte;
+  modelRankScore: number | null;
+  intentScore: number;
+  differenceRatio: number;
+}
+
+interface GuidedBrushSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  strokes: readonly GuidedBrushStroke[];
+  brushRadius: number;
+  status: GuidedBrushStatus;
+  revision: number;
+  computedRevision: number | null;
+  editRegion: PixelRect | null;
+  candidates: readonly GuidedBrushCandidate[];
+  selectedCandidateId: string | null;
+  history: readonly GuidedBrushStroke[];
+  redo: readonly GuidedBrushStroke[];
+}
+```
+
+Phase 21 replaces the primary Phase-17 point/box/layer UI with one two-zone semantic brush while
+retaining the legacy source for compatibility. The inner core supplies hard `keep`/`remove`
+constraints and prompt anchors; the full translucent radius bounds local candidate influence.
+Visible strokes produce at most 32 label-balanced prompts for the whole session. Only explicit
+recompute runs SlimSAM, intent-first ranking keeps raw model scores internal, materially duplicate
+alternatives collapse, and automatic-base bytes outside local influence zones remain unchanged.
+Latest-revision-wins orchestration and lifecycle run tokens prevent stale inference or result
+application after edits, reset, cancel, batch changes, or disposal.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -614,6 +668,10 @@ the current `AlphaMatte` remains the compositing-alpha authority.
 - Phase 20 foreground samples, corrected colour buffers, edge/component masks, dirty patches, and
   worker sessions remain in browser-tab memory and are discarded on reset/reload. Only image-free
   quality/runtime observations persist; no filename, prompt, pixel sample, or user image is stored.
+- Phase 21 brush strokes, compact constraint maps, prompt samples, candidates, edit regions,
+  embeddings, accepted mattes, and bounded delta histories remain in browser-tab memory and are
+  discarded on reset/source change/unmount. Only `docs/PHASE_21_RUNTIME_EVIDENCE.md` persists, with
+  image-free runtime path, bounded counts, classified failures, timings, and pass/fail observations.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -650,6 +708,10 @@ the current `AlphaMatte` remains the compositing-alpha authority.
 - Phase 20 adds optional bilingual edge-colour cleanup after alpha refinement and before the exact
   brush. Automatic, accepted-guided, refined, and selected settled-batch results expose accessible
   applied/unchanged/error outcomes while keeping background and download output byte-consistent.
+- Phase 21 makes a bilingual two-zone `Keep`/`Remove` semantic brush the primary guided flow from
+  both direct upload and automatic results. Explicit recompute updates a clean split result preview;
+  accepted output continues through matting, foreground cleanup, exact correction, backgrounds,
+  selected-batch handling, and downloads without a parallel state machine or new route.
 
 ### Env Config
 
@@ -686,6 +748,94 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-23 — Phase 21 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_21 automated gate passed and the architect requested local commit, merge,
+and context finalization without remote push or deployment
+
+### Changes / Decision
+- Replaced the primary Phase-17 point/box/layer interaction with one bilingual two-zone semantic
+  brush: a hard inner `keep`/`remove` core plus a translucent local-influence halo. Legacy source
+  remains available for compatibility and rollback but is no longer exposed in the production flow.
+- Added bounded session-wide prompt sampling (maximum 32), explicit-recompute-only SlimSAM
+  orchestration, intent-first candidate ranking, materially distinct alternatives, local
+  automatic-base fusion, hard-constraint precedence, and monotonic lifecycle guards against stale
+  inference or result application.
+- Integrated direct, automatic-result, and selected-batch entry with the existing matting,
+  foreground cleanup, exact correction, background, and download pipeline. No model asset, route,
+  endpoint, analytics payload, environment variable, or persistent user data was added.
+- Gate evidence passed: production container build/health and container-network smoke; generated
+  code, TypeScript, Steiger, 290 unit tests, 67 focused tests, 264 deterministic cross-browser E2E
+  tests with 4 expected feature-flag skips, the real IS-Net smoke, 36 focused Phase-21 browser
+  tests, and both serialized real Phase-21 SlimSAM/WASM scenarios.
+
+### Affected Phases / Consequences
+- Phase 21 completes the approved brush-guided correction contract while preserving Phase-17
+  implementation compatibility and the Phase-18–20 downstream pipeline.
+- The planned roadmap is complete through Phase 21. No next phase, remote publication, or
+  deployment is inferred.
+
+## 2026-07-23 — Advanced interactive boundary algorithms explicitly deferred
+
+**Type**: decision
+**Author**: Architect
+**Triggered by**: Phase 21 tolerant semantic-brush review
+
+### Changes / Decision
+- Phase 21 implements only the approved two-zone semantic brush: a firm inner core plus a
+  translucent local tolerance halo.
+- Edge-aware snapping, graph cuts/GrabCut, geodesic propagation, bilateral solvers, and additional
+  interactive correction models are out of scope now and in future phases unless the architect
+  explicitly reopens the decision.
+- Do not implicitly schedule or prototype those techniques and do not add related dependencies,
+  model assets, or runtime paths under the current contract.
+
+### Affected Phases / Consequences
+- PHASE_21 — finish the two-zone brush using the existing SlimSAM and local-fusion architecture
+  only.
+- Future phases — preserve this deferral as a scope constraint; a new explicit architect request is
+  required before evaluating or implementing any listed advanced technique.
+
+## 2026-07-23 — Brush-guided object correction approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect manual review found Phase-17 points, boxes, semantic strokes, mask
+scores, and manual object layers too difficult and unpredictable for the primary user journey, then
+approved the proposed brush-only guided contract
+
+### Changes / Decision
+- `SPEC.md` v1.13 adds Phase 21 and makes one translucent semantic brush the primary guided UI:
+  green `keep`, red `remove`, adjustable size, bounded undo/redo, clear, explicit recompute, visual
+  mask alternatives, and continuation through matting, edge cleanup, exact correction, background,
+  and download.
+- SlimSAM remains the model and reuses the pinned q8/WASM graphs plus same-image embedding. Visible
+  strokes become one compact constraint map and at most 32 balanced prompt samples for the entire
+  session; the decoder receives no unbounded per-stroke prompt growth.
+- Candidate ranking becomes intent-first and local: evaluate pre-hard-constraint agreement with
+  green/red markings, use any finite raw `iou_scores` value only as an internal tie-breaker, prefer
+  automatic-base continuity inside the brush-derived edit region, and collapse alternatives with
+  local `differenceRatio < 0.001` (0.1%). The UI no longer exposes a SlimSAM score, percentage, or
+  "estimate unavailable" message.
+- Automatic-base fusion may change only the bounded brush-derived edit region; pixels outside stay
+  byte-for-byte unchanged and explicit keep/remove constraints apply last. Direct guided entry
+  requires at least one green stroke before recompute. Painting and history actions never trigger
+  implicit inference.
+- Phase-17 point/box/manual-layer source is retained for rollback and compatibility. Only legacy UI
+  exports with no production callsite are marked `@deprecated`; reused worker/session/protocol code
+  remains active and unmarked. No model asset, route, API, persistence, analytics payload, or
+  environment variable is added.
+
+### Affected Phases / Consequences
+- PHASE_21 — new pending phase owns the brush UI, bounded sampling, candidate ranking, local fusion,
+  legacy policy, deterministic cross-browser coverage, and available-host real-model evidence.
+- PHASE_16–20 remain completed historical contracts and require no `NEEDS_REVIEW` marker. Phase 21
+  supersedes only Phase 17's public interaction; it does not claim the existing implementation
+  already behaves as brush-only.
+- `STATE.md` § Current Contract remains unchanged until Phase 21 is implemented, gated, and closed.
 
 ## 2026-07-22 — Phase 20 complete
 
