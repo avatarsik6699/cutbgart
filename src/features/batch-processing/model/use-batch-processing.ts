@@ -31,7 +31,8 @@ type BatchWorkerRequest =
       image: ProcessedImage;
       matte: AlphaMatte;
       backgroundFill?: BackgroundFill;
-    };
+    }
+  | { type: "dispose"; requestId: string };
 type BatchWorkerResponse =
   | {
       type: "model-progress";
@@ -67,7 +68,8 @@ type BatchWorkerResponse =
     }
   | { type: "error"; requestId?: string; message: string; code: string }
   | { type: "log"; qualityMode: QualityMode; message: string }
-  | { type: "fallback-to-wasm"; qualityMode: QualityMode };
+  | { type: "fallback-to-wasm"; qualityMode: QualityMode }
+  | { type: "disposed"; requestId: string };
 
 export interface BatchUpload {
   fileName: string;
@@ -95,7 +97,7 @@ function createInferenceWorker(): Worker {
 export function useBatchProcessing({
   qualityMode,
   inferencePath,
-  concurrencyLimit = inferencePath === "webgpu" ? 2 : 1,
+  concurrencyLimit = qualityMode === "ben2-fp16" ? 1 : inferencePath === "webgpu" ? 2 : 1,
   workerFactory = createInferenceWorker,
 }: UseBatchProcessingOptions) {
   const [session, setSession] = useState<BatchSession>(emptySession);
@@ -119,6 +121,7 @@ export function useBatchProcessing({
       { resolve: (image: ProcessedImage) => void; reject: (error: Error) => void }
     >(),
   );
+  const pendingDisposalsRef = useRef(new Map<string, () => void>());
 
   const updateItem = useCallback((id: string, update: (item: BatchItem) => BatchItem) => {
     setSession((current) => ({
@@ -130,9 +133,24 @@ export function useBatchProcessing({
   const dispatchQueued = useCallback(() => {
     const worker = workerRef.current;
     if (!modelReadyRef.current || !worker) return;
+    const firstQueued = queueRef.current[0];
+    const nextMode = firstQueued
+      ? workRef.current.get(firstQueued)?.qualityMode
+      : undefined;
+    const activeMode = [...activeRef.current]
+      .map((id) => workRef.current.get(id)?.qualityMode)
+      .find(Boolean);
+    // Model switches wait for the previous mode's active work to settle. The
+    // worker can then dispose the old ONNX session before loading the new one.
+    if (activeMode && nextMode && activeMode !== nextMode) return;
     const available = concurrencyLimit - activeRef.current.size;
     if (available <= 0) return;
-    const queuedIds = queueRef.current.splice(0, available);
+    const queuedIds: string[] = [];
+    while (queuedIds.length < available && queueRef.current.length) {
+      const id = queueRef.current[0]!;
+      if (nextMode && workRef.current.get(id)?.qualityMode !== nextMode) break;
+      queuedIds.push(queueRef.current.shift()!);
+    }
     if (!queuedIds.length) return;
     const started = performance.now();
     for (const id of queuedIds) {
@@ -260,6 +278,10 @@ export function useBatchProcessing({
           pendingCompositesRef.current.delete(message.requestId);
           pending.resolve(message.result);
         }
+      } else if (message.type === "disposed") {
+        pendingDisposalsRef.current.get(message.requestId)?.();
+        pendingDisposalsRef.current.delete(message.requestId);
+        modelReadyRef.current = false;
       } else if (message.type === "process-result") {
         activeRef.current.delete(message.requestId);
         updateItem(message.requestId, (item) => ({
@@ -354,6 +376,7 @@ export function useBatchProcessing({
   }, [concurrencyLimit, inferencePath, qualityMode, session.items]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronizes the React snapshot with the external Worker queue.
     dispatchQueued();
   }, [dispatchQueued, session.items]);
 
@@ -510,6 +533,15 @@ export function useBatchProcessing({
     workRef.current.clear();
     setSession(emptySession);
   }, []);
+  const releaseInference = useCallback((): Promise<void> => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.resolve();
+    const requestId = `batch-dispose-${crypto.randomUUID()}`;
+    return new Promise((resolve) => {
+      pendingDisposalsRef.current.set(requestId, resolve);
+      worker.postMessage({ type: "dispose", requestId } satisfies BatchWorkerRequest);
+    });
+  }, []);
   const snapshot = useMemo(
     () => deriveBatchSchedulerSnapshot(session, inferencePath, concurrencyLimit),
     [concurrencyLimit, inferencePath, session],
@@ -524,6 +556,7 @@ export function useBatchProcessing({
     extractMatte,
     recomposite,
     applyBackgroundFill,
+    releaseInference,
     reset,
   };
 }

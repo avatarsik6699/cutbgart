@@ -34,6 +34,25 @@
 | PHASE_13 | ✅ done | v0.13.0 | ✅ | 🤖 agent | Hardening & Launch |
 | PHASE_14 | ✅ done | v0.14.0 | ✅ | 🤖 agent | VPS Model CDN |
 | PHASE_15 | ✅ done | v0.15.0 | ✅ | 🤖 agent | Browser Model Evaluation Lab |
+| PHASE_16 | ✅ done | v0.16.0 | ✅ | 🤖 agent | Production Model Modes & Guided Selection |
+| PHASE_17 | ✅ done | v0.17.0 | ✅ | 🤖 agent | Iterative Guided Object Editor |
+| PHASE_18 | ✅ done | v0.18.0 | ✅ | 🤖 agent | Browser Interactive Matting Lab |
+| PHASE_19 | ✅ done | v0.19.0 | ✅ | 🤖 agent | Production Trimap & Alpha Refinement |
+| PHASE_20 | ✅ done | v0.20.0 | ✅ | 🤖 agent | Foreground Edge Quality & Runtime Hardening |
+| PHASE_21 | ✅ done | v0.21.0 | ✅ | 🤖 agent | Brush-Guided Object Correction |
+| PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
+| PHASE_23 | ⏳ pending | v0.23.0 | ⬜ | — | Release Reliability & Operations |
+| PHASE_24 | ⏳ pending | v0.24.0 | ⬜ | — | Legal & Data Governance Audit |
+| PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Consent & Legal Surfaces |
+| PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
+| PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Automatic-First Workspace |
+| PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Unified Cutout Tool |
+| PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Enhancements Tool & Committed History |
+| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Background & Export Tools |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Accessibility, Device & Product Validation |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -45,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `15` · **Phase in progress:** `—`
+**Phase completed:** `22` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -321,6 +340,317 @@ interface BenchmarkMeasurement {
 }
 ```
 
+```ts
+// Phase 16 — explicit production modes and guided object selection
+type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+type QualityMode = AutomaticModelMode | "fast" | "max"; // legacy worker aliases remain accepted
+
+interface ProductionModelProfile {
+  id: AutomaticModelMode;
+  modelId: "onnx-community/ISNet-ONNX" | "onnx-community/BEN2-ONNX";
+  revision: string;
+  dtype: "q8" | "fp32" | "fp16";
+  approximateBytes: number;
+  supportedPaths: readonly InferencePath[];
+  relativeSpeed: "fast" | "balanced" | "slow";
+  requiresWebGPU: boolean;
+}
+
+type SelectionPrompt =
+  | { type: "point"; x: number; y: number; label: 1 }
+  | { type: "box"; xMin: number; yMin: number; xMax: number; yMax: number };
+
+type ObjectSelectionStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready-for-prompt"
+  | "predicting-mask"
+  | "preview"
+  | "error";
+
+interface GuidedModelProfile {
+  modelId: "Xenova/slimsam-77-uniform";
+  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4";
+  dtype: "q8";
+  approximateBytes: 13_840_000;
+  supportedPaths: readonly ["wasm"];
+  license: "Apache-2.0";
+}
+```
+
+Phase 16 pins IS-Net q8/fp32, BEN2 fp16, and SlimSAM q8 to immutable revisions. BEN2 is an
+explicit, session-only WebGPU mode that falls back once to IS-Net q8 when capability, model, or OOM
+checks fail. SlimSAM is loaded only after explicit guided-selection entry, reuses one image
+embedding for replacement point/box prompts, and hands the accepted source-sized `AlphaMatte` to
+the existing brush/background/download pipeline. One automatic pipeline and at most one explicitly
+entered guided pipeline may coexist, but heavy inference is serialized and disposed on mode exit.
+
+```ts
+// Phase 17 — iterative guided object editor; all values are session-only
+type PromptPointLabel = 0 | 1;
+type SemanticStrokeMode = "keep" | "remove";
+
+interface GuidedPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: PromptPointLabel;
+}
+
+interface GuidedBox {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+}
+
+interface SemanticStroke {
+  id: string;
+  mode: SemanticStrokeMode;
+  points: readonly { x: number; y: number }[];
+  radius: number;
+}
+
+interface GuidedMaskCandidate {
+  id: string;
+  matte: AlphaMatte;
+  score: number | null;
+  differenceRatio: number;
+}
+
+interface ObjectMaskLayer {
+  id: string;
+  points: readonly GuidedPoint[];
+  targetBox: GuidedBox | null;
+  strokes: readonly SemanticStroke[];
+  candidates: readonly GuidedMaskCandidate[];
+  selectedCandidateId: string | null;
+  acceptedMatte: AlphaMatte | null;
+}
+
+type PromptHistoryEntry =
+  | { type: "point-added"; layerId: string; point: GuidedPoint }
+  | { type: "box-changed"; layerId: string; before: GuidedBox | null; after: GuidedBox | null }
+  | { type: "stroke-added"; layerId: string; stroke: SemanticStroke }
+  | { type: "candidate-selected"; layerId: string; beforeId: string | null; afterId: string | null }
+  | { type: "layer-added"; layerId: string }
+  | {
+      type: "layer-removed";
+      layerId: string;
+      promptData: {
+        points: readonly GuidedPoint[];
+        targetBox: GuidedBox | null;
+        strokes: readonly SemanticStroke[];
+        selectedCandidateId: string | null;
+      };
+      index: number;
+    }
+  | { type: "layer-selected"; beforeId: string; afterId: string };
+
+interface PromptSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  layers: readonly ObjectMaskLayer[];
+  activeLayerId: string;
+  revision: number;
+  history: readonly PromptHistoryEntry[];
+  redo: readonly PromptHistoryEntry[];
+}
+
+interface IterativeSelectionPrompt {
+  revision: number;
+  points: readonly GuidedPoint[];
+  box: GuidedBox | null;
+  previousMask: AlphaMatte | null;
+}
+```
+
+Phase 17 expands SlimSAM guidance to cumulative positive/negative points, one target box and
+semantic keep/remove strokes per object layer, ranked alternative masks, bounded delta-only
+undo/redo, and latest-revision-wins worker responses. Accepted layer masks are unioned over the
+automatic base matte; explicit semantic constraints win. Invalid model scores remain `null` rather
+than becoming invented confidence values. All prompts, candidates, masks, embeddings, and history
+remain browser-memory-only and are released with the guided session.
+
+```ts
+// src/features/model-lab/model/types.ts — Phase 18; evaluation-only, never a production mapping
+type MattingEvaluationModelId =
+  | "vitmatte-small-composition1k-q8"
+  | "vitmatte-small-composition1k-fp32"
+  | "vitmatte-small-distinctions646-q8"
+  | "vitmatte-small-distinctions646-fp32";
+
+type LightweightPromptEvaluationModelId = "efficient-sam-ti" | "mobile-sam-vit-t";
+type InteractiveEvaluationModelId =
+  | MattingEvaluationModelId
+  | LightweightPromptEvaluationModelId;
+
+type CandidateEligibility = "production-eligible" | "evidence-only" | "rejected-license";
+
+interface InteractiveMattingBenchmarkExport {
+  schemaVersion: 2;
+  capabilities: ModelLabCapabilities;
+  candidates: InteractiveEvaluationModelProfile[];
+  corpusCaseCount: number;
+  quality: MattingQualityMeasurement[];
+  runtime: InteractiveRuntimeMeasurement[];
+  decision: InteractiveEvaluationModelId | "none";
+}
+```
+
+Phase 18 extends the opt-in lab with immutable ViTMatte q8/fp32 profiles, deterministic trimap/crop
+preparation, alpha/boundary metrics, classified runtime outcomes, sequential pipeline disposal, and
+an image-free schema-v2 export. EfficientSAM-Ti and MobileSAM remain evidence-only because no
+verified immutable first-party browser ONNX graph was found. Production inference remains unchanged;
+the evidence record selects Distinctions-646 q8/fp32 as Phase-19 `balanced`/`maximum` inputs.
+
+```ts
+// Phase 19 — production trimap and soft-alpha refinement; all values are session-only
+type MattingRefinementMode = "balanced" | "maximum";
+type MattingModelVariantId =
+  | "vitmatte-small-distinctions646-q8"
+  | "vitmatte-small-distinctions646-fp32";
+type TrimapValue = 0 | 128 | 255;
+type HardConstraintValue = -1 | 0 | 1;
+
+interface Trimap {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+  unknownBounds: PixelRect | null;
+}
+
+interface RefinementConstraintMap {
+  width: number;
+  height: number;
+  data: Int8Array;
+}
+
+type MattingFallback = "none" | "balanced" | "deterministic";
+```
+
+Phase 19 adds selected-only, lazy Distinctions-646 q8/fp32 production refinement over an adaptive
+trimap focus crop. The latest hard keep/remove constraint is re-applied after model output; pixels
+outside the crop retain the prior alpha. Maximum may retry balanced once, then deterministic fusion;
+balanced may fall back only to deterministic fusion. Automatic, guided, and ViTMatte heavy stages
+are serialized with explicit disposal acknowledgements, and the refined matte continues through the
+existing brush, background, batch, and download flows.
+
+```ts
+// Phase 20 — session-only foreground cleanup and bounded matting runtime
+type MattingFallback = "none" | "balanced" | "wasm" | "deterministic";
+
+interface MattingInputSize {
+  width: number;
+  height: number;
+}
+
+type ForegroundCleanupPath = "decontaminate" | "edge-aware-fallback" | "unchanged";
+type ForegroundCleanupFallback =
+  | "none"
+  | "no-soft-edge"
+  | "no-background-samples"
+  | "processing-failed";
+
+interface DirtyPixelPatch {
+  bounds: PixelRect;
+  rgba: Uint8ClampedArray;
+}
+
+interface ForegroundRefinementResult {
+  foreground: Blob;
+  matte: AlphaMatte;
+  dirtyPatch: DirtyPixelPatch | null;
+  requestedPath: "decontaminate";
+  actualPath: ForegroundCleanupPath;
+  fallback: ForegroundCleanupFallback;
+  durationMs: number;
+  memoryBytes: number | "unavailable";
+}
+```
+
+Phase 20 bounds every ViTMatte input to at most 1024×1024 while preserving aspect ratio and restores
+the soft alpha to source-crop dimensions. Balanced WebGPU execution failure retries Balanced/WASM
+once; Maximum remains a finite fp32 → q8 → q8/WASM chain before deterministic fusion. Optional
+foreground decontamination changes RGB only in safe soft-edge regions, keeps source alpha and hard
+constraints exact, is reversible/non-accumulating, and reports localized applied, unchanged, or
+recoverable-error outcomes. `ProcessedImage.foreground` is an optional browser-memory colour layer;
+the current `AlphaMatte` remains the compositing-alpha authority.
+
+```ts
+// Phase 21 — brush-guided object correction; all values are session-only
+type GuidedBrushMode = "keep" | "remove";
+type GuidedBrushStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready"
+  | "dirty"
+  | "predicting"
+  | "preview"
+  | "error";
+
+interface GuidedBrushStroke {
+  id: string;
+  mode: GuidedBrushMode;
+  points: readonly { x: number; y: number }[];
+  radius: number;
+}
+
+interface GuidedBrushCandidate {
+  id: string;
+  matte: AlphaMatte;
+  modelRankScore: number | null;
+  intentScore: number;
+  differenceRatio: number;
+}
+
+interface GuidedBrushSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  strokes: readonly GuidedBrushStroke[];
+  brushRadius: number;
+  status: GuidedBrushStatus;
+  revision: number;
+  computedRevision: number | null;
+  editRegion: PixelRect | null;
+  candidates: readonly GuidedBrushCandidate[];
+  selectedCandidateId: string | null;
+  history: readonly GuidedBrushStroke[];
+  redo: readonly GuidedBrushStroke[];
+}
+```
+
+Phase 21 replaces the primary Phase-17 point/box/layer UI with one two-zone semantic brush while
+retaining the legacy source for compatibility. The inner core supplies hard `keep`/`remove`
+constraints and prompt anchors; the full translucent radius bounds local candidate influence.
+Visible strokes produce at most 32 label-balanced prompts for the whole session. Only explicit
+recompute runs SlimSAM, intent-first ranking keeps raw model scores internal, materially duplicate
+alternatives collapse, and automatic-base bytes outside local influence zones remain unchanged.
+Latest-revision-wins orchestration and lifecycle run tokens prevent stale inference or result
+application after edits, reset, cancel, batch changes, or disposal.
+
+```ts
+// models.manifest.json + scripts/sync-model-assets.ts — Phase 22
+interface VerifiedModelAsset {
+  path: string;
+  revision: string;
+  byteSize: number;
+  sha256: string;
+}
+
+interface ModelAssetManifest {
+  schemaVersion: 1;
+  release: string;
+  assets: VerifiedModelAsset[];
+}
+```
+
+Phase 22 makes the model/WASM manifest the immutable release contract for synchronized browser
+assets. Synchronization verifies source revision, byte size and SHA-256 before atomic activation,
+retains the previous verified release for rollback, and never treats a filename alone as trust.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -353,13 +683,36 @@ interface BenchmarkMeasurement {
 | `GET` | `/en/remove-background-from-product-photo`, `/en/remove-background-from-id-photo`, `/en/remove-background-from-logo`, `/en/remove-background-from-avatar` | none | English-locale counterparts of the four Russian scenario pages (Phase 12, SPEC.md §5.1, §5.5) |
 | `GET` | `/sitemap.xml` | none | Phase 12 contract: locale-aware build output containing both locale URLs and per-page `hreflang` alternates; supersedes the Phase 06 baseline above |
 | `GET`, `HEAD` | `https://cdn.cutbg.art/models/{manifest-path}` | none | Public pinned ISNet/config/ONNX Runtime asset with CORS, byte ranges, immutable caching, and Cloudflare edge delivery (Phase 14) |
+| `GET` | `/.well-known/security.txt` | none | RFC 9116 vulnerability-disclosure contact, expiry, canonical URL and policy link (Phase 22) |
 
 ### DB Schema
 
 - Tables: none yet.
 - Current migration head: `—`
-- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (`onnx-community/ISNet-ONNX`, `q8`/`fp32` dtype variants — replaces the original `BiRefNet_lite`/`BiRefNet` pair per the 2026-07-10 model-swap decision below) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14).
-- Client-side `localStorage` (added Phase 03): `qualityMode: "fast" | "max"` — persisted across visits, no other user data stored client-side (SPEC.md §3).
+- Client-side Cache Storage (`public/sw.js`, cache-first, content-hashed, added Phase 02): pinned ONNX model weights (IS-Net q8/fp32, explicitly loaded BEN2 fp16 and SlimSAM q8, plus selected-only ViTMatte Distinctions-646 q8/fp32 as of Phase 19) and ONNX Runtime WASM binaries. Production prefers the VPS-backed `cdn.cutbg.art` Cloudflare cache and automatically retries the same immutable revision from upstream Hugging Face/ONNX Runtime sources if it is unavailable (Phase 14/16/19). Partial `206` range probes are never cached.
+- Client-side `localStorage` (added Phase 03, retained by Phase 16): `qualityMode: "fast" | "max"` persists only the corresponding IS-Net q8/fp32 preference. BEN2 and guided-selection state remain session-only; no other user data is stored client-side (SPEC.md §3).
+- Phase 17 iterative prompts, object layers, candidates, semantic strokes, and undo/redo history are
+  session-only and never enter Cache Storage, `localStorage`, analytics, logs, or server storage.
+- Phase 18 matting corpus inputs/previews/results remain in memory. Only an explicit image-free JSON
+  export and the repository evidence record persist; neither contains image bytes, filenames,
+  prompt coordinates, or other private image-derived identifiers.
+- Phase 19 trimaps, focus crops, constraints, refined mattes, and model sessions remain in memory
+  and are discarded on reset/reload. Cache Storage may retain only immutable public model assets;
+  the runtime evidence record is image-free.
+- Phase 20 foreground samples, corrected colour buffers, edge/component masks, dirty patches, and
+  worker sessions remain in browser-tab memory and are discarded on reset/reload. Only image-free
+  quality/runtime observations persist; no filename, prompt, pixel sample, or user image is stored.
+- Phase 21 brush strokes, compact constraint maps, prompt samples, candidates, edit regions,
+  embeddings, accepted mattes, and bounded delta histories remain in browser-tab memory and are
+  discarded on reset/source change/unmount. Only `docs/PHASE_21_RUNTIME_EVIDENCE.md` persists, with
+  image-free runtime path, bounded counts, classified failures, timings, and pass/fail observations.
+- Phase 22 versions the browser model cache from the verified model/WASM manifest, removes orphaned
+  releases during activation, detects missing/corrupt bytes, and exposes a user-invoked clear action
+  that affects only published model assets. Source images, filenames, EXIF, masks, composites and
+  active editor work never enter or leave through this cache lifecycle.
+- Phase 22 release artifacts include a machine-readable CycloneDX SBOM and GitHub provenance/SBOM
+  attestations bound to the pushed production image digest. They contain build and dependency
+  metadata only, never user or image data.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -372,6 +725,9 @@ interface BenchmarkMeasurement {
 - `/dev/model-lab` — approved Phase 15 internal comparison surface for sequential same-image
   IS-Net/BEN2/MVANet runs, pairwise preference, and image-free benchmark export. It is `noindex`,
   excluded from the sitemap, and inactive unless the build-time lab flag is enabled.
+- Phase 18 extends `/dev/model-lab` with sequential ViTMatte trimap/alpha evaluation, deterministic
+  local corpus scoring, resource/license disclosure, classified unsupported/OOM recovery, and
+  image-free schema-v2 export. It adds no public route or production model fetch.
 - `/udalit-fon-s-foto-tovara`, `/udalit-fon-s-foto-na-dokumenty`, `/udalit-fon-s-logotipa`,
   `/udalit-fon-dlya-avatarki` — scenario-specific `pages/*` slices (Phase 06): the same reused
   upload/quality-toggle/remove-background/download features as `/`, wrapped in scenario copy
@@ -384,6 +740,19 @@ interface BenchmarkMeasurement {
   invariant, aggregate-only analytics, and the Telegram privacy contact.
 - The home and scenario tools now share `widgets/tool-workspace`: a single-column mobile/tablet
   flow and a two-column desktop preview/control layout, with no new domain entity or persistence.
+- Phase 17 evolves the same workspace's guided mode into an iterative object editor reachable from
+  direct guidance or an automatic result. It returns the unioned source-sized matte to the existing
+  exact correction, background, batch, and download flow without adding a route.
+- Phase 19 adds bilingual `balanced`/`maximum` soft-edge refinement to automatic results, accepted
+  guided results, and a selected settled batch item. It is lazy, reports actual path/fallback, and
+  preserves entry to exact correction, backgrounds, individual/ZIP downloads, and reset.
+- Phase 20 adds optional bilingual edge-colour cleanup after alpha refinement and before the exact
+  brush. Automatic, accepted-guided, refined, and selected settled-batch results expose accessible
+  applied/unchanged/error outcomes while keeping background and download output byte-consistent.
+- Phase 21 makes a bilingual two-zone `Keep`/`Remove` semantic brush the primary guided flow from
+  both direct upload and automatic results. Explicit recompute updates a clean split result preview;
+  accepted output continues through matting, foreground cleanup, exact correction, backgrounds,
+  selected-batch handling, and downloads without a parallel state machine or new route.
 
 ### Env Config
 
@@ -420,6 +789,546 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-24 — Phase 22 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_22 gate passed and architect requested finalization
+
+### Changes / Decision
+- Hardened the browser/SSR/Nginx boundary with an evidence-backed threat model, tested security
+  headers, bounded upload/export privacy checks, owned `security.txt`, abuse controls and
+  vulnerability-response runbooks.
+- Hardened containers and GitHub Actions with immutable digests/SHAs, least privilege, production
+  environment deployment, dependency/license/repository/container scanning, machine-readable SBOMs
+  and digest-bound GitHub attestations verified before deploy.
+- Replaced model/WASM trust-by-filename with a versioned SHA-256 manifest, verified atomic
+  synchronization/rollback, corruption recovery, cache migration/orphan cleanup, usage reporting
+  and a safe user-invoked model-cache clear action.
+- Local gate evidence passed build, type-check, 299 unit/integration tests, the 288-case
+  cross-browser Playwright matrix after one isolated Mobile Safari lazy-image retry, real-model
+  inference, Compose health/smoke, license/audit checks, model manifest verification, Trivy
+  filesystem/image scans, and CycloneDX SBOM validation.
+
+### Affected Phases / Consequences
+- PHASE_23 may build release reliability and operations on the verified image digest, SBOM,
+  attestation, rollback and production-security contracts established here.
+- No Phase-22 security exception is active; future exceptions require an owner, expiry,
+  reachability rationale and compensating control in this Project Log.
+
+## 2026-07-24 — Production-readiness roadmap promoted ahead of editor expansion
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval to record the July-2026 production-readiness research in full
+and extend/reorder the forward roadmap before implementation begins
+
+### Changes / Decision
+- `SPEC.md` v1.16 makes security and operations first-class product contracts. PHASE_22 now owns
+  threat modelling, header/privacy tests, container/CI hardening, dependency/license/container
+  gates, model/WASM integrity and cache lifecycle, SBOM/attestation, abuse controls,
+  `security.txt`, and vulnerability response.
+- PHASE_23 now owns immutable digest releases, candidate/post-deploy smoke, verified rollback,
+  release identity, deployment concurrency/audit, owner-approved SLI/SLOs and alerts, bounded
+  encrypted operational backups/restore drills, capacity/degradation exercises, incident/
+  maintenance runbooks, and a deterministic mocked Chromium critical path in pull-request CI.
+  Full cross-browser, WebGPU and real-model Playwright remains host-only.
+- The legal audit and approved surfaces move to PHASE_24–25 so present analytics/privacy claims and
+  future metadata governance are resolved before broader editor work. Owner/legal facts remain
+  explicit future gate inputs, not facts inferred by an agent.
+- The existing editor, batch, onboarding and refactor contracts move intact to PHASE_26–33 with
+  repaired metadata, dependencies, tags, paths and cross-references. Batch parity remains
+  cross-cutting through PHASE_26–30 and is consolidated in PHASE_31.
+- New PHASE_34 adds manual WCAG-EM/WCAG 2.2 AA and assistive-technology evidence, a limited physical
+  device/browser/degradation matrix, constrained-device performance, deterministic visual
+  regression, consented usability sessions, RU/EN editorial QA, a truthful accessibility
+  statement, and an evidence-linked readiness report.
+- The production maintenance contract is now explicit: per-release verification, monthly security/
+  dependency/backup review, quarterly restore/SLO/header/device/accessibility sampling, and annual
+  or material-change threat/legal/accessibility review. The already implemented ZIP dependency is
+  normalized to `client-zip` v2; the stale specification placeholder is removed.
+
+### Affected Phases / Consequences
+- PHASE_22–34 are pending sequential contracts and none is marked `NEEDS_REVIEW`.
+- PHASE_01–21 remain completed historical contracts. `STATE.md` § Current Contract remains Phase 21
+  until a new phase is implemented, gated, committed and closed.
+- Earlier 2026-07-24 Project Log entries remain immutable historical records; their old phase
+  numbers are superseded by this entry and the current Phase Status/SPEC tables.
+
+## 2026-07-24 — Enhancements naming, batch invariance, guidance, legal, and audit roadmap
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect review rejected the ambiguous `Edges` label, required every future
+editor capability to preserve multiple-upload behavior, and requested dedicated onboarding, legal/
+data-governance, and whole-project refactoring phases
+
+### Changes / Decision
+- `SPEC.md` v1.15 renames the public `Edges` tool to `Улучшения` / `Enhancements` and the future
+  operation/tool IDs to `enhance`. The name describes user benefit and can group local model-based
+  or deterministic finishing operations; Phase 25 still ships only fine-detail and colour-halo
+  improvements.
+- Batch behavior is now a cross-cutting delivery invariant: Phases 22–26 each support a single
+  image and the selected completed item from a multiple upload. Phase 27 is a consolidation and
+  stress/regression gate, not the first batch-parity implementation.
+- PHASE_28 adds research, an asset/content preparation pipeline, contextual animated/static help,
+  replayable onboarding, reduced-motion support, and single/batch guidance without blocking the
+  automatic-first path.
+- PHASE_29 separates legal/data discovery from UI implementation: operator and target-market facts,
+  deployed/future field-level data inventory, applicability/legal-basis/retention/processor/
+  transfer/notification matrices, banner/offer/consent decision, bilingual drafts, and qualified
+  review. It must verify the current unconditional analytics-script loading and the privacy page's
+  absolute “no personal data” claim against real payload/configuration evidence. Future metadata
+  collection remains forbidden until this contract and Phase 30 land.
+- PHASE_30 implements only the approved legal route/footer/privacy-choice matrix, with truthful
+  cookie/storage language, non-essential gating, easy rejection/withdrawal, and no dark patterns.
+- PHASE_31 performs a measured architecture/duplication/React render/effect/resource/bundle/
+  responsiveness audit and bounded refactoring with before/after evidence and full regressions.
+
+### Affected Phases / Consequences
+- PHASE_22–27 — pending contracts were updated surgically for shared single/batch delivery and the
+  Enhancements naming; none remains `NEEDS_REVIEW`.
+- PHASE_28–31 — new pending sequential contracts were added despite earlier phases being pending
+  because the architect explicitly requested a forward roadmap; dependencies still require each
+  preceding gate to pass before implementation.
+- PHASE_01–21 remain completed historical contracts. `STATE.md` § Current Contract is unchanged
+  until a new phase is implemented, gated, and closed.
+
+## 2026-07-24 — Automatic-first editor simplification and focused roadmap approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect manual testing found that model/runtime details, parallel correction
+panels, candidate navigation, quota explanations, and unclear continuation actions overwhelm the
+background-removal journey; the architect requested a simpler remove.bg-like flow and an
+architecture that does not block a possible future product-card editor
+
+### Changes / Decision
+- `SPEC.md` v1.14 separates the internal ML lifecycle from a new public journey: upload with a
+  user-facing processing choice starts automatic removal immediately, then one stable editor stage
+  exposes `Cutout`, `Edges`, and `Background` plus committed undo/redo and Download.
+- Public automatic modes are `Fast`, `Optimal`, and `Maximum quality (Beta)`. Model IDs, dtypes,
+  byte counts, execution providers, prompt quotas, candidate scores, and diagnostic state names are
+  removed from the primary UI. Maximum quality retains an accessible compatibility warning and a
+  one-time fallback to Optimal.
+- Cutout consolidates semantic and exact painting as `Magic`/`Manual`, automatically uses the
+  intent-best mask, removes candidate/history-shaped result navigation and `Continue from this
+  result`, and turns Apply into the explicit repeated-pass boundary. Clearing the final Magic mark
+  over an existing base restores that base locally instead of trapping the user behind a disabled
+  recompute action.
+- Soft-alpha refinement and edge-colour cleanup become one `Edges` tool. Background becomes its own
+  draft/apply tool. Toolbar history owns only committed document operations; active brush draft
+  history stays local and icon-based.
+- Phase 22 introduces a bounded browser-memory `EditDocument`/artifact/history kernel and separates
+  orchestration from the current monolithic workspace before the visual migration. Phases 23–27
+  then deliver the shell, Cutout, Edges/history, Background/export, and batch parity in order.
+- Rich layers, free transforms, shadows, perspective, text, and templates are not mixed into this
+  cycle. They require a separately loaded future Studio surface and a new approved spec; the
+  current app remains focused on background removal and background finishing.
+
+### Affected Phases / Consequences
+- PHASE_22–27 — new pending sequential contracts own this redesign.
+- PHASE_01–21 remain completed historical contracts and are not marked `NEEDS_REVIEW`; v1.14
+  supersedes their public interaction only through future implementation and does not claim the
+  current code already matches the new workflow.
+- `STATE.md` § Current Contract remains unchanged until the relevant new phase is implemented,
+  gated, and closed. There is no active blocker and no authorization to implement Studio features.
+
+## 2026-07-23 — Phase 21 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_21 automated gate passed and the architect requested local commit, merge,
+and context finalization without remote push or deployment
+
+### Changes / Decision
+- Replaced the primary Phase-17 point/box/layer interaction with one bilingual two-zone semantic
+  brush: a hard inner `keep`/`remove` core plus a translucent local-influence halo. Legacy source
+  remains available for compatibility and rollback but is no longer exposed in the production flow.
+- Added bounded session-wide prompt sampling (maximum 32), explicit-recompute-only SlimSAM
+  orchestration, intent-first candidate ranking, materially distinct alternatives, local
+  automatic-base fusion, hard-constraint precedence, and monotonic lifecycle guards against stale
+  inference or result application.
+- Integrated direct, automatic-result, and selected-batch entry with the existing matting,
+  foreground cleanup, exact correction, background, and download pipeline. No model asset, route,
+  endpoint, analytics payload, environment variable, or persistent user data was added.
+- Gate evidence passed: production container build/health and container-network smoke; generated
+  code, TypeScript, Steiger, 290 unit tests, 67 focused tests, 264 deterministic cross-browser E2E
+  tests with 4 expected feature-flag skips, the real IS-Net smoke, 36 focused Phase-21 browser
+  tests, and both serialized real Phase-21 SlimSAM/WASM scenarios.
+
+### Affected Phases / Consequences
+- Phase 21 completes the approved brush-guided correction contract while preserving Phase-17
+  implementation compatibility and the Phase-18–20 downstream pipeline.
+- The planned roadmap is complete through Phase 21. No next phase, remote publication, or
+  deployment is inferred.
+
+## 2026-07-23 — Advanced interactive boundary algorithms explicitly deferred
+
+**Type**: decision
+**Author**: Architect
+**Triggered by**: Phase 21 tolerant semantic-brush review
+
+### Changes / Decision
+- Phase 21 implements only the approved two-zone semantic brush: a firm inner core plus a
+  translucent local tolerance halo.
+- Edge-aware snapping, graph cuts/GrabCut, geodesic propagation, bilateral solvers, and additional
+  interactive correction models are out of scope now and in future phases unless the architect
+  explicitly reopens the decision.
+- Do not implicitly schedule or prototype those techniques and do not add related dependencies,
+  model assets, or runtime paths under the current contract.
+
+### Affected Phases / Consequences
+- PHASE_21 — finish the two-zone brush using the existing SlimSAM and local-fusion architecture
+  only.
+- Future phases — preserve this deferral as a scope constraint; a new explicit architect request is
+  required before evaluating or implementing any listed advanced technique.
+
+## 2026-07-23 — Brush-guided object correction approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect manual review found Phase-17 points, boxes, semantic strokes, mask
+scores, and manual object layers too difficult and unpredictable for the primary user journey, then
+approved the proposed brush-only guided contract
+
+### Changes / Decision
+- `SPEC.md` v1.13 adds Phase 21 and makes one translucent semantic brush the primary guided UI:
+  green `keep`, red `remove`, adjustable size, bounded undo/redo, clear, explicit recompute, visual
+  mask alternatives, and continuation through matting, edge cleanup, exact correction, background,
+  and download.
+- SlimSAM remains the model and reuses the pinned q8/WASM graphs plus same-image embedding. Visible
+  strokes become one compact constraint map and at most 32 balanced prompt samples for the entire
+  session; the decoder receives no unbounded per-stroke prompt growth.
+- Candidate ranking becomes intent-first and local: evaluate pre-hard-constraint agreement with
+  green/red markings, use any finite raw `iou_scores` value only as an internal tie-breaker, prefer
+  automatic-base continuity inside the brush-derived edit region, and collapse alternatives with
+  local `differenceRatio < 0.001` (0.1%). The UI no longer exposes a SlimSAM score, percentage, or
+  "estimate unavailable" message.
+- Automatic-base fusion may change only the bounded brush-derived edit region; pixels outside stay
+  byte-for-byte unchanged and explicit keep/remove constraints apply last. Direct guided entry
+  requires at least one green stroke before recompute. Painting and history actions never trigger
+  implicit inference.
+- Phase-17 point/box/manual-layer source is retained for rollback and compatibility. Only legacy UI
+  exports with no production callsite are marked `@deprecated`; reused worker/session/protocol code
+  remains active and unmarked. No model asset, route, API, persistence, analytics payload, or
+  environment variable is added.
+
+### Affected Phases / Consequences
+- PHASE_21 — new pending phase owns the brush UI, bounded sampling, candidate ranking, local fusion,
+  legacy policy, deterministic cross-browser coverage, and available-host real-model evidence.
+- PHASE_16–20 remain completed historical contracts and require no `NEEDS_REVIEW` marker. Phase 21
+  supersedes only Phase 17's public interaction; it does not claim the existing implementation
+  already behaves as brush-only.
+- `STATE.md` § Current Contract remains unchanged until Phase 21 is implemented, gated, and closed.
+
+## 2026-07-22 — Phase 20 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_20 automated gate passed and the architect requested documentation,
+completion of all remaining fixes, and local fixation without a remote push
+
+### Changes / Decision
+- Added deterministic, off-main-thread foreground-colour estimation, conservative soft-edge
+  decontamination, connected-component cleanup, dirty patches, cancellation/disposal, exact hard
+  constraints, non-accumulating reruns, and one source for preview/download recomposition.
+- Added bilingual optional cleanup controls with accessible applied/unchanged/recoverable-error
+  outcomes across automatic, guided, refined, and selected settled-batch flows.
+- Fixed the supplied large-image incident by bounding ViTMatte input to 1024×1024, restoring matte
+  dimensions, and adding finite Balanced WebGPU→WASM and Maximum fp32→q8→q8/WASM recovery.
+- Enforced the eight-category synthetic quality gate and available-host runtime thresholds. The
+  exact serialized real run passed on WASM: automatic 20,929 ms; Balanced 4,947/158 ms cold/warm;
+  Maximum 19,121/165 ms; cleanup 187 ms; generated 2500×2500 input bounded to 1024×1024 and restored
+  in 15,710.4 ms without fallback. Memory remained honestly `unavailable`.
+- COOP/COEP remains deferred because no isolated A/B benefit or complete production resource
+  compatibility evidence justified changing headers. No backend, route, model asset, analytics
+  payload, diagnostic intake, or persistent user data was added.
+- Gate evidence passed: production container build/health/smoke, 252 unit tests, TypeScript, lint
+  (zero errors; one pre-existing Fast Refresh warning), Prettier, Steiger, model-manifest sync, 248
+  cross-browser E2E tests with 4 expected feature-flag skips, real IS-Net smoke, and the real Phase
+  20 hybrid/runtime test.
+
+### Affected Phases / Consequences
+- Phase 20 closes the planned roadmap with an additive, client-only foreground-quality layer and
+  durable large-input/fallback compatibility rules. No next phase is inferred.
+- WebGPU on the available host and physical Firefox/Safari/iOS/Android devices remain unverified;
+  deterministic engine coverage is not presented as a physical-device claim.
+
+## 2026-07-22 — Large-image ViTMatte runtime incident accepted for Phase 20
+
+**Type**: feedback
+**Author**: architect + AI reproduction
+**Triggered by**: a voluntarily supplied local image failed both Balanced and Maximum soft-edge
+refinement while a smaller control image succeeded
+
+### Changes / Decision
+- Reproduced the failure without persisting the image or filename: a 2500×2500 source generated a
+  2086×2253 focus crop, which Transformers.js padded to 2112×2272 and passed unchanged to ViTMatte;
+  ONNX Runtime Web WASM then failed with `OrtRun`/`SafeIntOnOverflow`. A 400×400 control completed
+  on Balanced/WASM with no fallback.
+- Root cause is the missing inference-size bound, not upload misuse or a corrupt JPEG. The current
+  processor pads to a multiple of 32 but does not resize, despite Phase 19's bounded-crop intent.
+- Phase 20 review must bound and restore ViTMatte input, cover the large-input path without
+  committing private fixtures, complete Balanced WebGPU→WASM recovery, and make foreground-cleanup
+  applied/unchanged/error outcomes visible without raw diagnostics.
+- The architect authorized conservative corpus/runtime thresholds and completion of all remaining
+  Phase-20 work. Thresholds are release regression gates, not promises for untested hardware.
+
+### Affected Phases / Consequences
+- PHASE_20 owns the compatibility fix, focused regression, runtime evidence, and durable gotcha.
+- PHASE_19 remains historically complete; its runtime evidence used a 1×1 fixture and therefore did
+  not exercise source-sized ViTMatte memory/shape behavior.
+
+## 2026-07-22 — Phase 19 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_19 automated gate passed with both production ViTMatte variants and the
+selected-only lifecycle verified on the available host
+
+### Changes / Decision
+- Added production Distinctions-646 q8 `balanced` and fp32 `maximum` refinement over deterministic
+  trimaps and bounded focus crops, with hard constraints re-applied after source-sized restoration.
+- Integrated lazy bilingual refinement into automatic, accepted-guided, and selected settled-batch
+  results while preserving exact correction, background replacement, individual/ZIP download, and
+  reset flows.
+- Added explicit automatic/guided/ViTMatte disposal acknowledgements, selected-only warm reuse,
+  maximum → balanced → deterministic recovery, shared CDN-to-pinned-upstream loading, immutable
+  manifest entries, and full-response-only Service Worker caching.
+- Available-host evidence completed both q8/fp32 cold and warm WASM runs with no fallback, preserved
+  the hard foreground constraint, and honestly recorded peak memory and WebGPU as unavailable.
+- Gate evidence: production container build/health/smoke, generated code, TypeScript, Steiger, 228
+  unit tests, 50 focused tests, 20 focused cross-browser refinement passes, 212 default-disabled
+  cross-browser passes with 12 expected skips, real IS-Net inference, and serialized real q8/fp32
+  ViTMatte refinement all passed.
+
+### Affected Phases / Consequences
+- PHASE_20 can consume the two production refinement modes, actual-path/fallback metadata, hard
+  constraint precedence, and one-heavy-stage lifecycle for foreground-colour decontamination and
+  final device/runtime hardening.
+- No route, server endpoint, database, analytics payload, or persistent private image data was
+  added. Production CDN deployment remains deferred under the existing local-only Phase 17–20
+  decision.
+
+## 2026-07-22 — Phase 18 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_18 automated gate passed after architect-supplied WebGPU evidence and final
+dual-variant policy approval
+
+### Changes / Decision
+- Extended the opt-in model lab with pinned ViTMatte Composition-1k and Distinctions-646 q8/fp32
+  variants, deterministic trimap/crop corpus generation, alpha/boundary metrics, classified runtime
+  failures, sequential disposal/cancellation, and privacy-safe schema-v2 export.
+- Recorded successful WASM and architect-supplied WebGPU matrices. Both paths completed all 32
+  ViTMatte case/model runs; unavailable peak-memory APIs remain explicitly `unavailable`.
+- Closed Phase 18 with Distinctions-646 q8 as Phase-19 `balanced`/fallback and fp32 as the
+  WebGPU-oriented `maximum` mode. No Phase-18 production model/CDN mapping was changed.
+- Gate evidence: production container build/health and smoke, generated code, TypeScript, Steiger,
+  208 unit tests, 15 focused tests, 12 enabled-lab browser passes, 192 default-disabled
+  cross-browser passes, real IS-Net inference, and the serialized real ViTMatte smoke passed.
+
+### Affected Phases / Consequences
+- PHASE_19 receives the dual-variant policy, pinned graph identities, resource disclosures, hard
+  trimap constraints, selected-only lifecycle, and fp32 → q8 → deterministic fallback contract.
+- PHASE_20 must validate both refinement modes and fallback behavior in the complete pipeline.
+- The phase is additive and evaluation-only: no API, database, persistent user data, analytics
+  payload, public route, or production model asset was added.
+
+## 2026-07-22 — Dual-variant ViTMatte refinement approved
+
+**Type**: spec-change
+**Author**: `v.godlevskiy` (via AI spec-sync)
+**Triggered by**: architect review of the Phase-18 WebGPU benchmark and explicit request to retain
+both q8 and fp32 in the Phase-19 architecture
+
+### Changes / Decision
+- Phase 19 will expose Distinctions-646 q8 as the compact/WASM-safe `balanced` mode and fp32 as the
+  best-soft-alpha `maximum` mode recommended on confirmed WebGPU when the user accepts the larger
+  first download.
+- These are selected-only alternatives, not an ensemble: no eager dual download, no concurrent
+  residence, and no blending. Cache Storage may retain either graph after explicit use.
+- The bounded recovery chain is fp32 → q8 → deterministic guided fusion. Each transition preserves
+  source pixels, prompts, trimap, and the prior matte, disposes the failed pipeline, and never loops.
+
+### Affected Phases / Consequences
+- PHASE_18 — its evidence record now combines the automated WASM run with the architect-supplied
+  WebGPU export and produces a production variant policy rather than a single winner.
+- PHASE_19 — its future phase contract must include pre-load size disclosure, capability-aware mode
+  recommendation, explicit user choice, selected-only lazy loading/disposal, refinement concurrency
+  `1`, CDN pins for both graphs, and deterministic fallback/disposal tests.
+- PHASE_20 — must validate both refinement modes and the fallback chain in the full hybrid pipeline.
+- The shipped contract through PHASE_17 is unchanged; no endpoint, persistence, analytics payload,
+  or Phase-18 production model asset is added by this specification update.
+
+## 2026-07-16 — Phase 17 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_17 functional gate passed and the architect explicitly accepted the final
+external-model gate exception, requesting local merge without deployment
+
+### Changes / Decision
+- Replaced one-shot guided selection with cumulative positive/negative points, target boxes,
+  semantic keep/remove strokes, alternative mask candidates, multiple object layers, bounded
+  delta-only undo/redo, and latest-revision-wins SlimSAM orchestration.
+- Added deterministic fusion over the existing automatic matte, explicit constraint precedence,
+  accessible/localized explanations for layers, mask scores and blue kept-area overlays, robust
+  invalid-score handling, prompt-history hotkeys, and StrictMode-safe blob preview lifecycle.
+- Gate evidence: production container build/health and container-network smoke passed; generated
+  code, TypeScript, ESLint, Steiger, 198 unit tests, 26 focused tests, the 192-pass configured
+  cross-browser matrix, the 8-pass Phase-17 matrix, and real IS-Net inference through the production
+  CDN passed. The serialized real SlimSAM smoke also passed earlier on this host and is recorded in
+  `PHASE_17_RUNTIME_EVIDENCE.md`.
+- During the final repeat, Hugging Face returned 503/504/timeouts while SlimSAM was not yet present
+  on the undeployed production CDN. The architect explicitly accepted that external outage as a
+  non-blocking gate exception; no deployment or model sync was performed.
+
+### Affected Phases / Consequences
+- Additive client-only contract: no endpoint, persistent data, analytics payload, model pin, or
+  environment variable was added.
+- PHASE_18 may consume the completed iterative guided-editor baseline for browser matting research.
+- Remote publication and deployment remain deferred under the 2026-07-15 local-only decision.
+
+## 2026-07-15 — Phases 17–20 remain local until final manual acceptance
+
+**Type**: decision
+**Author**: `v.godlevskiy` (via AI agent)
+**Triggered by**: architect requested completing all remaining phases and local verification before
+publishing the accumulated work or deploying it
+
+### Changes / Decision
+- PHASE_17–20 are developed, gated, reviewed, committed, merged, and tagged locally. No branch,
+  `main` commit, or phase tag is pushed to a remote during this sequence.
+- No deployment is performed after an individual remaining phase. The architect manually tests the
+  completed local pipeline through PHASE_20 first.
+- Push to remote `main` and production deployment require explicit architect approval after all four
+  phases are complete, their automated gates pass, and local manual acceptance is finished.
+
+### Affected Phases / Consequences
+- PHASE_17–20 — local commits, merges, tags, and phase lifecycle documentation continue normally;
+  remote publication and deployment are deliberately deferred until the consolidated acceptance.
+- CI/CD triggered by a push to `main` is intentionally not exercised during intermediate phases;
+  host-only gates and local container-parity smoke checks remain mandatory as defined in STACK.md.
+
+## 2026-07-13 — Device incident feedback remains fully manual
+
+**Type**: decision
+**Author**: AI (spec-sync)
+**Triggered by**: architect clarification that users will report incidents directly in Telegram
+and may attach a photo, without any product or infrastructure support workflow
+
+### Changes / Decision
+- `SPEC.md` v1.11 keeps device-compatibility feedback entirely manual through the existing Telegram
+  channel. Users may voluntarily send the affected image, screenshot, and ordinary environment
+  description outside the application's processing path.
+- No diagnostic snapshot/export, incident form, upload endpoint, automated collection, device
+  registry, new analytics event/payload, support storage, backend, or infrastructure is planned.
+- When a report is reproducible, the normal development response is a focused regression test or
+  documented compatibility rule; there is no separate incident subsystem.
+- PHASE_20 retains runtime hardening but no longer includes a diagnostic-reporting feature or
+  diagnostic infrastructure.
+
+### Affected Phases / Consequences
+- PHASE_17–20 — validation remains automated and available-host-based; real-device reports are
+  handled manually and only generate product/test work when a concrete issue is reproduced.
+- The v1.10 Project Log reference below to a locally generated diagnostic snapshot is superseded by
+  this clarification. The physical-device matrix remains removed from release gates.
+- Current runtime, API, analytics, persistence, and infrastructure contracts are unchanged.
+
+## 2026-07-13 — Physical-device lab removed from release gates
+
+**Type**: decision
+**Author**: AI (spec-sync)
+**Triggered by**: architect decision that the project has no resources for a representative
+physical-device test lab and will investigate concrete devices from real-user feedback
+
+### Changes / Decision
+- `SPEC.md` v1.10 removes the representative physical weak/WASM and powerful/WebGPU matrix from
+  phase, merge, and deployment prerequisites. Coverage claims remain limited to environments that
+  actually ran.
+- Inference changes instead require configured cross-browser E2E, available-host real-model smoke,
+  focused capability/fallback/resource-disposal checks, and applicable quality, latency, and memory
+  regression thresholds.
+- Real-device compatibility becomes incident-first: voluntarily shared, locally generated,
+  image-free diagnostics support reproduction; a reproduced incident must produce a focused
+  regression or documented compatibility rule. Passive analytics remain aggregate-only.
+- PHASE_20 is renamed **Foreground Edge Quality & Runtime Hardening** and owns this sustainable
+  validation/incident-response contract plus edge-quality work, not a hardware inventory.
+
+### Affected Phases / Consequences
+- PHASE_16 — its available-host evidence remains valid; the previously deferred physical matrix is
+  no longer an outstanding prerequisite.
+- PHASE_17–20 — may proceed and deploy after their reproducible automated, quality, and
+  available-host gates pass; unavailable physical hardware does not create a blocker.
+- The earlier v1.9 Project Log statements that made Phase 20's physical matrix mandatory are
+  superseded by this decision and retained below only as append-only history.
+- Current runtime contract is unchanged; this changes future validation and release policy only.
+
+## 2026-07-13 — Phase 16 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_16 gate passed and the architect requested a local merge without deployment
+
+### Changes / Decision
+- Replaced the two-option quality toggle with explicit IS-Net q8, IS-Net fp32, and opt-in BEN2 fp16
+  production modes, truthful size/speed/capability copy, serialized model lifecycle, and a single
+  capability/model/OOM fallback to IS-Net q8 that preserves the local image.
+- Added a lazy SlimSAM q8 point-or-box guided flow with responsive coordinate mapping, same-image
+  embedding reuse, source-sized `AlphaMatte` output, accessible controls, and continuation through
+  the existing brush correction, background replacement, batch, and download pipeline.
+- Added immutable BEN2/SlimSAM manifest entries and fixed the production worker's bootstrap source
+  selection so IS-Net registry probes and weights also use its pinned commit SHA rather than
+  `resolve/main`.
+- Gate passed: production container build/health and container-network smoke; generated code,
+  TypeScript, Steiger, manifest verification, ESLint, Prettier, 186 unit tests, deterministic
+  cross-browser E2E (138 passed, 3 intentionally skipped), pinned real IS-Net inference, and the
+  serialized Phase-16 real BEN2-fallback plus SlimSAM point/box smoke. Two Phase-12 language-link
+  tests were also rerun in isolation (2/2 passed) after a transient Vite module-load failure under
+  parallel Mobile Safari emulation.
+
+### Affected Phases / Consequences
+- Additive client-only contract: no image endpoint, server-side persistence, analytics payload,
+  account, or new environment variable was introduced.
+- Representative physical weak/WASM and powerful/WebGPU acceptance is deliberately not claimed by
+  this local closeout. Per SPEC v1.9 it is consolidated into Phase 20 and remains mandatory before
+  deploying the combined Phases 16–19 pipeline.
+- PHASE_17 may build cumulative positive/negative prompts and semantic strokes on the completed
+  single-point/box guided baseline.
+
+## 2026-07-13 — Iterative guided matting pipeline approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval of the researched multi-prompt, semantic-brush, trimap/matting,
+and foreground-edge pipeline and request to plan it after Phase 16
+
+### Changes / Decision
+- `SPEC.md` v1.9 extends guided correction from Phase 16's one positive point or target box into a
+  staged human-in-the-loop pipeline: cumulative positive/negative prompts and semantic strokes,
+  multiple object layers, local progressive merge, confidence-aware trimaps, optional alpha
+  refinement, and foreground-colour decontamination. The existing pixel brush remains the final
+  exact correction layer.
+- Added Phases 17–20: Iterative Guided Object Editor; Browser Interactive Matting Lab; Production
+  Trimap & Alpha Refinement; Foreground Edge Quality & Device Hardening. Evaluation precedes any
+  production model addition, non-production-compatible licenses are evidence-only, and failures
+  retain a deterministic guided-fusion fallback.
+- Phase 16 keeps its implemented one-point/box contract. Its available-host real-model smoke is the
+  merge criterion for this no-deploy closeout; the explicitly unproven representative physical
+  weak/powerful matrix is consolidated into Phase 20 and remains mandatory before Phases 16–19 are
+  deployed together.
+
+### Affected Phases / Consequences
+- PHASE_16 — gate evidence wording is narrowed to what the development host actually proves; no
+  product behavior or implementation scope is retroactively expanded.
+- PHASE_17–20 — new pending phases own the approved iterative editor, evaluation, production
+  refiner, edge quality, and consolidated physical-device acceptance.
+- PHASE_01–15 remain valid; Current Contract is unchanged because the new entities are planned, not
+  yet implemented.
 
 ## 2026-07-13 — Phase 15 complete
 

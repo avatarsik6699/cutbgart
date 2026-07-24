@@ -4,14 +4,14 @@ import { describe, expect, it } from "vitest";
 import { createResultsZip, createUniqueResultNames } from "./create-results-zip";
 
 describe("createUniqueResultNames", () => {
-  it("sanitizes unsafe names and suffixes collisions", () => {
+  it("replaces source filenames with deterministic export names", () => {
     expect(
       createUniqueResultNames([
         { originalFileName: "../my photo.jpg" },
         { originalFileName: "my photo.png" },
         { originalFileName: "..." },
       ]),
-    ).toEqual(["my-photo.png", "my-photo-2.png", "result.png"]);
+    ).toEqual(["cutbg-result-1.png", "cutbg-result-2.png", "cutbg-result-3.png"]);
   });
 
   it("stores completed PNG bytes unchanged in the archive", async () => {
@@ -30,5 +30,6 @@ describe("createUniqueResultNames", () => {
     const extraLength = view.getUint16(28, true);
     const dataOffset = 30 + nameLength + extraLength;
     expect(bytes.slice(dataOffset, dataOffset + png.length)).toEqual(png);
+    expect(new TextDecoder().decode(bytes)).not.toContain("photo.jpg");
   });
 });

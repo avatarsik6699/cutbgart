@@ -12,6 +12,7 @@ interface PostedMessage {
 class MockWorker extends EventTarget {
   static instances: MockWorker[] = [];
   posted: PostedMessage[] = [];
+  terminated = false;
 
   constructor() {
     super();
@@ -23,7 +24,7 @@ class MockWorker extends EventTarget {
   }
 
   terminate(): void {
-    // no-op
+    this.terminated = true;
   }
 
   emit(data: unknown): void {
@@ -33,9 +34,73 @@ class MockWorker extends EventTarget {
 
 function makeFile(overrides: { type?: string; size?: number } = {}): File {
   const size = overrides.size ?? 1024;
-  return new File([new Uint8Array(size)], "photo.jpg", {
+  const bytes = new Uint8Array(size);
+  bytes.set([
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0x03, 0x01, 0x11,
+    0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+  ]);
+  return new File([bytes], "photo.jpg", {
     type: overrides.type ?? "image/jpeg",
   });
+}
+
+async function enterDirectGuidedPreview(): Promise<MockWorker> {
+  const method = screen.getByRole("button", { name: /guide with a brush/i });
+  await waitFor(() => expect((method as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(method);
+  fireEvent.change(screen.getByLabelText("Upload an image"), {
+    target: { files: [makeFile()] },
+  });
+  await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+  const worker = MockWorker.instances[0]!;
+  const encode = worker.posted.find((message) => message.type === "encode");
+  act(() =>
+    worker.emit({
+      type: "status",
+      revision: encode?.revision,
+      status: "ready-for-prompt",
+    }),
+  );
+  const image = await screen.findByRole("img", {
+    name: /brush-guided object correction/i,
+  });
+  Object.defineProperty(image, "setPointerCapture", { value: vi.fn() });
+  fireEvent.pointerDown(image, {
+    pointerId: 1,
+    button: 0,
+    isPrimary: true,
+    clientX: 10,
+    clientY: 10,
+  });
+  fireEvent.pointerUp(image, { pointerId: 1, clientX: 20, clientY: 20 });
+  fireEvent.click(screen.getByRole("button", { name: /recompute mask/i }));
+  const prompt = worker.posted.find((message) => message.type === "prompt") as
+    { prompt?: { revision: number } } | undefined;
+  act(() =>
+    worker.emit({
+      type: "candidates",
+      revision: prompt?.prompt?.revision,
+      candidates: [
+        {
+          id: "intent",
+          matte: {
+            width: 800,
+            height: 600,
+            data: new Uint8ClampedArray(800 * 600).fill(255),
+          },
+          score: 1,
+          differenceRatio: 0,
+        },
+      ],
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
+        .disabled,
+    ).toBe(false),
+  );
+  return worker;
 }
 
 // jsdom doesn't implement `ImageData` — MaskCorrectionCanvas's paint path
@@ -82,7 +147,7 @@ describe("ToolWorkspace", () => {
 
     expect(screen.getByTestId("tool-workspace")).toBeDefined();
     expect(screen.getByLabelText("Upload an image")).toBeDefined();
-    expect(screen.getByRole("switch")).toBeDefined();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
   it("shows a validation error for an unsupported file without starting the model pipeline", async () => {
@@ -95,6 +160,183 @@ describe("ToolWorkspace", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
     expect(screen.getByRole("alert").textContent).toMatch(/unsupported/i);
     expect(MockWorker.instances).toHaveLength(0);
+  });
+
+  it("uses the brush-only primary guided flow and recomputes only explicitly", async () => {
+    render(<ToolWorkspace />);
+    const method = screen.getByRole("button", { name: /guide with a brush/i });
+    await waitFor(() => expect((method as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(method);
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: { files: [makeFile()] },
+    });
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    const encode = worker.posted.find((message) => message.type === "encode");
+    expect(encode).toBeDefined();
+    act(() =>
+      worker.emit({
+        type: "status",
+        revision: encode?.revision,
+        status: "ready-for-prompt",
+      }),
+    );
+    const image = await screen.findByRole("img", {
+      name: /brush-guided object correction/i,
+    });
+    expect(screen.queryByRole("button", { name: /keep point/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^box$/i })).toBeNull();
+    Object.defineProperty(image, "setPointerCapture", { value: vi.fn() });
+    fireEvent.pointerDown(image, {
+      pointerId: 1,
+      button: 0,
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(image, { pointerId: 1, clientX: 20, clientY: 20 });
+    expect(worker.posted.some((message) => message.type === "prompt")).toBe(false);
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => /markings changed/i.test(status.textContent ?? "")),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /recompute mask/i }));
+    const prompt = worker.posted.find((message) => message.type === "prompt") as
+      { prompt?: { revision: number; points: Array<{ label: number }> } } | undefined;
+    expect(prompt?.prompt?.points.length).toBeLessThanOrEqual(32);
+    expect(prompt?.prompt?.points.every((point) => point.label === 1)).toBe(true);
+    act(() =>
+      worker.emit({
+        type: "candidates",
+        revision: prompt?.prompt?.revision,
+        candidates: [
+          {
+            id: "intent",
+            matte: {
+              width: 800,
+              height: 600,
+              data: new Uint8ClampedArray(800 * 600).fill(255),
+            },
+            score: -5,
+            differenceRatio: 0,
+          },
+          {
+            id: "raw",
+            matte: {
+              width: 800,
+              height: 600,
+              data: new Uint8ClampedArray(800 * 600),
+            },
+            score: 50,
+            differenceRatio: 1,
+          },
+        ],
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("guided-brush-candidates")).toBeDefined(),
+    );
+    expect(screen.queryByText(/quality estimate|estimate unavailable|50%/i)).toBeNull();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("locks guided interaction while applying and exposes a retryable apply error", async () => {
+    render(<ToolWorkspace />);
+    await enterDirectGuidedPreview();
+
+    fireEvent.click(screen.getByRole("button", { name: /accept and refine/i }));
+    await waitFor(() => expect(MockWorker.instances.length).toBeGreaterThan(1));
+    const compositeWorker = MockWorker.instances.at(-1)!;
+    const firstRequest = compositeWorker.posted.find(
+      (message) => message.type === "recomposite",
+    );
+    expect(firstRequest).toBeDefined();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
+        .disabled,
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => /applying.*result/i.test(status.textContent ?? "")),
+    ).toBe(true);
+
+    act(() =>
+      compositeWorker.emit({
+        type: "error",
+        requestId: firstRequest?.requestId,
+        code: "compositing-failed",
+        message: "Mock recomposite failed",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/mock recomposite failed/i),
+    );
+    expect(screen.getByTestId("guided-brush-selection")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() =>
+      expect(
+        compositeWorker.posted.filter((message) => message.type === "recomposite"),
+      ).toHaveLength(2),
+    );
+  });
+
+  it("does not reopen guided correction when matte extraction finishes after reset", async () => {
+    render(<ToolWorkspace />);
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: { files: [makeFile()] },
+    });
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() => worker.emit({ type: "model-ready", qualityMode: "fast" }));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "process")).toBe(true),
+    );
+    const processRequest = worker.posted.find((message) => message.type === "process");
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: processRequest?.requestId,
+        result: new Blob(["fake-png"], { type: "image/png" }),
+      }),
+    );
+    const guide = await screen.findByRole("button", {
+      name: /refine selection with brush/i,
+    });
+    fireEvent.click(guide);
+    await waitFor(() =>
+      expect(
+        worker.posted.some((message) => message.type === "extract-alpha-matte"),
+      ).toBe(true),
+    );
+    const extractRequest = worker.posted.find(
+      (message) => message.type === "extract-alpha-matte",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
+    act(() =>
+      worker.emit({
+        type: "alpha-matte-result",
+        requestId: extractRequest?.requestId,
+        matte: {
+          width: 800,
+          height: 600,
+          data: new Uint8ClampedArray(800 * 600).fill(255),
+        },
+        durationMs: 1,
+      }),
+    );
+
+    await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
+    expect(screen.queryByTestId("guided-brush-selection")).toBeNull();
   });
 
   it("drives upload -> process -> result -> reset without a page reload", async () => {

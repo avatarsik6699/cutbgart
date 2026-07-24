@@ -1,7 +1,16 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { loadEnv } from "vite";
 
 const ROOT_URL = "http://127.0.0.1:3000";
 const START_TIMEOUT_MS = 30_000;
+
+// Vite reads `.env*` itself, while the Playwright config runs in a separate
+// Node process. Mirror Vite's public client env into that process so test
+// selection sees the same feature flags as the application under test.
+const viteEnv = loadEnv("development", process.cwd());
+for (const [key, value] of Object.entries(viteEnv)) {
+  process.env[key] ??= value;
+}
 
 function stopProcessTree(child: ChildProcess): void {
   if (!child.pid || child.exitCode !== null) return;

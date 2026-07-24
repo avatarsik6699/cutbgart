@@ -8,6 +8,13 @@ import { installMockInference } from "./support/mock-inference";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
 
+async function waitForHeaderHydration(page: import("@playwright/test").Page) {
+  await expect(page.locator('[data-slot="site-header"]')).toHaveAttribute(
+    "data-hydrated",
+    "true",
+  );
+}
+
 interface ScenarioPage {
   path: string;
   testId: string;
@@ -106,7 +113,7 @@ for (const scenario of SCENARIO_PAGES) {
       await expect(
         page.getByRole("heading", { level: 1, name: scenario.h1 }),
       ).toBeVisible();
-      await expect(page.getByRole("switch")).toBeVisible();
+      await expect(page.getByTestId("processing-mode-selector")).toBeVisible();
       await expect(
         page.getByLabel(/Upload an image|Загрузить изображения/),
       ).toBeAttached();
@@ -223,12 +230,14 @@ test.describe("language switcher (Phase 12)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /о проекте cutbg/i }),
     ).toBeVisible();
+    await waitForHeaderHydration(page);
 
     await page.getByRole("link", { name: /^english$/i }).click();
     await expect(page).toHaveURL(/\/en\/about\/?$/);
     await expect(
       page.getByRole("heading", { level: 1, name: /about cutbg/i }),
     ).toBeVisible();
+    await waitForHeaderHydration(page);
 
     await page.getByRole("link", { name: /русский/i }).click();
     await expect(page).toHaveURL(/\/about\/?$/);
@@ -244,6 +253,7 @@ test.describe("language switcher (Phase 12)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /удалить фон с фото товара/i }),
     ).toBeVisible();
+    await waitForHeaderHydration(page);
 
     await page.getByRole("link", { name: /^english$/i }).click();
     await expect(page).toHaveURL(/\/en\/remove-background-from-product-photo\/?$/);
@@ -253,6 +263,7 @@ test.describe("language switcher (Phase 12)", () => {
         name: /remove the background from a product photo/i,
       }),
     ).toBeVisible();
+    await waitForHeaderHydration(page);
 
     await page.getByRole("link", { name: /русский/i }).click();
     await expect(page).toHaveURL(/\/udalit-fon-s-foto-tovara\/?$/);

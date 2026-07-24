@@ -10,6 +10,20 @@ export async function installMockInference(page: Page): Promise<void> {
     // Keep transitional queue/processing UI observable while remaining much
     // faster than real model inference.
     const PROCESS_DELAY_MS = 800;
+    Object.defineProperty(window, "__mockInferencePosts", {
+      configurable: true,
+      value: [] as Array<{
+        type: string;
+        qualityMode?: string;
+        promptType?: string;
+        revision?: number;
+        pointLabels?: number[];
+        promptPoints?: Array<{ x: number; y: number; label: number }>;
+        requestedMode?: string;
+        componentCleanup?: boolean;
+        sourceIsOriginal?: boolean;
+      }>,
+    });
     class MockInferenceWorker extends EventTarget {
       private source: {
         blob: Blob;
@@ -17,6 +31,7 @@ export async function installMockInference(page: Page): Promise<void> {
         height: number;
         format: string;
       } | null = null;
+      private guidedPromptCount = 0;
 
       postMessage(message: {
         type: string;
@@ -33,10 +48,87 @@ export async function installMockInference(page: Page): Promise<void> {
         };
         matte?: { data: Uint8ClampedArray };
         backgroundFill?: unknown;
+        revision?: number;
+        prompt?: {
+          revision: number;
+          points: Array<{ x: number; y: number; label: number }>;
+          box: unknown;
+        };
+        request?: {
+          requestId: string;
+          requestedMode?: "balanced" | "maximum";
+          requestedPath?: "webgpu" | "wasm";
+          inputSize?: { width: number; height: number };
+          priorMatte?: {
+            width: number;
+            height: number;
+            data: Uint8ClampedArray;
+          };
+          source?: { blob: Blob; width: number; height: number; format: string };
+          matte?: {
+            width: number;
+            height: number;
+            data: Uint8ClampedArray;
+          };
+          componentCleanup?: boolean;
+        };
       }): void {
+        (
+          window as unknown as {
+            __mockInferencePosts: Array<{
+              type: string;
+              qualityMode?: string;
+              promptType?: string;
+              revision?: number;
+              pointLabels?: number[];
+              promptPoints?: Array<{ x: number; y: number; label: number }>;
+              requestedMode?: string;
+              componentCleanup?: boolean;
+              sourceIsOriginal?: boolean;
+            }>;
+          }
+        ).__mockInferencePosts.push({
+          type: message.type,
+          qualityMode: message.qualityMode,
+          promptType: message.prompt ? (message.prompt.box ? "box" : "point") : undefined,
+          revision: message.revision ?? message.prompt?.revision,
+          pointLabels: message.prompt?.points.map((point) => point.label),
+          promptPoints: message.prompt?.points.map((point) => ({ ...point })),
+          requestedMode: message.request?.requestedMode,
+          componentCleanup: message.request?.componentCleanup,
+          sourceIsOriginal:
+            message.type === "encode" && message.source
+              ? message.source.blob ===
+                (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                  .__mockOriginalSourceBlob
+              : message.type === "refine-foreground" && message.request?.source
+                ? message.request.source.blob ===
+                  (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                    .__mockOriginalSourceBlob
+                : undefined,
+        });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
           if (message.type === "load-model") {
+            if (
+              (window as unknown as { __mockModelAssetFailureOnce?: boolean })
+                .__mockModelAssetFailureOnce
+            ) {
+              (
+                window as unknown as { __mockModelAssetFailureOnce?: boolean }
+              ).__mockModelAssetFailureOnce = false;
+              this.emit({
+                type: "error",
+                code: "model-load-failed",
+                qualityMode: message.qualityMode,
+                message: "verified model asset unavailable or corrupt",
+              });
+              return;
+            }
+            const ben2Fallback =
+              message.qualityMode === "ben2-fp16" &&
+              ((window as unknown as { __mockBen2Failure?: boolean }).__mockBen2Failure ||
+                message.inferencePath === "wasm");
             this.emit({
               type: "model-progress",
               qualityMode: message.qualityMode,
@@ -44,6 +136,16 @@ export async function installMockInference(page: Page): Promise<void> {
               loaded: 5_242_880,
               total: 10_485_760,
             });
+            if (ben2Fallback) {
+              this.emit({
+                type: "fallback-to-isnet",
+                qualityMode: message.qualityMode,
+                reason: (window as unknown as { __mockBen2Failure?: boolean })
+                  .__mockBen2Failure
+                  ? "device-out-of-memory"
+                  : "webgpu-unavailable",
+              });
+            }
             this.emit({
               type: "model-ready",
               qualityMode: message.qualityMode,
@@ -52,22 +154,302 @@ export async function installMockInference(page: Page): Promise<void> {
             });
             return;
           }
+          if (message.type === "encode" && message.source) {
+            (
+              window as unknown as { __mockOriginalSourceBlob?: Blob }
+            ).__mockOriginalSourceBlob = message.source.blob;
+            if (
+              (window as unknown as { __mockGuidedWorkerCrash?: boolean })
+                .__mockGuidedWorkerCrash
+            ) {
+              this.dispatchEvent(
+                new ErrorEvent("error", {
+                  message: "Guided worker failed to load",
+                  cancelable: true,
+                }),
+              );
+              return;
+            }
+            this.source = message.source;
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "loading-model",
+              progress: 50,
+            });
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "encoding-image",
+            });
+            this.emit({
+              type: "status",
+              revision: message.revision,
+              status: "ready-for-prompt",
+            });
+            return;
+          }
+          if (message.type === "prompt" && message.prompt && this.source) {
+            this.guidedPromptCount += 1;
+            const promptSequence =
+              ((window as unknown as { __mockGuidedPromptSequence?: number })
+                .__mockGuidedPromptSequence ?? 0) + 1;
+            (
+              window as unknown as { __mockGuidedPromptSequence: number }
+            ).__mockGuidedPromptSequence = promptSequence;
+            const revision = message.prompt.revision;
+            const source = this.source;
+            const respond = () => {
+              this.emit({ type: "status", revision, status: "predicting-mask" });
+              this.emit({
+                type: "candidates",
+                revision,
+                candidates: [0.92, 0.78, 0.61].map((score, index) => {
+                  const pixelCount = source.width * source.height;
+                  const collapsed = Boolean(
+                    (
+                      window as unknown as {
+                        __mockCollapseGuidedCandidates?: boolean;
+                      }
+                    ).__mockCollapseGuidedCandidates,
+                  );
+                  const boundaryTolerant = Boolean(
+                    (
+                      window as unknown as {
+                        __mockBoundaryTolerantGuidedCandidate?: boolean;
+                      }
+                    ).__mockBoundaryTolerantGuidedCandidate,
+                  );
+                  const data = new Uint8ClampedArray(pixelCount);
+                  if (collapsed) data.fill(255);
+                  else if (boundaryTolerant && index === 0)
+                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                      data[pixel] =
+                        pixel % source.width >= Math.floor(source.width / 2) ? 255 : 0;
+                  else if (index === 0) data.fill(255);
+                  else if (index === 2)
+                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                      data[pixel] = pixel % 2 ? 255 : 0;
+                  return {
+                    id: `mock-${String(promptSequence)}-${String(revision)}-${String(index)}`,
+                    score: (window as unknown as { __mockInvalidGuidedScores?: boolean })
+                      .__mockInvalidGuidedScores
+                      ? null
+                      : score,
+                    differenceRatio: index === 0 ? 0 : 1,
+                    matte: { width: source.width, height: source.height, data },
+                  };
+                }),
+              });
+            };
+            const delayFirst =
+              (window as unknown as { __mockDelayFirstGuidedResponse?: boolean })
+                .__mockDelayFirstGuidedResponse && promptSequence === 1;
+            if (delayFirst) window.setTimeout(respond, 250);
+            else respond();
+            return;
+          }
+          if (message.type === "dispose") {
+            this.emit({
+              type: "disposed",
+              requestId: message.requestId,
+              revision: message.revision,
+            });
+            return;
+          }
+          if (message.type === "refine" && message.request?.priorMatte) {
+            const request = message.request;
+            const priorMatte = request.priorMatte!;
+            const maximumFailure = Boolean(
+              (window as unknown as { __mockMattingMaximumFailure?: boolean })
+                .__mockMattingMaximumFailure,
+            );
+            const balancedFailure = Boolean(
+              (window as unknown as { __mockMattingBalancedFailure?: boolean })
+                .__mockMattingBalancedFailure,
+            );
+            const balancedWebGpuFailure = Boolean(
+              (
+                window as unknown as {
+                  __mockMattingBalancedWebGpuFailure?: boolean;
+                }
+              ).__mockMattingBalancedWebGpuFailure,
+            );
+            this.emit({
+              type: "progress",
+              requestId: request.requestId,
+              stage: "loading",
+              percent: 50,
+            });
+            if (request.requestedMode === "maximum" && maximumFailure) {
+              this.emit({
+                type: "fallback",
+                requestId: request.requestId,
+                from: "maximum",
+                to: "balanced",
+                fromPath: request.requestedPath,
+                toPath:
+                  request.requestedPath === "webgpu" ? "wasm" : request.requestedPath,
+                reason: "mock WebGPU failure",
+              });
+            } else if (
+              request.requestedMode === "balanced" &&
+              request.requestedPath === "webgpu" &&
+              balancedWebGpuFailure
+            ) {
+              this.emit({
+                type: "fallback",
+                requestId: request.requestId,
+                from: "balanced",
+                to: "balanced",
+                fromPath: "webgpu",
+                toPath: "wasm",
+                reason: "mock WebGPU execution failure",
+              });
+            }
+            const deterministic = balancedFailure;
+            this.emit({
+              type: "result",
+              requestId: request.requestId,
+              result: {
+                matte: {
+                  ...priorMatte,
+                  data: priorMatte.data.slice(),
+                },
+                requestedMode: request.requestedMode,
+                actualMode: deterministic
+                  ? "deterministic"
+                  : request.requestedMode === "maximum" && maximumFailure
+                    ? "balanced"
+                    : request.requestedMode,
+                actualPath: deterministic
+                  ? null
+                  : balancedWebGpuFailure
+                    ? "wasm"
+                    : request.requestedPath,
+                inputSize: request.inputSize,
+                fallback: deterministic
+                  ? "deterministic"
+                  : request.requestedMode === "maximum" && maximumFailure
+                    ? "balanced"
+                    : balancedWebGpuFailure
+                      ? "wasm"
+                      : "none",
+              },
+            });
+            return;
+          }
+          if (
+            message.type === "refine-foreground" &&
+            message.request?.source &&
+            message.request.matte
+          ) {
+            const request = message.request;
+            const source = request.source!;
+            const matte = request.matte!;
+            if (
+              (window as unknown as { __mockForegroundFailure?: boolean })
+                .__mockForegroundFailure
+            ) {
+              this.emit({
+                type: "error",
+                requestId: request.requestId,
+                error: {
+                  code: "processing-failed",
+                  message: "private mock diagnostic",
+                  recoverable: true,
+                },
+              });
+              return;
+            }
+            const unchanged = Boolean(
+              (window as unknown as { __mockForegroundUnchanged?: boolean })
+                .__mockForegroundUnchanged,
+            );
+            this.emit({
+              type: "progress",
+              requestId: request.requestId,
+              percent: 50,
+            });
+            this.emit({
+              type: "result",
+              requestId: request.requestId,
+              result: {
+                foreground: source.blob,
+                matte: {
+                  ...matte,
+                  data: matte.data.slice(),
+                },
+                dirtyPatch: null,
+                requestedPath: "decontaminate",
+                actualPath: unchanged ? "unchanged" : "decontaminate",
+                fallback: unchanged ? "no-soft-edge" : "none",
+                ...(unchanged
+                  ? { fallbackReason: "private no-soft-edge diagnostic" }
+                  : {}),
+                durationMs: 1,
+                memoryBytes: "unavailable",
+              },
+            });
+            return;
+          }
+          if (message.type === "reset") return;
           if (message.type === "process" && message.source) {
             this.source = message.source;
-            const emitResult = () =>
-              this.emit({
-                type: "process-result",
-                requestId: message.requestId,
-                result: message.source?.blob,
-                matte: {
-                  width: message.source!.width,
-                  height: message.source!.height,
-                  data: new Uint8ClampedArray(
-                    message.source!.width * message.source!.height,
-                  ).fill(255),
-                },
-                durationMs: 1,
-              });
+            (
+              window as unknown as { __mockOriginalSourceBlob?: Blob }
+            ).__mockOriginalSourceBlob = message.source.blob;
+            const emitResult = () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = message.source!.width;
+              canvas.height = message.source!.height;
+              const context = canvas.getContext("2d")!;
+              context.fillStyle = "#FFFFFF";
+              context.fillRect(0, 0, canvas.width, canvas.height);
+              canvas.toBlob((result) => {
+                if (!result) {
+                  this.emit({ type: "error", message: "Mock PNG encoding failed" });
+                  return;
+                }
+                this.emit({
+                  type: "process-result",
+                  requestId: message.requestId,
+                  result,
+                  matte: (() => {
+                    const data = new Uint8ClampedArray(
+                      message.source!.width * message.source!.height,
+                    ).fill(255);
+                    if (
+                      (
+                        window as unknown as {
+                          __mockBoundaryTolerantGuidedCandidate?: boolean;
+                        }
+                      ).__mockBoundaryTolerantGuidedCandidate
+                    )
+                      for (let pixel = 0; pixel < data.length; pixel += 1)
+                        data[pixel] =
+                          pixel % message.source!.width <
+                          Math.floor(message.source!.width / 2)
+                            ? 0
+                            : 255;
+                    else data.fill(128, 0, Math.max(1, message.source!.width));
+                    return {
+                      width: message.source!.width,
+                      height: message.source!.height,
+                      data,
+                    };
+                  })(),
+                  durationMs: 1,
+                  actualMode:
+                    message.qualityMode === "ben2-fp16" &&
+                    ((window as unknown as { __mockBen2Failure?: boolean })
+                      .__mockBen2Failure ||
+                      message.inferencePath === "wasm")
+                      ? "isnet-q8"
+                      : message.qualityMode,
+                });
+              }, "image/png");
+            };
             window.setTimeout(emitResult, PROCESS_DELAY_MS);
             return;
           }

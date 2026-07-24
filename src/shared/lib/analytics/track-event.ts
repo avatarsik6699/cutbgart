@@ -15,5 +15,14 @@ declare global {
  */
 export function trackEvent(event: AnalyticsEvent, data?: AnalyticsEventData): void {
   if (typeof window === "undefined") return;
-  window.umami?.track(event, data);
+  const safeData = data
+    ? {
+        ...(data.qualityMode ? { qualityMode: data.qualityMode } : {}),
+        ...(data.inferencePath ? { inferencePath: data.inferencePath } : {}),
+      }
+    : undefined;
+  window.umami?.track(
+    event,
+    safeData && Object.keys(safeData).length ? safeData : undefined,
+  );
 }

@@ -22,4 +22,22 @@ describe("trackEvent", () => {
 
     expect(track).toHaveBeenCalledWith("processing_completed", { qualityMode: "fast" });
   });
+
+  it("drops runtime-injected source metadata and image-derived values", () => {
+    const track = vi.fn<(event: string, data?: unknown) => void>();
+    window.umami = { track };
+
+    trackEvent("processing_completed", {
+      qualityMode: "fast",
+      fileName: "private-photo.jpg",
+      sha256: "image-derived-hash",
+      pixels: new Uint8Array([1, 2, 3]),
+    } as never);
+
+    expect(track).toHaveBeenCalledWith("processing_completed", {
+      qualityMode: "fast",
+    });
+    expect(JSON.stringify(track.mock.calls)).not.toContain("private-photo");
+    expect(JSON.stringify(track.mock.calls)).not.toContain("image-derived-hash");
+  });
 });

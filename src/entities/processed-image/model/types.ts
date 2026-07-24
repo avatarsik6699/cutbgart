@@ -1,4 +1,11 @@
-export type QualityMode = "fast" | "max";
+/** Explicit production model selected for automatic background removal. */
+export type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+
+/**
+ * `fast`/`max` remain accepted at the worker boundary for backwards-compatible
+ * sessions and tests. New UI code always emits an `AutomaticModelMode`.
+ */
+export type QualityMode = AutomaticModelMode | "fast" | "max";
 
 export type InferencePath = "webgpu" | "wasm";
 
@@ -22,6 +29,29 @@ export interface AlphaMatte {
   width: number;
   height: number;
   data: Uint8ClampedArray;
+}
+
+export type TrimapValue = 0 | 128 | 255;
+export type HardConstraintValue = -1 | 0 | 1;
+
+export interface PixelRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Trimap {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+  unknownBounds: PixelRect | null;
+}
+
+export interface RefinementConstraintMap {
+  width: number;
+  height: number;
+  data: Int8Array;
 }
 
 export type HexColor = `#${string}`;
@@ -50,6 +80,12 @@ export interface ProcessedImage {
   result: Blob;
   /** Transparent foreground used for instant background previews. */
   cutout?: Blob;
+  /**
+   * Optional source-sized foreground colour layer produced by edge cleanup.
+   * Its RGB values may differ from `source`, but its alpha remains the source
+   * alpha; `alphaMatte` is still the only compositing-alpha authority.
+   */
+  foreground?: Blob;
   qualityMode: QualityMode;
   /** Retained in memory so background changes never rerun inference. */
   alphaMatte?: AlphaMatte;

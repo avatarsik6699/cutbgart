@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Trash2 } from "lucide-react";
 
 import type {
   AlphaMatte,
   BackgroundFill,
+  ProcessedImage,
   QualityMode,
+  RefinementConstraintMap,
   SourceImage,
 } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
@@ -28,6 +30,22 @@ import {
 } from "../../../features/remove-background";
 import { QualityModeToggle, useQualityMode } from "../../../features/quality-mode-toggle";
 import {
+  GuidedBrushCanvas,
+  createGuidedBrushConstraints,
+  createGuidedBrushViewSession,
+  useGuidedBrushSelection,
+} from "../../../features/select-object";
+import {
+  MatteRefinementControls,
+  recommendMattingMode,
+  useMatteRefinement,
+  type MattingRefinementMode,
+} from "../../../features/refine-matte";
+import {
+  ForegroundRefinementControls,
+  useForegroundRefinement,
+} from "../../../features/refine-foreground";
+import {
   ChoosePhotoButton,
   UploadDropzone,
   UploadPreparationNotice,
@@ -36,12 +54,23 @@ import {
 } from "../../../features/upload-image";
 import { Button } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
-import { describeState } from "../lib/describe-state";
+import { clearModelCache } from "@/features/model-storage";
+import {
+  describeGuidedState,
+  describeRefinementState,
+  describeState,
+} from "../lib/describe-state";
 import { sourceImageToFile } from "../lib/source-image-to-file";
 import { ProcessingLog } from "./ProcessingLog";
 
 function pathLabel(path: "webgpu" | "wasm"): string {
   return path === "webgpu" ? "WebGPU" : "WASM";
+}
+
+function modeLabel(mode: QualityMode): string {
+  if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
+  if (mode === "ben2-fp16") return m.processingModeBen2();
+  return m.processingModeFast();
 }
 
 interface MaskCorrectionSlotsProps {
@@ -170,6 +199,10 @@ function MaskCorrectionSlots({
 }
 
 type DisplayError = { message: string; action: "retry" | "reset" };
+type GuidedBrushVisualContext = {
+  entryKind: "direct" | "processed";
+  resultColorSource: Blob;
+};
 
 function localizedUploadError(error: UploadValidationError): string {
   if (error.code === "unsupported-format") {
@@ -236,6 +269,7 @@ export function ToolWorkspace() {
   );
   const retryCorrectionRef = useRef<(() => void) | null>(null);
   const correctionRunRef = useRef(0);
+  const guidedRunRef = useRef(0);
   // TanStack Start SSRs this widget's markup before client hydration attaches
   // `UploadDropzone`/`ChoosePhotoButton`'s onChange/onDrop handlers — a real
   // interaction in that window is visually indistinguishable from a working
@@ -246,6 +280,42 @@ export function ToolWorkspace() {
   // only once this effect actually runs — i.e. only once hydration has
   // completed and the upload controls' own handlers are live.
   const [hydrated, setHydrated] = useState(false);
+  const [guidedEntry, setGuidedEntry] = useState(false);
+  const [guidedVisualContext, setGuidedVisualContext] =
+    useState<GuidedBrushVisualContext | null>(null);
+  const guided = useGuidedBrushSelection();
+  const guidedViewSession = useMemo(
+    () =>
+      guided.state.session ? createGuidedBrushViewSession(guided.state.session) : null,
+    [guided.state.session],
+  );
+  const guidedTargetRef = useRef<
+    | { kind: "direct" }
+    | { kind: "single"; image: ProcessedImage }
+    | { kind: "batch"; itemId: string; image: ProcessedImage }
+    | null
+  >(null);
+  const refinement = useMatteRefinement();
+  const finishRefinementApplying = refinement.finishApplying;
+  const foregroundRefinement = useForegroundRefinement();
+  const finishForegroundApplying = foregroundRefinement.finishApplying;
+  const [refinementMode, setRefinementMode] = useState<MattingRefinementMode>("balanced");
+  const refinementContextRef = useRef<{
+    guidedMatte: AlphaMatte | null;
+    constraints: RefinementConstraintMap | null;
+  }>({ guidedMatte: null, constraints: null });
+  const refinementTargetRef = useRef<
+    | { kind: "single"; image: ProcessedImage }
+    | { kind: "batch"; itemId: string; image: ProcessedImage }
+    | null
+  >(null);
+  const appliedRefinementRef = useRef<AlphaMatte | null>(null);
+  const foregroundTargetRef = useRef<
+    | { kind: "single"; image: ProcessedImage }
+    | { kind: "batch"; itemId: string; image: ProcessedImage }
+    | null
+  >(null);
+  const appliedForegroundRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate hydration flag (see comment above): it must flip exactly once, only after hydration completes on the client; the one extra render is the point, not an accident.
@@ -261,12 +331,23 @@ export function ToolWorkspace() {
   useEffect(() => {
     let cancelled = false;
     void detectDeviceCapabilities().then((capabilities) => {
-      if (!cancelled) setDefaultQualityMode(capabilities.defaultQualityMode);
+      if (!cancelled) {
+        setDefaultQualityMode(capabilities.defaultQualityMode);
+        setRefinementMode(recommendMattingMode(capabilities.inferencePath));
+      }
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(
+    () => () => {
+      correctionRunRef.current += 1;
+      guidedRunRef.current += 1;
+    },
+    [],
+  );
 
   const { qualityMode, setQualityMode } = useQualityMode(defaultQualityMode);
   const {
@@ -276,9 +357,11 @@ export function ToolWorkspace() {
     runInfo,
     logs,
     modelLoadBytes,
+    ben2FallbackNotice,
     selectFile,
     recomputeMaxQuality,
     retry,
+    retryInLightweightMode,
     reset,
     enterCorrecting,
     exitCorrecting,
@@ -286,10 +369,18 @@ export function ToolWorkspace() {
     recomposite,
     applyBackgroundFill,
     replaceResult,
+    adoptResult,
+    releaseInference,
   } = useBackgroundRemoval(qualityMode);
   const batch = useBatchProcessing({
     qualityMode,
     inferencePath: deviceCapabilities?.inferencePath ?? "wasm",
+    concurrencyLimit:
+      qualityMode === "ben2-fp16"
+        ? 1
+        : deviceCapabilities?.inferencePath === "webgpu"
+          ? 2
+          : 1,
   });
   const batchModelKey =
     `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
@@ -298,7 +389,19 @@ export function ToolWorkspace() {
   );
   const lastLogMessage = logs.at(-1)?.message;
 
+  async function releaseRefinementBeforeHeavyWork() {
+    await Promise.all([refinement.release(), foregroundRefinement.release()]);
+    refinement.reset();
+    foregroundRefinement.reset();
+    refinementTargetRef.current = null;
+    appliedRefinementRef.current = null;
+    foregroundTargetRef.current = null;
+    appliedForegroundRef.current = null;
+  }
+
   function handleUpload(result: UploadResult) {
+    const guidedRunId = guidedRunRef.current + 1;
+    guidedRunRef.current = guidedRunId;
     correctionRunRef.current += 1;
     setCorrectionError(null);
     setCorrectionViewAnnouncement("");
@@ -310,7 +413,22 @@ export function ToolWorkspace() {
       return;
     }
     setUploadError(null);
-    selectFile(sourceImageToFile(result.image));
+    refinementContextRef.current = { guidedMatte: null, constraints: null };
+    void releaseRefinementBeforeHeavyWork().then(() => {
+      if (guidedRunRef.current !== guidedRunId) return;
+      if (guidedEntry) {
+        guidedTargetRef.current = { kind: "direct" };
+        setGuidedVisualContext({
+          entryKind: "direct",
+          resultColorSource: result.image.blob,
+        });
+        guided.start(result.image);
+      } else {
+        guidedTargetRef.current = null;
+        setGuidedVisualContext(null);
+        selectFile(sourceImageToFile(result.image));
+      }
+    });
   }
 
   function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
@@ -319,11 +437,14 @@ export function ToolWorkspace() {
     );
     const invalid = results.find(({ result }) => !result.ok);
     setUploadError(invalid && !invalid.result.ok ? invalid.result.error : null);
-    if (valid.length) batch.enqueue(valid);
+    if (valid.length) {
+      void releaseRefinementBeforeHeavyWork().then(() => batch.enqueue(valid));
+    }
   }
 
   function handleReset() {
     correctionRunRef.current += 1;
+    guidedRunRef.current += 1;
     setUploadError(null);
     setPreparingFileCount(0);
     setCorrectionError(null);
@@ -334,8 +455,319 @@ export function ToolWorkspace() {
     setFinalizingCorrection(false);
     setPreviewFill({ type: "transparent" });
     setBackgroundBusy(false);
+    setGuidedEntry(false);
+    setGuidedVisualContext(null);
+    guidedTargetRef.current = null;
+    refinementContextRef.current = { guidedMatte: null, constraints: null };
+    refinementTargetRef.current = null;
+    appliedRefinementRef.current = null;
+    foregroundTargetRef.current = null;
+    appliedForegroundRef.current = null;
+    void refinement.release().then(refinement.reset);
+    void foregroundRefinement.release().then(foregroundRefinement.reset);
+    guided.reset();
     reset();
   }
+
+  function handleAcceptGuided() {
+    const session = guided.state.session;
+    const target = guidedTargetRef.current;
+    if (!session || !guided.state.matte || !target || !guided.canAccept) return;
+    const seed =
+      target.kind === "single" || target.kind === "batch"
+        ? target.image
+        : {
+            source: session.source,
+            result: session.source.blob,
+            qualityMode: "isnet-q8" as const,
+            alphaMatte: guided.state.matte,
+            backgroundFill: { type: "transparent" as const },
+          };
+    const guidedRunId = guidedRunRef.current + 1;
+    guidedRunRef.current = guidedRunId;
+    retryCorrectionRef.current = () => {
+      if (guidedTargetRef.current === target) handleAcceptGuided();
+    };
+    setCorrectionError(null);
+    setFinalizingCorrection(true);
+    const constraints = createGuidedBrushConstraints(session);
+    const guidedMatte = guided.state.matte;
+    const apply = target.kind === "batch" ? batch.recomposite : recomposite;
+    void apply(seed, guided.state.matte)
+      .then((result) => {
+        if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
+          return;
+        setFinalizingCorrection(false);
+        refinementContextRef.current = { guidedMatte, constraints };
+        setOriginalMatte(null);
+        if (target.kind === "batch") batch.replaceResult(target.itemId, result);
+        else if (target.kind === "single") replaceResult(result);
+        else adoptResult(result);
+        guided.reset();
+        guidedTargetRef.current = null;
+        setGuidedVisualContext(null);
+        setGuidedEntry(false);
+        retryCorrectionRef.current = null;
+      })
+      .catch((error: unknown) => {
+        if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
+          return;
+        setFinalizingCorrection(false);
+        setCorrectionError({
+          message: error instanceof Error ? error.message : String(error),
+          action: "retry",
+        });
+      });
+  }
+
+  function handleGuideAutomaticResult() {
+    if (state.status !== "result") return;
+    const image = state.result;
+    const guidedRunId = guidedRunRef.current + 1;
+    guidedRunRef.current = guidedRunId;
+    retryCorrectionRef.current = () => {
+      if (state.status === "result") handleGuideAutomaticResult();
+    };
+    setCorrectionError(null);
+    setExtractingMatte(true);
+    void (async () => {
+      try {
+        await releaseRefinementBeforeHeavyWork();
+        if (guidedRunRef.current !== guidedRunId) return;
+        const matte = await extractMatte(image);
+        if (guidedRunRef.current !== guidedRunId) return;
+        await releaseInference();
+        if (guidedRunRef.current !== guidedRunId) return;
+        setExtractingMatte(false);
+        guidedTargetRef.current = { kind: "single", image };
+        setGuidedVisualContext({
+          entryKind: "processed",
+          resultColorSource: image.foreground ?? image.source.blob,
+        });
+        guided.start(image.source, matte);
+        retryCorrectionRef.current = null;
+      } catch (error: unknown) {
+        if (guidedRunRef.current !== guidedRunId) return;
+        setExtractingMatte(false);
+        setCorrectionError({
+          message: error instanceof Error ? error.message : String(error),
+          action: "retry",
+        });
+      }
+    })();
+  }
+
+  function handleGuideBatchResult() {
+    if (!selectedBatchItem?.processedImage) return;
+    const { id, processedImage } = selectedBatchItem;
+    const guidedRunId = guidedRunRef.current + 1;
+    guidedRunRef.current = guidedRunId;
+    retryCorrectionRef.current = () => {
+      if (
+        selectedBatchItem?.id === id &&
+        selectedBatchItem.processedImage === processedImage
+      )
+        handleGuideBatchResult();
+    };
+    setCorrectionError(null);
+    setExtractingMatte(true);
+    void (async () => {
+      try {
+        await Promise.all([
+          releaseInference(),
+          refinement.release().then(refinement.reset),
+          foregroundRefinement.release().then(foregroundRefinement.reset),
+          batch.releaseInference(),
+        ]);
+        if (guidedRunRef.current !== guidedRunId) return;
+        const matte = processedImage.alphaMatte
+          ? processedImage.alphaMatte
+          : await batch.extractMatte(processedImage);
+        if (guidedRunRef.current !== guidedRunId) return;
+        setExtractingMatte(false);
+        guidedTargetRef.current = { kind: "batch", itemId: id, image: processedImage };
+        setGuidedVisualContext({
+          entryKind: "processed",
+          resultColorSource: processedImage.foreground ?? processedImage.source.blob,
+        });
+        guided.start(processedImage.source, matte);
+        retryCorrectionRef.current = null;
+      } catch (error: unknown) {
+        if (guidedRunRef.current !== guidedRunId) return;
+        setExtractingMatte(false);
+        setCorrectionError({
+          message: error instanceof Error ? error.message : String(error),
+          action: "retry",
+        });
+      }
+    })();
+  }
+
+  function startSingleRefinement(image: ProcessedImage) {
+    const previousTarget = refinementTargetRef.current;
+    const seed =
+      refinement.state.status === "result" && previousTarget?.kind === "single"
+        ? previousTarget.image
+        : image;
+    const priorMatte = seed.alphaMatte;
+    if (!priorMatte) return;
+    refinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      foregroundRefinement.release().then(foregroundRefinement.reset),
+    ]).then(() => {
+      const cleanSeed = { ...seed, foreground: undefined };
+      refinementTargetRef.current = { kind: "single", image: cleanSeed };
+      appliedRefinementRef.current = null;
+      refinement.start({
+        source: seed.source,
+        priorMatte,
+        guidedMatte: refinementContextRef.current.guidedMatte,
+        constraints: refinementContextRef.current.constraints,
+        mode: refinementMode,
+        path: deviceCapabilities?.inferencePath ?? "wasm",
+      });
+    });
+  }
+
+  function startBatchRefinement(itemId: string, image: ProcessedImage) {
+    const previousTarget = refinementTargetRef.current;
+    const seed =
+      refinement.state.status === "result" &&
+      previousTarget?.kind === "batch" &&
+      previousTarget.itemId === itemId
+        ? previousTarget.image
+        : image;
+    const priorMatte = seed.alphaMatte;
+    if (!priorMatte || batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
+    refinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      batch.releaseInference(),
+      foregroundRefinement.release().then(foregroundRefinement.reset),
+    ]).then(() => {
+      const cleanSeed = { ...seed, foreground: undefined };
+      refinementTargetRef.current = { kind: "batch", itemId, image: cleanSeed };
+      appliedRefinementRef.current = null;
+      refinement.start({
+        source: seed.source,
+        priorMatte,
+        guidedMatte: refinementContextRef.current.guidedMatte,
+        constraints: refinementContextRef.current.constraints,
+        mode: refinementMode,
+        path: deviceCapabilities?.inferencePath ?? "wasm",
+      });
+    });
+  }
+
+  useEffect(() => {
+    const result = refinement.state.result;
+    const target = refinementTargetRef.current;
+    if (!result || !target || appliedRefinementRef.current === result.matte) return;
+    appliedRefinementRef.current = result.matte;
+    const apply = target.kind === "single" ? recomposite : batch.recomposite;
+    void apply(target.image, result.matte)
+      .then((updated) => {
+        if (refinementTargetRef.current !== target) return;
+        if (target.kind === "single") replaceResult(updated);
+        else batch.replaceResult(target.itemId, updated);
+        finishRefinementApplying();
+      })
+      .catch((error: unknown) => {
+        finishRefinementApplying();
+        setCorrectionError({
+          message: `Could not apply refined matte: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
+  }, [
+    batch,
+    recomposite,
+    finishRefinementApplying,
+    refinement.state.result,
+    replaceResult,
+  ]);
+
+  function startSingleForegroundRefinement(
+    image: ProcessedImage,
+    componentCleanup: boolean,
+  ) {
+    const matte = image.alphaMatte;
+    if (!matte) return;
+    foregroundRefinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      refinement.release().then(refinement.reset),
+    ]).then(() => {
+      const seed = { ...image, foreground: undefined };
+      foregroundTargetRef.current = { kind: "single", image: seed };
+      appliedForegroundRef.current = null;
+      foregroundRefinement.start({
+        source: seed.source,
+        matte,
+        constraints: refinementContextRef.current.constraints,
+        componentCleanup,
+      });
+    });
+  }
+
+  function startBatchForegroundRefinement(
+    itemId: string,
+    image: ProcessedImage,
+    componentCleanup: boolean,
+  ) {
+    const matte = image.alphaMatte;
+    if (!matte || batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
+    foregroundRefinement.prepareNext();
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      refinement.release().then(refinement.reset),
+      batch.releaseInference(),
+    ]).then(() => {
+      const seed = { ...image, foreground: undefined };
+      foregroundTargetRef.current = { kind: "batch", itemId, image: seed };
+      appliedForegroundRef.current = null;
+      foregroundRefinement.start({
+        source: seed.source,
+        matte,
+        constraints: refinementContextRef.current.constraints,
+        componentCleanup,
+      });
+    });
+  }
+
+  useEffect(() => {
+    const result = foregroundRefinement.state.result;
+    const target = foregroundTargetRef.current;
+    if (!result || !target || appliedForegroundRef.current === result.foreground) return;
+    appliedForegroundRef.current = result.foreground;
+    const apply = target.kind === "single" ? recomposite : batch.recomposite;
+    const image = { ...target.image, foreground: result.foreground };
+    void apply(image, result.matte)
+      .then((updated) => {
+        if (foregroundTargetRef.current !== target) return;
+        if (target.kind === "single") replaceResult(updated);
+        else batch.replaceResult(target.itemId, updated);
+        finishForegroundApplying();
+      })
+      .catch((error: unknown) => {
+        finishForegroundApplying();
+        setCorrectionError({
+          message: `Could not apply foreground cleanup: ${error instanceof Error ? error.message : String(error)}`,
+          action: "retry",
+        });
+      });
+  }, [
+    batch,
+    finishForegroundApplying,
+    foregroundRefinement.state.result,
+    recomposite,
+    replaceResult,
+  ]);
 
   function handleRetry() {
     if (correctionError && retryCorrectionRef.current) {
@@ -409,12 +841,42 @@ export function ToolWorkspace() {
       // the switch. Bumping `correctionRunRef` also invalidates any
       // in-flight `extractMatte` from the item being switched away from.
       correctionRunRef.current += 1;
+      guidedRunRef.current += 1;
       setCorrectionError(null);
       setExtractingMatte(false);
       setOriginalMatte(null);
       setCorrectionViewAnnouncement("");
+      refinement.cancel();
+      refinementTargetRef.current = null;
+      foregroundRefinement.cancel();
+      foregroundTargetRef.current = null;
+      refinementContextRef.current = { guidedMatte: null, constraints: null };
+      guidedTargetRef.current = null;
+      setGuidedVisualContext(null);
+      guided.reset();
+      setFinalizingCorrection(false);
+      retryCorrectionRef.current = null;
     }
     batch.selectItem(id);
+  }
+
+  function handleClearBatch() {
+    correctionRunRef.current += 1;
+    guidedRunRef.current += 1;
+    retryCorrectionRef.current = null;
+    setCorrectionError(null);
+    setExtractingMatte(false);
+    setFinalizingCorrection(false);
+    guided.reset();
+    guidedTargetRef.current = null;
+    setGuidedVisualContext(null);
+    setGuidedEntry(false);
+    refinementContextRef.current = { guidedMatte: null, constraints: null };
+    void Promise.all([
+      refinement.release().then(refinement.reset),
+      foregroundRefinement.release().then(foregroundRefinement.reset),
+    ]);
+    batch.reset();
   }
 
   function handleBatchDoneCorrecting(correctedMatte: AlphaMatte) {
@@ -472,6 +934,8 @@ export function ToolWorkspace() {
     : state.status === "error"
       ? { message: state.error.message, action: state.error.action }
       : null;
+  const verifiedAssetError =
+    state.status === "error" && state.error.code === "model-load-failed";
 
   // Two grid slots (`.tool-workspace-grid`, globals.css): `surface` is the
   // visual/preview area (upload UI, batch grid, before/after slider, mask
@@ -481,24 +945,86 @@ export function ToolWorkspace() {
   let surfaceNode: ReactNode = null;
   let railNode: ReactNode = null;
 
+  const guidedCanvas =
+    guided.state.session && guidedViewSession && guidedVisualContext ? (
+      <GuidedBrushCanvas
+        session={guidedViewSession}
+        status={guided.state.status}
+        matteRef={guided.matteRef}
+        matteRevision={`${String(guided.state.session.computedRevision ?? "base")}:${guided.state.session.selectedCandidateId ?? "none"}`}
+        baseMatteRef={guided.baseMatteRef}
+        baseMatteRevision={guided.state.baseMatteRevision}
+        entryKind={guidedVisualContext.entryKind}
+        resultColorSource={guidedVisualContext.resultColorSource}
+        hasMatte={Boolean(guided.state.matte)}
+        progress={guided.state.progress}
+        error={guided.state.error}
+        errorCode={guided.state.errorCode}
+        promptCounts={{
+          total: guided.state.lastPromptCount,
+          keep: guided.state.lastPromptKeepCount,
+          remove: guided.state.lastPromptRemoveCount,
+        }}
+        applying={finalizingCorrection}
+        canAccept={guided.canAccept}
+        onStroke={guided.addStroke}
+        onBrushRadiusChange={guided.setBrushRadius}
+        onSelectCandidate={guided.selectCandidate}
+        onUndo={guided.undo}
+        onRedo={guided.redo}
+        onClear={guided.clear}
+        onRecompute={guided.recompute}
+        onContinueFromResult={guided.continueFromResult}
+        onAccept={handleAcceptGuided}
+        onRetry={guided.retry}
+        onCancel={() => {
+          guidedRunRef.current += 1;
+          guided.reset();
+          guidedTargetRef.current = null;
+          setGuidedVisualContext(null);
+          setGuidedEntry(false);
+          setExtractingMatte(false);
+          setFinalizingCorrection(false);
+          setCorrectionError(null);
+          retryCorrectionRef.current = null;
+        }}
+      />
+    ) : null;
+
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
-    surfaceNode = (
+    surfaceNode = guidedCanvas ?? (
       <div className="flex flex-col gap-3">
         <UploadDropzone
           onUpload={handleUpload}
-          onUploads={handleUploads}
+          onUploads={guidedEntry ? undefined : handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <ChoosePhotoButton
           onUpload={handleUpload}
-          onUploads={handleUploads}
+          onUploads={guidedEntry ? undefined : handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <UploadPreparationNotice fileCount={preparingFileCount} />
       </div>
     );
+  }
+
+  if (!displayError && guidedCanvas) {
+    surfaceNode = (
+      <div className="flex flex-col gap-4">
+        {guidedCanvas}
+        {correctionError && (
+          <CorrectionErrorAlert
+            error={correctionError}
+            onRetry={handleRetry}
+            onReset={handleReset}
+          />
+        )}
+      </div>
+    );
+    railNode = null;
   }
 
   // Batch base content — independent of whether the selected item is
@@ -524,7 +1050,7 @@ export function ToolWorkspace() {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={batch.reset}
+            onClick={handleClearBatch}
             className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 aria-hidden="true" />
@@ -540,6 +1066,7 @@ export function ToolWorkspace() {
           <QualityModeToggle
             qualityMode={qualityMode}
             onQualityModeChange={setQualityMode}
+            disabled={!hydrated}
           />
           <div
             className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto [&>*]:h-9"
@@ -621,6 +1148,41 @@ export function ToolWorkspace() {
       </div>
       {selectedBatchItem?.processedImage && !originalMatte && (
         <div className="flex flex-col gap-4" data-testid="batch-controls">
+          <MatteRefinementControls
+            mode={refinementMode}
+            path={deviceCapabilities?.inferencePath ?? null}
+            status={refinement.state.status}
+            progress={refinement.state.progress}
+            fallbackReason={refinement.state.fallbackReason}
+            fallback={refinement.state.fallback}
+            disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
+            onModeChange={setRefinementMode}
+            onStart={() =>
+              startBatchRefinement(
+                selectedBatchItem.id,
+                selectedBatchItem.processedImage!,
+              )
+            }
+            onCancel={refinement.cancel}
+            onSkip={handleBatchEditMask}
+          />
+          <ForegroundRefinementControls
+            status={foregroundRefinement.state.status}
+            progress={foregroundRefinement.state.progress}
+            fallbackReason={foregroundRefinement.state.fallbackReason}
+            result={foregroundRefinement.state.result}
+            error={foregroundRefinement.state.error}
+            disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
+            onStart={(componentCleanup) =>
+              startBatchForegroundRefinement(
+                selectedBatchItem.id,
+                selectedBatchItem.processedImage!,
+                componentCleanup,
+              )
+            }
+            onCancel={foregroundRefinement.cancel}
+            onSkip={handleBatchEditMask}
+          />
           <BackgroundFillSelector
             image={{
               source: selectedBatchItem.processedImage.source,
@@ -659,13 +1221,14 @@ export function ToolWorkspace() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => batch.retryItem(selectedBatchItem.id)}
+              onClick={() => {
+                void releaseRefinementBeforeHeavyWork().then(() =>
+                  batch.retryItem(selectedBatchItem.id),
+                );
+              }}
             >
               {m.reprocessMode({
-                mode:
-                  selectedBatchItem.qualityMode === "max"
-                    ? m.qualityMax()
-                    : m.qualityFast(),
+                mode: modeLabel(selectedBatchItem.qualityMode),
               })}
             </Button>
             <Button
@@ -676,13 +1239,22 @@ export function ToolWorkspace() {
             >
               {extractingMatte ? m.preparing() : m.editMask()}
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleGuideBatchResult}
+              disabled={
+                extractingMatte ||
+                batchBackgroundBusy[selectedBatchItem.id] ||
+                Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)
+              }
+            >
+              {extractingMatte ? m.preparing() : m.guidedRefineResult()}
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             {m.batchQualityHint({
-              mode:
-                selectedBatchItem.qualityMode === "max"
-                  ? m.qualityMax()
-                  : m.qualityFast(),
+              mode: modeLabel(selectedBatchItem.qualityMode),
             })}
           </p>
         </div>
@@ -696,7 +1268,7 @@ export function ToolWorkspace() {
   const batchCorrecting =
     batchActive && selectedBatchItem?.processedImage && originalMatte;
 
-  if (batchActive && !batchCorrecting) {
+  if (batchActive && !batchCorrecting && !guidedCanvas) {
     surfaceNode = batchSurfaceBase;
     railNode = batchRailBase;
   }
@@ -706,7 +1278,7 @@ export function ToolWorkspace() {
       <div className="flex flex-col gap-2">
         <p className="text-sm text-muted-foreground">
           {m.loadingModel({
-            mode: state.qualityMode === "max" ? m.qualityMax() : m.qualityFast(),
+            mode: modeLabel(state.qualityMode),
             progress: state.progress.toFixed(0),
           })}
           {modelLoadBytes.loaded > 0
@@ -746,7 +1318,7 @@ export function ToolWorkspace() {
     );
   }
 
-  if (!displayError && state.status === "result") {
+  if (!displayError && state.status === "result" && !guided.state.session) {
     surfaceNode = (
       <BeforeAfterSlider
         before={state.result.source}
@@ -756,6 +1328,30 @@ export function ToolWorkspace() {
     );
     railNode = (
       <div className="flex flex-col gap-4">
+        <MatteRefinementControls
+          mode={refinementMode}
+          path={deviceCapabilities?.inferencePath ?? null}
+          status={refinement.state.status}
+          progress={refinement.state.progress}
+          fallbackReason={refinement.state.fallbackReason}
+          fallback={refinement.state.fallback}
+          onModeChange={setRefinementMode}
+          onStart={() => startSingleRefinement(state.result)}
+          onCancel={refinement.cancel}
+          onSkip={handleEditMask}
+        />
+        <ForegroundRefinementControls
+          status={foregroundRefinement.state.status}
+          progress={foregroundRefinement.state.progress}
+          fallbackReason={foregroundRefinement.state.fallbackReason}
+          result={foregroundRefinement.state.result}
+          error={foregroundRefinement.state.error}
+          onStart={(componentCleanup) =>
+            startSingleForegroundRefinement(state.result, componentCleanup)
+          }
+          onCancel={foregroundRefinement.cancel}
+          onSkip={handleEditMask}
+        />
         <BackgroundFillSelector
           image={{
             source: state.result.source,
@@ -774,11 +1370,18 @@ export function ToolWorkspace() {
           <Button type="button" variant="outline" onClick={handleReset}>
             {m.processAnother()}
           </Button>
-          {state.result.qualityMode !== "max" && (
-            <Button type="button" variant="secondary" onClick={recomputeMaxQuality}>
-              {m.recomputeMax()}
-            </Button>
-          )}
+          {state.result.qualityMode !== "max" &&
+            state.result.qualityMode !== "isnet-fp32" && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void releaseRefinementBeforeHeavyWork().then(recomputeMaxQuality);
+                }}
+              >
+                {m.recomputeMax()}
+              </Button>
+            )}
           <Button
             type="button"
             variant="secondary"
@@ -786,6 +1389,14 @@ export function ToolWorkspace() {
             disabled={extractingMatte || backgroundBusy}
           >
             {extractingMatte ? m.preparing() : m.editMask()}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleGuideAutomaticResult}
+            disabled={extractingMatte || backgroundBusy}
+          >
+            {extractingMatte ? m.preparing() : m.guidedRefineResult()}
           </Button>
         </div>
         {correctionError && (
@@ -862,27 +1473,87 @@ export function ToolWorkspace() {
   return (
     <div
       data-testid="tool-workspace"
-      className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""}`}
+      className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""} ${guided.state.session ? "tool-workspace-guided" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">
-        {batch.session.items.length
-          ? m.batchCompleteAnnouncement({
-              done: batch.snapshot.completedCount,
-              total: batch.snapshot.totalCount,
-              failed: batch.snapshot.failedCount,
+        {foregroundRefinement.state.status !== "idle" &&
+        foregroundRefinement.state.status !== "result"
+          ? m.foregroundRefinementProgress({
+              progress: String(Math.round(foregroundRefinement.state.progress ?? 0)),
             })
-          : describeState(state, lightweightMode, uploadError)}
+          : refinement.state.status !== "idle" && refinement.state.status !== "result"
+            ? describeRefinementState(refinement.state.status, refinement.state.progress)
+            : guided.state.session
+              ? describeGuidedState(guided.state.status, guided.state.progress)
+              : batch.session.items.length
+                ? m.batchCompleteAnnouncement({
+                    done: batch.snapshot.completedCount,
+                    total: batch.snapshot.totalCount,
+                    failed: batch.snapshot.failedCount,
+                  })
+                : describeState(state, lightweightMode, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}
       </div>
 
-      {!batchActive && (
+      {!batchActive && !guided.state.session && (
         <div className="[grid-area:toggle]">
-          <QualityModeToggle
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-          />
+          {state.status === "idle" && (
+            <fieldset className="mb-3 space-y-2" data-testid="processing-method-selector">
+              <legend className="text-sm font-semibold">
+                {m.processingMethodLabel()}
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={guidedEntry ? "outline" : "default"}
+                  className="h-auto justify-start whitespace-normal p-3 text-left"
+                  aria-pressed={!guidedEntry}
+                  disabled={!hydrated}
+                  onClick={() => setGuidedEntry(false)}
+                >
+                  <span>
+                    <span className="block font-medium">{m.automaticMethod()}</span>
+                    <span className="mt-1 block text-xs font-normal opacity-80">
+                      {m.automaticMethodHint()}
+                    </span>
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={guidedEntry ? "default" : "outline"}
+                  className="h-auto justify-start whitespace-normal p-3 text-left"
+                  aria-pressed={guidedEntry}
+                  disabled={!hydrated}
+                  onClick={() => setGuidedEntry(true)}
+                >
+                  <span>
+                    <span className="block font-medium">{m.guidedMethod()}</span>
+                    <span className="mt-1 block text-xs font-normal opacity-80">
+                      {m.guidedMethodHint()}
+                    </span>
+                  </span>
+                </Button>
+              </div>
+            </fieldset>
+          )}
+          {!guidedEntry && (
+            <QualityModeToggle
+              qualityMode={qualityMode}
+              onQualityModeChange={setQualityMode}
+              disabled={!hydrated}
+            />
+          )}
+          {state.status === "idle" && guidedEntry && (
+            <div
+              role="status"
+              className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm"
+            >
+              <p className="font-medium">{m.guidedMethodMeta()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{m.guidedUploadHint()}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -899,13 +1570,45 @@ export function ToolWorkspace() {
         </p>
       )}
 
+      {ben2FallbackNotice && !displayError && (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 [grid-area:notice]"
+        >
+          {m.processingFallbackNotice()}
+        </p>
+      )}
+
       {displayError && (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive [grid-area:error]"
         >
-          <p>{displayError.message}</p>
-          {displayError.action === "retry" ? (
+          <p>{verifiedAssetError ? m.modelAssetRecovery() : displayError.message}</p>
+          {verifiedAssetError ? (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={handleRetry}>
+                {m.tryAgain()}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void clearModelCache().then(retry)}
+              >
+                {m.modelAssetResetAndRetry()}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQualityMode("isnet-q8");
+                  retryInLightweightMode();
+                }}
+              >
+                {m.modelAssetUseLighter()}
+              </Button>
+            </div>
+          ) : displayError.action === "retry" ? (
             <Button
               type="button"
               variant="outline"

@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.8` |
-| Date | `2026-07-13` |
+| Document Version | `v1.16` |
+| Date | `2026-07-24` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -66,15 +66,29 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Single-image processing with cancel/retry | Mobile app (backlog v2) |
 | Explicit "fast" vs "max quality" model switch, persisted in `localStorage` | Any server endpoint that accepts uploaded images (never — architectural invariant) |
 | Model evaluation lab: compare IS-Net q8/fp32, BEN2 fp16, and MVANet q4 in the browser on the same local images before selecting a new production automatic model (Phase 15) | Domain-specific model training/fine-tuning |
-| Guided object selection with SlimSAM: the user marks the object to preserve with a positive point or box when automatic removal is ambiguous (Phase 16) | |
+| Guided object selection with SlimSAM: Phase-16 point/box behavior remains internal/legacy compatibility; from Phase 28 the public entry is automatic result → Cutout → Magic brush, not a pre-upload guided choice | |
+| Iterative guided correction: cumulative positive/negative points, target boxes, semantic keep/remove strokes, multiple object layers, mask alternatives, and local correction of an existing automatic matte (Phase 17) | |
+| Brush-guided correction: Phase 21 supplies the translucent `keep`/`remove` semantic engine; Phase 28 reuses it as Cutout `Magic`, automatically selects the intent-best result, and removes public candidate navigation/continuation while Phase-17 controls remain legacy code | |
+| Optional client-side trimap/alpha refinement with `balanced` q8 and `maximum` fp32 modes, plus foreground-edge decontamination, selected only after browser model evaluation and capability checks (Phases 18–20) | |
 | Before/after slider result view, PNG-with-alpha download | Advertising on this domain (never — product decision) |
 | WebGPU with automatic, transparent WASM fallback | Donation/payment on this domain (never — lives on a separate portfolio project) |
 | Explicit error handling for every documented failure mode (§7 NFR) | |
 | SEO-optimized scenario landing pages (product photo, documents, logo, avatar) | |
-| Analytics (Cloudflare Web Analytics + self-hosted Umami, no PII) | |
+| Analytics (Cloudflare Web Analytics + self-hosted Umami; no image/content/custom visitor identifier is intentionally sent, while Phase 24 verifies actual request fields, configuration, legal classification, and retention) | |
 | Manual mask correction: brush add/erase/restore directly on the existing `AlphaMatte`, adjustable brush size/hardness, undo/redo; zoom/pan on the correction canvas for precise editing | |
 | Batch processing: upload and process multiple images in parallel; grid/tile overview with per-image progress; select any item to review/correct/reprocess through the existing single-image flow; download individually or all as a client-generated ZIP (Phase 10) | |
 | Background replacement: solid color, gradient (linear/radial), or user-uploaded background image composited in place of transparency for the downloaded PNG; the uploaded background image stays client-side only, consistent with §1.1's privacy invariant (Phase 11) | |
+| Production security and verifiable supply chain: threat model, browser/CDN/model integrity, hardened containers/CI, SBOM/attestation, vulnerability disclosure, and cache lifecycle (Phase 22) | |
+| Reversible operations: immutable releases, candidate/post-deploy smoke, rollback, SLI/SLOs, alerts, bounded backups/restore drills, incident runbooks, and deterministic critical-path CI (Phase 23) | |
+| Legal and data-governance readiness: jurisdiction/data inventory first, then approved transparency, consent/storage controls, footer disclosures, and legal pages; no future metadata collection begins before these gates (Phases 24–25) | |
+| Automatic-first editor: upload starts the selected automatic processing mode immediately; the stable result workspace exposes Cutout, Enhancements, and Background as switchable tools plus a toolbar download action (Phases 26–31) | |
+| Unified Cutout tool: `Magic` semantic correction and `Manual` exact alpha correction share one visual stage, user-facing brush language, bounded draft history, and app-level committed undo/redo (Phase 28) | |
+| User-facing result enhancements: soft-alpha refinement and edge-colour cleanup are the first operations grouped under `Улучшения` / `Enhancements`; the name is intentionally implementation-neutral so later local model-based or deterministic finishing operations can join without exposing their technology (Phase 29) | |
+| Download menu with output-size selection and an extensible client-only export contract; PNG is the only format shipped in this cycle (Phase 30) | Rich product-card composition (layers, object transforms, shadows, perspective, templates, text) — separate Studio product track after the focused background workflow is stable (§9) |
+| Batch-first feature parity: every editor capability introduced in Phases 26–30 works for a single upload and for the selected completed item from a multiple upload in the same phase; Phase 31 consolidates and stress-tests that shared contract rather than adding delayed parity | |
+| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 32) | |
+| Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable (Phase 33) | |
+| Final product validation: manual WCAG 2.2 AA/assistive-technology audit, representative physical-device matrix, browser-support policy, usability sessions, bilingual editorial QA, visual/performance evidence, and a truthful accessibility statement (Phase 34) | |
 
 ---
 
@@ -86,7 +100,7 @@ There is no account system and no server-side authorization surface. The only "r
 
 | Role | Capabilities | Restrictions |
 |------|-------------|--------------|
-| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose fast/max-quality mode, run inference client-side, view before/after, correct the mask with the brush editor, replace the background, download PNG result(s) individually or as a ZIP | No accounts, no persistence of results beyond the browser session |
+| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose a user-facing automatic quality mode, then use Cutout `Magic`/`Manual`, Enhancements, Background, committed undo/redo, contextual help, and PNG download(s)/ZIP; internal model alternatives are selected automatically | No accounts, no persistence of image results beyond the browser session; non-essential storage/metadata collection is governed by §7.2 |
 | `AI_Agent` | Implements phases, runs gate checks | No push to main/develop |
 
 ### 2.2 Key Entities
@@ -100,6 +114,10 @@ QualityMode ("fast" | "max") — user-selectable, persisted client-side in local
 EvaluationModelId → [features/model-lab] → BenchmarkRun (development-only, in-memory/exportable)
 BatchSession → holds many BatchItem (each: SourceImage → AlphaMatte → ProcessedImage), in-memory only
 ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (transparent by default)
+PromptSession + GuidedBrushSession + automatic AlphaMatte + MattingRefinementMode
+  → SemanticMask + Trimap → refined AlphaMatte
+SourceImage + current matte/foreground/background artifacts → EditDocument
+EditDocument + committed EditOperation ledger → undoable/redoable rendered result
 ```
 
 - **SourceImage** — the user's uploaded file (in-memory only; validated for format/size/resolution,
@@ -136,6 +154,30 @@ ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (tr
   "gradient"; kind: "linear" | "radial"; stops } | { type: "image"; blob }`. Applied at compositing
   time in place of (or in addition to, for preview) the transparent PNG output. A user-uploaded
   background image is held in memory only, exactly like `SourceImage` — never leaves the device.
+- **PromptSession** (Phase 17) — in-memory cumulative intent for one source image: positive and
+  negative points, one target box per object layer, positive/negative semantic strokes, candidate
+  selection, and undo/redo history. Multiple disconnected foreground objects are represented as
+  separate layers whose accepted masks are unioned; prompt coordinates, strokes, masks, and
+  embeddings are never persisted or sent to analytics. From Phase 21 this remains an internal
+  compatibility/orchestration substrate; the public primary flow does not expose points, boxes, or
+  manual layer management.
+- **GuidedBrushSession** (Phase 21) — the public semantic-guidance state for one source image:
+  source/base matte, one internal prompt layer, cumulative `keep`/`remove` brush strokes, brush
+  radius, bounded undo/redo, dirty/recomputed revision, local edit region, model candidates, and the
+  selected candidate. Brush opacity is presentational only; every covered pixel expresses binary
+  foreground/background intent. Direct guided entry requires at least one `keep` stroke before
+  recomputation; correction of an automatic result accepts either mode. Nothing is persisted.
+- **SemanticMask / Trimap** (Phases 17–19) — `SemanticMask` identifies which object regions should
+  be retained; `Trimap` classifies definite foreground, definite background, and an unknown band
+  derived from prompt constraints, boundaries, and disagreement with the automatic `AlphaMatte`.
+  A trimap-aware refiner may alter only the unknown band; explicit foreground/background strokes
+  remain hard constraints.
+- **MattingRefinementMode** (Phase 19) — session-only `"balanced" | "maximum"` choice for the same
+  Distinctions-646 matting family. `balanced` selects q8 (~27.5 MB) and is the weak-device/WASM
+  default and fallback; `maximum` selects fp32 (~103.9 MB) for the best measured soft-alpha quality
+  and is recommended on a confirmed WebGPU path. Only the selected variant is fetched and at most
+  one matting pipeline is resident; switching modes disposes the previous pipeline before loading
+  the other variant.
 - **DeviceCapabilities** — detected once per session (`navigator.gpu.requestAdapter()`); determines
   inference path (WebGPU + `fp16`-capable adapter required, or WASM) and the default `QualityMode`
   for weak devices. WebGPU probing was force-disabled for a period after the originally-shipped
@@ -144,6 +186,24 @@ ProcessedImage + BackgroundFill → [recomposite] → final downloadable PNG (tr
   after that swap; confirmed working end-to-end in a real (non-headless) browser, including the
   mid-session `isWebGpuExecutionError` → WASM fallback path in `inference.worker.ts` as a safety net
   if a given device's WebGPU turns out unusable for IS-Net specifically.
+- **EditDocument** (Phase 26) — one browser-memory document for one uploaded image. It gives the
+  immutable source, automatic baseline, current subject matte/foreground, background fill,
+  composited preview/download artifact, processing provenance, and monotonic revision one stable
+  identity. Every successful `BatchItem` owns one independent `EditDocument` from Phase 26; no
+  history or draft is shared between batch items.
+- **EditOperation / EditHistory** (Phase 26) — a bounded, browser-memory command ledger for changes
+  that have been committed to the visible document (Cutout application, Manual correction, Enhance,
+  Background). Operations reference immutable artifacts held by a resource-owning store rather
+  than copying changing full-resolution typed arrays through React state. Eviction/reset releases
+  unreachable buffers, blobs, object URLs, and workers. Tool-local, uncommitted brush markings use
+  their own bounded draft history and are not presented as document-level undo steps.
+- **EditorToolId** (Phase 27) — `"cutout" | "enhance" | "background"`. The public Russian label
+  for `enhance` is `Улучшения`; the ID and label describe user value rather than edge-only or
+  model-only implementation. This is a focused background
+  workflow, not a generic plugin marketplace or a claim that layers/effects already exist.
+- **ExportSettings** (Phase 30) — client-only output settings. This cycle ships `format: "png"` and
+  downscale-only size choices; the type is intentionally extensible for later WebP/JPEG support
+  without exposing unavailable format controls now.
 
 ---
 
@@ -157,10 +217,22 @@ is a direct consequence of the "inference is client-side only, no accounts" inva
 # browser tab/session, with one exception:
 
 localStorage:
-  qualityMode: "fast" | "max"     # persisted across visits, no other user data stored client-side
+  qualityMode: "fast" | "max"     # existing functional preference
+  helpState                       # Phase 32: versioned viewed/dismissed guidance preferences
+  privacyChoices                 # Phase 25 only if required by the Phase-24 legal matrix
 
-Cache Storage (Service Worker, public/sw.js) — cache-first, content-hashed, effectively permanent:
-  model weights (.onnx files, IS-Net `q8`/`fp32` dtype variants of the same model)
+In-memory session state (Phase 19):
+  mattingRefinementMode: "balanced" | "maximum"  # never persisted; capability-aware initial value
+
+In-memory editor state (Phases 26–31):
+  EditDocument                              # one per single image / BatchItem
+  EditHistory                               # bounded committed operations, never persisted
+  activeTool: "cutout" | "enhance" | "background" | null
+  activeToolDraft                           # bounded and discarded on cancel/reset
+  ExportSettings                            # session-only; PNG + downscale-only size in Phase 30
+
+Cache Storage (Service Worker, public/sw.js) — cache-first, verified and lifecycle-managed:
+  model weights (.onnx files, IS-Net and selected ViTMatte `q8`/`fp32` dtype variants)
   ONNX Runtime WASM binaries
 
 Model-lab exports (Phase 15, explicit user download only):
@@ -168,11 +240,25 @@ Model-lab exports (Phase 15, explicit user download only):
   no source/result image bytes and no filename
 ```
 
-No PII, no image data, no processing history is stored anywhere — client or server. A `BatchSession`
+No image data or processing history is stored anywhere — client or server. A `BatchSession`
 (Phase 10) and any custom background image (Phase 11) are in-memory only, scoped to the browser tab,
 discarded on reload — same as every other entity in §2.2. The "download all" ZIP (Phase 10) is
 assembled client-side (a small JS zip library) and streamed to disk via the browser's normal
 download mechanism — no server involvement, no temporary server-side storage.
+
+The application must not expand the existing metadata/analytics footprint merely because future
+storage is anticipated. Any new metadata field, purpose, recipient, retention period, or storage
+location requires the Phase-24 inventory/legal-basis review and the Phase-25 transparency/choice
+controls before collection is enabled. The authoritative inventory must distinguish browser-local
+functional state, model caches, ordinary server/CDN logs, analytics payloads, consent evidence, and
+future server-side metadata instead of describing all of them loosely as “cookies”.
+
+Editor history is not "processing history" in the account/cloud sense: it exists only for the
+current tab and document, has both entry and estimated-byte bounds, and is destroyed on document
+removal/reload. Artifact ownership is explicit: undo/redo may retain an artifact while it is
+reachable, but eviction/reset must revoke its object URLs and release its buffers/blobs. A future
+Studio product may reuse this browser-memory document kernel, but Phase 26 must not add persistence,
+serialization, accounts, a generic layer stack, or speculative transform/effect fields.
 
 ---
 
@@ -190,6 +276,7 @@ static/marketing page shells:
 | `GET` | `/` and all routes in §5.1 | none | SSR HTML: `<title>`, `<meta description>`, `<link rel="canonical">`, JSON-LD, hydrates client bundle. No image or user data in the request or response. |
 | `GET` | `/sitemap.xml` | none | Generated at build time by `scripts/generate-sitemap.ts` from the `routes/` tree |
 | `GET` | `/robots.txt` | none | Static, fully open, links to `sitemap.xml` |
+| `GET` | `/.well-known/security.txt` | none | Phase-22 RFC 9116 disclosure contact and policy; no request body or visitor metadata beyond ordinary request logs |
 
 Model weights and WASM binaries use a pinned, immutable path. Production prefers
 `cdn.cutbg.art` (Nginx static files on the VPS behind Cloudflare Cache); if that source is
@@ -208,9 +295,10 @@ the same rule: the background file never leaves the device either.
 
 ## 5. Frontend / Client Contract
 
-> No design assets (Figma) were provided for this cycle — this section is derived from the
-> architect's written brief (`raw_spec.md` §5–§7), which specifies layout, composition, and state
-> machine in enough structural detail to plan phases from. Revisit if screenshots become available.
+> No Figma source exists. The original sections were derived from the architect's written brief;
+> the Phase-26–31 target additionally uses the architect-provided remove.bg screenshot dated
+> 2026-07-24 as a hierarchy/interaction reference, not as a pixel-identical design or repository
+> asset.
 
 ### 5.1 Pages (MVP)
 
@@ -222,7 +310,10 @@ the same rule: the background file never leaves the device either.
 | `/udalit-fon-s-logotipa` | Logo scenario | Desired · `ru` base locale |
 | `/udalit-fon-dlya-avatarki` | Avatar/social profile photo scenario | Desired · `ru` base locale |
 | `/about` | About the project, tech, author link | Does not block launch · `ru` base locale |
-| `/privacy` | Static privacy-policy page fulfilling §7.2's "image never leaves your device" claim; discloses aggregate-only analytics (§7.6), cookie/localStorage usage, Telegram contact | Required (Phase 12) · `ru` base locale |
+| `/privacy` | Privacy notice fulfilling §7.2's "image never leaves your device" claim and the approved Phase-24 data inventory: purposes, categories, legal bases, recipients/processors, storage locations, retention, rights, and contact | Existing Phase-12 route; substantively revised in Phase 25 · `ru` base locale |
+| `/terms` | Plain-language Terms of Use for the free, anonymous service, including acceptable use, intellectual-property/user-content responsibility, service availability, and legally reviewed limitations | Conditional content approved in Phase 24; implemented in Phase 25 · `ru` base locale |
+| `/cookies` | Cookie and browser-storage notice using the real inventory—not a generic template—including necessary localStorage/Cache Storage, analytics behavior, retention, and how to change any non-essential choice | Conditional content approved in Phase 24; implemented in Phase 25 · `ru` base locale |
+| `/accessibility` | Truthful accessibility statement with evaluated scope, tested technologies, known limitations, owned contact, effective date, and review cadence | Phase 34 · `ru` base locale |
 | `/en/...` | English counterpart of every row above, same path suffix under the `/en` prefix (e.g. `/en/about`, `/en/privacy`) | Required (Phase 12, §5.5) |
 | `/dev/model-lab` | Internal, `noindex` browser model-comparison lab; enabled only when `VITE_ENABLE_MODEL_LAB=true`, otherwise renders an unavailable state and never loads candidate weights | Phase 15 evaluation-only · not localized · excluded from sitemap |
 
@@ -243,6 +334,12 @@ Batch processing (Phase 10) does not introduce a new route: dropping/selecting m
 any existing page's upload surface (`features/upload-image`) is what enters batch mode, on that same
 page. No dedicated `/batch` URL.
 
+Phase 24 may require an additional operator/legal-notice or separate-consent route after the
+operator identity, jurisdiction, target markets, and data purposes are known. Phase 25 implements
+the approved bilingual route manifest. A paid-service public offer is **not** presumed necessary
+for this free/no-payment product; it is added only if qualified review identifies a real contractual
+need or the product model changes.
+
 ### 5.2 Components / Feature Slices (Feature-Sliced Design, see §6)
 
 | Slice | Layer | Responsibility |
@@ -250,17 +347,24 @@ page. No dedicated `/batch` URL.
 | `pages/home`, `pages/product-photo`, ... | `pages` | Compose features + entities per scenario page; own zero business logic (that lives in `features`/`entities`) |
 | `features/upload-image` | `features` | Drag-and-drop (full working area), click-to-browse, clipboard paste, mobile camera capture; format/size/resolution validation; client-side downscale |
 | `features/remove-background` | `features` | Web Worker model init + inference, WebGPU/WASM device detection, `useBackgroundRemoval` hook exposing the state machine (§5.3), `OffscreenCanvas` postprocessing/compositing |
-| `features/quality-mode-toggle` | `features` | Fast/max-quality UI control, reads/writes `localStorage`, passed into `remove-background` as a parameter (not hardcoded) |
+| `features/quality-mode-toggle` | `features` | Persists the internal automatic profile; from Phase 27 presents only Fast/Optimal/Maximum quality (Beta) benefit labels and accessible compatibility guidance, never model IDs as the primary choice |
 | `features/model-lab` | `features` | (Phase 15) Opt-in browser-only evaluation surface behind `VITE_ENABLE_MODEL_LAB`: run the same local images sequentially through IS-Net q8/fp32, BEN2 fp16, and MVANet q4; compare anonymized previews, record load/inference/error measurements and pairwise preference, export image-free benchmark JSON. It must not alter the production quality toggle or eagerly fetch any model. |
-| `features/select-object` | `features` | (Phase 16) Guided SlimSAM correction: positive point or bounding-box prompt identifies the foreground object to keep; produces an `AlphaMatte` compatible with the existing correction/compositing flow. Loaded only after explicit entry into the mode and kept client-side. |
-| `features/download-result` | `features` | PNG-with-alpha download button; from Phase 10, also a "download all as ZIP" action over a `BatchSession` |
-| `features/correct-mask` | `features` | Brush-based add/erase/restore editing of the current `AlphaMatte`; adjustable brush size/hardness; undo/redo history; zoom/pan on the correction canvas for precise editing (Phase 09); re-composites via the existing `OffscreenCanvas` pipeline in `features/remove-background` — no new inference pass |
+| `features/select-object` | `features` | Phase 16 starts with one SlimSAM positive point or bounding box and Phase 17 evolves it into a multi-prompt/layer editor. Phase 21 supersedes that UI with one semantic brush and bounded internal candidate ranking. Phase 28 exposes the same engine only as Cutout `Magic`, automatically applies the intent-best candidate, and removes public candidate navigation/continuation. Point/box/manual-layer UI remains legacy source; reused session/worker APIs stay active. |
+| `features/refine-matte` | `features` | (Phases 18–19) Builds a confidence-aware trimap from automatic alpha, guided semantic masks, and hard user constraints, then optionally runs the selected Distinctions-646 q8 (`balanced`) or fp32 (`maximum`) variant only on the target/unknown crop. It discloses first-download size before loading, fetches only the chosen variant, keeps one matting pipeline resident, and falls back fp32 → q8 → deterministic no-new-model fusion without losing user work. |
+| `features/refine-foreground` | `features` | (Phase 20) Optional foreground-color estimation/decontamination and conservative edge-aware cleanup after alpha refinement; never changes explicit prompt constraints and always preserves the final pixel-level correction path. |
+| `features/download-result` | `features` | PNG download and Phase-10 ZIP; Phase 30 adds downscale-only Original/2048/1024 settings behind the toolbar Download split action and an extensible format type while shipping no non-PNG format |
+| `features/correct-mask` | `features` | Exact alpha editing with zoom/pan and patch history. Phase 28 presents it as Cutout `Manual` with user-facing Restore/Erase; baseline reset is handled by history rather than a third primary brush mode |
 | `features/batch-processing` | `features` | (Phase 10) Parallel upload + processing of multiple images (bounded concurrency, §7.1); grid/tile overview with per-`BatchItem` status; selecting an item enters the existing single-image `result`⇄`correcting` flow (§5.3) for review/correction/reprocess; no parallel state machine |
-| `features/background-replacement` | `features` | (Phase 11) Solid color / gradient (linear, radial) / user-uploaded image `BackgroundFill`, applied via the existing `OffscreenCanvas` compositing pipeline in place of transparency |
+| `features/background-replacement` | `features` | Transparent/color/gradient/uploaded-image `BackgroundFill`; Phase 30 gives it a tool-local live draft whose Apply commits one document operation and whose Cancel restores the committed fill |
+| `entities/edit-document` | `entities` | (Phase 26) Browser-memory identity and immutable artifact references for one editable result: source/baseline, current subject matte and foreground, background, composite, processing provenance, and revision. Contains pure model contracts only; orchestration remains in features/widgets. |
+| `features/editor-history` | `features` | (Phase 26) Bounded commit/undo/redo ledger over `EditDocument` artifacts with explicit reachability and cleanup. Owns committed document history only; Cutout/Manual markings that have not been applied remain tool-local drafts. |
+| `features/guided-help` | `features` | (Phase 32) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
+| `features/privacy-choices` | `features` | (Phase 25, if required by the Phase-24 decision matrix) Inventory-driven privacy/storage choices, consent evidence and withdrawal; it must block non-essential integrations until the applicable choice exists and must not claim that all browser storage is a cookie |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
 | `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box; also `site-header`, `site-footer`, `site-shell` (Phase 12) — presentational sitewide chrome, no business logic |
-| `widgets/tool-workspace` | `widgets` | (Phase 12) Extracts the upload → quality-toggle → process → preview → background-fill → download composition previously duplicated across `pages/home` and the four scenario pages (flagged as debt in `PHASE_06.md` Implementation Notes); responsive grid layout (single column on mobile, two-column preview/control-rail split on desktop) instead of the flat vertical stack. First and only use of the `widgets` layer — see §6's Architecture row for the rationale reversal |
-| `pages/privacy` | `pages` | (Phase 12) Static privacy-policy content, composed with `site-shell`; no business logic |
+| `widgets/tool-workspace` | `widgets` | (Phase 12; reorganized in Phases 26–31) Composes the shared upload/processing/editor experience. The Phase-26 controller split removes domain orchestration from the 1,500-line visual component; Phase 27 adds a stable stage, icon+label tool toolbar, tool panel slot, document undo/redo, and download slot. It coordinates features only through public APIs and does not become a second domain store. |
+| `pages/privacy`, `pages/terms`, `pages/cookies` | `pages` | (Phase 25) Approved bilingual legal/transparency content composed with `site-shell`; no policy decisions or consent business logic in page components |
+| `pages/accessibility` | `pages` | (Phase 34) Bilingual evidence-based accessibility statement; no unsupported compliance claim or product logic |
 
 Routing note: `routes/*.tsx` (TanStack Router file-based routing) stays a thin `loader` + head-meta +
 render shell; all composition and business logic lives in `pages/*`, per §5.5 of the architect's
@@ -272,7 +376,7 @@ brief. Cross-layer imports must go through each slice's public API (`index.ts`) 
 Implemented explicitly as a state machine, not scattered boolean flags:
 
 ```
-idle → model-loading → ready → processing → result ⇄ correcting
+idle → model-loading → ready → processing → result ⇄ guiding → refining → result ⇄ correcting
                 ↓            ↓         ↓
               error        error     error
 ```
@@ -290,6 +394,24 @@ idle → model-loading → ready → processing → result ⇄ correcting
   "edit mask" entry point into **correcting**, and (Phase 11) a background-fill selector
   (transparent/color/gradient/image) that affects both the composited preview and the downloaded PNG
   without introducing a new top-level state.
+- **guiding** (Phases 17, 21) — starts from a source image or existing result and retains the current
+  automatic matte. Phase 21's primary UI exposes only a translucent semantic brush with green
+  `keep` and red `remove` modes, adjustable size, undo/redo, clear-markings, and an explicit
+  "recompute" action. Painting, undo, and redo only update the visible markings and dirty state;
+  inference never runs during pointer movement or implicitly after a gesture. Recompute converts
+  the consolidated markings into one bounded total set of positive/negative SlimSAM prompt samples,
+  ignores stale revisions, ranks up to three materially different masks against the user's intent,
+  and previews the selected result. Direct entry requires at least one green stroke. For an
+  automatic base, model changes are fused only inside a brush-derived, bounded local edit region;
+  pixels outside remain byte-for-byte unchanged and explicit constraints apply last. The pinned
+  decoder has no previous-mask input, so continuity is deterministic local fusion rather than a
+  false claim of recurrent model refinement. Phase-17 point/box/manual-layer controls are not part
+  of the primary user journey.
+- **refining** (Phase 19) — derives a trimap and optionally predicts soft alpha only inside the
+  target/unknown crop. Before the first model fetch, the UI exposes `balanced` q8 and `maximum`
+  fp32 with their approximate download sizes and capability-aware recommendation. A maximum-mode
+  failure disposes fp32 and retries q8 once; a q8 failure continues with deterministic guided
+  fusion without losing prompts, source pixels, the trimap, or the prior matte.
 - **correcting** — user brushes corrections (add/erase/restore-to-model-output) onto the current
   `AlphaMatte`; adjustable brush size/hardness; undo/redo; zoom/pan the canvas for precise editing
   on high-resolution images (Phase 09) — zoom/pan is a view-only transform of the correction canvas,
@@ -300,11 +422,151 @@ idle → model-loading → ready → processing → result ⇄ correcting
 - **error** — reachable from any state; always carries a concrete message and an action (retry/reset),
   never a bare "something went wrong."
 
+Phase-21 brush guidance adds these browser-memory-only contracts:
+
+```ts
+type GuidedBrushMode = "keep" | "remove";
+type GuidedBrushStatus =
+  | "idle"
+  | "loading-model"
+  | "encoding-image"
+  | "ready"
+  | "dirty"
+  | "predicting"
+  | "preview"
+  | "error";
+
+interface GuidedBrushStroke {
+  id: string;
+  mode: GuidedBrushMode;
+  points: readonly { x: number; y: number }[]; // normalized source coordinates
+  radius: number; // source-image pixels; overlay opacity is visual only
+}
+
+interface GuidedBrushCandidate {
+  id: string;
+  matte: AlphaMatte;
+  modelRankScore: number | null; // any finite raw iou_scores value; never shown as a percentage
+  intentScore: number; // 0..1 agreement with pre-constraint keep/remove markings
+  differenceRatio: number; // candidate difference inside the local edit region only
+}
+
+interface GuidedBrushSession {
+  source: SourceImage;
+  baseMatte: AlphaMatte | null;
+  strokes: readonly GuidedBrushStroke[];
+  brushRadius: number;
+  status: GuidedBrushStatus;
+  revision: number;
+  computedRevision: number | null;
+  editRegion: PixelRect | null;
+  candidates: readonly GuidedBrushCandidate[];
+  selectedCandidateId: string | null;
+  history: readonly GuidedBrushStroke[]; // bounded gesture deltas
+  redo: readonly GuidedBrushStroke[];
+}
+```
+
+Candidate order is deterministic and intent-first: compare pre-hard-constraint agreement with all
+green/red markings, then use a finite raw SlimSAM ranking value only as a tie-breaker, then prefer
+continuity with an automatic base inside the edit region. A raw score outside `0..1` remains usable
+for internal ordering but is never converted into a confidence percentage. Alternatives whose
+local `differenceRatio` is below `0.001` (0.1%) are treated as materially identical and collapsed.
+Hard constraints are applied only after candidate evaluation and always win.
+
 Batch processing (Phase 10) does not add a new top-level state to this diagram. A `BatchSession` runs
 one independent instance of `model-loading → ready → processing → result` per `BatchItem`, in
 parallel (bounded concurrency, §7.1), summarized in a grid overview; selecting an item drops into
 that item's own `result`⇄`correcting` states exactly as described above. `error` on one `BatchItem`
 does not block or cancel the others (§7.3).
+
+#### Target public workflow (Phases 26–31)
+
+The state machine above remains the internal inference/lifecycle contract. It must no longer dictate
+the information architecture of the public UI. The public single-image journey becomes:
+
+```text
+empty → automatic-processing → editor ⇄ tool-draft
+  ↑              ↓              ↓
+ reset          error          recoverable tool error
+```
+
+- **empty** — one prominent drag/drop/click/paste surface and the automatic processing-mode
+  selector are visible together. There is no direct guided/manual entry choice. A valid upload
+  immediately begins the selected automatic mode; no extra "start processing" step is introduced.
+- **automatic-processing** — keep a stable stage footprint and show plain-language progress.
+  Model IDs, dtypes, graph sizes, raw runtime paths, prompt limits, diagnostics, and internal state
+  names are absent from the primary UI. A compact accessible details disclosure may expose
+  troubleshooting information without competing with the task.
+- **editor** — the processed result stays in one stable visual stage. An icon+text toolbar switches
+  between `Cutout`, `Enhancements`, and `Background` without replacing or vertically displacing the stage.
+  Document undo/redo and Download live at the toolbar level. Tool panels use a reserved responsive
+  slot beside/below the stage so switching tools causes minimal layout shift.
+- **tool-draft** — one selected tool owns bounded, uncommitted controls/markings. Applying commits
+  one labeled document operation; cancelling discards only the draft. Switching tools with a dirty
+  draft must ask to apply/discard or preserve it explicitly—never silently lose or apply work.
+- **error** — retains the uploaded source and any last committed document whenever recovery is
+  possible. Errors use user actions (`Try again`, `Use Optimal`, `Keep current result`) rather than
+  model/runtime terminology.
+
+User-facing automatic modes map to the existing production profiles but never show model names:
+
+| UI label (ru / en) | Internal profile | Contract |
+|--------------------|------------------|----------|
+| `Быстро` / `Fast` | `isnet-q8` | Smallest/fastest first result; works on WebGPU or WASM |
+| `Оптимально` / `Optimal` | `isnet-fp32` | Recommended balance and default on a capable device |
+| `Максимальное качество` / `Maximum quality` | `ben2-fp16` | Marked `Beta`; requires compatible WebGPU and may be unavailable. Before selection, an accessible info tooltip/popover explains that the app will fall back to `Optimal` if it cannot start. |
+
+The primary UI does not use `IS-Net`, `BEN2`, `q8`, `fp16`, `fp32`, `WASM`, or download-size
+numbers as mode names/descriptions. Technical identity remains available in source, diagnostics,
+model-lab evidence, and support troubleshooting.
+
+Tool contracts:
+
+- **Cutout** — one tool with `Magic` and `Manual` modes. `Magic` is the existing semantic
+  keep/remove brush backed by SlimSAM; `Manual` is exact alpha painting with user-facing
+  `Restore`/`Erase` semantics. The clean result is the single preview—candidate cards,
+  previous/next result navigation, the `Current result` section, stroke/prompt quotas, and
+  `Continue from this result` are removed from the primary UI. `Magic` ranks internally and uses
+  the best intent-matching candidate. `Apply` runs only when needed, commits that result as the new
+  base, clears the applied draft, and permits another correction pass. `Cancel` discards only
+  unapplied markings.
+- Removing/clearing the final `Magic` stroke after an earlier application must never trap the user
+  behind a disabled action. With an automatic/current base, `Apply` restores that base
+  deterministically without calling SlimSAM; a direct no-base session still requires green
+  `Keep` intent. This is a required regression contract, not merely button enablement.
+- Brush mark undo/redo/clear are compact icon buttons with accessible names, keyboard shortcuts,
+  focus-visible tooltips, and disabled-state explanations where needed. They operate on the active
+  draft. Toolbar-level undo/redo operates only on committed `EditOperation`s, avoiding an ambiguous
+  history stack.
+- The brush-size slider shows an ephemeral circle centered over the actual image stage. Its
+  displayed diameter is computed through the current source-to-viewport transform, including zoom,
+  and therefore matches the real paint footprint. It updates while the slider moves and fades
+  shortly after interaction stops; the rail swatch is not the authoritative preview.
+- **Enhancements** (`Улучшения`) — one user-facing panel groups optional finishing operations that
+  improve the cutout result, whether they use a local model or a deterministic algorithm. The first
+  operations are `Improve fine details` (soft alpha for hair/fur/translucency) and `Remove colour
+  halo` (foreground decontamination). Model families, graph sizes, execution providers, fallback
+  chains, and `Skip and edit with brush` are not primary controls. One Apply may run the selected
+  local stages sequentially and commits one undoable `enhance` document change.
+- **Background** — owns transparent, solid, gradient, and uploaded-image background choices.
+  Preview may update live, but only `Apply` commits it to document history/download; `Cancel`
+  restores the last committed background.
+- **Download** — a prominent toolbar button performs the current/default download, with an adjacent
+  menu for output settings. Phase 30 offers `Original`, `2048 px`, and `1024 px` longest-side
+  choices only when they downscale (never upscale), ships PNG only, and reserves a typed format slot
+  for later WebP/JPEG. No disabled or fake format choices are shown.
+
+`BeforeAfterSlider` may remain as a comparison affordance, but it is not a substitute for the stable
+editor stage and must not force every tool into separate duplicate previews.
+
+The public workflow is upload-count invariant. Uploading multiple valid files enters the existing
+batch overview, and selecting any completed item opens the **same** stage, toolbar, tool registry,
+draft semantics, history, help, and per-item export contract described above. Every tool or export
+capability added in Phases 26–30 must ship for both a single document and the selected batch
+document in that phase. Phase 31 is a consolidation, churn, and regression gate—not the first point
+at which batch users receive the redesigned capabilities. Item histories, drafts, zoom, background,
+and export settings remain isolated; batch processing and ZIP failures remain isolated too.
 
 ### 5.4 Accessibility & Mobile
 
@@ -322,6 +584,31 @@ does not block or cancel the others (§7.3).
 - The background-fill selector (Phase 11) is a standard keyboard-operable control set (color picker,
   gradient presets, file input for the custom image) — no new interaction pattern beyond what §5.4
   already requires elsewhere.
+- The Phase-21 semantic brush exposes keyboard-operable `keep`/`remove`, brush-size, undo/redo,
+  clear, recompute, candidate, and accept controls. Red/green markings use translucent colour plus
+  textual/icon labels so intent is not communicated by colour alone; the canvas announces dirty,
+  processing, candidate-ready, and error states through `aria-live`.
+- From Phase 27, the editor tool toolbar follows the ARIA toolbar pattern: arrow-key navigation,
+  visible focus, icon+text tool names, and an announced active tool. On narrow screens it may scroll
+  horizontally, but it must not hide a tool behind hover-only discovery.
+- Icon-only undo/redo/clear controls retain localized accessible names. Their explanations and all
+  `?` help content open on hover **and** keyboard focus/click, remain dismissible, and are not the
+  sole location of information required to complete the task.
+- The ephemeral brush-size preview is decorative; the slider exposes the numeric value and current
+  mode to assistive technology. Reduced-motion users get an immediate show/hide transition rather
+  than a fade animation.
+- A dirty tool draft cannot be lost on tool switch, reset, batch-item switch, or new upload without
+  an accessible apply/discard decision.
+- Phase-32 animated instructions are contextual, dismissible, replayable from Help, and never the
+  only source of task-critical information. They expose pause/replay controls when movement
+  continues, provide localized text/static alternatives, avoid flashing, and honor
+  `prefers-reduced-motion`; onboarding never blocks the automatic first result.
+- Phase 34 applies WCAG-EM to a representative RU/EN sample and evaluates WCAG 2.2 AA with
+  keyboard, 200%/400% zoom/reflow, forced colors, reduced motion, NVDA and VoiceOver evidence.
+  Automated scanners support but never replace manual and assistive-technology verification.
+- Canvas editing must expose an operable non-pointer path or an equivalent workflow for the same
+  user goal. The published accessibility statement names tested technologies and known limits
+  instead of claiming support for every browser, device, or disability.
 
 ### 5.5 Internationalization (Phase 12)
 
@@ -359,19 +646,36 @@ be fully bilingual, not translated as an afterthought.
 | Server runtime | Nitro, `node-server` preset | Produces the Docker-deployable Node bundle |
 | Language | TypeScript, strict mode | Mandatory |
 | UI | React 19, Tailwind CSS, shadcn/ui on Base UI | Base UI became shadcn/ui's default primitive layer (replacing Radix) as of July 2026; components are copied into the repo, not installed as a black-box dependency |
-| Architecture | Feature-Sliced Design (flexible mode): `app / pages / widgets / features / entities / shared` | `processes` remains omitted — officially excluded from FSD. `widgets` was deliberately omitted through Phase 11 (composition lived in `pages`, no payoff at that size); Phase 12 introduces exactly one `widgets` slice, `widgets/tool-workspace`, once five pages ended up duplicating the identical tool composition (§5.2) — the reversal is scoped to that one slice, not a general policy change |
+| Architecture | Feature-Sliced Design (flexible mode): `app / pages / widgets / features / entities / shared` | `processes` remains omitted — officially excluded from FSD. `widgets/tool-workspace` composes the product flow but may not own a parallel image-domain model. Phase 26 moves the stable document contract to `entities/edit-document`, committed history to `features/editor-history`, and orchestration into a controller with feature public APIs; visual stage/toolbar/tool panels stay separately testable. Future Studio capability must not turn `ToolWorkspace.tsx` into a generic god component or create same-layer feature imports. |
 | i18n | Paraglide JS (`@inlang/paraglide-js`) | Compiler-based message catalogs (`messages/ru.json`, `messages/en.json`); URL-based locale strategy via TanStack Router's `rewrite.input`/`rewrite.output`; see §5.5 |
 | ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
 | Evaluation models (Phase 15) | `onnx-community/BEN2-ONNX` fp16 and `onnx-community/MVANet-ONNX` q4, plus the existing IS-Net q8/fp32 baselines | Experimental only until browser compatibility, memory, latency, and project-image quality are measured. Immutable revisions are mandatory. Candidate weights load from Hugging Face only after explicit lab interaction and are not added to the production VPS manifest before selection. BEN2/MVANet are MIT-licensed. |
-| Guided segmentation (Phase 16) | `Xenova/slimsam-77-uniform` (final dtype/revision selected during phase initialization) | User-prompted segmentation, not automatic background removal. A positive point or bounding box resolves foreground intent for light-on-light and otherwise ambiguous images; exact browser execution-path support must be verified before production activation. Apache-2.0-licensed. |
-| Client-side ZIP (Phase 10) | `[NEEDS_CLARIFICATION: exact library — e.g. fflate or client-zip]` | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
+| Guided segmentation (Phases 16–17, 21) | `Xenova/slimsam-77-uniform` pinned q8/WASM | User-prompted segmentation, not automatic background removal. Phase 21 reuses the same image embedding and decoder but derives a bounded positive/negative point set from consolidated semantic brush markings. The decoder's `iou_scores` are an internal ranking signal, not a user-facing correctness percentage, and the graph does not accept a previous mask. Apache-2.0-licensed. |
+| Interactive matting (Phases 18–19) | Phase-18 evaluation: ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and licensed lightweight alternatives. Phase-19 production: pinned Distinctions-646 q8 + fp32 variants. | Phase-18 evidence selects q8 as the compact/WASM-safe `balanced` path and fp32 as the best-quality WebGPU-oriented `maximum` path. The variants are alternatives, not an ensemble: never eagerly fetch or concurrently retain both. Research-only/non-commercial licenses are not production eligible. |
+| Client-side ZIP (Phase 10) | `client-zip` v2 (`^2.5.0`) | Small, dependency-light, streams to the browser's normal download mechanism; no server involvement (§4) |
 | Package manager | pnpm | |
 | Containers | Docker + docker-compose: `nginx`, `app` (Node/Nitro SSR), `umami` + `umami-db` (Postgres) | Each service `restart: unless-stopped`; Node container runs with `init: true` (tini as PID 1); `umami-db` has a persistent volume + healthcheck gating `umami` startup |
 | Reverse proxy / TLS | Nginx; Certbot (cron) or `nginx-proxy` + `acme-companion` | Gzip/Brotli for SSR text responses |
 | CDN / model weight storage | VPS disk + Nginx behind Cloudflare Cache | `cdn.cutbg.art` is proxied by Cloudflare. Model `.onnx` files and ONNX Runtime WASM binaries are synchronized to a host directory from a pinned manifest, mounted read-only into Nginx, and served with CORS, byte-range support, and `Cache-Control: public, max-age=31536000, immutable`. Hugging Face Hub + the upstream ONNX Runtime CDN remain the automatic runtime fallback; R2 is not required. |
 | VPS | hip-hosting, 1-2 vCPU / 1-2 GB RAM | Server only does SSR of a light page shell (no inference); Umami+Postgres is the component most likely to grow with traffic; scale by upgrading the same provider's tier — no architecture migration needed since the whole stack is Docker Compose |
-| CI/CD | GitHub Actions | On push to `main`: lint → tests → build Docker image → push to GitHub Container Registry → SSH deploy on the VPS. The deploy synchronizes pinned model/WASM assets to the VPS before restarting Nginx when the manifest changes; model binaries are not committed or baked into the app image. |
+| CI/CD | GitHub Actions | Phase 22 adds least-privilege permissions, SHA-pinned third-party actions, scans, SBOM and artifact attestation. Phase 23 adds deterministic mocked critical-path Chromium checks on pull requests, immutable digest deployment, candidate/post-deploy smoke and verified rollback. Full cross-browser/WebGPU/real-model suites remain host-only. Model binaries are synchronized and verified separately, not committed or baked into the app image. |
+
+Production delivery follows these contracts from Phases 22–23:
+
+- App base images, third-party Actions, package lockfiles and model/WASM source revisions are
+  immutable inputs. A versioned asset manifest records byte size and SHA-256; synchronization and
+  cache acceptance fail closed on mismatch and preserve a previous known-good manifest.
+- Each production image has a machine-readable SBOM and GitHub artifact attestation bound to the
+  deployed digest. Deployment verifies repository/ref/digest/attestation and never uses `latest`.
+- Containers run as non-root with secrets outside layers/logs. Read-only filesystems, dropped
+  capabilities, cross-origin isolation and strict headers are enabled only after parity evidence.
+- Candidate and post-deploy smoke verify SSR, locale/canonical routing, security/legal surfaces,
+  CDN byte ranges/model integrity and release identity without sending an image. Failure triggers a
+  tested previous-digest rollback.
+- Operational state is backed up only when recovery is required, with encryption, access,
+  retention, owner-approved RPO/RTO and disposable restore evidence. Images, masks, composites and
+  browser editor documents are never backup inputs.
 
 ### 6.1 Model loading & caching (client-side)
 
@@ -380,6 +684,9 @@ be fully bilingual, not translated as an afterthought.
 - `env.useWasmCache = true` is mandatory (otherwise ONNX runtime files re-download every visit).
 - A dedicated Service Worker (`public/sw.js`) cache-first caches model weight files and WASM binaries,
   versioned by content hash in the path.
+- Phase 22 gives caches an explicit schema/version, activation cleanup, orphan eviction, quota and
+  corruption recovery, verified bytes, storage estimate and a user-invoked safe model-cache reset.
+  A cached filename or HTTP success alone is never sufficient integrity evidence.
 - The ISNet repository revision is pinned to an immutable commit SHA in both runtime configuration
   and `models.manifest.json`; production first tries `VITE_MODEL_CDN_BASE_URL`, then retries the same
   pinned revision from Hugging Face Hub if the private CDN load fails.
@@ -391,6 +698,16 @@ be fully bilingual, not translated as an afterthought.
   entry, and at most one heavy automatic-model pipeline resident at once; dispose the previous
   pipeline before loading another candidate. Phase 16 applies the same lazy-loading rule to
   SlimSAM.
+- Phase 18 matting candidates follow the same isolation rule: explicit lab opt-in, immutable
+  revisions, sequential execution, no production manifest entry, and no public-flow fetch before a
+  measured Phase-19 selection. A model that lacks production-compatible licensing is evidence-only.
+- Phase 19 pins both Distinctions-646 variants in the production manifest but fetches neither on
+  page/component mount. `balanced` lazily loads q8 (~27.5 MB); `maximum` lazily loads fp32
+  (~103.9 MB). Cache Storage may retain both after separate explicit uses, but runtime memory holds
+  only the selected matting pipeline. A mode switch first settles/cancels active work and disposes
+  the old pipeline/tensors/session before loading the other variant.
+- Phase 21 adds no model or model asset. It reuses the pinned Phase-16 SlimSAM q8 graphs, cached
+  same-image embedding, serialized heavy-work lifecycle, CDN/upstream fallback, and session cleanup.
 
 ---
 
@@ -403,9 +720,10 @@ longest side) are downscaled client-side before inference; the output mask is up
 original resolution before final PNG compositing, to avoid degrading the source image's quality.
 
 Batch processing (Phase 10) runs multiple images' inference in parallel but with **bounded
-concurrency** (exact limit decided at Phase 10 `/phase-init`, informed by real-device testing) —
-never "all items at once" — so a large batch cannot exhaust memory or make the UI hang on a weak
-device, consistent with the "UI must never hang" requirement already stated in §7.4.
+concurrency** (the existing policy allows `2` active WebGPU jobs or `1` WASM job and is tuned only
+from reproducible runtime evidence) — never "all items at once" — so a large batch cannot exhaust
+memory or make the UI hang on a weak device, consistent with the "UI must never hang" requirement
+already stated in §7.4.
 
 Phase 15 evaluation runs heavy candidates sequentially with concurrency `1`, records cold-load and
 warm-inference timing separately, and disposes the previous heavy pipeline before switching models.
@@ -413,17 +731,112 @@ The original §1.2 inference target remains the production target for IS-Net mod
 BEN2/MVANet results are evaluated against measured device-specific latency rather than assumed to
 meet it.
 
+Interactive correction keeps source-sized mattes and constraint maps in compact byte buffers,
+stores undo/redo as bounded dirty patches rather than full-resolution snapshots, and performs
+semantic/matting refinement on local target crops whenever correctness permits. Automatic,
+promptable, and matting pipelines never perform heavy inference concurrently. Capability tiers may
+retain more than one warm session only after measured peak-memory evidence; otherwise the previous
+pipeline is disposed before the next heavy stage loads.
+
+Phase-21 brush guidance consolidates every visible stroke into one compact constraint map before
+sampling. The SlimSAM decoder receives at most `32` representative prompt points for the entire
+current brush session, balanced across available `keep` and `remove` intent; it never receives
+`32 × stroke-count`. Recompute is explicit and serialized. Candidate comparison and difference
+measurement are restricted to the brush-derived edit region so a small but important boundary
+change is not diluted by unrelated image pixels.
+
+Phase-19 matting refinement has concurrency `1`, including batch use. Its capability-aware initial
+mode is `maximum` on a confirmed WebGPU path and `balanced` on WASM or an unknown/weak path; missing
+advisory APIs such as `navigator.deviceMemory` alone never disable an explicit maximum-mode choice.
+The user's explicit selection wins until a classified load, operator, WebGPU, inference, or OOM
+failure triggers the bounded fallback policy in §7.3.
+
+The Phase-27 editor reserves the stage and tool-panel geometry before tool content mounts. Switching
+Cutout/Enhancements/Background must not recreate the source preview, reset zoom, or move the principal
+stage between unrelated layouts. Tool panels may be lazy-loaded after automatic processing, but
+their loading placeholder keeps the same slot dimensions.
+
+Editor history is bounded by both entry count and estimated retained bytes. Full image artifacts
+remain outside changing React props/state and are referenced immutably; brush history continues to
+use dirty patches/strokes. Reset, source replacement, batch-item deletion, history eviction, and
+unmount release every artifact no longer reachable from the current document or undo/redo stacks.
+Future layers do not relax the one-heavy-inference-stage-at-a-time rule.
+
+Phase 33 is an evidence-driven audit, not permission for a speculative rewrite or blanket
+memoization. It establishes reproducible baselines for bundle/startup, React commits and
+interaction latency, long tasks, worker/main-thread utilization, heap/resource growth, and
+single/batch churn; profiles representative flows before editing; removes duplication and
+unnecessary effects/state only where ownership becomes clearer; and repeats the same measurements
+after each change. React development `StrictMode` lifecycle checks, Profiler traces, browser
+performance/heap evidence, existing Web Vitals, and explicit Blob/Object URL/worker/tensor cleanup
+tests are complementary evidence. No performance claim is accepted from code inspection alone.
+
+Phase 34 repeats the representative flows on the documented physical-device/browser sample and
+freezes an evidence-based support/degradation matrix. A P0/P1 freeze, crash, leak, task blocker or
+budget regression is release-blocking; missing hardware remains explicitly unverified rather than
+being converted into a universal compatibility claim.
+
 ### 7.2 Security & Privacy
 
 - No server endpoint anywhere accepts image files — see §4 (architectural invariant, not a
   configuration/validation choice).
-- CSP headers: scripts/WASM loadable only from the app's own domain and the CDN/R2 domain; no inline
-  scripts without a nonce.
+- Phase 22 maintains an owned threat model across browser, worker, service worker/cache, SSR/Nginx,
+  Cloudflare/CDN, public model/WASM supply, GitHub Actions/GHCR, VPS, Umami/Uptime, support and
+  export boundaries. Each material architecture/integration change updates it before release.
+- CSP and other security headers have one documented authoritative layer and regression tests.
+  Scripts/workers/WASM connect only to the app and approved immutable asset/analytics origins;
+  inline execution requires a nonce/hash. `frame-ancestors`, MIME sniffing, referrer and permissions
+  policies are explicit; HSTS and cross-origin isolation ship only after HTTPS/CDN/analytics
+  compatibility is verified.
+- Production containers run non-root and use pinned image digests. CI uses least-privilege
+  permissions and SHA-pinned third-party actions, scans dependencies/licenses/containers, produces
+  an SBOM and attestation, and deploys only a verified immutable digest.
+- Model/WASM files are public but untrusted inputs until their pinned revision, byte size and
+  SHA-256 match the release manifest. Partial/corrupt sync or cache entries fail closed and retain
+  the previous known-good set.
+- `/.well-known/security.txt` and the vulnerability runbook have an owned, monitored contact,
+  expiry, private-report path, severity/response targets and coordinated disclosure process.
+- Positive/negative network and export tests prove that image pixels, source filenames, hashes,
+  EXIF, prompts, masks and composites do not enter requests, analytics, logs or downloads except
+  the user-requested output pixels. File validation includes bounded malformed/adversarial inputs.
+- Public SSR and `/api/send` use evidence-backed body/request/time/rate limits at the owning layer;
+  controls must not break ordinary batch work or model CDN byte ranges.
 - Model weights are intentionally public (open-source weights) — no need to gate access to them.
 - A static privacy-policy page must explicitly and accurately state "your image never leaves your
   device" — this is the product's core claim and must remain verifiably true, not marketing copy.
   Shipped as `/privacy` (and `/en/privacy`) in Phase 12 — see §5.1; this requirement existed since
   the original spec but was not implemented in any phase through 11, a gap Phase 12 closes.
+- Privacy UI and legal copy must describe observed behavior, not generic “we use cookies” boilerplate.
+  The inventory distinguishes HTTP cookies, `localStorage`, Cache Storage/service-worker caches,
+  ordinary request logs, Cloudflare Web Analytics, self-hosted Umami pageviews/events, help state,
+  consent evidence, and any future metadata. “Cookie-free” vendor defaults do not remove the duty
+  to verify the deployed configuration, payload, recipients, storage geography, and retention.
+- Phase 24 begins with required owner facts: operator legal identity/form/address/contact and
+  jurisdiction; target markets/languages; whether minors are intentionally served; every current
+  host/CDN/analytics/support processor and storage location; log/analytics retention; and the exact
+  proposed future metadata fields, purposes, recipients, and retention. Unknown facts stay marked
+  as blockers in the legal requirements matrix—agents must not fabricate them.
+- Phase 24 produces a versioned data-flow/inventory, purpose/legal-basis/retention matrix,
+  processor and transfer register, browser-storage/cookie inventory, user-rights and request
+  procedure, security/incident/erasure responsibilities, operator-notification/localization check,
+  and an approved route/footer/consent decision. Russian 152-FZ and EU GDPR/ePrivacy are baseline
+  review regimes because of the Russian/English product, but the actual operator and targeting
+  facts decide applicability. Qualified legal review is an explicit release gate for approved text;
+  this engineering plan does not promise universal legal compliance.
+- Phase 25 implements only the approved matrix and versioned texts. Where non-essential consent is
+  required, `Accept`, `Reject`, and granular settings are equally understandable; non-essential
+  code/storage does not run before the choice; withdrawal is as easy as acceptance through a
+  persistent footer link; the core editor remains usable after refusal; and no pre-checked,
+  scroll-to-consent, cookie-wall, or other dark pattern is permitted. Strictly necessary local
+  functionality remains available and is transparently documented.
+- The footer exposes the approved operator/contact identity, Terms, Privacy, Cookie & storage
+  notice, and `Privacy choices`/withdrawal entry where applicable, in both locales. A separate
+  personal-data consent is rendered only when the legal matrix identifies consent as the basis;
+  it is not bundled invisibly into Terms.
+- New server-side metadata collection is forbidden until its field-level purpose, minimization,
+  legal basis, retention/deletion, access controls, processor/storage geography, transparency text,
+  and any required choice/notification are approved and implemented. Image pixels and
+  image-derived artifacts remain excluded from metadata collection and analytics under all phases.
 
 ### 7.3 Error Handling (mandatory, one explicit path per case)
 
@@ -435,15 +848,44 @@ meet it.
 | Model load failure (no network on first visit, CDN 404/CORS) | Retry with a "try again" button |
 | Device out-of-memory during inference | Caught explicitly; clear message suggesting a lower resolution |
 | One `BatchItem` fails during batch processing (Phase 10) | Isolated per-item error state in the grid tile; does not cancel or block the rest of the batch |
+| Interactive prompt/refinement request is superseded | Ignore or cancel the stale result; only the latest prompt revision may update the visible mask |
+| Brush-guided recompute has no green intent and no automatic base | Keep the session and markings, do not call SlimSAM, and explain that at least one green `keep` stroke is required to identify an object |
+| SlimSAM candidate scores are non-finite, outside `0..1`, or absent | Never show an "estimate unavailable" message or invent a percentage. Use any finite raw value only as an internal ranking signal; otherwise rank deterministically by pre-constraint agreement with green/red markings and continuity with the base inside the edit region |
+| Brush-guided candidates are pixel-identical or materially indistinguishable inside the edit region | Show one result and state that no meaningfully different alternatives were produced; do not render redundant choices |
+| The final Magic marking is undone/cleared after a previously applied result | With a current base, make Apply restore that base locally and clear stale candidates without calling SlimSAM. Do not leave Apply/Recompute permanently disabled. With no base, keep the direct-entry green-intent requirement. |
+| Maximum fp32 matting is unsupported, fails, or exhausts memory | Dispose fp32, preserve source/prompts/trimap/prior matte, show a localized notice, and retry the q8 variant once; never loop or keep both pipelines resident |
+| Balanced q8 matting is unsupported, fails, or exhausts memory | Dispose q8, preserve source/prompts/trimap/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
+| Maximum-quality automatic mode cannot start | Preserve the upload, explain in user language that the mode is unavailable on this device, and offer/perform the documented one-time fallback to `Optimal`; never expose BEN2/WebGPU exception text as the primary message |
+| A tool operation fails after a committed document exists | Preserve the last committed document and the recoverable draft where safe; offer retry/cancel/keep-current-result. A failed or stale async operation creates no history entry. |
+| Export/downscale fails | Preserve the document and settings, report that the file could not be prepared, and allow retry or Original-size PNG; never upload the image as fallback |
 
-### 7.4 Cross-Browser Support Matrix (mandatory test coverage)
+### 7.4 Cross-Browser and Runtime Validation
 
-| Browser/device | Inference path | Test priority |
-|-----------------|-----------------|----------------|
-| Chrome/Edge desktop | WebGPU + `fp16` | High |
-| Safari desktop/iOS (limited WebGPU support) | WASM + `q8` fallback | High — requires testing on a real device, not just emulation |
-| Android Chrome | WebGPU (chipset-dependent) with fallback | Medium |
-| Older/low-power devices | WASM, expect degraded time | Medium — UI must never hang |
+Compatibility claims are limited to environments actually exercised. During ordinary development,
+configured browser projects and the available host remain the fast regression gate; Phase 34 adds
+a focused product-validation sample rather than a permanent broad device lab.
+
+| Environment | Inference/runtime path | Required evidence |
+|-------------|------------------------|-------------------|
+| Configured Chromium project | Deterministic WebGPU and WASM/fallback branches | Full user-flow E2E; available-host real-model smoke for inference changes |
+| Configured Firefox project | Deterministic supported/fallback branches | User-flow, canvas interaction, state recovery, and download E2E |
+| Configured WebKit project | Deterministic WASM/fallback branches | User-flow, canvas interaction, state recovery, and download E2E; this is browser-engine coverage, not a claim that physical Safari/iOS hardware was tested |
+| Available development host | Its real detected WebGPU or WASM path | Serialized real-model smoke, capability report, classified failures, and measured timing for inference changes |
+| Synthetic weak/OOM conditions | Injected capability, allocation, and worker failures | Deterministic fallback, cancellation, resource-disposal, and UI-responsiveness tests |
+| Phase-34 physical sample | iPhone/Safari, Android/Chrome including one constrained device, macOS/Safari, Windows Chromium/integrated graphics, and a no-WebGPU path | Exact hardware/OS/browser evidence for core single/batch/edit/download journeys, accessibility and performance; cloud devices may supplement but not replace both mobile physical checks |
+
+Every phase that changes inference must pass the configured cross-browser E2E suite, its
+available-host real-model smoke, focused capability/fallback tests, and the applicable quality,
+latency, and memory thresholds. Phase 34 freezes the current Baseline-informed supported/fallback/
+unsupported browser policy and fixes P0/P1 physical-device findings. Missing hardware is recorded
+as unverified; it is neither silently ignored nor represented as supported.
+
+A user may still contact the existing Telegram feedback channel and voluntarily attach the
+affected source/result image, a screenshot, and ordinary browser/device details. This happens
+outside the application's processing path and creates no upload or diagnostic endpoint. Reproduce
+the issue, classify the runtime/model path, and add the smallest durable regression or support rule.
+No automated incident collection, device registry, session replay, image telemetry, backend, or
+new analytics payload is authorized by this workflow.
 
 ### 7.5 SEO
 
@@ -474,9 +916,20 @@ meet it.
 | `webgpu_unavailable_fallback` | Umami custom event | Frequency of WASM fallback — prioritization signal |
 | Uptime | Uptime Kuma (self-hosted) or UptimeRobot free tier | Ping home page + Umami `/api/heartbeat` every 5 min, alert via Telegram/email |
 | Logs | Nginx access/error → container stdout, size-bounded rotation via the `docker-compose` log driver | No separate log aggregator at this scale |
+| Release identity and checks | GitHub deployment record + OCI labels/digest + candidate/post-deploy smoke | Trace a production result to immutable inputs and make rollback evidence explicit |
+| Reliability objectives | Phase-23 SLI/SLO and alert review | SSR/CDN/model readiness, release success/rollback time, processing/download outcomes and Web Vitals with owner-approved targets |
+| Recovery | Encrypted backup status + disposable restore/rollback drill | Prove owner-approved RPO/RTO for operational state; images/editor state are excluded |
 
-All analytics events are aggregate counters only — no PII, no linkage to a specific image or its
-content (consistent with the privacy invariant in §1.1/§7.2).
+Application-defined analytics events are aggregate counters only and never include an image,
+filename, prompt, result, or custom visitor identifier. This does not justify a blanket “no
+personal data” claim: Phase 24 must inspect the deployed pageview/request fields, IP handling,
+configuration, recipients, storage location, and retention, then document the applicable legal
+classification and controls (§7.2).
+
+Phase 23 adds no unapproved browser telemetry: it uses synthetic, deployment and aggregate
+infrastructure evidence first. Any new event, field or identifier requires the Phase-24 field-level
+review and Phase-25 transparency/choice implementation. Alerts and logs have bounded retention,
+redaction, an owner and a runbook; they never include image data or source URLs.
 
 ### 7.7 Testing
 
@@ -492,12 +945,44 @@ content (consistent with the privacy invariant in §1.1/§7.2).
 | E2E (background replacement) | In **result**, switch background fill through color → gradient → uploaded image → downloaded PNG reflects the selected fill, not transparency | Playwright |
 | E2E (model lab) | With the lab flag enabled and inference mocked: opt in, select local images/models, run a sequential comparison, choose a pairwise preference, and export image-free benchmark JSON | Playwright |
 | E2E (guided selection) | Enter **select object**, place a positive point and a box, obtain a mask, then continue through existing correction/result/download flow | Playwright |
-| Cross-browser matrix | WebGPU path and WASM fallback separately, must include Safari/iOS | Playwright projects per browser |
-| Visual regression (optional, v2) | UI components across states | Playwright screenshots |
+| E2E (iterative guidance) | Starting from an automatic or guided result, combine positive/negative points, box, semantic keep/remove strokes, undo/redo, multiple object layers, and alternative masks; stale prompt responses never overwrite the latest revision | Playwright |
+| E2E (brush-guided correction) | From both direct upload and an automatic result, paint translucent green/red markings, adjust brush size, undo/redo/clear without implicit inference, explicitly recompute, compare only materially different visual candidates, accept one, and continue through matting/edge cleanup/exact brush/background/download; stale responses never overwrite newer markings | Playwright |
+| E2E (automatic-first editor) | Initial mode selection + one/many upload starts automatic processing without a second action; every completed selected item uses stable geometry while Cutout/Enhancements/Background switch; default UI contains no model ID/dtype/runtime/prompt-quota copy | Playwright |
+| E2E (unified Cutout) | For a single image and a selected batch item, open Cutout, switch Magic/Manual, verify the viewport-accurate transient brush-size preview, icon draft history, Apply/Cancel semantics, automatic best-candidate use, repeated passes, and final-stroke removal restoring the current base without another model call or disabled-action trap | Playwright |
+| E2E (document history) | Commit Cutout, Enhancements, and Background operations; toolbar undo/redo traverses committed visible changes in order, never consumes an unapplied brush draft, ignores stale/failed async work, and keeps per-batch-item histories isolated | Playwright |
+| E2E (Enhancements + export) | For a single image and a selected batch item, run selected result enhancements with plain-language controls, undo/redo the result, then download Original/2048/1024 PNG as applicable; dimensions never upscale and preview/download remain consistent | Playwright |
+| E2E (guided help/onboarding) | First-run and contextual help never block automatic processing; animated and reduced-motion/static variants explain the actual current controls; dismiss/replay/version reset, keyboard/focus/pause behavior, localization, and single/batch contexts remain correct | Playwright + accessibility checks |
+| E2E (privacy/legal surfaces) | Approved footer links/routes exist in both locales; storage/analytics behavior matches the published inventory; where consent is required, reject is first-layer/easy, non-essential integrations are blocked before choice, choices can be changed, and core editing works after refusal | Playwright + request/storage inspection |
+| Performance/lifecycle audit | Repeatable single/batch scenarios record bundle/startup/Web Vitals, React commits, interaction latency/long tasks, worker/main-thread work, heap/resource growth, and cleanup under item/tool/upload churn before and after Phase-33 changes | Build stats + React Profiler + browser traces/heap + Vitest/Playwright |
+| E2E (matting refinement) | Before any refiner fetch, choose capability-recommended or explicit `balanced`/`maximum`; verify q8/fp32 graph selection, no eager/concurrent dual load, fp32 → q8 → deterministic fallback, warm cache/session reuse, hard trimap constraints, and continuation through correction/background/download | Playwright + focused worker/hook tests |
+| Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
+| Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
+| Supply-chain/security | Header policy, model/WASM manifest integrity, corrupt/partial cache recovery, dependency/license/container scans, SBOM/attestation verification, metadata-free export and positive/negative no-image-egress tests | Repository security gate + Vitest/Playwright + disposable container |
+| Release/rollback | Candidate and external smoke, digest deployment, concurrency lock, forced post-deploy failure, automatic/manual rollback, redaction, alert delivery, backup restore | Disposable Docker deployment + GitHub workflow/script integration tests |
+| CI critical path | Deterministic mocked Chromium: upload one/many → process → switch/edit → undo/redo → download | Playwright on pull requests from Phase 23; no real model/WebGPU dependency |
+| Accessibility/manual | WCAG-EM sample, keyboard/zoom/forced-colors/reduced-motion, NVDA and VoiceOver, truthful statement and owned limitations | Manual evidence + automated regression support (Phase 34) |
+| Physical-device/product | Core RU/EN single/batch journeys, support/degradation matrix, constrained-device performance, moderated task sessions and editorial QA | Documented physical sample and consented research (Phase 34) |
+| Visual regression | Representative deterministic RU/EN desktop/mobile structures; excludes nondeterministic model pixels/animation frames | Reviewed Playwright screenshots in the CI browser from Phase 34 |
 
-Priority: critical-path E2E and the cross-browser matrix outrank unit coverage percentage — the cost
-of "broken on Safari" or "hangs on a weak Android device" is higher than the cost of a gap in a small
-utility function's unit tests.
+Priority: critical-path E2E, available-host real-model smoke, and the configured cross-browser
+matrix outrank unit coverage percentage. Device-specific user reports are converted into focused
+regressions after reproduction rather than anticipated through an unavailable hardware lab.
+
+### 7.8 Production Maintenance & Readiness
+
+- **Every release:** immutable-input verification, scans/SBOM/attestation, candidate smoke,
+  post-deploy external smoke, release record and rollback readiness.
+- **Monthly:** dependency/CVE/license/model-source review, expiring exception review, backup status,
+  disk/certificate capacity, and owned alert delivery.
+- **Quarterly:** disposable restore and rollback drill, SLI/SLO review, security-header/model-cache
+  check, sampled supported-device/accessibility regression, and incident/runbook tabletop.
+- **Annually or after a material architecture/market/data change:** threat-model, legal/data-flow,
+  accessibility and supported-browser review.
+
+Phase 23 freezes exact owners, targets and cadence from measured scale; Phase 34 validates the
+finished focused product. Kubernetes, multi-region redundancy, user session replay, a physical
+device lab, or a paid APM is not required without evidence that the current single-VPS product
+needs it.
 
 ---
 
@@ -517,10 +1002,28 @@ utility function's unit tests.
 | `10` | Batch processing | Process many images in one session without repeating the upload → download loop by hand | `features/batch-processing` slice: parallel upload/processing with bounded concurrency (§7.1), grid/tile overview with per-item status, select-to-review/correct/reprocess via the existing single-image flow, per-item and "download all as ZIP" (§4, §6); per-item error isolation (§7.3); e2e coverage (§7.7) |
 | `11` | Background replacement | Let the user place the cutout on a solid color, gradient, or custom background instead of only transparent PNG | `features/background-replacement` slice: `BackgroundFill` (color/gradient/image) composited via the existing `OffscreenCanvas` pipeline; background-fill selector wired into **result** (§5.3); custom background image stays client-side only (§1.1, §4); e2e coverage (§7.7) |
 | `12` | Localization, Branding & Launch Content | Bilingual (ru/en) site with a real brand identity and the launch content the product still lacks | Paraglide JS i18n (§5.5): `ru` base locale, `en` under `/en`, language switcher, hreflang, locale-aware sitemap; `widgets/tool-workspace` replacing the duplicated flat vertical stack with a responsive grid (single column mobile, two-column desktop); `shared/ui/site-header` + `site-footer` + `site-shell` (nav, wordmark logo, Telegram feedback link, language switcher); one accent color added to the neutral design-token set; favicon/app-icon set + `site.webmanifest` + OG/Twitter meta (§7.5); `/privacy` + `/en/privacy` (§7.2); home-page hero/value-prop content (client-side/private, free, fast) and a condensed trust badge on other pages; English translations of the four scenario pages |
-| `13` | Hardening & Launch | Final SEO-page presentation, confidence across the real device matrix, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; full pass over §7.4 matrix on real devices, not just emulators; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
+| `13` | Hardening & Launch | Final SEO-page presentation, available-host cross-browser confidence, then public availability | Replace the Phase-06 placeholder examples with the architect-provided final `public/images/*-example.webp` assets and correct their responsive rendered dimensions per §5.1/§7.5, including Playwright coverage; available-host §7.4 validation with incident-driven follow-up for device-specific reports; polish; production publish — explicitly not blocked on the separate portfolio/donation track |
 | `14` | VPS Model CDN | Own the production model delivery path without requiring R2 or a payment card, while retaining the proven upstream path as a resilience fallback | Synchronize `models.manifest.json` with pinned ISNet `q8`/`fp32` assets and ONNX Runtime WASM; serve the host asset directory at `cdn.cutbg.art` through Nginx with CORS, byte ranges, and immutable cache headers; document the proxied DNS and Cloudflare Cache Rule; wire `VITE_MODEL_CDN_BASE_URL`; retry pinned model loading through Hugging Face Hub/upstream WASM CDN when the private CDN is unavailable; include the Cloudflare Web Analytics token in production builds; verify CDN headers, primary loading, and fallback |
 | `15` | Browser Model Evaluation Lab | Select the next automatic quality model using reproducible evidence without changing production inference | Typed immutable model registry for IS-Net q8/fp32, BEN2 fp16 and MVANet q4; opt-in development model-lab route behind `VITE_ENABLE_MODEL_LAB`; sequential same-image comparisons with side-by-side previews, cold-load/warm-inference/error/memory-capability observations, pairwise preference and image-free JSON export; focused unit/integration/E2E coverage; written decision record naming BEN2, MVANet, or neither for Phase 16 |
 | `16` | Production Model Modes & Guided Selection | Preserve both existing IS-Net modes, add the Phase-15 winner as an optional heavy automatic mode, and provide user-directed recovery for ambiguous images | User-facing processing-mode selector with model characteristics and capability-aware fallback; lazy single-session loading/disposal for the selected heavy model; SlimSAM positive-point/bounding-box flow producing the existing `AlphaMatte`; continuation into brush correction/result/download; batch concurrency constrained for heavy modes; production CDN manifest and localized E2E updates |
+| `17` | Iterative Guided Object Editor | Turn Phase 16's one-shot selection into a predictable human-in-the-loop object editor without adding another heavy model | Cumulative positive/negative points; target box combined with points; semantic keep/remove strokes sampled into prompts and retained as hard constraints; per-object mask layers and union; alternative candidate selection; prompt undo/redo; previous-mask/local progressive merge; deterministic fusion with the selected automatic `AlphaMatte`; existing pixel brush remains the final exact editor |
+| `18` | Browser Interactive Matting Lab | Select or reject a trimap/alpha refiner and lightweight prompt-model alternatives using reproducible browser evidence before production integration | Extend the opt-in model lab with pinned ViTMatte-small Composition-1k/Distinctions-646 q8/fp32 and selected lightweight promptable candidates; license gate; image-free export; alpha/boundary quality corpus; cold/warm timing, peak-memory/OOM, WebGPU/WASM/operator compatibility, quantization impact, and a written production variant policy for Phase 19 |
+| `19` | Production Trimap & Alpha Refinement | Convert automatic + guided intent into high-quality soft alpha while retaining both maximum-quality and safe weak-device paths | Confidence/disagreement-driven trimap; hard positive/negative constraints; adaptive unknown band; target/focus crop inference; Distinctions-646 q8 `balanced` and fp32 `maximum` modes with pre-load size disclosure and capability-aware recommendation; selected-only lazy loading and one-heavy-stage lifecycle; fp32 → q8 → deterministic fallback; CDN pins; localized UI/E2E through correction, background replacement, and download |
+| `20` | Foreground Edge Quality & Runtime Hardening | Remove residual colour spill/edge artifacts and establish maintainable release confidence for the full hybrid pipeline without requiring a physical-device lab | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; configured cross-browser and available-host real-model coverage for the Phases 16–19 pipeline; quality-regression corpus and interaction/latency/memory thresholds; manual triage of voluntarily supplied Telegram reports and focused regression coverage only for reproducible incidents; aggregate counters only; no diagnostic-reporting feature or mandatory physical-device matrix |
+| `21` | Brush-Guided Object Correction | Replace the technically exposed Phase-17 guided editor with one predictable semantic brush while reusing the proven SlimSAM runtime and preserving the exact final editor | Primary bilingual `keep`/`remove` translucent brush UI with size, undo/redo, clear, explicit recompute, visual candidate previews, direct-entry green-intent validation, and continuation through the existing pipeline; consolidated constraint map and at most 32 balanced prompt samples per session; intent/local-continuity candidate ranking without user-facing SlimSAM percentages; brush-region-only fusion over an automatic base; retained legacy point/box/layer source with selective `@deprecated` annotations only for production-unreferenced UI; focused unit/component/E2E plus host-only real-model evidence; no new model asset, API, persistence, analytics payload, or environment variable |
+| `22` | Production Security & Supply Chain Hardening | Protect the existing browser-only product and make every production input verifiable before the feature surface expands | Threat model; tested headers/no-image-egress/export metadata; non-root digest-pinned containers; least-privilege SHA-pinned CI; dependency/license/container gates; SBOM/attestation; verified model/WASM manifest and cache lifecycle; abuse controls; security.txt and vulnerability runbook |
+| `23` | Release Reliability & Operations | Make releases immutable, observable, reversible and recoverable without adding unapproved visitor telemetry | Release identity and digest deploy; candidate/post-deploy external smoke; automatic/manual rollback; deployment concurrency/audit; SLI/SLO and actionable alerts; bounded encrypted operational backups with restore drill; capacity/degradation exercises; CI mocked Chromium critical path; incident/maintenance runbooks |
+| `24` | Legal & Data Governance Audit | Turn vague future metadata/cookie intent into an operator-specific, reviewable legal and data contract before adding collection or consent UI | Required operator/jurisdiction/market inputs; deployed data-flow and storage inspection; field-level data inventory; purposes/legal bases/minimization/retention/deletion; processors/transfers/localization/notification/rights/security matrices; decision on banner vs storage notice, legal routes/footer, terms/offer/consent needs; draft RU/EN content; qualified-review checkpoint; no runtime collection changes |
+| `25` | Consent & Legal Surfaces | Implement the approved Phase-24 transparency and choice contract without dark patterns or false cookie claims | Versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, retention/version behavior, SSR/SEO, storage/request inspection, and E2E |
+| `26` | Editor Document Foundation & Guided Reset | Establish a scalable browser-memory edit contract before rearranging the UI, and close the final-stroke guided-correction regression | `entities/edit-document`; bounded artifact store and `features/editor-history`; controller extraction from the monolithic workspace; explicit committed-vs-draft history semantics and resource cleanup; a base-backed zero-mark reset path that does not call SlimSAM; unit/component/E2E regression coverage; no visible broad redesign yet |
+| `27` | Automatic-First Workspace | Make the shortest successful path upload → automatic result, while introducing the stable editor shell used by every later tool | One/many upload plus `Fast`/`Optimal`/`Maximum quality (Beta)` selector; automatic start; no direct guided entry or primary model/runtime copy; shared single/selected-batch stable stage + icon/text Cutout/Enhancements/Background toolbar + document undo/redo/download slots; reserved responsive tool panel with accessible help/details and minimal layout shift |
+| `28` | Unified Cutout Tool | Merge semantic and exact correction into one predictable editing tool and remove the candidate/debug-shaped interaction | `Cutout` with `Magic`/`Manual` for single and selected batch documents; keep/remove or restore/erase controls; automatic intent-best result; no Current Result/candidate navigation/Continue/quota copy; Apply/Cancel/repeated-pass contract; icon draft history; viewport-accurate transient brush preview; zoom/pan and bilingual cross-browser E2E |
+| `29` | Enhancements Tool & Committed History | Group optional result-finishing operations under a clear, extensible user concept and make applied changes safely reversible | One `Улучшения` / `Enhancements` panel whose first actions improve fine details and remove colour halo; implementation-neutral registry for later local model/algorithm operations; no model/provider/size/skip-to-brush copy; one serialized `enhance` commit; Cutout/Manual/Enhancements toolbar undo/redo for single and selected batch documents; artifact cleanup verification |
+| `30` | Background & Export Tools | Finish the result toolbar with focused background editing and a scalable download contract | Background draft/apply/undo and sized PNG export for single and selected batch documents; primary Download + settings menu; Original/2048/1024 downscale-only PNG; item-local settings and bulk-ZIP compatibility; extensible `ExportSettings` without fake future formats; client-only privacy guarantees |
+| `31` | Batch Workflow Consolidation & UX Hardening | Prove that the already shared single/batch editor remains isolated and robust under churn, then remove superseded public controls | Validate one `EditDocument`/history per item and existing Cutout/Enhancements/Background/export parity; bulk ZIP; safe dirty-draft item switching; dead public candidate/technical panels removed; accessibility, localization, memory/lifecycle, layout-shift, and full single/batch regression gate |
+| `32` | Guided Help & Onboarding | Research, produce, and integrate useful animated/contextual instructions without slowing or blocking the core task | Interaction inventory and user-risk hypotheses; asset-format/build-vs-library decision with size/accessibility/localization criteria; a small production asset pipeline; versioned `features/guided-help`; contextual first-use cards and compact tool demos; dismiss/replay from Help; reduced-motion static alternative; single/batch context, bilingual, cross-browser, performance, and E2E validation |
+| `33` | Whole-Project Audit & Refactor | Reduce verified architectural duplication and UI/runtime cost after the feature contracts stabilize, without a rewrite or behavior drift | Baseline inventory; dead/duplicate code and FSD/public-API audit; React StrictMode/Profiler rerender/effect review; worker/canvas/blob/object-URL/tensor/cache lifecycle and batch-churn memory audit; bundle/lazy-load and long-task/INP profiling; prioritized findings ledger; small reversible refactors with characterization tests; before/after evidence and full gates |
+| `34` | Accessibility, Device & Product Validation | Validate the complete focused editor with people, assistive technology and representative hardware before broad readiness claims | WCAG-EM/WCAG 2.2 AA audit; keyboard/zoom/forced-colors/reduced-motion; NVDA/VoiceOver; iPhone/Android/macOS/Windows/no-WebGPU sample; supported-browser/degradation policy; constrained-device performance; visual regression; RU/EN usability/editorial review; accessibility statement; evidence-linked readiness report and P0/P1 closure |
 
 ---
 
@@ -534,6 +1037,37 @@ utility function's unit tests.
 Batch processing and background replacement remain in MVP scope (Phases 10-11, §8). Point-prompt /
 SAM-style correction, previously deferred on 2026-07-11, is now approved as the SlimSAM guided
 selection flow in Phase 16 after the Phase 15 automatic-model evaluation.
+Its iterative multi-prompt, semantic-brush, trimap/matting, and foreground-decontamination evolution
+is approved as Phases 17–20. Phase 21 supersedes only the public guided-editor interaction with a
+brush-only semantic workflow: the Phase-17 point/box/manual-layer implementation is retained as
+legacy compatibility source, while reused internal worker/session contracts remain active. These
+phases may evaluate third-party pretrained models but do not authorize domain-specific
+training/fine-tuning or any server-side inference.
+
+**Focused-product boundary after Phase 34:**
+
+`cutbg.art` remains a fast background-removal and background-finishing product. Layers, free object
+movement, shadows, perspective, text, templates, and marketplace-card composition are not added to
+the Phase-22–34 product cycle and must not increase the initial bundle or time-to-first-result.
+
+If that richer direction is approved later, treat it as a separate **Studio** surface (a separately
+loaded route/bundle, and potentially a separate application if product/SEO/deployment needs
+diverge). Reuse the Phase-26 browser-memory document/artifact/history kernel only where the
+contracts genuinely match. Do not force the focused remover and a Canva-like editor into one
+always-loaded state machine.
+
+Phases 32–34 improve guidance, implementation quality and product validation without adding Studio editing
+capabilities. The unnumbered discovery order for that future track is:
+
+1. canvas/output-size contract plus one subject transform (move/scale/rotate) with touch handles;
+2. explicit background + subject layer stack and selection model;
+3. non-destructive subject shadow/effect parameters;
+4. crop/perspective and marketplace aspect-ratio presets;
+5. additional image/text layers, templates, and WebP/JPEG export.
+
+This is an architectural horizon, not approved implementation scope. Each item requires user
+research, a separate SPEC change, bundle/performance budgets, and its own numbered phases before
+code is written.
 
 **Never (product decision, not a phasing choice):**
 - Any server endpoint that accepts uploaded images, in any form
@@ -548,6 +1082,17 @@ selection flow in Phase 16 after the Phase 15 automatic-model evaluation.
   validation against actual Russian-language long-tail search volume before scenario copy is written.
 - Final list of shadcn/ui components to copy into `shared/ui` for MVP (minimum known so far: button,
   slider, toast/notification, dialog for mobile menu if needed).
-- Exact client-side ZIP library for Phase 10's "download all" (§6).
-- Phase 10's batch concurrency limit (§7.1) — needs real-device testing to set responsibly rather
-  than guessing a number ahead of time.
+- Enabling cross-origin isolation for WASM multithreading remains optional research for Phase 20;
+  any COOP/COEP change must first prove compatibility with CDN assets, analytics, and public pages.
+- Phase-23 owners must approve measured SLI/SLO targets, alert routing, operational backup scope,
+  and RPO/RTO; the agent must not invent business-criticality targets.
+- Phase-24 owner inputs must be supplied before that audit can close: operator legal identity/form/
+  address/contact and jurisdiction, actual target countries, minors policy, complete hosting/CDN/
+  analytics/support processor list and retention, and whether qualified Russian/EU counsel is
+  available for the applicability matrix.
+- “Future metadata” is not yet a defined data category. Before implementation, the owner must name
+  each proposed field and product purpose; image pixels, mattes, filenames, prompt coordinates, and
+  image-derived embeddings remain prohibited from storage/analytics regardless.
+- Before Phase 34, the owner must secure access to the minimum physical-device/assistive-technology
+  sample and representative consented research participants. Unavailable environments remain
+  explicitly unverified; they cannot be replaced by unsupported compatibility claims.

@@ -85,6 +85,73 @@ Architecture lint (run in CI before tests, not part of the standard gate rows ab
 pnpm exec steiger ./src
 ```
 
+### Security and supply-chain gate (Phase 22)
+
+The following versions/commands are frozen from current primary documentation.
+Any version or policy change requires maintainer review of release notes,
+license and provenance.
+
+```bash
+pnpm audit --prod --audit-level high
+pnpm security:licenses
+pnpm sync-model-assets -- --check
+
+docker run --rm \
+  -v "$PWD:/work:ro" \
+  aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e \
+  fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+  --exit-code 1 /work
+
+docker build -t cutbgart:security .
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e \
+  image --scanners vuln --severity HIGH,CRITICAL \
+  --exit-code 1 cutbgart:security
+```
+
+CI additionally runs the SHA-pinned
+`actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294`
+(v5.0.0) and
+`aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25`
+(v0.36.0 / Trivy 0.70.0). It emits `sbom.cdx.json`, creates GitHub provenance
+and SBOM attestations for the pushed image digest, and the protected
+`production` job verifies:
+
+```bash
+gh attestation verify "oci://$IMAGE_NAME@$IMAGE_DIGEST" \
+  --repo "$GITHUB_REPOSITORY" \
+  --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+  --source-ref refs/heads/main \
+  --deny-self-hosted-runners
+```
+
+The gate fails on scanner execution failure, high/critical reachable findings,
+unreviewed licenses, mutable model inputs, or missing/mismatched attestation
+identity. Exception owner/expiry rules are in
+[`security/SECURE_DEVELOPMENT.md`](security/SECURE_DEVELOPMENT.md).
+
+### Production security ownership
+
+- SSR responses set CSP, `frame-ancestors`, `X-Content-Type-Options`,
+  `Referrer-Policy`, and `Permissions-Policy` in `src/server.ts`.
+- Nginx owns HTTPS redirect/HSTS, CDN CORP/CORS, `/api/send` and public SSR
+  request/body/time limits. COOP/COEP are intentionally not enabled.
+- Compose production service images and Dockerfile bases are pinned by digest.
+  Deploy must set `APP_IMAGE=ghcr.io/...@sha256:...`; the `cutbgart:local`
+  fallback is only for local `--build`.
+- GitHub `production` environment stores VPS secrets. Vite analytics IDs/tokens
+  are public browser identifiers and use repository environment variables, not
+  secret-bearing Docker layers.
+- Model release operations:
+
+```bash
+pnpm sync-model-assets                         # verified atomic activation
+pnpm sync-model-assets -- --verify-cache       # verify active bytes
+pnpm sync-model-assets -- --rollback           # swap to previous verified release
+docker compose --profile maintenance run --rm --build model-sync
+```
+
 ### TLS / reverse-proxy verification (VPS-only, not part of the automated gate)
 
 `nginx` + `certbot` can only be brought up successfully after `deploy/init-letsencrypt.sh` has run
@@ -113,6 +180,11 @@ pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
 pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
 pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
 pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
+pnpm e2e:phase-17-real     # Phase 17 only: serialized iterative SlimSAM runtime evidence
+pnpm e2e:matting-lab-real  # Phase 18 only: serialized ViTMatte alpha/runtime evidence
+pnpm e2e:phase-19-real     # Phase 19 only: serialized production q8/fp32 refinement evidence
+pnpm e2e:phase-20-real     # Phase 20 only: serialized full-pipeline + bounded-input evidence
+pnpm e2e:phase-21-real     # Phase 21 only: serialized brush-derived SlimSAM evidence
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker, never in CI
 ```
@@ -177,6 +249,10 @@ pnpm exec steiger ./src
 pnpm e2e                  # fast iteration
 pnpm e2e:full             # phase gate, includes one real-model smoke
 pnpm e2e:model-lab-real   # opt-in Phase 15 evaluation; never CI/normal matrix
+pnpm e2e:matting-lab-real # opt-in Phase 18 ViTMatte evaluation; never CI/normal matrix
+pnpm e2e:phase-19-real    # opt-in Phase 19 production refiner; never CI/normal matrix
+pnpm e2e:phase-20-real    # opt-in Phase 20 hybrid pipeline; never CI/normal matrix
+pnpm e2e:phase-21-real    # opt-in Phase 21 brush-guided SlimSAM; never CI/normal matrix
 
 # Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run

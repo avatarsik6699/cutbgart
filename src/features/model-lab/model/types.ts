@@ -6,6 +6,22 @@ import type {
 
 export type EvaluationModelId = "isnet-q8" | "isnet-fp32" | "ben2-fp16" | "mvanet-q4";
 
+export type MattingEvaluationModelId =
+  | "vitmatte-small-composition1k-q8"
+  | "vitmatte-small-composition1k-fp32"
+  | "vitmatte-small-distinctions646-q8"
+  | "vitmatte-small-distinctions646-fp32";
+
+export type LightweightPromptEvaluationModelId = "efficient-sam-ti" | "mobile-sam-vit-t";
+
+export type PromptBaselineModelId = "slimsam-q8";
+
+export type InteractiveEvaluationModelId =
+  MattingEvaluationModelId | LightweightPromptEvaluationModelId | PromptBaselineModelId;
+
+export type CandidateEligibility =
+  "production-eligible" | "evidence-only" | "rejected-license";
+
 export type EvaluationDtype = "q8" | "fp32" | "fp16" | "q4";
 export type EvaluationStatus = "queued" | "loading" | "processing" | "success" | "error";
 
@@ -19,6 +35,105 @@ export interface EvaluationModelProfile {
   supportedPaths: readonly InferencePath[];
   license: "AGPL-3.0" | "MIT";
   resourceWarning: string;
+}
+
+export interface InteractiveEvaluationModelProfile {
+  id: InteractiveEvaluationModelId;
+  label: string;
+  family: "matting" | "promptable";
+  modelId: string;
+  revision: string;
+  graphFiles: readonly string[];
+  dtype: EvaluationDtype;
+  license: string;
+  eligibility: CandidateEligibility;
+  supportedPaths: readonly InferencePath[];
+  approximateBytes: number;
+  resourceWarning: string;
+  unsupportedReason?: string;
+}
+
+export type MattingCorpusCategory =
+  | "hair-fur"
+  | "transparent-thin"
+  | "holes"
+  | "shadows"
+  | "light-on-light"
+  | "multiple-objects"
+  | "motion-blur"
+  | "high-resolution-small-target";
+
+export interface MattingCorpusCase {
+  ordinal: number;
+  category: MattingCorpusCategory;
+  source: SourceImage;
+  trimap: AlphaMatte;
+  groundTruth: AlphaMatte;
+  sourceUrl: string;
+}
+
+export interface MattingQualityMeasurement {
+  caseOrdinal: number;
+  modelId: InteractiveEvaluationModelId;
+  iou: number | null;
+  boundaryIou: number | null;
+  sad: number | null;
+  mse: number | null;
+  gradient: number | null;
+  connectivity: number | null;
+  interactionsToAccept: number | null;
+}
+
+export interface ForegroundEdgeMetricSet {
+  sad: number;
+  mse: number;
+  gradient: number;
+  connectivity: number;
+  boundaryIou: number;
+  colourSpill: number;
+}
+
+export interface ForegroundEdgeQualityMeasurement {
+  caseOrdinal: number;
+  baseline: ForegroundEdgeMetricSet;
+  refined: ForegroundEdgeMetricSet;
+  /** `refined - baseline`; negative is improvement for errors, positive for IoU. */
+  delta: ForegroundEdgeMetricSet;
+  interactionsToAccept: number;
+  latencyMs: number;
+  memoryBytes: number | "unavailable";
+}
+
+export type InteractiveEvaluationErrorCode =
+  | "license-rejected"
+  | "operator-unsupported"
+  | "model-load-failed"
+  | "device-out-of-memory"
+  | "processing-failed";
+
+export interface InteractiveRuntimeMeasurement {
+  caseOrdinal: number;
+  modelId: InteractiveEvaluationModelId;
+  requestedPath: InferencePath;
+  actualPath: InferencePath;
+  status: "success" | "unsupported" | "error";
+  coldLoadMs: number;
+  warmInferenceMs: number;
+  peakMemoryBytes: number | null;
+  memoryObservation: "measured" | "estimated" | "unavailable";
+  fallbackReason?: string;
+  errorCode?: InteractiveEvaluationErrorCode;
+}
+
+export interface InteractiveMattingBenchmarkExport {
+  schemaVersion: 2;
+  createdAt: string;
+  capabilities: ModelLabCapabilities;
+  candidates: InteractiveEvaluationModelProfile[];
+  corpusCaseCount: number;
+  quality: MattingQualityMeasurement[];
+  runtime: InteractiveRuntimeMeasurement[];
+  decision: InteractiveEvaluationModelId | "none";
 }
 
 export type EvaluationErrorCode =
@@ -94,7 +209,18 @@ export interface ModelLabCancelRequest {
   type: "cancel";
 }
 
-export type ModelLabWorkerRequest = ModelLabProcessRequest | ModelLabCancelRequest;
+export interface ModelLabInteractiveProcessRequest {
+  type: "process-interactive";
+  requestId: string;
+  modelId: InteractiveEvaluationModelId;
+  inferencePath: InferencePath;
+  source: SourceImage;
+  trimap: AlphaMatte;
+  caseOrdinal: number;
+}
+
+export type ModelLabWorkerRequest =
+  ModelLabProcessRequest | ModelLabInteractiveProcessRequest | ModelLabCancelRequest;
 
 export interface ModelLabProgressResponse {
   type: "progress";
@@ -124,8 +250,42 @@ export interface ModelLabErrorResponse {
   measurement: BenchmarkMeasurement;
 }
 
+export interface ModelLabInteractiveProgressResponse {
+  type: "interactive-progress";
+  requestId: string;
+  modelId: InteractiveEvaluationModelId;
+  stage: "loading" | "processing";
+  percent: number | null;
+}
+
+export interface ModelLabInteractiveResultResponse {
+  type: "interactive-result";
+  requestId: string;
+  modelId: InteractiveEvaluationModelId;
+  caseOrdinal: number;
+  result: Blob;
+  matte: AlphaMatte;
+  measurement: InteractiveRuntimeMeasurement;
+}
+
+export interface ModelLabInteractiveErrorResponse {
+  type: "interactive-error";
+  requestId: string;
+  modelId: InteractiveEvaluationModelId;
+  caseOrdinal: number;
+  code: InteractiveEvaluationErrorCode;
+  message: string;
+  measurement: InteractiveRuntimeMeasurement;
+}
+
 export type ModelLabWorkerResponse =
   ModelLabProgressResponse | ModelLabResultResponse | ModelLabErrorResponse;
+
+export type ModelLabAnyWorkerResponse =
+  | ModelLabWorkerResponse
+  | ModelLabInteractiveProgressResponse
+  | ModelLabInteractiveResultResponse
+  | ModelLabInteractiveErrorResponse;
 
 export interface BenchmarkExport {
   schemaVersion: 1;

@@ -52,7 +52,7 @@ test.describe("/ (home)", () => {
     await expect(brandLogos).toHaveCount(2);
     await expect(brandLogos.first()).toHaveJSProperty("complete", true);
     await expect(brandLogos.first()).toHaveJSProperty("naturalWidth", 1100);
-    await expect(page.getByRole("switch")).toBeVisible();
+    await expect(page.getByTestId("processing-mode-selector")).toBeVisible();
     await expect(page.getByLabel("Upload an image")).toBeAttached();
   });
 
@@ -298,15 +298,15 @@ test.describe("/ (home)", () => {
       page.getByRole("slider", { name: /before\/after comparison/i }),
     ).toBeVisible();
 
-    await page.getByRole("switch").click();
-    await expect(page.getByRole("switch")).toBeChecked();
+    await page.getByRole("radio", { name: /IS-Net Precise/i }).click();
+    await expect(page.getByRole("radio", { name: /IS-Net Precise/i })).toBeChecked();
     await expect(
-      page.getByRole("button", { name: /reprocess in fast mode/i }),
+      page.getByRole("button", { name: /reprocess in IS-Net Fast mode/i }),
     ).toBeVisible();
     await expect(page.getByText(/setting applies to images added after/i)).toBeVisible();
 
     const schedulerSummary = page.getByTestId("scheduler-summary");
-    await page.getByRole("button", { name: /reprocess in fast mode/i }).click();
+    await page.getByRole("button", { name: /reprocess in IS-Net Fast mode/i }).click();
     await expect(schedulerSummary).not.toContainText("4 done");
     await expect(schedulerSummary).toContainText("4 done");
 
@@ -336,7 +336,7 @@ test.describe("/ (home)", () => {
     );
     await expect(upload).toBeDisabled();
     await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
-    await expect(page.getByText(/\d+ × \d+ · Fast/)).toHaveCount(4);
+    await expect(page.getByText(/\d+ × \d+ · IS-Net Fast/)).toHaveCount(4);
     const unavailableTile = page
       .getByRole("button", { name: /review available when ready/i })
       .first();

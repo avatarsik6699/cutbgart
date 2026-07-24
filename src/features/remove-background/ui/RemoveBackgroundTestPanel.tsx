@@ -132,11 +132,12 @@ export function RemoveBackgroundTestPanel({
           <button type="button" onClick={reset} className="mr-4 underline">
             process another image
           </button>
-          {state.result.qualityMode !== "max" && (
-            <button type="button" onClick={recomputeMaxQuality} className="underline">
-              recompute in max quality
-            </button>
-          )}
+          {state.result.qualityMode !== "max" &&
+            state.result.qualityMode !== "isnet-fp32" && (
+              <button type="button" onClick={recomputeMaxQuality} className="underline">
+                recompute in max quality
+              </button>
+            )}
         </div>
       )}
 

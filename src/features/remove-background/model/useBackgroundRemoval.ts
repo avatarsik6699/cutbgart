@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 
 import { trackEvent } from "@/shared/lib/analytics";
+import { inspectEncodedImageDimensions } from "@/shared/lib/image-file-inspection";
 
 import type {
   AlphaMatte,
@@ -12,6 +13,7 @@ import type {
   SourceImage,
 } from "../../../entities/processed-image";
 import { detectDeviceCapabilities } from "./device-capabilities";
+import { normalizeModelMode } from "./model-info";
 import {
   initialRemoveBackgroundState,
   removeBackgroundReducer,
@@ -83,7 +85,41 @@ export async function buildSourceImage(file: File): Promise<BuildSourceImageResu
     };
   }
 
-  const bitmap = await createImageBitmap(file);
+  const encodedDimensions = await inspectEncodedImageDimensions(file, file.type);
+  if (!encodedDimensions) {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The file is malformed or does not match its image format.",
+        action: "reset",
+      },
+    };
+  }
+  if (Math.max(encodedDimensions.width, encodedDimensions.height) > MAX_DIMENSION_PX) {
+    return {
+      ok: false,
+      error: {
+        code: "resolution-too-large",
+        message: `Image resolution (${String(encodedDimensions.width)}x${String(encodedDimensions.height)}) exceeds the ${String(MAX_DIMENSION_PX)}px limit on the longest side.`,
+        action: "reset",
+      },
+    };
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The image is malformed and could not be decoded.",
+        action: "reset",
+      },
+    };
+  }
   const { width, height } = bitmap;
   bitmap.close();
 
@@ -110,9 +146,11 @@ export interface UseBackgroundRemovalResult {
   /** Timestamped diagnostic trail (file downloads, state transitions, timings) for an optional debug log panel. */
   logs: LogEntry[];
   modelLoadBytes: { loaded: number; total: number | null };
+  ben2FallbackNotice: boolean;
   selectFile: (file: File) => void;
   recomputeMaxQuality: () => void;
   retry: () => void;
+  retryInLightweightMode: () => void;
   reset: () => void;
   /** Enters `correcting` from `result` (Phase 07) — no worker/inference involved. */
   enterCorrecting: () => void;
@@ -127,6 +165,9 @@ export interface UseBackgroundRemovalResult {
     fill: BackgroundFill,
   ) => Promise<ProcessedImage>;
   replaceResult: (image: ProcessedImage) => void;
+  adoptResult: (image: ProcessedImage) => void;
+  /** Disposes the active automatic ONNX session before another heavy stage starts. */
+  releaseInference: () => Promise<void>;
 }
 
 /**
@@ -152,6 +193,7 @@ export function useBackgroundRemoval(
     loaded: 0,
     total: null as number | null,
   });
+  const [ben2FallbackNotice, setBen2FallbackNotice] = useState(false);
   const logIdRef = useRef(0);
 
   const appendLog = useCallback((message: string) => {
@@ -170,6 +212,7 @@ export function useBackgroundRemoval(
   const pendingRecompositeRequestsRef = useRef(
     new Map<string, PendingWorkerRequest<ProcessedImage>>(),
   );
+  const pendingDisposeRequestsRef = useRef(new Map<string, () => void>());
   const lastAttemptRef = useRef<{
     source: SourceImage;
     qualityMode: QualityMode;
@@ -211,7 +254,11 @@ export function useBackgroundRemoval(
       switch (message.type) {
         case "model-progress": {
           const attempt = lastAttemptRef.current;
-          if (attempt && attempt.qualityMode === message.qualityMode) {
+          if (
+            attempt &&
+            normalizeModelMode(attempt.qualityMode) ===
+              normalizeModelMode(message.qualityMode)
+          ) {
             dispatch({ type: "MODEL_PROGRESS", percent: message.percent });
             setModelLoadBytes({
               loaded: message.loaded,
@@ -226,15 +273,30 @@ export function useBackgroundRemoval(
         }
         case "fallback-to-wasm": {
           const attempt = lastAttemptRef.current;
-          if (attempt && attempt.qualityMode === message.qualityMode) {
+          if (
+            attempt &&
+            normalizeModelMode(attempt.qualityMode) ===
+              normalizeModelMode(message.qualityMode)
+          ) {
             setLightweightMode(true);
             appendLog("WebGPU failed on this run — falling back to WASM");
           }
           break;
         }
+        case "fallback-to-isnet": {
+          setBen2FallbackNotice(true);
+          setLightweightMode(message.reason === "webgpu-unavailable");
+          appendLog(`BEN2 fallback to IS-Net q8 (${message.reason})`);
+          break;
+        }
         case "model-ready": {
           const attempt = lastAttemptRef.current;
-          if (!attempt || attempt.qualityMode !== message.qualityMode) break;
+          if (
+            !attempt ||
+            normalizeModelMode(attempt.qualityMode) !==
+              normalizeModelMode(message.qualityMode)
+          )
+            break;
           awaitingModelLoadRef.current = false;
           setRunInfo({ inferencePath: message.inferencePath, dtype: message.dtype });
           appendLog(
@@ -268,7 +330,7 @@ export function useBackgroundRemoval(
             source: attempt.source,
             result: message.result,
             cutout: message.result,
-            qualityMode: attempt.qualityMode,
+            qualityMode: message.actualMode ?? attempt.qualityMode,
             alphaMatte: message.matte,
             backgroundFill: { type: "transparent" },
             backgroundPending: false,
@@ -292,6 +354,11 @@ export function useBackgroundRemoval(
           pendingRecompositeRequestsRef.current.delete(message.requestId);
           appendLog(`Correction composite updated in ${String(message.durationMs)}ms`);
           pending.resolve(message.result);
+          break;
+        }
+        case "disposed": {
+          pendingDisposeRequestsRef.current.get(message.requestId)?.();
+          pendingDisposeRequestsRef.current.delete(message.requestId);
           break;
         }
         case "error": {
@@ -370,6 +437,7 @@ export function useBackgroundRemoval(
         trackEvent("model_load_started");
       }
       awaitingModelLoadRef.current = true;
+      setBen2FallbackNotice(false);
       setRunInfo(null);
       dispatch({ type: "SELECT_FILE", qualityMode });
       void getDeviceCapabilities().then((capabilities) => {
@@ -410,7 +478,7 @@ export function useBackgroundRemoval(
   const recomputeMaxQuality = useCallback(() => {
     const attempt = lastAttemptRef.current;
     if (state.status === "result" && attempt) {
-      startAttempt(attempt.source, "max");
+      startAttempt(attempt.source, "isnet-fp32");
     }
   }, [startAttempt, state.status]);
 
@@ -420,11 +488,16 @@ export function useBackgroundRemoval(
       startAttempt(attempt.source, attempt.qualityMode);
     }
   }, [startAttempt]);
+  const retryInLightweightMode = useCallback(() => {
+    const attempt = lastAttemptRef.current;
+    if (attempt) startAttempt(attempt.source, "isnet-q8");
+  }, [startAttempt]);
 
   const reset = useCallback(() => {
     lastAttemptRef.current = null;
     pendingRequestIdRef.current = null;
     setRunInfo(null);
+    setBen2FallbackNotice(false);
     dispatch({ type: "RESET" });
   }, []);
 
@@ -437,6 +510,9 @@ export function useBackgroundRemoval(
   }, []);
   const replaceResult = useCallback((result: ProcessedImage) => {
     dispatch({ type: "REPLACE_RESULT", result });
+  }, []);
+  const adoptResult = useCallback((result: ProcessedImage) => {
+    dispatch({ type: "ADOPT_RESULT", result });
   }, []);
 
   const extractMatte = useCallback(
@@ -490,6 +566,15 @@ export function useBackgroundRemoval(
     },
     [getWorker, nextRequestId],
   );
+  const releaseInference = useCallback((): Promise<void> => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.resolve();
+    const requestId = nextRequestId();
+    return new Promise((resolve) => {
+      pendingDisposeRequestsRef.current.set(requestId, resolve);
+      worker.postMessage({ type: "dispose", requestId } satisfies WorkerRequest);
+    });
+  }, [nextRequestId]);
 
   return {
     state,
@@ -498,9 +583,11 @@ export function useBackgroundRemoval(
     runInfo,
     logs,
     modelLoadBytes,
+    ben2FallbackNotice,
     selectFile,
     recomputeMaxQuality,
     retry,
+    retryInLightweightMode,
     reset,
     enterCorrecting,
     exitCorrecting,
@@ -508,5 +595,7 @@ export function useBackgroundRemoval(
     recomposite,
     applyBackgroundFill,
     replaceResult,
+    adoptResult,
+    releaseInference,
   };
 }

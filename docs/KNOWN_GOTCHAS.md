@@ -11,6 +11,62 @@
 
 ## Gotcha Log
 
+### An awaited editor transition can resurrect a cancelled session
+
+- **Symptoms**: guided correction reopens after Reset, a result from the previously selected batch
+  item is applied to the current item, or the guided UI disappears on item switch while its worker
+  remains alive.
+- **Root cause**: releasing another model, extracting a matte, and recompositing an accepted result
+  are separate asynchronous steps. Clearing React state does not cancel their promises; a late
+  continuation can still mutate the workspace using its captured target.
+- **Fix**: give the whole transition one monotonic run token, check it after every `await` and before
+  every state mutation, and increment it on reset, cancel, item switch, batch clear, replacement
+  upload, and unmount. Explicitly reset the guided hook when its batch target leaves scope.
+- **Prevention**: any new multi-step editor transition must have target identity plus a run token;
+  disabling a button is UX protection, not stale-completion protection.
+
+### SlimSAM `iou_scores` is not a user-facing accuracy percentage
+
+- **Symptoms**: mask alternatives intermittently show "SlimSAM quality estimate unavailable", or
+  the first candidate is called recommended even though no valid estimate exists; changing prompts
+  may make the message appear or disappear without an actionable explanation.
+- **Root cause**: the SAM decoder returns raw `iou_scores` output used to rank masks. The Phase-17
+  adapter treated only finite values inside `0..1` as displayable and converted everything else to
+  `null`, but the model/library contract does not make this value a stable, calibrated user
+  correctness percentage. With all values `null`, decoder order still made candidate 1 look
+  recommended.
+- **Fix**: Phase 21 removes model-score copy from the public UI. Rank candidates by pre-constraint
+  agreement with green/red semantic markings, use any finite raw model value only as an internal
+  tie-breaker, compare alternatives inside the local edit region, and collapse materially identical
+  masks.
+- **Prevention**: never expose raw model ranking/logit output as accuracy or confidence unless the
+  exact pinned model contract and calibration evidence support that claim. A missing internal
+  ranking signal must not create a user-facing task with no possible user action.
+
+### A memoized blob URL can be revoked during React StrictMode's development remount
+
+- **Symptoms**: an image backed by a `Blob` works initially, then shows only its alt text after
+  entering the editor in development; production or a non-StrictMode test may appear unaffected.
+- **Root cause**: render memoization keeps the same object URL while an effect cleanup revokes it.
+  React StrictMode intentionally runs setup, cleanup, and setup again, so the second setup reuses an
+  already-revoked URL.
+- **Fix**: create the object URL in the same callback-ref/effect setup that owns it, assign it to the
+  image there, and revoke that exact URL in the matching cleanup.
+- **Prevention**: lifecycle tests for blob-backed previews must render under `StrictMode` and verify
+  that the current image URL was not revoked; browser coverage should also assert `naturalWidth > 0`.
+
+### A mocked ML result does not prove that the browser rendered the result
+
+- **Symptoms**: guided-selection E2E is green because the mock worker returned an `AlphaMatte` and
+  an “accept” button appeared, while a real user sees no point, box, or mask on the image.
+- **Root cause**: tests asserted state transitions but never asserted the visible prompt and canvas
+  overlay. The matte could remain in hook state without ever reaching the rendering component.
+- **Fix**: guided E2E must assert the immediate point marker, live box during pointer drag, final
+  box marker, painted mask canvas, and clearing those visuals on replacement. The serialized real
+  smoke also asserts marker and mask rendering after the actual SlimSAM response.
+- **Prevention**: for ML/canvas flows, pair worker-message assertions with a user-visible artifact;
+  a status string or enabled action alone is not behavioral proof.
+
 ### Never build `model-sync` from the full application dependency stage
 
 - **Symptoms**: the `main` deploy spends nearly ten minutes in `docker compose --profile maintenance run --rm --build model-sync`, then fails with `Run Command Timeout` while exporting the image even though dependency installation completed.
@@ -178,15 +234,20 @@
 - **Prevention**: do not mutate Transformers.js model/WASM host settings inside independent async
   loads. Any future multi-source logic must coordinate through the same loader.
 
-### Gitignored generated assets still need an ESLint global ignore
+### Gitignored generated assets (including atomic rollback siblings) still need an ESLint global ignore
 
 - **Symptoms**: after `pnpm sync-model-assets`, `pnpm lint` reports dozens of missing-rule errors
   inside `deploy/model-assets/onnxruntime-web/*`, even though that directory is in `.gitignore`.
 - **Root cause**: ESLint flat config does not inherit Git ignore patterns. `eslint .` discovers the
   upstream ORT JavaScript bundles unless its own global ignore list excludes the host asset mount.
-- **Fix**: keep `deploy/model-assets` in the first, global `ignores` block of `eslint.config.js`.
-- **Prevention**: any future generated/downloaded directory inside the repo must be excluded from
-  both Git and the tools that recursively scan the working tree.
+- **Fix**: keep `deploy/model-assets*` in the first, global `ignores` block of
+  `eslint.config.js` and in `.dockerignore`. The wildcard is intentional: Phase 22's atomic
+  synchronizer also owns `model-assets.previous`, transient `model-assets.staging-*`, and rollback
+  swap directories. Without the Docker ignore, every app build needlessly sends hundreds of
+  megabytes of model rollback data as build context.
+- **Prevention**: any future generated/downloaded directory inside the repo — including atomic
+  staging/backup siblings — must be excluded from both Git and the tools that recursively scan the
+  working tree.
 
 ### Pre-optimize lazily imported dependencies in Vite development
 
@@ -279,6 +340,19 @@
   Worker messages, network calls, ref mutation, timers, analytics, or other externally observable
   work inside them.
 
+### A bounded undo stack does not bound the live brush document
+
+- **Symptoms**: long guided-brush sessions become progressively slower and retain more memory even
+  though the undo history reports a fixed limit; very dense pointer input can also create a single
+  stroke with thousands of nearly identical points.
+- **Root cause**: slicing `history` to its last N entries does not remove older strokes from the
+  active `strokes` collection, and raw `pointermove` frequency has no inherent upper bound.
+- **Fix**: enforce the same explicit cap on active guided strokes and history, simplify points by
+  source-space distance while painting, and hard-cap points per committed stroke. Surface those
+  limits in the UI rather than silently implying an unlimited session.
+- **Prevention**: every interactive editor needs separate, tested bounds for its live document,
+  per-gesture payload, undo/redo metadata, model input, and full-resolution result buffers.
+
 ### A hook value derived from a ref read during render silently freezes in `renderHook` tests
 
 - **Symptoms**: a Vitest `renderHook` test's `result.current` gets stuck on an older value (e.g. a
@@ -312,6 +386,36 @@
 - **Prevention**: [optional — how to avoid hitting it again]
 - **Links**: [optional — docs / issue / PR]
 -->
+
+### ViTMatte padding is not resizing — large focus crops can overflow ONNX Runtime Web
+
+- **Symptoms**: Balanced refinement returns the deterministic fallback with
+  `OrtRun ... SafeIntOnOverflow`; Maximum logs the same error twice because fp32 and its q8 fallback
+  receive the same large crop. Smaller images work on the same browser and model path.
+- **Root cause**: Transformers.js' ViTMatte processor pads width/height to `size_divisibility: 32`
+  but does not resize. Passing a near-source-sized crop can therefore create an unexpectedly large
+  four-channel float tensor and model intermediates. Reproduced on WASM with a 2086×2253 crop,
+  padded to 2112×2272, while a 400×400 control succeeded.
+- **Fix**: bound the model-input pixel budget before processor invocation, preserve aspect ratio,
+  and let source-crop restoration resample soft alpha back to the original coordinates. A WebGPU
+  execution failure still gets one explicit WASM retry; size bounding is backend-independent.
+- **Prevention**: real-model coverage must include an image-free generated large-input case and
+  assert the posted model-input dimensions, actual path, fallback classification, and restored
+  source-sized matte. Tiny fixtures prove graph loading only, not production-size safety.
+
+### Paraglide and route generation must finish before tests consume generated modules
+
+- **Symptoms**: an otherwise unrelated full Vitest run suddenly reports broad UI failures such as
+  missing `@/paraglide/runtime` imports or an undefined `m` messages namespace while
+  `pnpm generate:code` is running in parallel.
+- **Root cause**: Paraglide and TanStack Router regenerate their output trees non-atomically. A
+  concurrent test, typecheck, or build can resolve a generated module while that tree is between
+  removal and replacement.
+- **Fix**: finish `pnpm generate:code` first, then start Vitest, TypeScript, lint, or the production
+  build. The Phase 20 gate's sequential rerun completed with 59 test files and 252 tests passing.
+- **Prevention**: generation may be parallelized internally by its own scripts, but never run it
+  concurrently with commands that import `src/paraglide` or the generated route tree.
+
 # Certbot webroot bootstrap cannot delete nginx's dummy certificate before issuance
 
 - **Symptoms**: the first production deploy reaches Certbot, but Let's Encrypt reports

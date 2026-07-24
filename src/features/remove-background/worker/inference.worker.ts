@@ -2,6 +2,7 @@ import { env, pipeline, type ImageSegmentationPipeline } from "@huggingface/tran
 
 import type {
   AlphaMatte,
+  AutomaticModelMode,
   BackgroundFill,
   InferencePath,
   ProcessedImage,
@@ -10,12 +11,15 @@ import type {
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
 import {
+  createModelSourceLoader,
+  type ModelSource,
+} from "../../../shared/lib/model-source-loader";
+import {
   compositeProcessedImage,
   extractAlphaMatte,
   recompositeProcessedImage,
 } from "../lib/compositing";
-import { DTYPES, MODEL_ID, MODEL_REVISION } from "../model/model-info";
-import { createModelSourceLoader, type ModelSource } from "../model/model-source";
+import { getProductionModel, normalizeModelMode } from "../model/model-info";
 
 // `self` in a real dedicated worker is a `DedicatedWorkerGlobalScope`, but this
 // project's tsconfig only loads the `DOM` lib (for the React app), under which
@@ -41,7 +45,7 @@ env.useWasmCache = true;
 // concurrently while two models initialize would create mixed-source loads.
 const upstreamRemoteHost = env.remoteHost;
 const upstreamWasmPaths = env.backends.onnx.wasm?.wasmPaths;
-const pinnedRemotePathTemplate = `{model}/resolve/${MODEL_REVISION}/`;
+let pinnedRemotePathTemplate = "{model}/resolve/main/";
 
 function selectModelSource(source: ModelSource): void {
   // Transformers.js 4.2's pipeline registry probes expected files without
@@ -105,8 +109,17 @@ export interface RecompositeRequest {
   backgroundFill?: BackgroundFill;
 }
 
+export interface DisposeRequest {
+  type: "dispose";
+  requestId: string;
+}
+
 export type WorkerRequest =
-  LoadModelRequest | ProcessRequest | ExtractAlphaMatteRequest | RecompositeRequest;
+  | LoadModelRequest
+  | ProcessRequest
+  | ExtractAlphaMatteRequest
+  | RecompositeRequest
+  | DisposeRequest;
 
 export interface ModelProgressResponse {
   type: "model-progress";
@@ -137,12 +150,19 @@ export interface FallbackToWasmResponse {
   qualityMode: QualityMode;
 }
 
+export interface FallbackToIsnetResponse {
+  type: "fallback-to-isnet";
+  qualityMode: QualityMode;
+  reason: "webgpu-unavailable" | "model-failed" | "device-out-of-memory";
+}
+
 export interface ProcessResultResponse {
   type: "process-result";
   requestId: string;
   result: Blob;
   matte: AlphaMatte;
   durationMs: number;
+  actualMode?: AutomaticModelMode;
 }
 
 export interface AlphaMatteResultResponse {
@@ -157,6 +177,11 @@ export interface RecompositeResultResponse {
   requestId: string;
   result: ProcessedImage;
   durationMs: number;
+}
+
+export interface DisposedResponse {
+  type: "disposed";
+  requestId: string;
 }
 
 export type WorkerErrorCode =
@@ -178,49 +203,58 @@ export type WorkerResponse =
   | WorkerLogResponse
   | ModelReadyResponse
   | FallbackToWasmResponse
+  | FallbackToIsnetResponse
   | ProcessResultResponse
   | AlphaMatteResultResponse
   | RecompositeResultResponse
+  | DisposedResponse
   | WorkerErrorResponse;
 
-// Keyed on quality mode *and* inference path — a mid-session WebGPU-execution
-// fallback (see `handleProcess`) can need both a webgpu and a wasm pipeline
-// for the same quality mode, and those are separate `onnxruntime-web` sessions
-// (different execution provider), not interchangeable cache entries, even
-// though both currently resolve the same `dtype` per `DTYPES[qualityMode]`.
-const segmenters = new Map<string, Promise<ImageSegmentationPipeline>>();
-
-function segmenterCacheKey(
-  qualityMode: QualityMode,
-  inferencePath: InferencePath,
-): string {
-  return `${qualityMode}:${inferencePath}`;
+interface ActiveSegmenter {
+  key: string;
+  segmenter: ImageSegmentationPipeline;
 }
+
+// One automatic ONNX session at a time. Repeated work in the same mode is
+// warm; switching awaits disposal before constructing the next session.
+let activeSegmenter: ActiveSegmenter | null = null;
+let loadingSegmenter: Promise<ImageSegmentationPipeline> | null = null;
+let ben2FallbackMode: InferencePath | null = null;
 
 function post(response: WorkerResponse, transfer?: Transferable[]): void {
   workerScope.postMessage(response, transfer);
 }
 
-function loadSegmenter(
+async function disposeActiveSegmenter(): Promise<void> {
+  const active = activeSegmenter;
+  activeSegmenter = null;
+  loadingSegmenter = null;
+  if (active) await active.segmenter.dispose();
+}
+
+async function loadSegmenter(
   qualityMode: QualityMode,
   inferencePath: InferencePath,
 ): Promise<ImageSegmentationPipeline> {
-  const cacheKey = segmenterCacheKey(qualityMode, inferencePath);
-  let cached = segmenters.get(cacheKey);
-  if (!cached) {
+  const profile = getProductionModel(qualityMode);
+  const cacheKey = `${profile.id}:${inferencePath}`;
+  if (activeSegmenter?.key === cacheKey) return activeSegmenter.segmenter;
+  if (loadingSegmenter) await loadingSegmenter.catch(() => undefined);
+  if (activeSegmenter?.key === cacheKey) return activeSegmenter.segmenter;
+  await disposeActiveSegmenter();
+  pinnedRemotePathTemplate = `{model}/resolve/${profile.revision}/`;
+  // The source loader selects its initial host while this module is evaluated,
+  // before a concrete production profile is known. Re-apply the currently
+  // selected source after choosing the profile so registry probes use this
+  // model's immutable revision instead of the bootstrap `resolve/main` path.
+  selectModelSource(modelSourceLoader.current());
+
+  const load = (async () => {
     const createPipeline = () =>
-      pipeline("image-segmentation", MODEL_ID, {
-        revision: MODEL_REVISION,
+      pipeline("image-segmentation", profile.modelId, {
+        revision: profile.revision,
         device: inferencePath,
-        // ISNet-ONNX publishes fp32/fp16/int8/uint8/q8 variants, unlike the old
-        // BiRefNet exports — `q8` for "fast" keeps SPEC.md §6.1's original
-        // "q8 on WASM" intent, `fp32` for "max" trades size/speed for precision.
-        dtype: DTYPES[qualityMode],
-        // `info.status` cycles through "initiate" -> "download" -> "progress"
-        // (many, per chunk) -> "done" per file, plus a synthesized
-        // "progress_total" aggregating all files (Transformers.js's
-        // `DefaultProgressCallback`). "progress" is too high-frequency to log
-        // usefully — the aggregate percent already covers it.
+        dtype: profile.dtype,
         progress_callback: (info) => {
           if (info.status === "progress_total") {
             post({
@@ -250,14 +284,15 @@ function loadSegmenter(
         // failure. Fail fast here instead, in the SPEC.md §7.3 "model load
         // failure" bucket (retry action) — see docs/KNOWN_GOTCHAS.md.
         if (typeof segmenter.processor !== "function") {
+          void segmenter.dispose();
           throw new Error(
-            `Model "${MODEL_ID}" (${DTYPES[qualityMode]}) loaded without a usable processor — likely a transient failure fetching repo metadata`,
+            `Model "${profile.modelId}" (${profile.dtype}) loaded without a usable processor`,
           );
         }
         return segmenter;
       });
 
-    cached = modelSourceLoader.load(createPipeline, {
+    const segmenter = await modelSourceLoader.load(createPipeline, {
       onFallback: (cdnError) => {
         post({
           type: "log",
@@ -266,20 +301,15 @@ function loadSegmenter(
         });
       },
     });
-    // Don't let a failed load permanently poison the cache — otherwise a
-    // rejected promise stays cached forever and `retry()` (SPEC.md §7.3)
-    // would just re-reject instantly instead of actually re-attempting.
-    // Attaching this extra `.catch()` (a separate derived promise) only
-    // evicts the cache entry; it doesn't change what callers awaiting
-    // `cached` itself observe.
-    cached.catch(() => {
-      if (segmenters.get(cacheKey) === cached) {
-        segmenters.delete(cacheKey);
-      }
-    });
-    segmenters.set(cacheKey, cached);
+    activeSegmenter = { key: cacheKey, segmenter };
+    return segmenter;
+  })();
+  loadingSegmenter = load;
+  try {
+    return await load;
+  } finally {
+    if (loadingSegmenter === load) loadingSegmenter = null;
   }
-  return cached;
 }
 
 function isOutOfMemoryError(error: unknown): boolean {
@@ -309,8 +339,37 @@ function toErrorMessage(error: unknown): string {
 }
 
 async function handleLoadModel(request: LoadModelRequest): Promise<void> {
+  const requestedMode = normalizeModelMode(request.qualityMode);
+  const requestedProfile = getProductionModel(requestedMode);
+  ben2FallbackMode = null;
   try {
-    await loadSegmenter(request.qualityMode, request.inferencePath);
+    let actualMode: QualityMode = requestedMode;
+    let actualPath = request.inferencePath;
+    if (requestedProfile.requiresWebGPU && request.inferencePath !== "webgpu") {
+      actualMode = "isnet-q8";
+      actualPath = "wasm";
+      ben2FallbackMode = actualPath;
+      post({
+        type: "fallback-to-isnet",
+        qualityMode: request.qualityMode,
+        reason: "webgpu-unavailable",
+      });
+    }
+    try {
+      await loadSegmenter(actualMode, actualPath);
+    } catch (error) {
+      if (requestedMode !== "ben2-fp16") throw error;
+      await disposeActiveSegmenter();
+      actualMode = "isnet-q8";
+      actualPath = request.inferencePath === "webgpu" ? "webgpu" : "wasm";
+      ben2FallbackMode = actualPath;
+      post({
+        type: "fallback-to-isnet",
+        qualityMode: request.qualityMode,
+        reason: isOutOfMemoryError(error) ? "device-out-of-memory" : "model-failed",
+      });
+      await loadSegmenter(actualMode, actualPath);
+    }
     post({
       type: "log",
       qualityMode: request.qualityMode,
@@ -319,8 +378,8 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
     post({
       type: "model-ready",
       qualityMode: request.qualityMode,
-      inferencePath: request.inferencePath,
-      dtype: DTYPES[request.qualityMode],
+      inferencePath: actualPath,
+      dtype: getProductionModel(actualMode).dtype,
     });
   } catch (error) {
     post({
@@ -332,26 +391,51 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
   }
 }
 
-async function segmentWithWebGpuFallback(
-  request: ProcessRequest,
-): ReturnType<ImageSegmentationPipeline> {
+async function segmentWithWebGpuFallback(request: ProcessRequest): Promise<{
+  output: Awaited<ReturnType<ImageSegmentationPipeline>>;
+  actualMode: AutomaticModelMode;
+}> {
+  const requestedMode = normalizeModelMode(request.qualityMode);
+  if (requestedMode === "ben2-fp16" && ben2FallbackMode) {
+    const segmenter = await loadSegmenter("isnet-q8", ben2FallbackMode);
+    return { output: await segmenter(request.source.blob), actualMode: "isnet-q8" };
+  }
   try {
     const segmenter = await loadSegmenter(request.qualityMode, request.inferencePath);
-    return await segmenter(request.source.blob);
+    return {
+      output: await segmenter(request.source.blob),
+      actualMode: requestedMode,
+    };
   } catch (error) {
+    if (requestedMode === "ben2-fp16") {
+      await disposeActiveSegmenter();
+      const path = request.inferencePath === "webgpu" ? "webgpu" : "wasm";
+      ben2FallbackMode = path;
+      post({
+        type: "fallback-to-isnet",
+        qualityMode: request.qualityMode,
+        reason: isOutOfMemoryError(error) ? "device-out-of-memory" : "model-failed",
+      });
+      const fallback = await loadSegmenter("isnet-q8", path);
+      return { output: await fallback(request.source.blob), actualMode: "isnet-q8" };
+    }
     if (request.inferencePath !== "webgpu" || !isWebGpuExecutionError(error)) {
       throw error;
     }
     post({ type: "fallback-to-wasm", qualityMode: request.qualityMode });
     const wasmSegmenter = await loadSegmenter(request.qualityMode, "wasm");
-    return wasmSegmenter(request.source.blob);
+    return {
+      output: await wasmSegmenter(request.source.blob),
+      actualMode: requestedMode,
+    };
   }
 }
 
 async function handleProcess(request: ProcessRequest): Promise<void> {
   const startedAt = performance.now();
   try {
-    const [segment] = await segmentWithWebGpuFallback(request);
+    const { output, actualMode } = await segmentWithWebGpuFallback(request);
+    const [segment] = output;
     if (!segment) {
       throw new Error("Model returned no segmentation mask");
     }
@@ -361,7 +445,7 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
     const processedImage = await compositeProcessedImage(
       request.source,
       { width, height, data: matteData },
-      request.qualityMode,
+      actualMode,
     );
     post({
       type: "process-result",
@@ -369,6 +453,7 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
       result: processedImage.result,
       matte: processedImage.alphaMatte!,
       durationMs: Math.round(performance.now() - startedAt),
+      actualMode,
     });
   } catch (error) {
     post({
@@ -426,13 +511,17 @@ async function handleRecomposite(request: RecompositeRequest): Promise<void> {
 
 workerScope.addEventListener("message", (event) => {
   const request = event.data;
-  if (request.type === "load-model") {
+  if (request.type === "dispose") {
+    void disposeActiveSegmenter().then(() =>
+      post({ type: "disposed", requestId: request.requestId }),
+    );
+  } else if (request.type === "load-model") {
     void handleLoadModel(request);
   } else if (request.type === "process") {
     void handleProcess(request);
   } else if (request.type === "extract-alpha-matte") {
     void handleExtractAlphaMatte(request);
-  } else {
+  } else if (request.type === "recomposite") {
     void handleRecomposite(request);
   }
 });

@@ -1,4 +1,5 @@
 export type {
+  AutomaticModelMode,
   BackgroundFill,
   BackgroundGradientStop,
   HexColor,
@@ -7,6 +8,11 @@ export type {
   DeviceCapabilities,
   SourceImage,
   AlphaMatte,
+  TrimapValue,
+  HardConstraintValue,
+  PixelRect,
+  Trimap,
+  RefinementConstraintMap,
   ProcessedImage,
 } from "./model/types";
 export {

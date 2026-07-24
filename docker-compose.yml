@@ -9,7 +9,9 @@ services:
         VITE_CF_BEACON_TOKEN: ${VITE_CF_BEACON_TOKEN:-}
     # Must match .github/workflows/ci.yml's GHCR publish target so the VPS
     # deploy job's `docker compose pull` retrieves the image built by CI.
-    image: ghcr.io/avatarsik6699/cutbgart:latest
+    # CI/deploy must set APP_IMAGE to ghcr.io/...@sha256:<build digest>.
+    # The local fallback is only a name for `docker compose up --build`.
+    image: ${APP_IMAGE:-cutbgart:local}
     restart: unless-stopped
     init: true # tini as PID 1 — correct signal handling, no zombie processes (SPEC.md §8.1)
     environment:
@@ -17,6 +19,20 @@ services:
       PORT: "3000"
     expose:
       - "3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     # Network-native way to confirm the app is actually serving, without
     # depending on nginx/TLS (which only work post deploy/init-letsencrypt.sh
     # on the real VPS) or publishing port 3000 to the host. Uses Node's
@@ -42,14 +58,27 @@ services:
     build:
       context: .
       target: model-sync
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     volumes:
-      - ./deploy/model-assets:/model-assets
+      # Mount the parent so the synchronizer can atomically rename the active
+      # directory and retain model-assets.previous for rollback.
+      - ./deploy:/deploy
 
   # Self-hosted Umami (custom event tracking, SPEC.md §7.6) + its own Postgres
   # instance. `umami-db`'s healthcheck gates `umami`'s startup so it never
   # boots against a not-yet-ready database.
   umami-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     restart: unless-stopped
     environment:
       POSTGRES_DB: umami
@@ -63,9 +92,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   umami:
-    image: docker.umami.is/umami-software/umami:postgresql-latest
+    image: docker.umami.is/umami-software/umami:postgresql-latest@sha256:8edfe4beaef13f9d1300619fa264ef250a3688df9cc54d24ca830ca31cb475ec
     restart: unless-stopped
     environment:
       DATABASE_URL: ${UMAMI_DATABASE_URL}
@@ -75,6 +114,16 @@ services:
         condition: service_healthy
     expose:
       - "3000"
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   # Self-hosted uptime monitoring (SPEC.md §7.6): pings the home page + this
   # stack's own `umami` container on `/api/heartbeat` every 5 min, alerts via
@@ -83,15 +132,25 @@ services:
   # monitor config. Bound to loopback only; reach it via an SSH tunnel
   # (`ssh -L 3001:localhost:3001 <host>`) rather than exposing it publicly.
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:1@sha256:3d632903e6af34139a37f18055c4f1bfd9b7205ae1138f1e5e8940ddc1d176f9
     restart: unless-stopped
     volumes:
       - uptime-kuma-data:/app/data
     ports:
       - "127.0.0.1:3001:3001"
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 300
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     restart: unless-stopped
     depends_on:
       - app
@@ -103,6 +162,22 @@ services:
       - ./deploy/model-assets:/srv/model-assets:ro
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=64m,mode=0755
+      - /var/run:size=8m,mode=0755
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   # TLS via Certbot + webroot (SPEC.md §8.2 — chosen over nginx-proxy +
   # acme-companion for this single-app deploy: fewer moving parts).
@@ -115,7 +190,7 @@ services:
   # reload). After that, this service only handles ongoing renewal (checks
   # twice daily, renews when within Let's Encrypt's 30-day window).
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:latest@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4
     restart: unless-stopped
     volumes:
       - certbot-webroot:/var/www/certbot
@@ -123,6 +198,16 @@ services:
     entrypoint: >
       /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w
       /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
 volumes:
   certbot-webroot:

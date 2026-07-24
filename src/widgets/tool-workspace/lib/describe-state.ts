@@ -1,4 +1,6 @@
 import type { RemoveBackgroundState } from "../../../features/remove-background";
+import type { GuidedBrushStatus } from "../../../features/select-object";
+import type { MattingRefinementStatus } from "../../../features/refine-matte";
 import type { UploadValidationError } from "../../../features/upload-image";
 import { m } from "@/paraglide/messages";
 
@@ -9,6 +11,32 @@ function uploadErrorMessage(error: UploadValidationError): string {
   }
   if (error.code === "exceeds-size-limit") return m.uploadTooLarge();
   return m.uploadResolutionError();
+}
+
+export function describeGuidedState(
+  status: GuidedBrushStatus,
+  progress: number | null,
+): string {
+  if (status === "loading-model")
+    return m.guidedLoadingModel({ progress: String(Math.round(progress ?? 0)) });
+  if (status === "encoding-image") return m.guidedEncodingImage();
+  if (status === "predicting") return m.guidedBrushRecomputing();
+  if (status === "preview") return m.guidedBrushPreviewReady();
+  if (status === "dirty") return m.guidedBrushDirty();
+  if (status === "error") return m.guidedBrushError();
+  if (status === "idle") return m.stateIdle();
+  return m.guidedBrushReady();
+}
+
+export function describeRefinementState(
+  status: MattingRefinementStatus,
+  progress: number | null,
+): string {
+  if (status === "fallback") return m.matteRefinementFallback();
+  if (status === "result") return m.stateResult();
+  if (status === "error") return m.matteRefinementDeterministicFallback();
+  if (status === "idle") return m.stateIdle();
+  return m.matteRefinementProgress({ progress: String(Math.round(progress ?? 0)) });
 }
 
 /**
@@ -27,7 +55,12 @@ export function describeState(
     case "idle":
       return m.stateIdle();
     case "model-loading": {
-      const modeLabel = state.qualityMode === "max" ? m.qualityMax() : m.qualityFast();
+      const modeLabel =
+        state.qualityMode === "max" || state.qualityMode === "isnet-fp32"
+          ? m.processingModePrecise()
+          : state.qualityMode === "ben2-fp16"
+            ? m.processingModeBen2()
+            : m.processingModeFast();
       return m.stateLoading({
         mode: lightweightMode ? `${modeLabel} · WASM` : modeLabel,
         progress: Math.round(state.progress),
