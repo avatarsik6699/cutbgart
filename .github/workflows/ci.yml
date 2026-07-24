@@ -190,6 +190,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify digest provenance before contacting production
         env:
+          GH_TOKEN: ${{ github.token }}
           IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
           IMAGE_DIGEST: ${{ needs.build-and-push.outputs.digest }}
         run: |
