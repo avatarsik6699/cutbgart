@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useReducer } from "react";
 
 import { trackEvent } from "@/shared/lib/analytics";
+import { inspectEncodedImageDimensions } from "@/shared/lib/image-file-inspection";
 
 import type {
   AlphaMatte,
@@ -84,7 +85,41 @@ export async function buildSourceImage(file: File): Promise<BuildSourceImageResu
     };
   }
 
-  const bitmap = await createImageBitmap(file);
+  const encodedDimensions = await inspectEncodedImageDimensions(file, file.type);
+  if (!encodedDimensions) {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The file is malformed or does not match its image format.",
+        action: "reset",
+      },
+    };
+  }
+  if (Math.max(encodedDimensions.width, encodedDimensions.height) > MAX_DIMENSION_PX) {
+    return {
+      ok: false,
+      error: {
+        code: "resolution-too-large",
+        message: `Image resolution (${String(encodedDimensions.width)}x${String(encodedDimensions.height)}) exceeds the ${String(MAX_DIMENSION_PX)}px limit on the longest side.`,
+        action: "reset",
+      },
+    };
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The image is malformed and could not be decoded.",
+        action: "reset",
+      },
+    };
+  }
   const { width, height } = bitmap;
   bitmap.close();
 
@@ -115,6 +150,7 @@ export interface UseBackgroundRemovalResult {
   selectFile: (file: File) => void;
   recomputeMaxQuality: () => void;
   retry: () => void;
+  retryInLightweightMode: () => void;
   reset: () => void;
   /** Enters `correcting` from `result` (Phase 07) — no worker/inference involved. */
   enterCorrecting: () => void;
@@ -452,6 +488,10 @@ export function useBackgroundRemoval(
       startAttempt(attempt.source, attempt.qualityMode);
     }
   }, [startAttempt]);
+  const retryInLightweightMode = useCallback(() => {
+    const attempt = lastAttemptRef.current;
+    if (attempt) startAttempt(attempt.source, "isnet-q8");
+  }, [startAttempt]);
 
   const reset = useCallback(() => {
     lastAttemptRef.current = null;
@@ -547,6 +587,7 @@ export function useBackgroundRemoval(
     selectFile,
     recomputeMaxQuality,
     retry,
+    retryInLightweightMode,
     reset,
     enterCorrecting,
     exitCorrecting,

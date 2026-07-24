@@ -16,12 +16,16 @@ describe("model info", () => {
     const manifest = JSON.parse(
       readFileSync(path.join(process.cwd(), "models.manifest.json"), "utf8"),
     ) as {
-      models: Array<{ id: string; revision: string; files: string[] }>;
+      assets: Array<{ path: string; revision: string }>;
     };
-    const [model] = manifest.models;
+    const modelPrefix = `${MODEL_ID}/resolve/${MODEL_REVISION}/`;
+    const modelAssets = manifest.assets.filter((asset) =>
+      asset.path.startsWith(modelPrefix),
+    );
 
-    expect(model).toMatchObject({ id: MODEL_ID, revision: MODEL_REVISION });
-    expect(model?.files).toEqual(
+    expect(modelAssets).not.toHaveLength(0);
+    expect(modelAssets.every((asset) => asset.revision === MODEL_REVISION)).toBe(true);
+    expect(modelAssets.map((asset) => asset.path.slice(modelPrefix.length))).toEqual(
       expect.arrayContaining([
         DTYPES.fast === "q8" ? "onnx/model_quantized.onnx" : "",
         DTYPES.max === "fp32" ? "onnx/model.onnx" : "",

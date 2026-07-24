@@ -24,7 +24,12 @@ class MockOffscreenCanvas {
 
 function makeFile(overrides: { type?: string; size?: number } = {}): File {
   const size = overrides.size ?? 1024;
-  return new File([new Uint8Array(size)], "photo.jpg", {
+  const bytes = new Uint8Array(size);
+  bytes.set([
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0x03, 0x01, 0x11,
+    0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+  ]);
+  return new File([bytes], "photo.jpg", {
     type: overrides.type ?? "image/jpeg",
   });
 }
@@ -87,5 +92,25 @@ describe("validateAndPrepareUpload", () => {
       expect(result.image.height).toBe(2048);
       expect(result.image.format).toBe("image/jpeg");
     }
+  });
+
+  it("rejects a decompression-bomb-like header before pixel decoding", async () => {
+    const decode = vi.fn();
+    vi.stubGlobal("createImageBitmap", decode);
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(16, 65_535);
+    view.setUint32(20, 65_535);
+
+    const result = await validateAndPrepareUpload(
+      new File([bytes], "bomb.png", { type: "image/png" }),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "exceeds-resolution-limit" },
+    });
+    expect(decode).not.toHaveBeenCalled();
   });
 });

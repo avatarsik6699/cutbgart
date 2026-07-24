@@ -1,54 +1,145 @@
 {
-  "$comment": "Declares the pinned Hugging Face model revision and ONNX Runtime Web version synchronized to the VPS directory served at cdn.cutbg.art/models (SPEC.md §6, §6.1). Binaries are never committed. The immutable revision makes the CDN path safe for long-lived caching.",
-  "models": [
+  "$comment": "Phase 22 lockfile for every model and ONNX Runtime Web asset served from cdn.cutbg.art/models. Paths and revisions are immutable; byteSize and sha256 are verified before an atomic release becomes active.",
+  "schemaVersion": 1,
+  "release": "v0.22.0",
+  "assets": [
     {
-      "id": "onnx-community/ISNet-ONNX",
+      "path": "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/config.json",
       "revision": "3fe6e3db3e32c69aadde61fe388ddb1a0574440c",
-      "files": [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/model.onnx",
-        "onnx/model_quantized.onnx"
-      ]
+      "byteSize": 27,
+      "sha256": "d0b94ab052ace79177085c66a00a3f014a973edb09999cb0108bb01e65ded060"
     },
     {
-      "id": "onnx-community/BEN2-ONNX",
+      "path": "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/preprocessor_config.json",
+      "revision": "3fe6e3db3e32c69aadde61fe388ddb1a0574440c",
+      "byteSize": 339,
+      "sha256": "7f6ea1f0aa49cdc77487e172f3dd67820a842512b4a203b14ffadfb8bd027d40"
+    },
+    {
+      "path": "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/onnx/model.onnx",
+      "revision": "3fe6e3db3e32c69aadde61fe388ddb1a0574440c",
+      "byteSize": 176114856,
+      "sha256": "8bc7e049e30cdda79a47e111673d3620096993b7c751ca2cb474591c23bfe4b5"
+    },
+    {
+      "path": "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/onnx/model_quantized.onnx",
+      "revision": "3fe6e3db3e32c69aadde61fe388ddb1a0574440c",
+      "byteSize": 44348381,
+      "sha256": "9f5c5fa3ccc771612d5290a648f055f94a4fa4ce289c6b3df7258e7e10e87a42"
+    },
+    {
+      "path": "onnx-community/BEN2-ONNX/resolve/c552aa82688edce09f0ac9d2e31ad53d9d629010/config.json",
       "revision": "c552aa82688edce09f0ac9d2e31ad53d9d629010",
-      "files": ["config.json", "preprocessor_config.json", "onnx/model_fp16.onnx"]
+      "byteSize": 80,
+      "sha256": "a1955f3bbdd628a0ea0339ec14bc98ba7b09e1a35d267e4ab01e902d2489dfa5"
     },
     {
-      "id": "Xenova/slimsam-77-uniform",
+      "path": "onnx-community/BEN2-ONNX/resolve/c552aa82688edce09f0ac9d2e31ad53d9d629010/preprocessor_config.json",
+      "revision": "c552aa82688edce09f0ac9d2e31ad53d9d629010",
+      "byteSize": 391,
+      "sha256": "447d9ccb2c4129ab0ca045fc293e7d79dbc45e293ac1e94818d865db77f65a54"
+    },
+    {
+      "path": "onnx-community/BEN2-ONNX/resolve/c552aa82688edce09f0ac9d2e31ad53d9d629010/onnx/model_fp16.onnx",
+      "revision": "c552aa82688edce09f0ac9d2e31ad53d9d629010",
+      "byteSize": 219121675,
+      "sha256": "dfdc25f421f32a0d1268e0f2ff2153d340e8f1d52d3dd16f5dc33c1ce85cedf1"
+    },
+    {
+      "path": "Xenova/slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/config.json",
       "revision": "7c8459c48dabad6291b384c97be46c451c25d6c4",
-      "files": [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/vision_encoder_quantized.onnx",
-        "onnx/prompt_encoder_mask_decoder_quantized.onnx"
-      ]
+      "byteSize": 379,
+      "sha256": "c90642d2451181d0e20f0beeb405687ffb3732b448aec3a6d2c44f41c5cc15f4"
     },
     {
-      "id": "Xenova/vitmatte-small-distinctions-646",
+      "path": "Xenova/slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/preprocessor_config.json",
+      "revision": "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      "byteSize": 574,
+      "sha256": "de84590cfab4d1514f8b1a04d9c61b14f56c2a9f3af31c656a44b046465b73a5"
+    },
+    {
+      "path": "Xenova/slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/onnx/vision_encoder_quantized.onnx",
+      "revision": "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      "byteSize": 8882165,
+      "sha256": "cce23c7b2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971"
+    },
+    {
+      "path": "Xenova/slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/onnx/prompt_encoder_mask_decoder_quantized.onnx",
+      "revision": "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      "byteSize": 5020129,
+      "sha256": "e95d495de5db3bd02d303c525b3003287c6df3d231c7b358559a5520c96fd372"
+    },
+    {
+      "path": "Xenova/vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/config.json",
       "revision": "358d428c452e5e0cd52955011a8b51944731d28e",
-      "files": [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/model_quantized.onnx",
-        "onnx/model.onnx"
-      ]
+      "byteSize": 963,
+      "sha256": "d07b3d82b218f9fbe701284e12282a64acd0726531c7f48018f5b1411860d577"
+    },
+    {
+      "path": "Xenova/vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/preprocessor_config.json",
+      "revision": "358d428c452e5e0cd52955011a8b51944731d28e",
+      "byteSize": 284,
+      "sha256": "0db558038b96a3f5c97e46d4ec8966fcc479e9aa58a391bca60b5094a5f7fee0"
+    },
+    {
+      "path": "Xenova/vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/onnx/model_quantized.onnx",
+      "revision": "358d428c452e5e0cd52955011a8b51944731d28e",
+      "byteSize": 27499369,
+      "sha256": "a14ddb1a85ac668f652dbeb19734b7dd5e70276b02b810db2061100249107774"
+    },
+    {
+      "path": "Xenova/vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/onnx/model.onnx",
+      "revision": "358d428c452e5e0cd52955011a8b51944731d28e",
+      "byteSize": 103885865,
+      "sha256": "a1cf48234c369faa3ea1711981d961fe1ec71f51e593f9d6553aa5a0e7d557e3"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.asyncify.mjs",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 47507,
+      "sha256": "7236653b8565da4046e459cd0e274123419a1d9f1f8f18fd36c28058346ca655"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.asyncify.wasm",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 24254953,
+      "sha256": "7e83cd6cee77e478bc96a7e91b198144fb5e4126287daf1f9b54bb195ebcd55a"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.jsep.mjs",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 46614,
+      "sha256": "3ee381d20a80f51a788a1c4a5872f6f1d047538dd4342f4af00062de5f9ea4c6"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.jsep.wasm",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 26827543,
+      "sha256": "78feeeb3d08f6bcee94d938ed322f69073bb8076b5f9d34697a574ffba8deb48"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.jspi.mjs",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 44523,
+      "sha256": "47f5232865f07cc6a11e825cac8dfd9b75bdf5f4a0889bde077e753ae93d3913"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.jspi.wasm",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 15046878,
+      "sha256": "7c28cdb40958a998f5aa0981d5cb8e57ac1e7e9b4d2f18a7d74e00dd9629d7a3"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.mjs",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 24180,
+      "sha256": "0a1e718d99c41b22c21f2520ff4f9e883a6b5533856e398d21816ee8eb8185d3"
+    },
+    {
+      "path": "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.wasm",
+      "revision": "npm:onnxruntime-web@1.27.0",
+      "byteSize": 13479978,
+      "sha256": "d1ab1b94b16a65b29d710d0b587b29e7bed336827577623913479b8afe8113e6"
     }
-  ],
-  "onnxRuntimeWeb": {
-    "$comment": "Must match package.json. Only the pinned Emscripten runtime variants selected dynamically by ONNX Runtime Web are synchronized from its documented jsDelivr release path.",
-    "version": "1.27.0",
-    "files": [
-      "ort-wasm-simd-threaded.asyncify.mjs",
-      "ort-wasm-simd-threaded.asyncify.wasm",
-      "ort-wasm-simd-threaded.jsep.mjs",
-      "ort-wasm-simd-threaded.jsep.wasm",
-      "ort-wasm-simd-threaded.jspi.mjs",
-      "ort-wasm-simd-threaded.jspi.wasm",
-      "ort-wasm-simd-threaded.mjs",
-      "ort-wasm-simd-threaded.wasm"
-    ]
-  }
+  ]
 }

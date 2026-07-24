@@ -2,6 +2,7 @@ import { Rocket, LockKeyhole, HandCoins } from "lucide-react";
 import { m } from "@/paraglide/messages";
 import { SiteShell } from "@/shared/ui";
 import { ToolWorkspace } from "@/widgets/tool-workspace";
+import { ModelStorageManager } from "@/features/model-storage";
 
 const FEATURES = [
   { icon: LockKeyhole, title: m.heroFeatureClientTitle, body: m.heroFeatureClientBody },
@@ -43,6 +44,9 @@ export function HomePage() {
         </section>
 
         <ToolWorkspace />
+        <aside className="mx-auto w-full max-w-4xl" aria-label={m.modelStorageTitle()}>
+          <ModelStorageManager />
+        </aside>
       </main>
     </SiteShell>
   );

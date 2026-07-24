@@ -234,15 +234,20 @@
 - **Prevention**: do not mutate Transformers.js model/WASM host settings inside independent async
   loads. Any future multi-source logic must coordinate through the same loader.
 
-### Gitignored generated assets still need an ESLint global ignore
+### Gitignored generated assets (including atomic rollback siblings) still need an ESLint global ignore
 
 - **Symptoms**: after `pnpm sync-model-assets`, `pnpm lint` reports dozens of missing-rule errors
   inside `deploy/model-assets/onnxruntime-web/*`, even though that directory is in `.gitignore`.
 - **Root cause**: ESLint flat config does not inherit Git ignore patterns. `eslint .` discovers the
   upstream ORT JavaScript bundles unless its own global ignore list excludes the host asset mount.
-- **Fix**: keep `deploy/model-assets` in the first, global `ignores` block of `eslint.config.js`.
-- **Prevention**: any future generated/downloaded directory inside the repo must be excluded from
-  both Git and the tools that recursively scan the working tree.
+- **Fix**: keep `deploy/model-assets*` in the first, global `ignores` block of
+  `eslint.config.js` and in `.dockerignore`. The wildcard is intentional: Phase 22's atomic
+  synchronizer also owns `model-assets.previous`, transient `model-assets.staging-*`, and rollback
+  swap directories. Without the Docker ignore, every app build needlessly sends hundreds of
+  megabytes of model rollback data as build context.
+- **Prevention**: any future generated/downloaded directory inside the repo — including atomic
+  staging/backup siblings — must be excluded from both Git and the tools that recursively scan the
+  working tree.
 
 ### Pre-optimize lazily imported dependencies in Vite development
 

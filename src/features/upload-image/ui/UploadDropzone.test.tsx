@@ -5,7 +5,12 @@ import { UploadDropzone } from "./UploadDropzone";
 
 function makeFile(overrides: { type?: string; size?: number } = {}): File {
   const size = overrides.size ?? 1024;
-  return new File([new Uint8Array(size)], "photo.jpg", {
+  const bytes = new Uint8Array(size);
+  bytes.set([
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0x03, 0x01, 0x11,
+    0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+  ]);
+  return new File([bytes], "photo.jpg", {
     type: overrides.type ?? "image/jpeg",
   });
 }

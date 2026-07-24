@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChoosePhotoButton } from "./ChoosePhotoButton";
 
 function makeFile(): File {
-  return new File([new Uint8Array(1024)], "photo.jpg", { type: "image/jpeg" });
+  const bytes = new Uint8Array(1024);
+  bytes.set([
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0x03, 0x01, 0x11,
+    0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+  ]);
+  return new File([bytes], "photo.jpg", { type: "image/jpeg" });
 }
 
 beforeEach(() => {

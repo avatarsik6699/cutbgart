@@ -10,3 +10,6 @@ allowBuilds:
 # just breaks Docker builds run shortly after `pnpm add`. See
 # docs/KNOWN_GOTCHAS.md.
 minimumReleaseAge: 0
+overrides:
+  adm-zip: 0.6.0
+  sharp: 0.35.3

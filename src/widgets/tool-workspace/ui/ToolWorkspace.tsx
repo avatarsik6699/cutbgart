@@ -54,6 +54,7 @@ import {
 } from "../../../features/upload-image";
 import { Button } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
+import { clearModelCache } from "@/features/model-storage";
 import {
   describeGuidedState,
   describeRefinementState,
@@ -360,6 +361,7 @@ export function ToolWorkspace() {
     selectFile,
     recomputeMaxQuality,
     retry,
+    retryInLightweightMode,
     reset,
     enterCorrecting,
     exitCorrecting,
@@ -932,6 +934,8 @@ export function ToolWorkspace() {
     : state.status === "error"
       ? { message: state.error.message, action: state.error.action }
       : null;
+  const verifiedAssetError =
+    state.status === "error" && state.error.code === "model-load-failed";
 
   // Two grid slots (`.tool-workspace-grid`, globals.css): `surface` is the
   // visual/preview area (upload UI, batch grid, before/after slider, mask
@@ -1580,8 +1584,31 @@ export function ToolWorkspace() {
           role="alert"
           className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive [grid-area:error]"
         >
-          <p>{displayError.message}</p>
-          {displayError.action === "retry" ? (
+          <p>{verifiedAssetError ? m.modelAssetRecovery() : displayError.message}</p>
+          {verifiedAssetError ? (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={handleRetry}>
+                {m.tryAgain()}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void clearModelCache().then(retry)}
+              >
+                {m.modelAssetResetAndRetry()}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQualityMode("isnet-q8");
+                  retryInLightweightMode();
+                }}
+              >
+                {m.modelAssetUseLighter()}
+              </Button>
+            </div>
+          ) : displayError.action === "retry" ? (
             <Button
               type="button"
               variant="outline"

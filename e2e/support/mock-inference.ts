@@ -110,6 +110,21 @@ export async function installMockInference(page: Page): Promise<void> {
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
           if (message.type === "load-model") {
+            if (
+              (window as unknown as { __mockModelAssetFailureOnce?: boolean })
+                .__mockModelAssetFailureOnce
+            ) {
+              (
+                window as unknown as { __mockModelAssetFailureOnce?: boolean }
+              ).__mockModelAssetFailureOnce = false;
+              this.emit({
+                type: "error",
+                code: "model-load-failed",
+                qualityMode: message.qualityMode,
+                message: "verified model asset unavailable or corrupt",
+              });
+              return;
+            }
             const ben2Fallback =
               message.qualityMode === "ben2-fp16" &&
               ((window as unknown as { __mockBen2Failure?: boolean }).__mockBen2Failure ||

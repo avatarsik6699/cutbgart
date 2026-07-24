@@ -305,5 +305,15 @@
   "avatarBody1": "A messaging app, social network, or company site avatar usually needs a portrait without a distracting background — a room, a street, or random people nearby. Upload your photo and the background around the silhouette is removed, leaving a transparent PNG that fits neatly into a round or square profile frame.",
   "avatarBody2": "Use the transparent result as-is if the platform supports transparency, or place it over a solid or brand color. Processing happens locally: your photo is never sent to a server and isn't stored anywhere except your own device.",
   "avatarExampleAlt": "Avatar photo before and after background removal",
-  "avatarExampleCaption": "Before, on the left: the photo prior to processing. After, on the right: the finished silhouette on a transparent background."
+  "avatarExampleCaption": "Before, on the left: the photo prior to processing. After, on the right: the finished silhouette on a transparent background.",
+  "modelStorageTitle": "Downloaded model storage",
+  "modelStoragePrivacy": "Only published processing files are stored here. Source images, filenames, masks, and edited results stay in the active browser session and are not part of this cache.",
+  "modelStorageLoading": "Checking downloaded model storage…",
+  "modelStorageUsage": "Approximately {usage} across {count} downloaded files.",
+  "modelStorageClear": "Clear downloaded models",
+  "modelStorageCleared": "Downloaded models cleared. Active editor work was kept.",
+  "modelStorageError": "Storage information is unavailable. Reload the page and try again.",
+  "modelAssetRecovery": "A verified processing file is unavailable or corrupt. Retry, clear downloaded models, or switch to the supported lighter mode.",
+  "modelAssetResetAndRetry": "Clear models and retry",
+  "modelAssetUseLighter": "Use lighter mode"
 }

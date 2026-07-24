@@ -1,118 +1,109 @@
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  buildModelAssetPlan,
-  buildOnnxRuntimeAssetPlan,
+  buildAssetPlan,
   validateManifest,
-  type ModelManifest,
+  verifyAssetFile,
+  type ModelAssetManifest,
 } from "./sync-model-assets";
 
-const manifest: ModelManifest = {
-  models: [
+const tempDirectories: string[] = [];
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
+const manifest: ModelAssetManifest = {
+  schemaVersion: 1,
+  release: "v0.22.0",
+  assets: [
     {
-      id: "onnx-community/ISNet-ONNX",
+      path: "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/config.json",
       revision: "3fe6e3db3e32c69aadde61fe388ddb1a0574440c",
-      files: [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/model_quantized.onnx",
-        "onnx/model.onnx",
-      ],
+      byteSize: 2,
+      sha256: sha256("{}"),
     },
     {
-      id: "onnx-community/BEN2-ONNX",
-      revision: "c552aa82688edce09f0ac9d2e31ad53d9d629010",
-      files: ["config.json", "preprocessor_config.json", "onnx/model_fp16.onnx"],
-    },
-    {
-      id: "Xenova/slimsam-77-uniform",
-      revision: "7c8459c48dabad6291b384c97be46c451c25d6c4",
-      files: [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/vision_encoder_quantized.onnx",
-        "onnx/prompt_encoder_mask_decoder_quantized.onnx",
-      ],
-    },
-    {
-      id: "Xenova/vitmatte-small-distinctions-646",
-      revision: "358d428c452e5e0cd52955011a8b51944731d28e",
-      files: [
-        "config.json",
-        "preprocessor_config.json",
-        "onnx/model_quantized.onnx",
-        "onnx/model.onnx",
-      ],
+      path: "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.wasm",
+      revision: "npm:onnxruntime-web@1.27.0",
+      byteSize: 4,
+      sha256: sha256("wasm"),
     },
   ],
-  onnxRuntimeWeb: {
-    version: "1.27.0",
-    files: [
-      "ort-wasm-simd-threaded.asyncify.mjs",
-      "ort-wasm-simd-threaded.asyncify.wasm",
-      "ort-wasm-simd-threaded.jsep.mjs",
-      "ort-wasm-simd-threaded.jsep.wasm",
-      "ort-wasm-simd-threaded.jspi.mjs",
-      "ort-wasm-simd-threaded.jspi.wasm",
-      "ort-wasm-simd-threaded.mjs",
-      "ort-wasm-simd-threaded.wasm",
-    ],
-  },
 };
 
+afterEach(async () => {
+  await Promise.all(
+    tempDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+});
+
 describe("model asset manifest", () => {
-  it("maps the pinned Hugging Face revision to the Nginx asset layout", () => {
+  it("maps immutable model and runtime paths to pinned upstream sources", () => {
     validateManifest(manifest, "1.27.0");
-    expect(buildModelAssetPlan(manifest)).toContainEqual({
-      source:
-        "https://huggingface.co/onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/onnx/model_quantized.onnx",
-      relativePath:
-        "onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/onnx/model_quantized.onnx",
+    expect(buildAssetPlan(manifest).map(({ source }) => source)).toEqual([
+      "https://huggingface.co/onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/config.json",
+      "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort-wasm-simd-threaded.wasm",
+    ]);
+  });
+
+  it("rejects mutable, duplicate, traversing, or malformed records", () => {
+    const mutable = structuredClone(manifest);
+    mutable.assets[0]!.revision = "main";
+    expect(() => validateManifest(mutable, "1.27.0")).toThrow(/revision/);
+
+    const duplicate = structuredClone(manifest);
+    duplicate.assets.push({ ...duplicate.assets[0]! });
+    expect(() => validateManifest(duplicate, "1.27.0")).toThrow(/Duplicate/);
+
+    const traversal = structuredClone(manifest);
+    traversal.assets[0]!.path = "../escape.onnx";
+    expect(() => validateManifest(traversal, "1.27.0")).toThrow(/Unsafe/);
+
+    const badHash = structuredClone(manifest);
+    badHash.assets[0]!.sha256 = "not-a-digest";
+    expect(() => validateManifest(badHash, "1.27.0")).toThrow(/sha256/);
+  });
+
+  it("detects cached size and same-size content corruption", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "cutbg-model-test-"));
+    tempDirectories.push(directory);
+    const filePath = path.join(directory, "asset");
+    const asset = {
+      path: "asset",
+      revision: "test",
+      byteSize: 4,
+      sha256: sha256("good"),
+    };
+
+    await writeFile(filePath, "good");
+    expect(await verifyAssetFile(filePath, asset)).toBe(true);
+    await writeFile(filePath, "evil");
+    expect(await verifyAssetFile(filePath, asset)).toBe(false);
+    await writeFile(filePath, "shorter");
+    expect(await verifyAssetFile(filePath, asset)).toBe(false);
+  });
+
+  it("keeps the browser manifest contract in sync with the operator manifest", async () => {
+    const [operatorRaw, browserRaw] = await Promise.all([
+      readFile(path.resolve("models.manifest.json"), "utf8"),
+      readFile(path.resolve("public/models.manifest.json"), "utf8"),
+    ]);
+    const operator = JSON.parse(operatorRaw) as ModelAssetManifest;
+    const browser = JSON.parse(browserRaw) as ModelAssetManifest;
+    expect({
+      schemaVersion: browser.schemaVersion,
+      release: browser.release,
+      assets: browser.assets,
+    }).toEqual({
+      schemaVersion: operator.schemaVersion,
+      release: operator.release,
+      assets: operator.assets,
     });
-  });
-
-  it("rejects an ONNX Runtime version mismatch", () => {
-    expect(() => validateManifest(manifest, "1.28.0")).toThrow(/does not match/);
-  });
-
-  it("maps pinned ONNX Runtime variants to the CDN asset layout", () => {
-    expect(buildOnnxRuntimeAssetPlan(manifest)).toContainEqual({
-      source:
-        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort-wasm-simd-threaded.asyncify.mjs",
-      relativePath: "onnxruntime-web/1.27.0/ort-wasm-simd-threaded.asyncify.mjs",
-    });
-  });
-
-  it("maps BEN2 and SlimSAM immutable assets without bundling binaries", () => {
-    const plan = buildModelAssetPlan(manifest);
-    expect(
-      plan.some((asset) =>
-        asset.relativePath.includes(
-          "BEN2-ONNX/resolve/c552aa82688edce09f0ac9d2e31ad53d9d629010/onnx/model_fp16.onnx",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      plan.some((asset) =>
-        asset.relativePath.includes(
-          "slimsam-77-uniform/resolve/7c8459c48dabad6291b384c97be46c451c25d6c4/onnx/vision_encoder_quantized.onnx",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      plan.some((asset) =>
-        asset.relativePath.includes(
-          "vitmatte-small-distinctions-646/resolve/358d428c452e5e0cd52955011a8b51944731d28e/onnx/model.onnx",
-        ),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects an incomplete ONNX Runtime asset set", () => {
-    const incomplete = structuredClone(manifest);
-    incomplete.onnxRuntimeWeb.files.pop();
-    expect(() => validateManifest(incomplete, "1.27.0")).toThrow(
-      /missing ONNX Runtime Web file/,
-    );
+    expect(operator.assets.length).toBeGreaterThan(20);
   });
 });

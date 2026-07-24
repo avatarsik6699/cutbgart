@@ -1,0 +1,5 @@
+Contact: https://t.me/+HaqBWI1A3vg4MWJi
+Expires: 2027-07-23T23:59:59Z
+Preferred-Languages: en, ru
+Canonical: https://cutbg.art/.well-known/security.txt
+Policy: https://github.com/avatarsik6699/cutbgart/security/policy

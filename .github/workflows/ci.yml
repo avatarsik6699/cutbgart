@@ -6,68 +6,119 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Review dependency and license changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development
+          license-check: true
+          vulnerability-check: true
+
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
-      # Paraglide output and TanStack Router's route tree are generated and
-      # gitignored. A clean runner needs both before type-aware ESLint.
       - run: pnpm generate:code
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
-      - name: Architecture lint (Steiger — FSD boundaries, SPEC.md §7.7)
+      - name: Architecture lint (Steiger — FSD boundaries)
         run: pnpm arch:lint
       - run: pnpm test
 
-  # No e2e/Playwright job here by design: e2e is a host-only, human-in-the-loop
-  # check run locally after implementing a phase (or to reproduce a reported
-  # issue) — never in Docker, never in CI. See AGENTS.md core rule 8.
+  security-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit production packages
+        run: pnpm audit --prod --audit-level high
+      - name: Inventory production licenses
+        run: pnpm licenses list --prod --json > licenses.production.json
+      - name: Enforce reviewed production licenses
+        run: pnpm security:licenses
+      - name: Scan repository vulnerabilities, secrets and misconfiguration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0, Trivy 0.70.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          format: table
+      - name: Upload reviewed license inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-license-inventory
+          path: licenses.production.json
+          retention-days: 30
 
+  # Playwright stays host-only by project contract; it is never run in CI.
   build-and-push:
-    needs: lint-and-test
+    needs: [lint-and-test, security-source]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     outputs:
-      image: ${{ steps.meta.outputs.tags }}
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+      - id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=raw,value=latest
             type=sha,format=long
-
-      - uses: docker/build-push-action@v7
+      - id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           push: true
@@ -75,52 +126,103 @@ jobs:
             VITE_MODEL_CDN_BASE_URL=${{ vars.VITE_MODEL_CDN_BASE_URL }}
             VITE_UMAMI_SCRIPT_URL=${{ vars.VITE_UMAMI_SCRIPT_URL }}
             VITE_UMAMI_WEBSITE_ID=${{ vars.VITE_UMAMI_WEBSITE_ID }}
-            VITE_CF_BEACON_TOKEN=${{ secrets.VITE_CF_BEACON_TOKEN }}
+            VITE_CF_BEACON_TOKEN=${{ vars.VITE_CF_BEACON_TOKEN }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+      - name: Scan production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          format: table
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          scanners: vuln
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: 0
+          skip-setup-trivy: true
+      - name: Upload machine-readable SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
+      - name: Attest image provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Attest image SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
 
   deploy:
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       packages: read
+      attestations: read
     steps:
-      - uses: actions/checkout@v4
-
-      # The VPS is not required to hold GitHub credentials. Copy only the
-      # deployment/model-sync contract through the existing VPS SSH key.
-      - name: Copy Phase 14 deployment configuration
-        uses: appleboy/scp-action@v1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify digest provenance before contacting production
+        env:
+          IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
+          IMAGE_DIGEST: ${{ needs.build-and-push.outputs.digest }}
+        run: |
+          gh attestation verify "oci://${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --source-ref refs/heads/main \
+            --deny-self-hosted-runners
+      - name: Copy deployment and verified-model contract
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: ".dockerignore,Dockerfile,docker-compose.yml,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,models.manifest.json,scripts/sync-model-assets.ts,deploy/nginx/app.conf,deploy/init-letsencrypt.sh"
+          source: ".dockerignore,Dockerfile,docker-compose.yml,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,models.manifest.json,public/models.manifest.json,scripts/sync-model-assets.ts,deploy/nginx/app.conf,deploy/init-letsencrypt.sh"
           target: ${{ secrets.VPS_APP_DIR }}
           overwrite: true
-
-      # SSH to the VPS, synchronize the pinned Phase 14 model assets, pull the
-      # freshly pushed app image, and restart the stack. The public weights
-      # remain outside the app image.
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
+      - name: Deploy the verified digest over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         env:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_IMAGE: ${{ needs.build-and-push.outputs.image }}@${{ needs.build-and-push.outputs.digest }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN
+          envs: GHCR_USER,GHCR_TOKEN,APP_IMAGE
           script: |
-            set -e
+            set -eu
             cd ${{ secrets.VPS_APP_DIR }}
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose --profile maintenance run --rm --build model-sync
-            docker compose pull app
-            docker compose up -d
+            APP_IMAGE="$APP_IMAGE" docker compose pull app
+            APP_IMAGE="$APP_IMAGE" docker compose up -d
             docker logout ghcr.io

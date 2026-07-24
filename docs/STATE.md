@@ -40,6 +40,19 @@
 | PHASE_19 | ✅ done | v0.19.0 | ✅ | 🤖 agent | Production Trimap & Alpha Refinement |
 | PHASE_20 | ✅ done | v0.20.0 | ✅ | 🤖 agent | Foreground Edge Quality & Runtime Hardening |
 | PHASE_21 | ✅ done | v0.21.0 | ✅ | 🤖 agent | Brush-Guided Object Correction |
+| PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
+| PHASE_23 | ⏳ pending | v0.23.0 | ⬜ | — | Release Reliability & Operations |
+| PHASE_24 | ⏳ pending | v0.24.0 | ⬜ | — | Legal & Data Governance Audit |
+| PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Consent & Legal Surfaces |
+| PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
+| PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Automatic-First Workspace |
+| PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Unified Cutout Tool |
+| PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Enhancements Tool & Committed History |
+| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Background & Export Tools |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Accessibility, Device & Product Validation |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -51,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `21` · **Phase in progress:** `—`
+**Phase completed:** `22` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -618,6 +631,26 @@ alternatives collapse, and automatic-base bytes outside local influence zones re
 Latest-revision-wins orchestration and lifecycle run tokens prevent stale inference or result
 application after edits, reset, cancel, batch changes, or disposal.
 
+```ts
+// models.manifest.json + scripts/sync-model-assets.ts — Phase 22
+interface VerifiedModelAsset {
+  path: string;
+  revision: string;
+  byteSize: number;
+  sha256: string;
+}
+
+interface ModelAssetManifest {
+  schemaVersion: 1;
+  release: string;
+  assets: VerifiedModelAsset[];
+}
+```
+
+Phase 22 makes the model/WASM manifest the immutable release contract for synchronized browser
+assets. Synchronization verifies source revision, byte size and SHA-256 before atomic activation,
+retains the previous verified release for rollback, and never treats a filename alone as trust.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -650,6 +683,7 @@ application after edits, reset, cancel, batch changes, or disposal.
 | `GET` | `/en/remove-background-from-product-photo`, `/en/remove-background-from-id-photo`, `/en/remove-background-from-logo`, `/en/remove-background-from-avatar` | none | English-locale counterparts of the four Russian scenario pages (Phase 12, SPEC.md §5.1, §5.5) |
 | `GET` | `/sitemap.xml` | none | Phase 12 contract: locale-aware build output containing both locale URLs and per-page `hreflang` alternates; supersedes the Phase 06 baseline above |
 | `GET`, `HEAD` | `https://cdn.cutbg.art/models/{manifest-path}` | none | Public pinned ISNet/config/ONNX Runtime asset with CORS, byte ranges, immutable caching, and Cloudflare edge delivery (Phase 14) |
+| `GET` | `/.well-known/security.txt` | none | RFC 9116 vulnerability-disclosure contact, expiry, canonical URL and policy link (Phase 22) |
 
 ### DB Schema
 
@@ -672,6 +706,13 @@ application after edits, reset, cancel, batch changes, or disposal.
   embeddings, accepted mattes, and bounded delta histories remain in browser-tab memory and are
   discarded on reset/source change/unmount. Only `docs/PHASE_21_RUNTIME_EVIDENCE.md` persists, with
   image-free runtime path, bounded counts, classified failures, timings, and pass/fail observations.
+- Phase 22 versions the browser model cache from the verified model/WASM manifest, removes orphaned
+  releases during activation, detects missing/corrupt bytes, and exposes a user-invoked clear action
+  that affects only published model assets. Source images, filenames, EXIF, masks, composites and
+  active editor work never enter or leave through this cache lifecycle.
+- Phase 22 release artifacts include a machine-readable CycloneDX SBOM and GitHub provenance/SBOM
+  attestations bound to the pushed production image digest. They contain build and dependency
+  metadata only, never user or image data.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -748,6 +789,151 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-24 — Phase 22 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_22 gate passed and architect requested finalization
+
+### Changes / Decision
+- Hardened the browser/SSR/Nginx boundary with an evidence-backed threat model, tested security
+  headers, bounded upload/export privacy checks, owned `security.txt`, abuse controls and
+  vulnerability-response runbooks.
+- Hardened containers and GitHub Actions with immutable digests/SHAs, least privilege, production
+  environment deployment, dependency/license/repository/container scanning, machine-readable SBOMs
+  and digest-bound GitHub attestations verified before deploy.
+- Replaced model/WASM trust-by-filename with a versioned SHA-256 manifest, verified atomic
+  synchronization/rollback, corruption recovery, cache migration/orphan cleanup, usage reporting
+  and a safe user-invoked model-cache clear action.
+- Local gate evidence passed build, type-check, 299 unit/integration tests, the 288-case
+  cross-browser Playwright matrix after one isolated Mobile Safari lazy-image retry, real-model
+  inference, Compose health/smoke, license/audit checks, model manifest verification, Trivy
+  filesystem/image scans, and CycloneDX SBOM validation.
+
+### Affected Phases / Consequences
+- PHASE_23 may build release reliability and operations on the verified image digest, SBOM,
+  attestation, rollback and production-security contracts established here.
+- No Phase-22 security exception is active; future exceptions require an owner, expiry,
+  reachability rationale and compensating control in this Project Log.
+
+## 2026-07-24 — Production-readiness roadmap promoted ahead of editor expansion
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect approval to record the July-2026 production-readiness research in full
+and extend/reorder the forward roadmap before implementation begins
+
+### Changes / Decision
+- `SPEC.md` v1.16 makes security and operations first-class product contracts. PHASE_22 now owns
+  threat modelling, header/privacy tests, container/CI hardening, dependency/license/container
+  gates, model/WASM integrity and cache lifecycle, SBOM/attestation, abuse controls,
+  `security.txt`, and vulnerability response.
+- PHASE_23 now owns immutable digest releases, candidate/post-deploy smoke, verified rollback,
+  release identity, deployment concurrency/audit, owner-approved SLI/SLOs and alerts, bounded
+  encrypted operational backups/restore drills, capacity/degradation exercises, incident/
+  maintenance runbooks, and a deterministic mocked Chromium critical path in pull-request CI.
+  Full cross-browser, WebGPU and real-model Playwright remains host-only.
+- The legal audit and approved surfaces move to PHASE_24–25 so present analytics/privacy claims and
+  future metadata governance are resolved before broader editor work. Owner/legal facts remain
+  explicit future gate inputs, not facts inferred by an agent.
+- The existing editor, batch, onboarding and refactor contracts move intact to PHASE_26–33 with
+  repaired metadata, dependencies, tags, paths and cross-references. Batch parity remains
+  cross-cutting through PHASE_26–30 and is consolidated in PHASE_31.
+- New PHASE_34 adds manual WCAG-EM/WCAG 2.2 AA and assistive-technology evidence, a limited physical
+  device/browser/degradation matrix, constrained-device performance, deterministic visual
+  regression, consented usability sessions, RU/EN editorial QA, a truthful accessibility
+  statement, and an evidence-linked readiness report.
+- The production maintenance contract is now explicit: per-release verification, monthly security/
+  dependency/backup review, quarterly restore/SLO/header/device/accessibility sampling, and annual
+  or material-change threat/legal/accessibility review. The already implemented ZIP dependency is
+  normalized to `client-zip` v2; the stale specification placeholder is removed.
+
+### Affected Phases / Consequences
+- PHASE_22–34 are pending sequential contracts and none is marked `NEEDS_REVIEW`.
+- PHASE_01–21 remain completed historical contracts. `STATE.md` § Current Contract remains Phase 21
+  until a new phase is implemented, gated, committed and closed.
+- Earlier 2026-07-24 Project Log entries remain immutable historical records; their old phase
+  numbers are superseded by this entry and the current Phase Status/SPEC tables.
+
+## 2026-07-24 — Enhancements naming, batch invariance, guidance, legal, and audit roadmap
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect review rejected the ambiguous `Edges` label, required every future
+editor capability to preserve multiple-upload behavior, and requested dedicated onboarding, legal/
+data-governance, and whole-project refactoring phases
+
+### Changes / Decision
+- `SPEC.md` v1.15 renames the public `Edges` tool to `Улучшения` / `Enhancements` and the future
+  operation/tool IDs to `enhance`. The name describes user benefit and can group local model-based
+  or deterministic finishing operations; Phase 25 still ships only fine-detail and colour-halo
+  improvements.
+- Batch behavior is now a cross-cutting delivery invariant: Phases 22–26 each support a single
+  image and the selected completed item from a multiple upload. Phase 27 is a consolidation and
+  stress/regression gate, not the first batch-parity implementation.
+- PHASE_28 adds research, an asset/content preparation pipeline, contextual animated/static help,
+  replayable onboarding, reduced-motion support, and single/batch guidance without blocking the
+  automatic-first path.
+- PHASE_29 separates legal/data discovery from UI implementation: operator and target-market facts,
+  deployed/future field-level data inventory, applicability/legal-basis/retention/processor/
+  transfer/notification matrices, banner/offer/consent decision, bilingual drafts, and qualified
+  review. It must verify the current unconditional analytics-script loading and the privacy page's
+  absolute “no personal data” claim against real payload/configuration evidence. Future metadata
+  collection remains forbidden until this contract and Phase 30 land.
+- PHASE_30 implements only the approved legal route/footer/privacy-choice matrix, with truthful
+  cookie/storage language, non-essential gating, easy rejection/withdrawal, and no dark patterns.
+- PHASE_31 performs a measured architecture/duplication/React render/effect/resource/bundle/
+  responsiveness audit and bounded refactoring with before/after evidence and full regressions.
+
+### Affected Phases / Consequences
+- PHASE_22–27 — pending contracts were updated surgically for shared single/batch delivery and the
+  Enhancements naming; none remains `NEEDS_REVIEW`.
+- PHASE_28–31 — new pending sequential contracts were added despite earlier phases being pending
+  because the architect explicitly requested a forward roadmap; dependencies still require each
+  preceding gate to pass before implementation.
+- PHASE_01–21 remain completed historical contracts. `STATE.md` § Current Contract is unchanged
+  until a new phase is implemented, gated, and closed.
+
+## 2026-07-24 — Automatic-first editor simplification and focused roadmap approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect manual testing found that model/runtime details, parallel correction
+panels, candidate navigation, quota explanations, and unclear continuation actions overwhelm the
+background-removal journey; the architect requested a simpler remove.bg-like flow and an
+architecture that does not block a possible future product-card editor
+
+### Changes / Decision
+- `SPEC.md` v1.14 separates the internal ML lifecycle from a new public journey: upload with a
+  user-facing processing choice starts automatic removal immediately, then one stable editor stage
+  exposes `Cutout`, `Edges`, and `Background` plus committed undo/redo and Download.
+- Public automatic modes are `Fast`, `Optimal`, and `Maximum quality (Beta)`. Model IDs, dtypes,
+  byte counts, execution providers, prompt quotas, candidate scores, and diagnostic state names are
+  removed from the primary UI. Maximum quality retains an accessible compatibility warning and a
+  one-time fallback to Optimal.
+- Cutout consolidates semantic and exact painting as `Magic`/`Manual`, automatically uses the
+  intent-best mask, removes candidate/history-shaped result navigation and `Continue from this
+  result`, and turns Apply into the explicit repeated-pass boundary. Clearing the final Magic mark
+  over an existing base restores that base locally instead of trapping the user behind a disabled
+  recompute action.
+- Soft-alpha refinement and edge-colour cleanup become one `Edges` tool. Background becomes its own
+  draft/apply tool. Toolbar history owns only committed document operations; active brush draft
+  history stays local and icon-based.
+- Phase 22 introduces a bounded browser-memory `EditDocument`/artifact/history kernel and separates
+  orchestration from the current monolithic workspace before the visual migration. Phases 23–27
+  then deliver the shell, Cutout, Edges/history, Background/export, and batch parity in order.
+- Rich layers, free transforms, shadows, perspective, text, and templates are not mixed into this
+  cycle. They require a separately loaded future Studio surface and a new approved spec; the
+  current app remains focused on background removal and background finishing.
+
+### Affected Phases / Consequences
+- PHASE_22–27 — new pending sequential contracts own this redesign.
+- PHASE_01–21 remain completed historical contracts and are not marked `NEEDS_REVIEW`; v1.14
+  supersedes their public interaction only through future implementation and does not claim the
+  current code already matches the new workflow.
+- `STATE.md` § Current Contract remains unchanged until the relevant new phase is implemented,
+  gated, and closed. There is no active blocker and no authorization to implement Studio features.
 
 ## 2026-07-23 — Phase 21 complete
 

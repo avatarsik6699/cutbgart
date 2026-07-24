@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "arch:lint": "steiger ./src",
+    "security:licenses": "node scripts/check-production-licenses.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "tsx scripts/run-e2e.ts",

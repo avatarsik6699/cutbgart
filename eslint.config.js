@@ -12,7 +12,7 @@ export default tseslint.config(
       ".output",
       ".nitro",
       "node_modules",
-      "deploy/model-assets",
+      "deploy/model-assets*",
       "src/routeTree.gen.ts",
       "src/paraglide",
     ],

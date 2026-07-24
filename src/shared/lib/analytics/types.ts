@@ -10,4 +10,9 @@ export type AnalyticsEvent =
   | "download_clicked"
   | "webgpu_unavailable_fallback";
 
-export type AnalyticsEventData = Record<string, string | number | boolean>;
+// Fixed aggregate dimensions only. This deliberately cannot carry arbitrary
+// filenames, hashes, image-derived values, EXIF, masks or session identifiers.
+export interface AnalyticsEventData {
+  qualityMode?: "fast" | "max" | "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+  inferencePath?: "webgpu" | "wasm";
+}

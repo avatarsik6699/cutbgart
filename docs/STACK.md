@@ -85,6 +85,73 @@ Architecture lint (run in CI before tests, not part of the standard gate rows ab
 pnpm exec steiger ./src
 ```
 
+### Security and supply-chain gate (Phase 22)
+
+The following versions/commands are frozen from current primary documentation.
+Any version or policy change requires maintainer review of release notes,
+license and provenance.
+
+```bash
+pnpm audit --prod --audit-level high
+pnpm security:licenses
+pnpm sync-model-assets -- --check
+
+docker run --rm \
+  -v "$PWD:/work:ro" \
+  aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e \
+  fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+  --exit-code 1 /work
+
+docker build -t cutbgart:security .
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e \
+  image --scanners vuln --severity HIGH,CRITICAL \
+  --exit-code 1 cutbgart:security
+```
+
+CI additionally runs the SHA-pinned
+`actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294`
+(v5.0.0) and
+`aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25`
+(v0.36.0 / Trivy 0.70.0). It emits `sbom.cdx.json`, creates GitHub provenance
+and SBOM attestations for the pushed image digest, and the protected
+`production` job verifies:
+
+```bash
+gh attestation verify "oci://$IMAGE_NAME@$IMAGE_DIGEST" \
+  --repo "$GITHUB_REPOSITORY" \
+  --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+  --source-ref refs/heads/main \
+  --deny-self-hosted-runners
+```
+
+The gate fails on scanner execution failure, high/critical reachable findings,
+unreviewed licenses, mutable model inputs, or missing/mismatched attestation
+identity. Exception owner/expiry rules are in
+[`security/SECURE_DEVELOPMENT.md`](security/SECURE_DEVELOPMENT.md).
+
+### Production security ownership
+
+- SSR responses set CSP, `frame-ancestors`, `X-Content-Type-Options`,
+  `Referrer-Policy`, and `Permissions-Policy` in `src/server.ts`.
+- Nginx owns HTTPS redirect/HSTS, CDN CORP/CORS, `/api/send` and public SSR
+  request/body/time limits. COOP/COEP are intentionally not enabled.
+- Compose production service images and Dockerfile bases are pinned by digest.
+  Deploy must set `APP_IMAGE=ghcr.io/...@sha256:...`; the `cutbgart:local`
+  fallback is only for local `--build`.
+- GitHub `production` environment stores VPS secrets. Vite analytics IDs/tokens
+  are public browser identifiers and use repository environment variables, not
+  secret-bearing Docker layers.
+- Model release operations:
+
+```bash
+pnpm sync-model-assets                         # verified atomic activation
+pnpm sync-model-assets -- --verify-cache       # verify active bytes
+pnpm sync-model-assets -- --rollback           # swap to previous verified release
+docker compose --profile maintenance run --rm --build model-sync
+```
+
 ### TLS / reverse-proxy verification (VPS-only, not part of the automated gate)
 
 `nginx` + `certbot` can only be brought up successfully after `deploy/init-letsencrypt.sh` has run

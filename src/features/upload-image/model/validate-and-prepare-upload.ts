@@ -1,9 +1,11 @@
 import type { SourceImage } from "../../../entities/processed-image";
 import { downscaleToFit } from "./downscale";
 import type { UploadResult } from "./types";
+import { inspectEncodedImageDimensions } from "@/shared/lib/image-file-inspection";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_DIMENSION_PX = 4096;
+const MAX_DECODE_PIXELS = 40_000_000;
 const ACCEPTED_FORMATS = ["image/jpeg", "image/png", "image/webp"] as const;
 
 function isAcceptedFormat(type: string): type is SourceImage["format"] {
@@ -40,7 +42,38 @@ export async function validateAndPrepareUpload(file: File): Promise<UploadResult
     };
   }
 
-  const bitmap = await createImageBitmap(file);
+  const encodedDimensions = await inspectEncodedImageDimensions(file, file.type);
+  if (!encodedDimensions) {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The file is malformed or does not match its image format.",
+      },
+    };
+  }
+  if (encodedDimensions.width * encodedDimensions.height > MAX_DECODE_PIXELS) {
+    return {
+      ok: false,
+      error: {
+        code: "exceeds-resolution-limit",
+        message: `Encoded image dimensions (${String(encodedDimensions.width)}x${String(encodedDimensions.height)}) exceed the safe decode limit.`,
+      },
+    };
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported-format",
+        message: "The image is malformed and could not be decoded.",
+      },
+    };
+  }
   const { width, height } = bitmap;
 
   if (Math.max(width, height) <= MAX_DIMENSION_PX) {
