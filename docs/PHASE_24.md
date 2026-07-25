@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `24` |
 | Title | Legal & Data Governance Audit |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.24.0` |
 | Depends on | PHASE_23 gate passing |
 
@@ -19,8 +19,9 @@
 Establish an operator-specific, evidence-backed legal and data-governance contract before adding a
 cookie/storage banner, new legal pages, or future metadata collection. This phase inventories the
 deployed behavior, determines which regimes and documents apply, drafts the approved content and
-implementation matrix, and requires qualified review; it changes no runtime collection
-(SPEC.md §3, §5.1–§5.2, §7.2, §7.6, §8).
+implementation matrix, and records either qualified review or explicit owner acceptance of the
+identified residual risks; it changes no runtime collection (SPEC.md §3, §5.1–§5.2, §7.2, §7.6,
+§8).
 
 ## Research References
 
@@ -44,47 +45,48 @@ operator's actual jurisdiction and market.
 
 ### Data
 
-- [ ] `D1` Complete an owner-facts sheet with legal name/form, registration and service address,
+- [x] `D1` Complete an owner-facts sheet with legal name/form, registration and service address,
   privacy/legal contact, operator jurisdiction, hosting/entity relationships, target countries and
   languages, intended minors policy, and current/future business model. Unknown facts are explicit
   blockers; the agent must not invent them — _Depends on:_ —
-- [ ] `D2` Inspect code, built pages, browser storage/network requests, Nginx/Cloudflare/VPS/Umami
+- [x] `D2` Inspect code, built pages, browser storage/network requests, Nginx/Cloudflare/VPS/Umami
   configuration, model/CDN traffic, logs, Telegram support path, and retention settings. Record
   every current data/storage flow by field/category, source, purpose, recipient, location,
   retention/deletion, access, and whether it can identify or single out a visitor — _Depends on:_
   `D1`
-- [ ] `D3` Create a separate proposed-metadata register. For every future field, document the
+- [x] `D3` Create a separate proposed-metadata register. For every future field, document the
   concrete product purpose, necessity/minimization, legal basis candidate, recipients/location,
   retention/deletion, access control, user transparency/choice, and whether image/image-derived
   data is prohibited. Unspecified “metadata” is not an approvable category — _Depends on:_ `D1`
-- [ ] `D4` Build an applicability matrix for the operator/targets, using Russian 152-FZ and
+- [x] `D4` Build an applicability matrix for the operator/targets, using Russian 152-FZ and
   GDPR/ePrivacy as baseline regimes plus any additional market identified by `D1`. Resolve
   operator notification, localization/transfers, legal bases, consent form/separation, user
   rights, minors, retention/destruction, security/incident, processor, and record-keeping duties —
   _Depends on:_ `D1`–`D3`
-- [ ] `D5` Produce the operational governance set: data-flow map, storage/cookie inventory,
+- [x] `D5` Produce the operational governance set: data-flow map, storage/cookie inventory,
   purpose/legal-basis/retention matrix, processor/transfer register, rights-request procedure,
   retention/deletion schedule, security/incident responsibility checklist, and change-review
   process for any new metadata/integration — _Depends on:_ `D4`
-- [ ] `D6` Decide from evidence—not preference—whether the deployed app needs a first-layer consent
+- [x] `D6` Decide from evidence—not preference—whether the deployed app needs a first-layer consent
   banner, a storage notice only, or another control. Define necessary/non-essential categories,
   default execution gating, consent evidence/expiry/withdrawal, equal Reject/Accept treatment, and
   how current Cloudflare/Umami behavior changes under the decision — _Depends on:_ `D2`, `D4`, `D5`
-- [ ] `D7` Approve a bilingual route/footer/content manifest: revised Privacy, Terms of Use,
+- [x] `D7` Approve a bilingual route/footer/content manifest: revised Privacy, Terms of Use,
   Cookie & browser-storage notice, operator/legal notice and separate consent only where required.
   Record explicitly whether a public offer is unnecessary for the current free/no-payment model or
   required for a concrete legal reason — _Depends on:_ `D4`–`D6`
-- [ ] `D8` Draft the RU source texts and legally faithful EN counterparts with version/effective
+- [x] `D8` Draft the RU source texts and legally faithful EN counterparts with version/effective
   date, contact and change process. Reconcile every factual claim against `D2`; do not publish
   generic templates or say “compliant” without evidence — _Depends on:_ `D7`
-- [ ] `D9` Obtain and record qualified legal review for the actual operator/markets, resolve or
-  explicitly reject each finding with the owner, and freeze the Phase-25 implementation matrix and
-  approved texts. This phase cannot close with placeholder operator facts or unresolved mandatory
-  review findings — _Depends on:_ `D5`–`D8`
+- [x] `D9` Record qualified review or the owner's explicit, dated acceptance of the identified
+  residual risks; distinguish owner acceptance from legal advice, preserve every deferred fact and
+  remediation item, and freeze the Phase-25 implementation matrix and draft texts. The owner
+  accepted the recorded risks on `2026-07-25` and directed Phase 24 to close without external
+  counsel — _Depends on:_ `D5`–`D8`
 
 ### Infra
 
-- [ ] `I1` Add no runtime route, banner, tracker, cookie, metadata field, database, API, or retention
+- [x] `I1` Add no runtime route, banner, tracker, cookie, metadata field, database, API, or retention
   behavior. Preserve current collection while auditing it; any urgent unlawful/unsafe finding is
   escalated as a separate architect decision rather than silently changing production — _Depends
   on:_ `D9`
@@ -97,6 +99,7 @@ operator's actual jurisdiction and market.
 
 ~~~
 docs/legal/OPERATOR_FACTS.md
+docs/legal/OWNER_LEGAL_GUIDE_RU.md
 docs/legal/DATA_INVENTORY.md
 docs/legal/PROPOSED_METADATA.md
 docs/legal/APPLICABILITY_MATRIX.md
@@ -142,8 +145,8 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 24` after all owner facts and review findings are resolved. Standard documentation
-checks apply; additionally verify:
+Run `/phase-gate 24` after all owner facts, deferred risks and review decisions are recorded.
+Standard documentation checks apply; additionally verify:
 
 ```bash
 if rg -n 'TODO|TBD|NEEDS_CLARIFICATION|\[insert|your company' docs/legal; then
@@ -155,8 +158,16 @@ pnpm build
 
 Fail if the inventory omits any deployed storage/request/log/analytics path, proposed metadata is
 not field-level, banner need is assumed without analysis, offer/consent is copied generically,
-operator facts remain unknown, factual claims contradict runtime, or qualified-review findings are
-unresolved.
+mandatory facts are neither resolved nor explicitly deferred with owner acceptance, factual claims
+contradict runtime, or review/risk findings are unrecorded.
+
+**Gate outcome (`2026-07-25`):** accepted with an explicit architect exception. Docker build/health
+and smoke, code generation, TypeScript, 305 Vitest tests, formatting/placeholders, and the
+281-passing/15-skipped deterministic cross-browser E2E matrix passed. The serialized real-model
+Chromium smoke timed out twice after 240 seconds while waiting for the result slider, with the page
+still showing IS-Net/WASM model loading at 0%. The owner explicitly accepted this technical gate
+risk and authorized Phase 24 closure; the failure is not represented as fixed and must be rerun or
+resolved before Phase 25 is closed.
 
 ---
 
@@ -166,7 +177,20 @@ unresolved.
 
 ## Implementation Notes
 
-None
+- The public repository uses a split register: publication-safe analysis lives in `docs/legal/`,
+  while owner-supplied identity/infrastructure/notification facts live in the gitignored
+  `.ops/legal/operator-facts.md`. Exact infrastructure is not advertised, but mandatory
+  controller/recipient/transfer transparency is not treated as optional.
+- Owner decisions cover individual-controller form, privacy email, worldwide audience, under-16
+  position, commercial use of outputs and hosted-service resale restrictions. On `2026-07-25` the
+  owner explicitly accepted the recorded risks of deferring full legal identity/address,
+  provider/Cloudflare verification, Russian notification/localization/transfer remediation and
+  qualified counsel, and directed Phase 24 to close. This is risk acceptance, not legal review or
+  a compliance claim. Optional analytics remains fail-closed until Phase-25 controls and the
+  applicable provider/retention checks are implemented. No runtime behavior was changed.
+- On `2026-07-25`, after two identical serialized real-model smoke timeouts, the owner separately
+  accepted the technical gate risk and authorized closure. All other gate rows passed; Phase 25
+  inherits a mandatory real-model rerun/investigation before its own closure.
 
 ## Atomic Commit Message
 
@@ -176,6 +200,6 @@ docs(phase-24): define legal and data governance contract
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
-- [ ] Run `/context-update 24`
-- [ ] Commit on `feat/phase-24`; tag `v0.24.0` after merge
+- [x] Scope complete; gate accepted with documented owner exception; review notes resolved
+- [x] Run `/context-update 24`
+- [x] Commit on `feat/phase-24`; tag `v0.24.0` after merge

@@ -8,14 +8,14 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.17` |
-| Date | `2026-07-24` |
+| Document Version | `v1.18` |
+| Date | `2026-07-25` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
 | Domain | Client-side (in-browser) image background removal. Free, anonymous, no-account tool — ML inference runs entirely on the user's device via WebGPU (WASM fallback), the server never receives or processes the user's image. Domain: `cutbg.art`. |
 | Public brand name | `cutbg` — wordmark-only logo (no pictorial icon), set in the app's existing Geist Variable font. This is the user-facing brand (site `<title>`, header/footer, `site.webmanifest`, OG tags); it does not rename the repo or `package.json`, which stay `bg_remove_app` / "BG Remove App" as internal project identifiers. |
-| Feedback channel | Telegram: `https://t.me/+HaqBWI1A3vg4MWJi` — linked from `shared/ui/site-header` and `site-footer` (Phase 12); also the contact channel referenced on `/privacy` for privacy questions (§5.1) |
+| Feedback channel | Telegram: `https://t.me/+HaqBWI1A3vg4MWJi` for voluntary product feedback; `avatarsik6699@gmail.com` is the dedicated privacy/legal request channel approved in Phase 24 (§5.1) |
 
 ---
 
@@ -311,7 +311,7 @@ the same rule: the background file never leaves the device either.
 | `/udalit-fon-dlya-avatarki` | Avatar/social profile photo scenario | Desired · `ru` base locale |
 | `/about` | About the project, tech, author link | Does not block launch · `ru` base locale |
 | `/privacy` | Privacy notice fulfilling §7.2's "image never leaves your device" claim and the approved Phase-24 data inventory: purposes, categories, legal bases, recipients/processors, storage locations, retention, rights, and contact | Existing Phase-12 route; substantively revised in Phase 25 · `ru` base locale |
-| `/terms` | Plain-language Terms of Use for the free, anonymous service, including acceptable use, intellectual-property/user-content responsibility, service availability, and legally reviewed limitations | Conditional content approved in Phase 24; implemented in Phase 25 · `ru` base locale |
+| `/terms` | Plain-language Terms of Use for the free, anonymous service, including acceptable use, intellectual-property/user-content responsibility, service availability, and owner-approved limitations with explicit residual-risk disclosure where qualified review is absent | Conditional content approved in Phase 24; implemented in Phase 25 · `ru` base locale |
 | `/cookies` | Cookie and browser-storage notice using the real inventory—not a generic template—including necessary localStorage/Cache Storage, analytics behavior, retention, and how to change any non-essential choice | Conditional content approved in Phase 24; implemented in Phase 25 · `ru` base locale |
 | `/accessibility` | Truthful accessibility statement with evaluated scope, tested technologies, known limitations, owned contact, effective date, and review cadence | Phase 34 · `ru` base locale |
 | `/en/...` | English counterpart of every row above, same path suffix under the `/en` prefix (e.g. `/en/about`, `/en/privacy`) | Required (Phase 12, §5.5) |
@@ -337,7 +337,7 @@ page. No dedicated `/batch` URL.
 Phase 24 may require an additional operator/legal-notice or separate-consent route after the
 operator identity, jurisdiction, target markets, and data purposes are known. Phase 25 implements
 the approved bilingual route manifest. A paid-service public offer is **not** presumed necessary
-for this free/no-payment product; it is added only if qualified review identifies a real contractual
+for this free/no-payment product; it is added only if later review identifies a real contractual
 need or the product model changes.
 
 ### 5.2 Components / Feature Slices (Feature-Sliced Design, see §6)
@@ -821,8 +821,10 @@ being converted into a universal compatibility claim.
   procedure, security/incident/erasure responsibilities, operator-notification/localization check,
   and an approved route/footer/consent decision. Russian 152-FZ and EU GDPR/ePrivacy are baseline
   review regimes because of the Russian/English product, but the actual operator and targeting
-  facts decide applicability. Qualified legal review is an explicit release gate for approved text;
-  this engineering plan does not promise universal legal compliance.
+  facts decide applicability. Qualified legal review is recommended, but the owner may close the
+  audit without it only through an explicit, dated acceptance of the identified residual risks.
+  Such acceptance must remain visible in the Phase-24 records, must not be described as legal
+  review, and does not permit a claim of universal legal compliance.
 - Phase 25 implements only the approved matrix and versioned texts. Where non-essential consent is
   required, `Accept`, `Reject`, and granular settings are equally understandable; non-essential
   code/storage does not run before the choice; withdrawal is as easy as acceptance through a
@@ -1020,7 +1022,7 @@ needs it.
 | `21` | Brush-Guided Object Correction | Replace the technically exposed Phase-17 guided editor with one predictable semantic brush while reusing the proven SlimSAM runtime and preserving the exact final editor | Primary bilingual `keep`/`remove` translucent brush UI with size, undo/redo, clear, explicit recompute, visual candidate previews, direct-entry green-intent validation, and continuation through the existing pipeline; consolidated constraint map and at most 32 balanced prompt samples per session; intent/local-continuity candidate ranking without user-facing SlimSAM percentages; brush-region-only fusion over an automatic base; retained legacy point/box/layer source with selective `@deprecated` annotations only for production-unreferenced UI; focused unit/component/E2E plus host-only real-model evidence; no new model asset, API, persistence, analytics payload, or environment variable |
 | `22` | Production Security & Supply Chain Hardening | Protect the existing browser-only product and make every production input verifiable before the feature surface expands | Threat model; tested headers/no-image-egress/export metadata; non-root digest-pinned containers; least-privilege SHA-pinned CI; dependency/license/container gates; SBOM/attestation; verified model/WASM manifest and cache lifecycle; abuse controls; security.txt and vulnerability runbook |
 | `23` | Release Reliability & Operations | Make releases immutable, observable, reversible and recoverable without adding unapproved visitor telemetry | Release identity and digest deploy; candidate/post-deploy external smoke; automatic/manual rollback; deployment concurrency/audit; evidence-based SLI/SLO and actionable alerts; bounded encrypted operational backups with restore drill; capacity/degradation exercises; CI mocked Chromium critical path; incident/maintenance runbooks; step-by-step metrics and monitoring guide |
-| `24` | Legal & Data Governance Audit | Turn vague future metadata/cookie intent into an operator-specific, reviewable legal and data contract before adding collection or consent UI | Required operator/jurisdiction/market inputs; deployed data-flow and storage inspection; field-level data inventory; purposes/legal bases/minimization/retention/deletion; processors/transfers/localization/notification/rights/security matrices; decision on banner vs storage notice, legal routes/footer, terms/offer/consent needs; draft RU/EN content; qualified-review checkpoint; no runtime collection changes |
+| `24` | Legal & Data Governance Audit | Turn vague future metadata/cookie intent into an operator-specific, reviewable legal and data contract before adding collection or consent UI | Required operator/jurisdiction/market inputs; deployed data-flow and storage inspection; field-level data inventory; purposes/legal bases/minimization/retention/deletion; processors/transfers/localization/notification/rights/security matrices; decision on banner vs storage notice, legal routes/footer, terms/offer/consent needs; draft RU/EN content; qualified review or explicit dated owner risk acceptance; no runtime collection changes |
 | `25` | Consent & Legal Surfaces | Implement the approved Phase-24 transparency and choice contract without dark patterns or false cookie claims | Versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, retention/version behavior, SSR/SEO, storage/request inspection, and E2E |
 | `26` | Editor Document Foundation & Guided Reset | Establish a scalable browser-memory edit contract before rearranging the UI, and close the final-stroke guided-correction regression | `entities/edit-document`; bounded artifact store and `features/editor-history`; controller extraction from the monolithic workspace; explicit committed-vs-draft history semantics and resource cleanup; a base-backed zero-mark reset path that does not call SlimSAM; unit/component/E2E regression coverage; no visible broad redesign yet |
 | `27` | Automatic-First Workspace | Make the shortest successful path upload → automatic result, while introducing the stable editor shell used by every later tool | One/many upload plus `Fast`/`Optimal`/`Maximum quality (Beta)` selector; automatic start; no direct guided entry or primary model/runtime copy; shared single/selected-batch stable stage + icon/text Cutout/Enhancements/Background toolbar + document undo/redo/download slots; reserved responsive tool panel with accessible help/details and minimal layout shift |
