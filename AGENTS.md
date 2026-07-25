@@ -30,9 +30,10 @@ must follow when working on this project. Stack-specific commands, file layout, 
    interact, assert the resulting state — not just unit/component tests. Run the e2e suite locally
    from the host as part of implementation verification (`/impl-assist`), not only at
    `/phase-gate`. A passing local e2e run is a stand-in for a first pass of the architect's manual
-   browser check, not a replacement for it. E2E/Playwright is intentionally **host-only** — never
-   run it in Docker and never wire it into CI; its job is local confirmation that a phase's work
-   (or a reported bug repro) actually behaves correctly, not pipeline gating.
+   browser check, not a replacement for it. E2E/Playwright is **host-first** and never runs in
+   Docker. The sole CI exception is `e2e/ci-critical.spec.ts`: mocked inference, Chromium only,
+   one worker, and no model/CDN/WebGPU dependency. The full cross-browser, WebGPU and real-model
+   suites remain local confirmation, not pipeline gating.
 
 ## Stack Conventions
 

@@ -41,7 +41,9 @@ by hand whenever the stack changes.
 11. Run the **frontend type-check** command from `STACK.md`.
 12. Run the **frontend unit tests** command from `STACK.md`.
 13. Run the **e2e lint / determinism check** command from `STACK.md` (if defined). It must fail on
-    any policy violation (e.g. committed `waitForTimeout` calls when Playwright is in use).
+    any policy violation (e.g. committed `waitForTimeout` calls when Playwright is in use). The
+    only CI Playwright surface is `e2e/ci-critical.spec.ts` on mocked Chromium; full-matrix,
+    WebGPU and real-model checks remain host-only.
 14. Run the **e2e** command from `STACK.md` (if defined).
 15. Run the **smoke** command from `STACK.md`, unless the phase file declares a phase-specific
     smoke override under `Gate Checks`.

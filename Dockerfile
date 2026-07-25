@@ -43,6 +43,13 @@ RUN pnpm build
 # bundled into .output/server) — the runtime stage needs neither
 # node_modules nor the pnpm toolchain, just Node and the build output.
 FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS runtime
+ARG APP_BUILD_ID=local
+ARG APP_COMMIT_SHA=unknown
+ARG APP_CREATED_AT=1970-01-01T00:00:00Z
+LABEL org.opencontainers.image.title="cutbg.art" \
+    org.opencontainers.image.version=$APP_BUILD_ID \
+    org.opencontainers.image.revision=$APP_COMMIT_SHA \
+    org.opencontainers.image.created=$APP_CREATED_AT
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -59,6 +66,8 @@ RUN rm -rf /usr/local/lib/node_modules/corepack \
     /usr/local/bin/yarn \
     /usr/local/bin/yarnpkg
 COPY --from=build --chown=node:node /app/.output ./.output
+COPY --from=build --chown=node:node /app/scripts/release/smoke.mjs ./release/smoke.mjs
+COPY --from=build --chown=node:node /app/public/models.manifest.json ./release/models.manifest.json
 USER node
 EXPOSE 3000
 CMD ["node", ".output/server/index.mjs"]

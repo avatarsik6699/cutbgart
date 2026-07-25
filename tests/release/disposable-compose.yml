@@ -1,0 +1,8 @@
+services:
+  app:
+    image: ${APP_IMAGE}
+    environment:
+      APP_BUILD_ID: ${APP_BUILD_ID}
+      APP_COMMIT_SHA: ${APP_COMMIT_SHA}
+      APP_CREATED_AT: ${APP_CREATED_AT}
+      APP_IMAGE_DIGEST: ${APP_IMAGE_DIGEST}

@@ -76,7 +76,7 @@ STACK.md` for those.
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |
-| E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic cross-browser UI suite first, then one serialized Chromium real-model/CDN smoke. Use `pnpm e2e` during ordinary iteration; use `pnpm e2e:real-model` to diagnose only the external inference path. Never run Playwright in Docker or CI. |
+| E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic cross-browser UI suite first, then one serialized Chromium real-model/CDN smoke. The sole CI exception is `pnpm e2e:ci-critical`: mocked Chromium, one worker, no model/CDN/WebGPU dependency. Never run Playwright in Docker. |
 | Smoke | `docker compose exec -T app node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` | Deterministic, container-network-native — doesn't need port 3000 published to the host or TLS/nginx up. `app` also has a Docker `healthcheck` (docker-compose.yml) doing the same check on a 10s interval; `docker compose ps app` should show `(healthy)`. Phase files may override with a phase-specific check. |
 
 Architecture lint (run in CI before tests, not part of the standard gate rows above — SPEC.md §7.7):
@@ -131,6 +131,34 @@ unreviewed licenses, mutable model inputs, or missing/mismatched attestation
 identity. Exception owner/expiry rules are in
 [`security/SECURE_DEVELOPMENT.md`](security/SECURE_DEVELOPMENT.md).
 
+### Release reliability gate (Phase 23)
+
+Repository/disposable checks:
+
+```bash
+pnpm build
+docker compose config --quiet
+docker compose build
+pnpm e2e:ci-critical
+pnpm release:test
+pnpm release:test:docker
+node scripts/operations/validate-alerts.mjs
+```
+
+Production releases use `scripts/release/deploy.sh`; manual recovery uses
+`scripts/release/rollback.sh manual`. The controller requires
+`APP_IMAGE=ghcr.io/...@sha256:...`, `APP_BUILD_ID`, `APP_COMMIT_SHA` and
+`APP_CREATED_AT`, validates matching OCI labels, starts a loopback-only candidate,
+runs pre/post smoke, serializes with `.ops/releases/deploy.lock`, retains the last
+10 records and three non-secret config snapshots, and fails visibly after an
+automatic rollback. Operational backup/drill commands are documented in
+[`runbooks/BACKUP_RESTORE.md`](runbooks/BACKUP_RESTORE.md).
+
+At the Phase-23 gate, additionally validate the real protected `production`
+environment, external hostname, Uptime Kuma SSH tunnel, notification receipt,
+previous-digest rollback and encrypted restore on a production-parity disposable
+host. Local tests do not claim those external checks passed.
+
 ### Production security ownership
 
 - SSR responses set CSP, `frame-ancestors`, `X-Content-Type-Options`,
@@ -143,6 +171,11 @@ identity. Exception owner/expiry rules are in
 - GitHub `production` environment stores VPS secrets. Vite analytics IDs/tokens
   are public browser identifiers and use repository environment variables, not
   secret-bearing Docker layers.
+- GitHub production secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`,
+  `VPS_APP_DIR`. Repository/environment variables contain only public Vite
+  browser identifiers. Backup passphrases and Uptime notification credentials
+  live in the approved host/password store, never GitHub logs or repository
+  files.
 - Model release operations:
 
 ```bash
@@ -178,6 +211,7 @@ pnpm tsc --noEmit          # type-check, strict mode
 pnpm vitest run            # unit + integration (Testing Library for hooks)
 pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
 pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
+pnpm e2e:ci-critical       # Mocked Chromium PR-CI exception; one worker
 pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
 pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
 pnpm e2e:phase-17-real     # Phase 17 only: serialized iterative SlimSAM runtime evidence
@@ -186,7 +220,7 @@ pnpm e2e:phase-19-real     # Phase 19 only: serialized production q8/fp32 refine
 pnpm e2e:phase-20-real     # Phase 20 only: serialized full-pipeline + bounded-input evidence
 pnpm e2e:phase-21-real     # Phase 21 only: serialized brush-derived SlimSAM evidence
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
-                           # host-only: never in Docker, never in CI
+                           # host-only: never in Docker or CI
 ```
 
 Playwright drives the app the way a human would in a browser. `pnpm e2e` replaces only the external
@@ -194,7 +228,9 @@ ML Worker boundary with a deterministic in-browser test double; uploads, state t
 canvas editing, responsive layouts, and downloads remain real and run across the browser matrix.
 `pnpm e2e:real-model` owns the slow/network-dependent ONNX+CDN check and runs once, serially, in
 Chromium. Write or extend the deterministic suite for every changed user-facing flow and run
-`pnpm e2e:full` at `/phase-gate`. Playwright remains host-only and stays out of Docker/CI.
+`pnpm e2e:full` at `/phase-gate`. Only `e2e/ci-critical.spec.ts` runs in CI; it uses mocked
+inference, Chromium and one worker. Every other Playwright project remains host-only, and no
+Playwright suite runs in Docker.
 
 ---
 
@@ -244,9 +280,11 @@ pnpm exec prettier --write .
 pnpm eslint . --fix
 pnpm exec steiger ./src
 
-# e2e — host-only, run against `pnpm dev` (never in Docker/CI); write/extend a
-# spec for every new user-facing flow (AGENTS.md core rule 8)
+# e2e — host-first, run against `pnpm dev` (never in Docker); write/extend a
+# spec for every new user-facing flow (AGENTS.md core rule 8). CI owns only
+# e2e/ci-critical.spec.ts on mocked Chromium.
 pnpm e2e                  # fast iteration
+pnpm e2e:ci-critical      # deterministic PR-CI exception
 pnpm e2e:full             # phase gate, includes one real-model smoke
 pnpm e2e:model-lab-real   # opt-in Phase 15 evaluation; never CI/normal matrix
 pnpm e2e:matting-lab-real # opt-in Phase 18 ViTMatte evaluation; never CI/normal matrix
@@ -258,6 +296,18 @@ pnpm e2e:phase-21-real    # opt-in Phase 21 brush-guided SlimSAM; never CI/norma
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run
 # it standalone only to inspect/debug its output.
 pnpm generate-sitemap
+
+# Release/recovery operations
+pnpm release:test
+pnpm release:test:docker
+APP_IMAGE='ghcr.io/<owner>/<repo>@sha256:<digest>' \
+  APP_BUILD_ID='<id>' APP_COMMIT_SHA='<sha>' \
+  ./scripts/release/deploy.sh
+./scripts/release/rollback.sh manual
+./scripts/operations/backup.sh
+./scripts/operations/restore.sh '<archive>' '<empty-target>'
+node scripts/operations/exercise-capacity.mjs
+node scripts/operations/validate-alerts.mjs
 
 # Synchronize pinned public model/WASM files into deploy/model-assets/.
 # Prefer the container command on the VPS for dependency/container parity.

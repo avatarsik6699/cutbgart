@@ -51,7 +51,11 @@ describe("production security policy", () => {
     expect(workflow).toContain("format: cyclonedx");
     expect(workflow).toContain("actions/attest@f7c74d28");
     expect(workflow).toContain("--source-ref refs/heads/main");
-    expect(workflow).toContain("environment: production");
+    expect(workflow).toMatch(/environment:\s*\n\s+name: production/);
+    expect(workflow).toContain("group: production-deployment");
+    expect(workflow).toContain("cancel-in-progress: false");
+    expect(workflow).not.toContain("type=raw,value=latest");
+    expect(workflow).toContain("./scripts/release/deploy.sh");
   });
 
   it("publishes a non-placeholder RFC 9116 contact", async () => {

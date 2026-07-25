@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "alerts": [
+    {
+      "id": "app-down",
+      "severity": "SEV-1",
+      "owner": "operator-on-call",
+      "threshold": "2 consecutive 5-minute synthetic failures",
+      "escalation": "Telegram immediately; email after 10 minutes",
+      "maintenanceSuppression": "Uptime Kuma maintenance window for an approved release only",
+      "deduplication": "one incident per monitor for 60 minutes",
+      "runbook": "docs/runbooks/INCIDENT.md"
+    },
+    {
+      "id": "cdn-model-failure",
+      "severity": "SEV-1",
+      "owner": "operator-on-call",
+      "threshold": "2 consecutive range or integrity probe failures",
+      "escalation": "Telegram immediately; email after 10 minutes",
+      "maintenanceSuppression": "suppress only during a documented model release",
+      "deduplication": "one incident per model release for 60 minutes",
+      "runbook": "docs/runbooks/INCIDENT.md"
+    },
+    {
+      "id": "certificate-expiry",
+      "severity": "SEV-2",
+      "owner": "operator",
+      "threshold": "certificate expires within 14 days",
+      "escalation": "email immediately; Telegram at 7 days",
+      "maintenanceSuppression": "none",
+      "deduplication": "one reminder per day",
+      "runbook": "docs/runbooks/INCIDENT.md"
+    },
+    {
+      "id": "disk-resource-pressure",
+      "severity": "SEV-2",
+      "owner": "operator",
+      "threshold": "disk at 80% or memory at 85% for 10 minutes",
+      "escalation": "Telegram after two failed checks",
+      "maintenanceSuppression": "approved capacity exercise only",
+      "deduplication": "one incident per resource for 60 minutes",
+      "runbook": "docs/runbooks/INCIDENT.md"
+    },
+    {
+      "id": "backup-failure",
+      "severity": "SEV-2",
+      "owner": "operator",
+      "threshold": "backup command fails or no encrypted backup within 30 hours",
+      "escalation": "email immediately; Telegram after 36 hours",
+      "maintenanceSuppression": "documented restore drill only",
+      "deduplication": "one incident per backup day",
+      "runbook": "docs/runbooks/BACKUP_RESTORE.md"
+    },
+    {
+      "id": "elevated-5xx",
+      "severity": "SEV-2",
+      "owner": "operator-on-call",
+      "threshold": "10 or more proxy 5xx responses in 5 minutes",
+      "escalation": "Telegram after threshold; email after 15 minutes",
+      "maintenanceSuppression": "approved release window only",
+      "deduplication": "one incident per 30 minutes",
+      "runbook": "docs/runbooks/INCIDENT.md"
+    }
+  ]
+}

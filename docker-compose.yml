@@ -3,6 +3,9 @@ services:
     build:
       context: .
       args:
+        APP_BUILD_ID: ${APP_BUILD_ID:-local}
+        APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+        APP_CREATED_AT: ${APP_CREATED_AT:-1970-01-01T00:00:00Z}
         VITE_MODEL_CDN_BASE_URL: ${VITE_MODEL_CDN_BASE_URL:-}
         VITE_UMAMI_SCRIPT_URL: ${VITE_UMAMI_SCRIPT_URL:-}
         VITE_UMAMI_WEBSITE_ID: ${VITE_UMAMI_WEBSITE_ID:-}
@@ -159,6 +162,7 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/app.conf:/etc/nginx/conf.d/app.conf:ro
+      - ./deploy/nginx/release.conf:/etc/nginx/release/release.conf:ro
       - ./deploy/model-assets:/srv/model-assets:ro
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro

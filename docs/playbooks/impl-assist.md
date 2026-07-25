@@ -144,9 +144,11 @@ After implementing each item:
 1. Re-read the changed files and confirm the contract/note is satisfied.
 2. Run the focused checks listed in the plan when available.
 3. If a new/updated e2e spec exists for the item, run it locally from the host (`pnpm e2e` or the
-   file-scoped Playwright command) as part of verification — never inside Docker, never as a CI
-   step. This is the automated stand-in for a first pass of the architect's manual browser check,
-   not a substitute for it (AGENTS.md core rule 8).
+   file-scoped Playwright command) as part of verification — never inside Docker. Do not add a CI
+   Playwright step except by deliberately extending Phase 23's single mocked Chromium critical
+   path; the full matrix and real-model checks stay host-only. This is the automated stand-in for a
+   first pass of the architect's manual browser check, not a substitute for it (AGENTS.md core
+   rule 8).
 4. Report the commands run and their results; if a check was not run, state the reason.
 5. Mark the item:
    - Scope task → check off the matching item in `docs/PHASE_XX.md` § Scope.

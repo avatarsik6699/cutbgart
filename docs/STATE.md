@@ -41,7 +41,7 @@
 | PHASE_20 | ✅ done | v0.20.0 | ✅ | 🤖 agent | Foreground Edge Quality & Runtime Hardening |
 | PHASE_21 | ✅ done | v0.21.0 | ✅ | 🤖 agent | Brush-Guided Object Correction |
 | PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
-| PHASE_23 | ⏳ pending | v0.23.0 | ⬜ | — | Release Reliability & Operations |
+| PHASE_23 | ✅ done | v0.23.0 | ✅ | 🤖 agent | Release Reliability & Operations |
 | PHASE_24 | ⏳ pending | v0.24.0 | ⬜ | — | Legal & Data Governance Audit |
 | PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Consent & Legal Surfaces |
 | PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `22` · **Phase in progress:** `—`
+**Phase completed:** `23` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -651,6 +651,20 @@ Phase 22 makes the model/WASM manifest the immutable release contract for synchr
 assets. Synchronization verifies source revision, byte size and SHA-256 before atomic activation,
 retains the previous verified release for rollback, and never treats a filename alone as trust.
 
+```ts
+// OCI/deployment metadata and bounded release records — Phase 23
+interface ReleaseIdentity {
+  buildId: string;
+  commitSha: string;
+  imageDigest: `sha256:${string}`;
+  createdAt: string;
+}
+```
+
+Phase 23 binds each production deployment and rollback to an immutable image digest and matching
+OCI identity. Candidate and external smoke checks, release records and response headers expose the
+same non-secret identity without adding a public infrastructure endpoint.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -713,6 +727,10 @@ retains the previous verified release for rollback, and never treats a filename 
 - Phase 22 release artifacts include a machine-readable CycloneDX SBOM and GitHub provenance/SBOM
   attestations bound to the pushed production image digest. They contain build and dependency
   metadata only, never user or image data.
+- Phase 23 retains at most 10 non-secret release/rollback records and three non-secret
+  configuration snapshots. Encrypted operational backups cover only approved Umami/Uptime,
+  release/configuration and TLS material under the documented retention schedule; source images,
+  masks, composites and editor state are never backup inputs.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -768,6 +786,8 @@ retains the previous verified release for rollback, and never treats a filename 
 | `UMAMI_APP_SECRET` | `<random 32+ char secret>` | required — `umami` container's own env, docker-compose only (Phase 05) |
 | `UMAMI_DATABASE_URL` | `postgresql://umami:***@umami-db:5432/umami` | required — `umami` container's own env, docker-compose only (Phase 05) |
 | `POSTGRES_PASSWORD` | `<random secret>` | required — `umami-db` container's own env, docker-compose only (Phase 05) |
+| `APP_BUILD_ID` | `2026-07-25.1` | required for Phase 23 production build/deploy identity |
+| `APP_COMMIT_SHA` | full immutable commit SHA | required for Phase 23 production build/deploy identity |
 
 ### DB Seeds
 
@@ -789,6 +809,54 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-25 — Phase 23 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_23 gate passed and architect confirmed the manual operator checks
+
+### Changes / Decision
+- Production releases now use immutable digest/OCI identity, loopback-only candidate smoke,
+  post-deploy external verification, serialized auditable deployment and tested automatic/manual
+  previous-digest rollback.
+- Reliability operations now have evidence-based SLI/SLO targets, owned alert contracts, bounded
+  encrypted operational backups, restore/capacity/degradation drills, maintenance cadence and
+  owner-facing deploy, rollback, incident, backup and metrics runbooks.
+- CI gains one mocked Chromium critical journey while the full cross-browser and real-model suites
+  remain host-only. The Chromium-only Service Worker degradation probe reflects Playwright's
+  documented instrumentation boundary; all other supported-browser UI coverage remains intact.
+- Gate evidence passed 305 Vitest tests, the 281-case cross-browser matrix with 15 documented
+  skips, real-model inference, release/recovery and disposable Docker rollback checks, build,
+  Compose health/smoke, capacity budgets, audit/license/model checks and Trivy scans. A newly
+  disclosed PostCSS advisory was resolved by pinning the patched transitive version before PASS.
+
+### Affected Phases / Consequences
+- PHASE_24 may audit legal and data governance against the frozen Phase-23 operational
+  signals, retention and access paths; Phase 23 adds no browser telemetry or visitor identifier.
+- Production SLO/RTO compliance remains evidence-based and is not inferred from workstation gate
+  timings.
+
+## 2026-07-24 — Phase 23 operational defaults delegated to the implementation agent
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect delegated Phase-23 operational decisions and required a metrics guide
+
+### Changes / Decision
+- `SPEC.md` v1.17 delegates selection of cost-appropriate SLI/SLO targets, alert routing, backup
+  scope/retention and RPO/RTO to the implementation agent using measured evidence and the existing
+  single-VPS, Uptime Kuma, Umami, Cloudflare and GitHub architecture.
+- Phase 23 must publish `docs/operations/METRICS_GUIDE.md`: a step-by-step index covering where
+  every metric and operational signal is viewed and stored, its retention and threshold, and how
+  it is accessed safely. Uptime Kuma instructions must include a copyable SSH tunnel command,
+  local URL, verification, shutdown and troubleshooting without repository secrets.
+- No paid/external observability platform or new visitor telemetry is authorized. New credentials,
+  spending, legal facts or a material architecture/scope change still require escalation.
+
+### Affected Phases / Consequences
+- PHASE_23 — contract updated and reviewed; remains `⏳ pending` and ready for `/impl-assist 23`.
+- No completed phase or runtime contract is changed.
 
 ## 2026-07-24 — Phase 22 complete
 

@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.16` |
+| Document Version | `v1.17` |
 | Date | `2026-07-24` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
@@ -674,8 +674,8 @@ Production delivery follows these contracts from Phases 22–23:
   CDN byte ranges/model integrity and release identity without sending an image. Failure triggers a
   tested previous-digest rollback.
 - Operational state is backed up only when recovery is required, with encryption, access,
-  retention, owner-approved RPO/RTO and disposable restore evidence. Images, masks, composites and
-  browser editor documents are never backup inputs.
+  retention, documented evidence-based RPO/RTO and disposable restore evidence. Images, masks,
+  composites and browser editor documents are never backup inputs.
 
 ### 6.1 Model loading & caching (client-side)
 
@@ -917,8 +917,8 @@ new analytics payload is authorized by this workflow.
 | Uptime | Uptime Kuma (self-hosted) or UptimeRobot free tier | Ping home page + Umami `/api/heartbeat` every 5 min, alert via Telegram/email |
 | Logs | Nginx access/error → container stdout, size-bounded rotation via the `docker-compose` log driver | No separate log aggregator at this scale |
 | Release identity and checks | GitHub deployment record + OCI labels/digest + candidate/post-deploy smoke | Trace a production result to immutable inputs and make rollback evidence explicit |
-| Reliability objectives | Phase-23 SLI/SLO and alert review | SSR/CDN/model readiness, release success/rollback time, processing/download outcomes and Web Vitals with owner-approved targets |
-| Recovery | Encrypted backup status + disposable restore/rollback drill | Prove owner-approved RPO/RTO for operational state; images/editor state are excluded |
+| Reliability objectives | Phase-23 SLI/SLO and alert review | SSR/CDN/model readiness, release success/rollback time, processing/download outcomes and Web Vitals with documented, evidence-based targets |
+| Recovery | Encrypted backup status + disposable restore/rollback drill | Prove documented RPO/RTO for operational state; images/editor state are excluded |
 
 Application-defined analytics events are aggregate counters only and never include an image,
 filename, prompt, result, or custom visitor identifier. This does not justify a blanket “no
@@ -928,8 +928,15 @@ classification and controls (§7.2).
 
 Phase 23 adds no unapproved browser telemetry: it uses synthetic, deployment and aggregate
 infrastructure evidence first. Any new event, field or identifier requires the Phase-24 field-level
-review and Phase-25 transparency/choice implementation. Alerts and logs have bounded retention,
-redaction, an owner and a runbook; they never include image data or source URLs.
+review and Phase-25 transparency/choice implementation.
+
+Phase 23 must also publish a step-by-step operator metrics guide that maps every approved
+metric, SLI/SLO, alert, release check and recovery signal to its viewing location, storage and
+retention. The guide must include safe access instructions for Umami, Cloudflare, GitHub and the
+self-hosted Uptime Kuma dashboard, including an SSH tunnel example, local URL, verification and
+disconnect steps without embedding production secrets.
+Alerts and logs have bounded retention, redaction, an owner and a runbook; they never include image
+data or source URLs.
 
 ### 7.7 Testing
 
@@ -1012,7 +1019,7 @@ needs it.
 | `20` | Foreground Edge Quality & Runtime Hardening | Remove residual colour spill/edge artifacts and establish maintainable release confidence for the full hybrid pipeline without requiring a physical-device lab | Foreground-colour estimation/decontamination; conservative edge-aware fallback and connected-component cleanup; bounded full-resolution buffers/dirty patches; configured cross-browser and available-host real-model coverage for the Phases 16–19 pipeline; quality-regression corpus and interaction/latency/memory thresholds; manual triage of voluntarily supplied Telegram reports and focused regression coverage only for reproducible incidents; aggregate counters only; no diagnostic-reporting feature or mandatory physical-device matrix |
 | `21` | Brush-Guided Object Correction | Replace the technically exposed Phase-17 guided editor with one predictable semantic brush while reusing the proven SlimSAM runtime and preserving the exact final editor | Primary bilingual `keep`/`remove` translucent brush UI with size, undo/redo, clear, explicit recompute, visual candidate previews, direct-entry green-intent validation, and continuation through the existing pipeline; consolidated constraint map and at most 32 balanced prompt samples per session; intent/local-continuity candidate ranking without user-facing SlimSAM percentages; brush-region-only fusion over an automatic base; retained legacy point/box/layer source with selective `@deprecated` annotations only for production-unreferenced UI; focused unit/component/E2E plus host-only real-model evidence; no new model asset, API, persistence, analytics payload, or environment variable |
 | `22` | Production Security & Supply Chain Hardening | Protect the existing browser-only product and make every production input verifiable before the feature surface expands | Threat model; tested headers/no-image-egress/export metadata; non-root digest-pinned containers; least-privilege SHA-pinned CI; dependency/license/container gates; SBOM/attestation; verified model/WASM manifest and cache lifecycle; abuse controls; security.txt and vulnerability runbook |
-| `23` | Release Reliability & Operations | Make releases immutable, observable, reversible and recoverable without adding unapproved visitor telemetry | Release identity and digest deploy; candidate/post-deploy external smoke; automatic/manual rollback; deployment concurrency/audit; SLI/SLO and actionable alerts; bounded encrypted operational backups with restore drill; capacity/degradation exercises; CI mocked Chromium critical path; incident/maintenance runbooks |
+| `23` | Release Reliability & Operations | Make releases immutable, observable, reversible and recoverable without adding unapproved visitor telemetry | Release identity and digest deploy; candidate/post-deploy external smoke; automatic/manual rollback; deployment concurrency/audit; evidence-based SLI/SLO and actionable alerts; bounded encrypted operational backups with restore drill; capacity/degradation exercises; CI mocked Chromium critical path; incident/maintenance runbooks; step-by-step metrics and monitoring guide |
 | `24` | Legal & Data Governance Audit | Turn vague future metadata/cookie intent into an operator-specific, reviewable legal and data contract before adding collection or consent UI | Required operator/jurisdiction/market inputs; deployed data-flow and storage inspection; field-level data inventory; purposes/legal bases/minimization/retention/deletion; processors/transfers/localization/notification/rights/security matrices; decision on banner vs storage notice, legal routes/footer, terms/offer/consent needs; draft RU/EN content; qualified-review checkpoint; no runtime collection changes |
 | `25` | Consent & Legal Surfaces | Implement the approved Phase-24 transparency and choice contract without dark patterns or false cookie claims | Versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, retention/version behavior, SSR/SEO, storage/request inspection, and E2E |
 | `26` | Editor Document Foundation & Guided Reset | Establish a scalable browser-memory edit contract before rearranging the UI, and close the final-stroke guided-correction regression | `entities/edit-document`; bounded artifact store and `features/editor-history`; controller extraction from the monolithic workspace; explicit committed-vs-draft history semantics and resource cleanup; a base-backed zero-mark reset path that does not call SlimSAM; unit/component/E2E regression coverage; no visible broad redesign yet |
@@ -1084,8 +1091,12 @@ code is written.
   slider, toast/notification, dialog for mobile menu if needed).
 - Enabling cross-origin isolation for WASM multithreading remains optional research for Phase 20;
   any COOP/COEP change must first prove compatibility with CDN assets, analytics, and public pages.
-- Phase-23 owners must approve measured SLI/SLO targets, alert routing, operational backup scope,
-  and RPO/RTO; the agent must not invent business-criticality targets.
+- For Phase 23, the owner delegates selection of SLI/SLO targets, alert routing, operational backup
+  scope, retention and RPO/RTO to the implementation agent. The agent must choose conservative,
+  cost-appropriate defaults from measured project evidence and the existing single-VPS,
+  Uptime Kuma, Umami, Cloudflare and GitHub architecture; document assumptions and trade-offs; and
+  avoid adding a paid/external platform or new visitor telemetry. Escalate only if implementation
+  would require new credentials, spending, legal facts, or a material architecture/scope change.
 - Phase-24 owner inputs must be supplied before that audit can close: operator legal identity/form/
   address/contact and jurisdiction, actual target countries, minors policy, complete hosting/CDN/
   analytics/support processor list and retention, and whether qualified Russian/EU counsel is

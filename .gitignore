@@ -21,6 +21,9 @@ coverage
 playwright-report
 test-results
 
+# Host-only Phase 23 release records and encrypted operational backups
+.ops/
+
 # Public model/WASM binaries synchronized onto the VPS for Nginx (Phase 14)
 deploy/model-assets*/
 sample/
