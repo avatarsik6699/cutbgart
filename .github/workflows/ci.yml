@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a running main release; production also has its own lock.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   dependency-review:
@@ -49,6 +50,24 @@ jobs:
         run: pnpm arch:lint
       - run: pnpm test
 
+  ci-critical-path:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the CI exception browser only
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Deterministic mocked Chromium critical path
+        run: pnpm e2e:ci-critical
+
   security-source:
     runs-on: ubuntu-latest
     steps:
@@ -83,7 +102,8 @@ jobs:
           path: licenses.production.json
           retention-days: 30
 
-  # Playwright stays host-only by project contract; it is never run in CI.
+  # Only ci-critical-path is allowed in CI. The full matrix, WebGPU and real
+  # model suites remain host-only by project contract.
   build-and-push:
     needs: [lint-and-test, security-source]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -97,6 +117,8 @@ jobs:
     outputs:
       image: ${{ steps.image.outputs.name }}
       digest: ${{ steps.push.outputs.digest }}
+      build_id: ${{ steps.release.outputs.build_id }}
+      created_at: ${{ steps.release.outputs.created_at }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -110,19 +132,30 @@ jobs:
       - id: image
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - id: release
+        shell: bash
+        run: |
+          echo "build_id=$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=latest
             type=sha,format=long
+          labels: |
+            org.opencontainers.image.version=${{ steps.release.outputs.build_id }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.release.outputs.created_at }}
       - id: push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           push: true
           build-args: |
+            APP_BUILD_ID=${{ steps.release.outputs.build_id }}
+            APP_COMMIT_SHA=${{ github.sha }}
+            APP_CREATED_AT=${{ steps.release.outputs.created_at }}
             VITE_MODEL_CDN_BASE_URL=${{ vars.VITE_MODEL_CDN_BASE_URL }}
             VITE_UMAMI_SCRIPT_URL=${{ vars.VITE_UMAMI_SCRIPT_URL }}
             VITE_UMAMI_WEBSITE_ID=${{ vars.VITE_UMAMI_WEBSITE_ID }}
@@ -174,7 +207,12 @@ jobs:
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: https://cutbg.art
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: read
@@ -205,7 +243,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: ".dockerignore,Dockerfile,docker-compose.yml,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,models.manifest.json,public/models.manifest.json,scripts/sync-model-assets.ts,deploy/nginx/app.conf,deploy/init-letsencrypt.sh"
+          source: ".dockerignore,Dockerfile,docker-compose.yml,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,models.manifest.json,public/models.manifest.json,scripts/sync-model-assets.ts,scripts/release,deploy/nginx/app.conf,deploy/nginx/release.conf,deploy/init-letsencrypt.sh"
           target: ${{ secrets.VPS_APP_DIR }}
           overwrite: true
       - name: Deploy the verified digest over SSH
@@ -214,16 +252,21 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APP_IMAGE: ${{ needs.build-and-push.outputs.image }}@${{ needs.build-and-push.outputs.digest }}
+          APP_BUILD_ID: ${{ needs.build-and-push.outputs.build_id }}
+          APP_COMMIT_SHA: ${{ github.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DEPLOY_REF: ${{ github.ref }}
+          DEPLOY_RUN_ID: ${{ github.run_id }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN,APP_IMAGE
+          envs: GHCR_USER,GHCR_TOKEN,APP_IMAGE,APP_BUILD_ID,APP_COMMIT_SHA,DEPLOY_ACTOR,DEPLOY_REF,DEPLOY_RUN_ID
           script: |
             set -eu
             cd ${{ secrets.VPS_APP_DIR }}
+            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker compose --profile maintenance run --rm --build model-sync
-            APP_IMAGE="$APP_IMAGE" docker compose pull app
-            APP_IMAGE="$APP_IMAGE" docker compose up -d
-            docker logout ghcr.io
+            export APP_IMAGE APP_BUILD_ID APP_COMMIT_SHA
+            export DEPLOY_ACTOR DEPLOY_REF DEPLOY_RUN_ID
+            ./scripts/release/deploy.sh
