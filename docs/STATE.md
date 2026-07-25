@@ -42,7 +42,7 @@
 | PHASE_21 | ✅ done | v0.21.0 | ✅ | 🤖 agent | Brush-Guided Object Correction |
 | PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
 | PHASE_23 | ✅ done | v0.23.0 | ✅ | 🤖 agent | Release Reliability & Operations |
-| PHASE_24 | ⏳ pending | v0.24.0 | ⬜ | — | Legal & Data Governance Audit |
+| PHASE_24 | ✅ done | v0.24.0 | ✅ | 🤖 agent | Legal/data contract; owner accepted legal and real-model gate residual risks |
 | PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Consent & Legal Surfaces |
 | PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
 | PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Automatic-First Workspace |
@@ -809,6 +809,37 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-25 — Phase 24 complete with explicit owner risk acceptance
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_24 documentation gate completed and architect explicitly accepted the
+recorded legal and technical residual risks
+
+### Changes / Decision
+- Added a deployed data-flow/storage inventory, proposed-metadata register, applicability and
+  legal-basis matrix, governance controls, Phase-25 implementation contract, owner guide, and
+  bilingual Privacy/Terms/browser-storage drafts. No runtime route, tracker, cookie, metadata,
+  database, API, environment variable or image-processing behavior changed.
+- The public repository contains only publication-safe facts. Exact operator/infrastructure/
+  notification facts remain in a gitignored confidential register. The owner accepted deferring
+  full identity/address, provider/Cloudflare verification, Russian notification/localization/
+  transfer remediation and qualified counsel; this is not a legal opinion or compliance claim.
+- The gate passed Docker build/health/smoke, code generation, TypeScript, 305 Vitest tests,
+  formatting/placeholders, and 281 deterministic cross-browser E2E cases with 15 documented
+  skips. The serialized real-model Chromium smoke timed out twice after 240 seconds while still
+  loading IS-Net/WASM. The architect explicitly accepted that technical exception to close this
+  docs-only phase; the failure remains unresolved.
+
+### Affected Phases / Consequences
+- PHASE_25 may implement only `docs/legal/IMPLEMENTATION_MATRIX.md`: analytics is fail-closed before
+  choice and until the applicable provider/retention checks are verified; no invented operator or
+  infrastructure facts and no universal compliance claim.
+- PHASE_25 must rerun or investigate the real-model smoke before its own closure; Phase-24 risk
+  acceptance does not convert the timeout into a passing technical result.
+- `docs/STATE.md` § Current Contract remains at Phase 23 because Phase 24 introduced no runtime
+  model, endpoint, database, environment or persistence contract.
 
 ## 2026-07-25 — Phase 23 complete
 
