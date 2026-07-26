@@ -43,7 +43,7 @@
 | PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
 | PHASE_23 | ✅ done | v0.23.0 | ✅ | 🤖 agent | Release Reliability & Operations |
 | PHASE_24 | ✅ done | v0.24.0 | ✅ | 🤖 agent | Legal/data contract; owner accepted legal and real-model gate residual risks |
-| PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
+| PHASE_25 | ✅ done | v0.25.0 | ✅ | 🤖 agent | Editor Document Foundation & Guided Reset |
 | PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Automatic-First Workspace |
 | PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Unified Cutout Tool |
 | PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Enhancements Tool & Committed History |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `23` · **Phase in progress:** `—`
+**Phase completed:** `25` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -665,6 +665,43 @@ Phase 23 binds each production deployment and rollback to an immutable image dig
 OCI identity. Candidate and external smoke checks, release records and response headers expose the
 same non-secret identity without adding a public infrastructure endpoint.
 
+```ts
+// Phase 25 — bounded editor document, artifacts and committed history
+type EditorArtifactId = string;
+type EditOperationKind = "cutout" | "manual" | "enhance" | "background";
+
+interface EditDocumentSnapshot {
+  alphaMatte: EditorArtifactId;
+  foreground: EditorArtifactId | null;
+  composite: EditorArtifactId;
+  backgroundFill: EditorBackgroundFill;
+  processingMode: EditorAutomaticModelMode;
+  provenance: Readonly<EditProcessingProvenance>;
+}
+
+interface EditDocument {
+  id: string;
+  source: EditorSourceImage;
+  baseline: Readonly<EditDocumentSnapshot>;
+  current: Readonly<EditDocumentSnapshot>;
+  revision: number;
+}
+
+interface EditDocumentScope {
+  document: EditDocument;
+  history: EditHistory;
+  artifacts: EditorArtifactStore;
+  workerOwnerId: string;
+}
+```
+
+Phase 25 gives a successful single result and every successful batch item one independent
+browser-memory document scope. Its artifact store owns mattes, blobs and object URLs by opaque ID
+and releases them when no baseline/current/history owner remains. Committed history is atomic,
+labeled and bounded to 20 entries / 96 MiB of avoidable historical artifacts; stale, failed and
+cancelled async work never commits. Tool strokes remain drafts. `useToolWorkspaceController`
+owns workspace orchestration and worker/run guards, while `ToolWorkspace` remains presentation.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -731,6 +768,9 @@ same non-secret identity without adding a public infrastructure endpoint.
   configuration snapshots. Encrypted operational backups cover only approved Umami/Uptime,
   release/configuration and TLS material under the documented retention schedule; source images,
   masks, composites and editor state are never backup inputs.
+- Phase 25 edit documents, artifact stores, object URLs, committed histories and stable worker
+  ownership tokens remain in browser-tab memory only. Reset, source replacement, batch item
+  removal/clear and unmount release the affected scope without touching another completed item.
 - `umami-db` (Postgres, added Phase 05): Umami's own internal schema, managed entirely by the Umami container image — not owned by this app; this app's contract still has no server-side persistent store (SPEC.md §3).
 
 ### UI Pages
@@ -771,6 +811,9 @@ same non-secret identity without adding a public infrastructure endpoint.
   both direct upload and automatic results. Explicit recompute updates a clean split result preview;
   accepted output continues through matting, foreground cleanup, exact correction, backgrounds,
   selected-batch handling, and downloads without a parallel state machine or new route.
+- Phase 25 preserves the existing workspace presentation while moving orchestration behind
+  `useToolWorkspaceController`. Removing the last guided mark over an automatic base exposes an
+  explicit localized restore action that returns the base locally and sends no SlimSAM request.
 
 ### Env Config
 
@@ -809,6 +852,37 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-27 — Phase 25 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_25 gate passed
+
+### Changes / Decision
+- Added independent in-memory edit-document scopes for successful single and batch results, with
+  immutable automatic baselines, monotonic revisions, stable worker ownership and an artifact
+  store that tracks reachability, bytes and object-URL disposal.
+- Added labeled atomic edit history bounded to 20 entries and 96 MiB of avoidable historical
+  artifacts, including deterministic eviction, branch-after-undo cleanup, localized selectors and
+  stale/failed/cancelled commit exclusion.
+- Extracted workspace orchestration into `useToolWorkspaceController` without materially changing
+  the current UI, and made source replacement/reset/removal/unmount dispose only the intended
+  single or batch document scope.
+- Fixed automatic-base guided correction so removing the final mark can explicitly restore the
+  base locally, invalidate stale candidates and advance revision without a SlimSAM request.
+- Gate evidence passed code generation, TypeScript, architecture lint, 317 Vitest tests, focused
+  phase suites, formatting/lint (one inherited warning), 289 cross-browser E2E cases with 15
+  expected skips, the serialized real-model Chromium smoke, Docker production build/health and
+  container-native HTTP smoke.
+
+### Affected Phases / Consequences
+- PHASE_26 can add the automatic-first toolbar/layout against the document/controller foundation
+  without moving orchestration back into `ToolWorkspace`.
+- PHASE_27–30 inherit bounded committed history and per-item ownership; active tool strokes remain
+  drafts until an explicit successful commit.
+- No route, endpoint, persistent user-data store, model revision, analytics payload, package or
+  runtime environment contract changed.
 
 ## 2026-07-25 — Final legal work moved behind the completed product
 

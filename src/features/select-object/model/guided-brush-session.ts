@@ -140,6 +140,18 @@ export function clearGuidedBrushStrokes(session: GuidedBrushSession): GuidedBrus
   });
 }
 
+export function restoreGuidedBrushBase(session: GuidedBrushSession): GuidedBrushSession {
+  if (!session.baseMatte || session.strokes.length > 0) return session;
+  return {
+    ...session,
+    status: "preview",
+    computedRevision: session.revision,
+    editRegion: null,
+    candidates: [],
+    selectedCandidateId: null,
+  };
+}
+
 export function setGuidedBrushCandidates(
   session: GuidedBrushSession,
   candidates: readonly GuidedBrushCandidate[],

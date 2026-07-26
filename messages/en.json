@@ -118,6 +118,7 @@
   "guidedBrushRedo": "Redo marking",
   "guidedBrushClear": "Clear markings",
   "guidedBrushRecompute": "Recompute mask",
+  "guidedBrushRestoreBase": "Restore automatic result",
   "guidedBrushRecomputing": "Recomputing mask…",
   "guidedBrushApplying": "Applying the selected result…",
   "guidedBrushReady": "Paint Keep or Remove markings on the image.",

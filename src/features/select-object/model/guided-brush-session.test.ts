@@ -11,6 +11,7 @@ import {
   createGuidedBrushSession,
   createGuidedBrushViewSession,
   redoGuidedBrushStroke,
+  restoreGuidedBrushBase,
   selectGuidedBrushCandidate,
   setGuidedBrushCandidates,
   setGuidedBrushRadius,
@@ -108,5 +109,31 @@ describe("guided brush session", () => {
     });
     expect(canAcceptGuidedBrushSession(continued)).toBe(true);
     expect(continueGuidedBrushFromResult(continued, candidate.matte)).toBe(continued);
+  });
+
+  it("turns a zero-mark dirty pass back into its local base", () => {
+    const baseMatte = {
+      width: 8,
+      height: 8,
+      data: new Uint8ClampedArray(64).fill(120),
+    };
+    const painted = appendGuidedBrushStroke(
+      createGuidedBrushSession(source, baseMatte),
+      stroke("remove"),
+    );
+    const empty = undoGuidedBrushStroke(painted);
+    const restored = restoreGuidedBrushBase(empty);
+    expect(restored).toMatchObject({
+      baseMatte,
+      strokes: [],
+      status: "preview",
+      computedRevision: empty.revision,
+      candidates: [],
+      selectedCandidateId: null,
+    });
+    expect(canAcceptGuidedBrushSession(restored)).toBe(true);
+    expect(restoreGuidedBrushBase(createGuidedBrushSession(source))).toEqual(
+      createGuidedBrushSession(source),
+    );
   });
 });

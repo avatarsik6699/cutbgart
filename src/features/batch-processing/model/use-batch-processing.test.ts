@@ -204,4 +204,75 @@ describe("useBatchProcessing", () => {
       expect(result.current.snapshot.activeCount).toBeLessThanOrEqual(limit);
     },
   );
+
+  it("owns and releases independent edit documents per completed batch item", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "isnet-q8",
+        inferencePath: "webgpu",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+    act(() =>
+      result.current.enqueue([
+        { fileName: "first.jpg", source },
+        { fileName: "second.jpg", source: { ...source, blob: new Blob(["second"]) } },
+      ]),
+    );
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "isnet-q8",
+        inferencePath: "webgpu",
+        dtype: "q8",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        2,
+      ),
+    );
+    const requests = worker.posted.filter((message) => message.type === "process");
+    for (const [index, request] of requests.entries()) {
+      act(() =>
+        worker.emit({
+          type: "process-result",
+          requestId: request.requestId,
+          result: new Blob([`result-${String(index)}`]),
+          matte: {
+            width: 1,
+            height: 1,
+            data: new Uint8ClampedArray([index + 1]),
+          },
+          durationMs: 1,
+        }),
+      );
+    }
+    await waitFor(() => expect(result.current.snapshot.completedCount).toBe(2));
+    const [first, second] = result.current.session.items;
+    if (!first?.editDocument || !second?.editDocument)
+      throw new Error("Expected independent edit documents");
+    expect(first.editDocument).not.toBe(second.editDocument);
+    expect(first.editDocument.artifacts).not.toBe(second.editDocument.artifacts);
+    expect(first.editDocument.document.id).not.toBe(second.editDocument.document.id);
+    expect(first.editDocument.workerOwnerId).not.toBe(second.editDocument.workerOwnerId);
+
+    const firstScope = first.editDocument;
+    const secondScope = second.editDocument;
+    act(() => result.current.selectItem(second.id));
+    expect(result.current.session.items[0]?.editDocument).toBe(firstScope);
+    expect(result.current.session.items[1]?.editDocument).toBe(secondScope);
+
+    act(() => result.current.removeItem(first.id));
+    expect(firstScope.artifacts.stats().artifactCount).toBe(0);
+    expect(secondScope.artifacts.stats().artifactCount).toBeGreaterThan(0);
+    expect(result.current.session.items).toHaveLength(1);
+
+    act(() => result.current.reset());
+    expect(secondScope.artifacts.stats().artifactCount).toBe(0);
+  });
 });

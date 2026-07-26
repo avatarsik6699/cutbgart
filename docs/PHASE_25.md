@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `25` |
 | Title | Editor Document Foundation & Guided Reset |
-| Status | `⏳ pending` |
+| Status | `✅ done` |
 | Tag | `v0.25.0` |
 | Depends on | PHASE_24 gate passing |
 
@@ -30,51 +30,51 @@ base without another SlimSAM call or a permanently disabled action (SPEC.md §2.
 
 ### Frontend
 
-- [ ] `F1` Add `entities/edit-document` pure contracts for document identity, immutable automatic
+- [x] `F1` Add `entities/edit-document` pure contracts for document identity, immutable automatic
   baseline/current artifact references, subject matte/foreground, background, composite,
   processing provenance, and monotonic revision. A successful single upload and each successful
   `BatchItem` own exactly one independent document scope; queued/processing/error items do not
   allocate one early. Do not add persistence, serialization, generic layers, transforms, shadows,
   perspective, or effects — _Depends on:_ —
-- [ ] `F2` Add an artifact store owning mattes/blobs/object URLs by opaque ID, tracking estimated
+- [x] `F2` Add an artifact store owning mattes/blobs/object URLs by opaque ID, tracking estimated
   unique bytes and reachability from current/baseline/history snapshots. Release unreachable
   resources on eviction, branch-after-undo, document reset/removal, and unmount — _Depends on:_ `F1`
-- [ ] `F3` Add `features/editor-history` with labeled atomic commit/undo/redo. Bound history to 20
+- [x] `F3` Add `features/editor-history` with labeled atomic commit/undo/redo. Bound history to 20
   entries and 96 MiB of retained historical artifacts; when one undo step alone exceeds the byte
   budget, retain only that latest step. Current-document artifacts are not counted as avoidable
   history, and a failed/stale/cancelled async action creates no entry — _Depends on:_ `F1`, `F2`
-- [ ] `F4` Define the history boundary: committed document mutations use `EditHistory`; active
+- [x] `F4` Define the history boundary: committed document mutations use `EditHistory`; active
   Magic/Manual strokes remain bounded tool drafts. Expose selectors for `canUndo`, `canRedo`, and
   localized next-action labels without adding the Phase-26 toolbar yet — _Depends on:_ `F3`
-- [ ] `F5` Extract a `useToolWorkspaceController` orchestration module from
+- [x] `F5` Extract a `useToolWorkspaceController` orchestration module from
   `ToolWorkspace.tsx`: source/result adoption, worker lifecycle, refinement targets, background
   application, correction entry/exit, reset, and stale-run guards move behind a typed interface.
   Keep the current rendered UX materially unchanged and preserve feature public-API boundaries —
   _Depends on:_ `F1`–`F4`
-- [ ] `F6` Add the base-backed zero-mark transition to guided brush state/hook logic. If undo/clear
+- [x] `F6` Add the base-backed zero-mark transition to guided brush state/hook logic. If undo/clear
   removes the final stroke after a computed result and `baseMatte` exists, explicit recompute/apply
   restores the base locally, invalidates stale candidates, advances the revision coherently, and
   sends no worker request. A direct session with no base still requires green `keep` intent —
   _Depends on:_ `F5`
-- [ ] `F7` Keep current candidate/Continue UI operational until Phase 27, but make its action state
+- [x] `F7` Keep current candidate/Continue UI operational until Phase 27, but make its action state
   reflect `F6` so manual testing can no longer reproduce the disabled-action trap. Add a
   plain-language accessible label for the local reset path if copy is needed — _Depends on:_ `F6`
-- [ ] `F8` Add unit/hook/component tests for artifact reachability, byte/count eviction,
+- [x] `F8` Add unit/hook/component tests for artifact reachability, byte/count eviction,
   branch-after-undo cleanup, operation labels, failed/stale exclusion, controller reset/source
   replacement, zero-mark base restoration, no-worker-call proof, and direct no-base validation —
   _Depends on:_ `F2`–`F7`
-- [ ] `F9` Extend Playwright coverage for automatic-result Magic correction: add a stroke,
+- [x] `F9` Extend Playwright coverage for automatic-result Magic correction: add a stroke,
   recompute, undo/clear until no strokes remain, trigger the action, verify the base result returns,
   and assert no additional mocked inference post was made. Cover reset/source replacement cleanup
   in both the single-image flow and a selected completed batch item without changing the broad
   Phase-21 visual flow — _Depends on:_ `F8`
-- [ ] `F10` Add batch lifecycle tests proving item selection/reordering cannot share document,
+- [x] `F10` Add batch lifecycle tests proving item selection/reordering cannot share document,
   artifact, history, revision, or worker ownership and that removal/clear releases only the target
   item's resources. Keep the current batch presentation unchanged — _Depends on:_ `F1`–`F9`
 
 ### Infra
 
-- [ ] `I1` Keep Phase 25 free of new packages, model assets, runtime evidence commands, routes,
+- [x] `I1` Keep Phase 25 free of new packages, model assets, runtime evidence commands, routes,
   env vars, analytics payloads, persistence, and server work. Run the existing real-model smoke
   only through the normal phase gate because the SlimSAM graph/protocol itself is unchanged —
   _Depends on:_ `F10`
@@ -114,6 +114,9 @@ src/widgets/tool-workspace/index.ts
 messages/ru.json
 messages/en.json
 e2e/brush-guided-correction.spec.ts
+e2e/operations-degraded.spec.ts
+scripts/run-e2e.ts
+vite.config.ts
 docs/PHASE_25.md
 ~~~
 
@@ -217,7 +220,13 @@ explicitly resolved by a new architect decision.
 
 ## Implementation Notes
 
-None
+- `entities/edit-document` uses structurally compatible editor image/matte/fill contracts instead
+  of importing the sibling `processed-image` entity; this preserves the phase contract while
+  satisfying the enforced FSD same-layer import boundary.
+- The E2E runner uses Vite's `e2e` mode with HMR/agent console forwarding disabled, and the
+  inherited offline-cache probe waits for the native ESM graph to become idle before disconnecting
+  Chromium. This removes a dev-only reload race without changing production behavior or adding an
+  environment variable.
 
 ---
 
@@ -231,9 +240,9 @@ refactor(phase-25): add editor document history and guided reset
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 25`
-- [ ] Committed atomically on `feat/phase-25`
-- [ ] Tag created after merge: `v0.25.0`
+- [x] All Scope checkboxes checked
+- [x] All automated gate checks green
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — run `/context-update 25`
+- [x] Committed atomically on `feat/phase-25`
+- [x] Tag created after merge: `v0.25.0`

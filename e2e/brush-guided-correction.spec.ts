@@ -375,6 +375,80 @@ test("separated automatic-base markings cannot change the untouched area between
     .toEqual([255, 255, 255]);
 });
 
+test("removing the final automatic-base mark restores locally without another SlimSAM prompt", async ({
+  page,
+}) => {
+  await page.goto("/en");
+  const upload = page.getByLabel("Upload an image");
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(AUTOMATIC_FLOW_SAMPLES[0].file);
+  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible({
+    timeout: 15_000,
+  });
+  const workspace = page.getByTestId("tool-workspace");
+  await expect(workspace).toHaveAttribute("data-document-id", /.+/);
+  const documentId = await workspace.getAttribute("data-document-id");
+  expect(documentId).toBeTruthy();
+
+  await page.getByRole("button", { name: /Refine selection with brush/ }).click();
+  const guided = page.getByTestId("guided-brush-selection");
+  await expect(guided).toBeVisible();
+  await guided.getByRole("button", { name: /^Remove$/ }).click();
+  await brushStroke(page, [0.62, 0.42], [0.7, 0.55]);
+  await guided.getByRole("button", { name: /Recompute mask/ }).click();
+  await expect(guided.getByTestId("guided-brush-candidates")).toBeVisible();
+  const promptCount = (await guidedPromptPosts(page)).length;
+
+  await guided.getByRole("button", { name: /Undo marking/ }).click();
+  await expect(guided).toHaveAttribute("data-stroke-count", "0");
+  const restore = guided.getByRole("button", {
+    name: /Restore automatic result/,
+  });
+  await expect(restore).toBeEnabled();
+  await restore.click();
+
+  await expect(guided.getByTestId("guided-brush-candidates")).toHaveCount(0);
+  await expect(guided.getByRole("button", { name: /Accept and refine/ })).toBeEnabled();
+  expect(await guidedPromptPosts(page)).toHaveLength(promptCount);
+  await guided.getByRole("button", { name: /Accept and refine/ }).click();
+  await expect(workspace).toHaveAttribute("data-document-id", documentId!);
+  expect(await guidedPromptPosts(page)).toHaveLength(promptCount);
+});
+
+test("single and selected batch document ownership resets independently", async ({
+  page,
+}) => {
+  await page.goto("/en");
+  const upload = page.getByLabel("Upload an image");
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(AUTOMATIC_FLOW_SAMPLES[0].file);
+  const workspace = page.getByTestId("tool-workspace");
+  await expect(workspace).toHaveAttribute("data-document-id", /.+/, {
+    timeout: 15_000,
+  });
+  await expect(workspace).toHaveAttribute("data-document-artifact-count", /[1-9]/);
+  await page.getByRole("button", { name: /Process another image/ }).click();
+  await expect(workspace).not.toHaveAttribute("data-document-id", /.+/);
+
+  await upload.setInputFiles([
+    AUTOMATIC_FLOW_SAMPLES[0].file,
+    AUTOMATIC_FLOW_SAMPLES[1].file,
+  ]);
+  await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(2);
+  const readyItems = page.getByRole("button", { name: /Select .* ready/i });
+  await expect(readyItems).toHaveCount(2, { timeout: 15_000 });
+  await readyItems.first().click();
+  const firstId = await workspace.getAttribute("data-document-id");
+  const firstOwner = await workspace.getAttribute("data-document-worker-owner");
+  expect(firstId).toBeTruthy();
+  expect(firstOwner).toBeTruthy();
+  await readyItems.nth(1).click();
+  await expect(workspace).not.toHaveAttribute("data-document-id", firstId!);
+  await expect(workspace).not.toHaveAttribute("data-document-worker-owner", firstOwner!);
+  await page.getByRole("button", { name: /Clear batch/ }).click();
+  await expect(workspace).not.toHaveAttribute("data-document-id", /.+/);
+});
+
 test("the tolerance halo can cross a boundary without forcing either semantic intent", async ({
   page,
 }) => {

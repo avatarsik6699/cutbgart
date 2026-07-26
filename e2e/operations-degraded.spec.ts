@@ -35,6 +35,10 @@ test("verified model cache recovers offline and an uncached CDN request fails sa
   }, CACHED_ASSET);
   expect(primed).toEqual({ status: 200, release: "v0.22.0" });
 
+  // Vite may still be serving the tail of the native ESM graph after the page
+  // load event. Going offline before those requests settle can trigger a
+  // development-only reload and destroy the evaluation context.
+  await page.waitForLoadState("networkidle");
   await context.setOffline(true);
   try {
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);

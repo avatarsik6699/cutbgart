@@ -5,6 +5,7 @@ import type {
   QualityMode,
   SourceImage,
 } from "../../../entities/processed-image";
+import type { EditDocumentScope } from "../../../entities/edit-document";
 
 export type BatchItemStatus =
   "queued" | "model-loading" | "processing" | "result" | "error";
@@ -33,6 +34,8 @@ export interface BatchItem {
   qualityMode: QualityMode;
   alphaMatte?: AlphaMatte;
   processedImage?: ProcessedImage;
+  /** Allocated only after a successful result; never shared between items. */
+  editDocument?: EditDocumentScope;
   status: BatchItemStatus;
   error?: string;
   enqueuedAt: number;

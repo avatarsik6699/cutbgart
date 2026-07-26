@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Trash2 } from "lucide-react";
 
 import type {
   AlphaMatte,
   BackgroundFill,
-  ProcessedImage,
   QualityMode,
-  RefinementConstraintMap,
   SourceImage,
 } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
@@ -19,37 +17,15 @@ import {
 import { DownloadResultButton } from "../../../features/download-result";
 import { BackgroundFillSelector } from "../../../features/background-replacement";
 import { DownloadAllButton } from "../../../features/download-result";
-import {
-  BatchGrid,
-  BatchStatus,
-  useBatchProcessing,
-} from "../../../features/batch-processing";
-import {
-  detectDeviceCapabilities,
-  useBackgroundRemoval,
-} from "../../../features/remove-background";
-import { QualityModeToggle, useQualityMode } from "../../../features/quality-mode-toggle";
-import {
-  GuidedBrushCanvas,
-  createGuidedBrushConstraints,
-  createGuidedBrushViewSession,
-  useGuidedBrushSelection,
-} from "../../../features/select-object";
-import {
-  MatteRefinementControls,
-  recommendMattingMode,
-  useMatteRefinement,
-  type MattingRefinementMode,
-} from "../../../features/refine-matte";
-import {
-  ForegroundRefinementControls,
-  useForegroundRefinement,
-} from "../../../features/refine-foreground";
+import { BatchGrid, BatchStatus } from "../../../features/batch-processing";
+import { QualityModeToggle } from "../../../features/quality-mode-toggle";
+import { GuidedBrushCanvas } from "../../../features/select-object";
+import { MatteRefinementControls } from "../../../features/refine-matte";
+import { ForegroundRefinementControls } from "../../../features/refine-foreground";
 import {
   ChoosePhotoButton,
   UploadDropzone,
   UploadPreparationNotice,
-  type UploadResult,
   type UploadValidationError,
 } from "../../../features/upload-image";
 import { Button } from "@/shared/ui";
@@ -60,7 +36,7 @@ import {
   describeRefinementState,
   describeState,
 } from "../lib/describe-state";
-import { sourceImageToFile } from "../lib/source-image-to-file";
+import { useToolWorkspaceController } from "../model/use-tool-workspace-controller";
 import { ProcessingLog } from "./ProcessingLog";
 
 function pathLabel(path: "webgpu" | "wasm"): string {
@@ -199,10 +175,6 @@ function MaskCorrectionSlots({
 }
 
 type DisplayError = { message: string; action: "retry" | "reset" };
-type GuidedBrushVisualContext = {
-  entryKind: "direct" | "processed";
-  resultColorSource: Blob;
-};
 
 function localizedUploadError(error: UploadValidationError): string {
   if (error.code === "unsupported-format") {
@@ -251,106 +223,37 @@ function CorrectionErrorAlert({ error, onRetry, onReset }: CorrectionErrorAlertP
  * not just DOM order — so both constraints hold at once.
  */
 export function ToolWorkspace() {
-  const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
-  const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
-  const [preparingFileCount, setPreparingFileCount] = useState(0);
-  const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
-  const [extractingMatte, setExtractingMatte] = useState(false);
-  const [finalizingCorrection, setFinalizingCorrection] = useState(false);
-  const [correctionError, setCorrectionError] = useState<DisplayError | null>(null);
-  const [correctionViewAnnouncement, setCorrectionViewAnnouncement] = useState("");
-  const [previewFill, setPreviewFill] = useState<BackgroundFill>({ type: "transparent" });
-  const [backgroundBusy, setBackgroundBusy] = useState(false);
-  const [batchPreviewFills, setBatchPreviewFills] = useState<
-    Record<string, BackgroundFill>
-  >({});
-  const [batchBackgroundBusy, setBatchBackgroundBusy] = useState<Record<string, boolean>>(
-    {},
-  );
-  const retryCorrectionRef = useRef<(() => void) | null>(null);
-  const correctionRunRef = useRef(0);
-  const guidedRunRef = useRef(0);
-  // TanStack Start SSRs this widget's markup before client hydration attaches
-  // `UploadDropzone`/`ChoosePhotoButton`'s onChange/onDrop handlers — a real
-  // interaction in that window is visually indistinguishable from a working
-  // control but silently drops the event (same class of bug as
-  // docs/KNOWN_GOTCHAS.md's Playwright-hydration-race entry, but reproducible
-  // by a real user's very first upload attempt, not just automation). `false`
-  // on both the server render and the first client render, flipping to `true`
-  // only once this effect actually runs — i.e. only once hydration has
-  // completed and the upload controls' own handlers are live.
-  const [hydrated, setHydrated] = useState(false);
-  const [guidedEntry, setGuidedEntry] = useState(false);
-  const [guidedVisualContext, setGuidedVisualContext] =
-    useState<GuidedBrushVisualContext | null>(null);
-  const guided = useGuidedBrushSelection();
-  const guidedViewSession = useMemo(
-    () =>
-      guided.state.session ? createGuidedBrushViewSession(guided.state.session) : null,
-    [guided.state.session],
-  );
-  const guidedTargetRef = useRef<
-    | { kind: "direct" }
-    | { kind: "single"; image: ProcessedImage }
-    | { kind: "batch"; itemId: string; image: ProcessedImage }
-    | null
-  >(null);
-  const refinement = useMatteRefinement();
-  const finishRefinementApplying = refinement.finishApplying;
-  const foregroundRefinement = useForegroundRefinement();
-  const finishForegroundApplying = foregroundRefinement.finishApplying;
-  const [refinementMode, setRefinementMode] = useState<MattingRefinementMode>("balanced");
-  const refinementContextRef = useRef<{
-    guidedMatte: AlphaMatte | null;
-    constraints: RefinementConstraintMap | null;
-  }>({ guidedMatte: null, constraints: null });
-  const refinementTargetRef = useRef<
-    | { kind: "single"; image: ProcessedImage }
-    | { kind: "batch"; itemId: string; image: ProcessedImage }
-    | null
-  >(null);
-  const appliedRefinementRef = useRef<AlphaMatte | null>(null);
-  const foregroundTargetRef = useRef<
-    | { kind: "single"; image: ProcessedImage }
-    | { kind: "batch"; itemId: string; image: ProcessedImage }
-    | null
-  >(null);
-  const appliedForegroundRef = useRef<Blob | null>(null);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate hydration flag (see comment above): it must flip exactly once, only after hydration completes on the client; the one extra render is the point, not an accident.
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js");
-    }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void detectDeviceCapabilities().then((capabilities) => {
-      if (!cancelled) {
-        setDefaultQualityMode(capabilities.defaultQualityMode);
-        setRefinementMode(recommendMattingMode(capabilities.inferencePath));
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(
-    () => () => {
-      correctionRunRef.current += 1;
-      guidedRunRef.current += 1;
-    },
-    [],
-  );
-
-  const { qualityMode, setQualityMode } = useQualityMode(defaultQualityMode);
   const {
+    uploadError,
+    preparingFileCount,
+    setPreparingFileCount,
+    originalMatte,
+    extractingMatte,
+    finalizingCorrection,
+    correctionError,
+    correctionViewAnnouncement,
+    setCorrectionViewAnnouncement,
+    previewFill,
+    setPreviewFill,
+    backgroundBusy,
+    setBackgroundBusy,
+    batchPreviewFills,
+    setBatchPreviewFills,
+    batchBackgroundBusy,
+    setBatchBackgroundBusy,
+    hydrated,
+    guidedEntry,
+    setGuidedEntry,
+    guidedVisualContext,
+    guided,
+    guidedViewSession,
+    refinement,
+    foregroundRefinement,
+    refinementMode,
+    setRefinementMode,
+    singleDocument,
+    qualityMode,
+    setQualityMode,
     state,
     deviceCapabilities,
     lightweightMode,
@@ -358,576 +261,39 @@ export function ToolWorkspace() {
     logs,
     modelLoadBytes,
     ben2FallbackNotice,
-    selectFile,
     recomputeMaxQuality,
     retry,
     retryInLightweightMode,
-    reset,
-    enterCorrecting,
-    exitCorrecting,
-    extractMatte,
-    recomposite,
     applyBackgroundFill,
-    replaceResult,
-    adoptResult,
-    releaseInference,
-  } = useBackgroundRemoval(qualityMode);
-  const batch = useBatchProcessing({
-    qualityMode,
-    inferencePath: deviceCapabilities?.inferencePath ?? "wasm",
-    concurrencyLimit:
-      qualityMode === "ben2-fp16"
-        ? 1
-        : deviceCapabilities?.inferencePath === "webgpu"
-          ? 2
-          : 1,
-  });
-  const batchModelKey =
-    `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
-  const selectedBatchItem = batch.session.items.find(
-    (item) => item.id === batch.session.selectedItemId,
-  );
-  const lastLogMessage = logs.at(-1)?.message;
-
-  async function releaseRefinementBeforeHeavyWork() {
-    await Promise.all([refinement.release(), foregroundRefinement.release()]);
-    refinement.reset();
-    foregroundRefinement.reset();
-    refinementTargetRef.current = null;
-    appliedRefinementRef.current = null;
-    foregroundTargetRef.current = null;
-    appliedForegroundRef.current = null;
-  }
-
-  function handleUpload(result: UploadResult) {
-    const guidedRunId = guidedRunRef.current + 1;
-    guidedRunRef.current = guidedRunId;
-    correctionRunRef.current += 1;
-    setCorrectionError(null);
-    setCorrectionViewAnnouncement("");
-    retryCorrectionRef.current = null;
-    setPreviewFill({ type: "transparent" });
-    setBackgroundBusy(false);
-    if (!result.ok) {
-      setUploadError(result.error);
-      return;
-    }
-    setUploadError(null);
-    refinementContextRef.current = { guidedMatte: null, constraints: null };
-    void releaseRefinementBeforeHeavyWork().then(() => {
-      if (guidedRunRef.current !== guidedRunId) return;
-      if (guidedEntry) {
-        guidedTargetRef.current = { kind: "direct" };
-        setGuidedVisualContext({
-          entryKind: "direct",
-          resultColorSource: result.image.blob,
-        });
-        guided.start(result.image);
-      } else {
-        guidedTargetRef.current = null;
-        setGuidedVisualContext(null);
-        selectFile(sourceImageToFile(result.image));
-      }
-    });
-  }
-
-  function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
-    const valid = results.flatMap(({ fileName, result }) =>
-      result.ok ? [{ fileName, source: result.image }] : [],
-    );
-    const invalid = results.find(({ result }) => !result.ok);
-    setUploadError(invalid && !invalid.result.ok ? invalid.result.error : null);
-    if (valid.length) {
-      void releaseRefinementBeforeHeavyWork().then(() => batch.enqueue(valid));
-    }
-  }
-
-  function handleReset() {
-    correctionRunRef.current += 1;
-    guidedRunRef.current += 1;
-    setUploadError(null);
-    setPreparingFileCount(0);
-    setCorrectionError(null);
-    setCorrectionViewAnnouncement("");
-    retryCorrectionRef.current = null;
-    setOriginalMatte(null);
-    setExtractingMatte(false);
-    setFinalizingCorrection(false);
-    setPreviewFill({ type: "transparent" });
-    setBackgroundBusy(false);
-    setGuidedEntry(false);
-    setGuidedVisualContext(null);
-    guidedTargetRef.current = null;
-    refinementContextRef.current = { guidedMatte: null, constraints: null };
-    refinementTargetRef.current = null;
-    appliedRefinementRef.current = null;
-    foregroundTargetRef.current = null;
-    appliedForegroundRef.current = null;
-    void refinement.release().then(refinement.reset);
-    void foregroundRefinement.release().then(foregroundRefinement.reset);
-    guided.reset();
-    reset();
-  }
-
-  function handleAcceptGuided() {
-    const session = guided.state.session;
-    const target = guidedTargetRef.current;
-    if (!session || !guided.state.matte || !target || !guided.canAccept) return;
-    const seed =
-      target.kind === "single" || target.kind === "batch"
-        ? target.image
-        : {
-            source: session.source,
-            result: session.source.blob,
-            qualityMode: "isnet-q8" as const,
-            alphaMatte: guided.state.matte,
-            backgroundFill: { type: "transparent" as const },
-          };
-    const guidedRunId = guidedRunRef.current + 1;
-    guidedRunRef.current = guidedRunId;
-    retryCorrectionRef.current = () => {
-      if (guidedTargetRef.current === target) handleAcceptGuided();
-    };
-    setCorrectionError(null);
-    setFinalizingCorrection(true);
-    const constraints = createGuidedBrushConstraints(session);
-    const guidedMatte = guided.state.matte;
-    const apply = target.kind === "batch" ? batch.recomposite : recomposite;
-    void apply(seed, guided.state.matte)
-      .then((result) => {
-        if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
-          return;
-        setFinalizingCorrection(false);
-        refinementContextRef.current = { guidedMatte, constraints };
-        setOriginalMatte(null);
-        if (target.kind === "batch") batch.replaceResult(target.itemId, result);
-        else if (target.kind === "single") replaceResult(result);
-        else adoptResult(result);
-        guided.reset();
-        guidedTargetRef.current = null;
-        setGuidedVisualContext(null);
-        setGuidedEntry(false);
-        retryCorrectionRef.current = null;
-      })
-      .catch((error: unknown) => {
-        if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
-          return;
-        setFinalizingCorrection(false);
-        setCorrectionError({
-          message: error instanceof Error ? error.message : String(error),
-          action: "retry",
-        });
-      });
-  }
-
-  function handleGuideAutomaticResult() {
-    if (state.status !== "result") return;
-    const image = state.result;
-    const guidedRunId = guidedRunRef.current + 1;
-    guidedRunRef.current = guidedRunId;
-    retryCorrectionRef.current = () => {
-      if (state.status === "result") handleGuideAutomaticResult();
-    };
-    setCorrectionError(null);
-    setExtractingMatte(true);
-    void (async () => {
-      try {
-        await releaseRefinementBeforeHeavyWork();
-        if (guidedRunRef.current !== guidedRunId) return;
-        const matte = await extractMatte(image);
-        if (guidedRunRef.current !== guidedRunId) return;
-        await releaseInference();
-        if (guidedRunRef.current !== guidedRunId) return;
-        setExtractingMatte(false);
-        guidedTargetRef.current = { kind: "single", image };
-        setGuidedVisualContext({
-          entryKind: "processed",
-          resultColorSource: image.foreground ?? image.source.blob,
-        });
-        guided.start(image.source, matte);
-        retryCorrectionRef.current = null;
-      } catch (error: unknown) {
-        if (guidedRunRef.current !== guidedRunId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: error instanceof Error ? error.message : String(error),
-          action: "retry",
-        });
-      }
-    })();
-  }
-
-  function handleGuideBatchResult() {
-    if (!selectedBatchItem?.processedImage) return;
-    const { id, processedImage } = selectedBatchItem;
-    const guidedRunId = guidedRunRef.current + 1;
-    guidedRunRef.current = guidedRunId;
-    retryCorrectionRef.current = () => {
-      if (
-        selectedBatchItem?.id === id &&
-        selectedBatchItem.processedImage === processedImage
-      )
-        handleGuideBatchResult();
-    };
-    setCorrectionError(null);
-    setExtractingMatte(true);
-    void (async () => {
-      try {
-        await Promise.all([
-          releaseInference(),
-          refinement.release().then(refinement.reset),
-          foregroundRefinement.release().then(foregroundRefinement.reset),
-          batch.releaseInference(),
-        ]);
-        if (guidedRunRef.current !== guidedRunId) return;
-        const matte = processedImage.alphaMatte
-          ? processedImage.alphaMatte
-          : await batch.extractMatte(processedImage);
-        if (guidedRunRef.current !== guidedRunId) return;
-        setExtractingMatte(false);
-        guidedTargetRef.current = { kind: "batch", itemId: id, image: processedImage };
-        setGuidedVisualContext({
-          entryKind: "processed",
-          resultColorSource: processedImage.foreground ?? processedImage.source.blob,
-        });
-        guided.start(processedImage.source, matte);
-        retryCorrectionRef.current = null;
-      } catch (error: unknown) {
-        if (guidedRunRef.current !== guidedRunId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: error instanceof Error ? error.message : String(error),
-          action: "retry",
-        });
-      }
-    })();
-  }
-
-  function startSingleRefinement(image: ProcessedImage) {
-    const previousTarget = refinementTargetRef.current;
-    const seed =
-      refinement.state.status === "result" && previousTarget?.kind === "single"
-        ? previousTarget.image
-        : image;
-    const priorMatte = seed.alphaMatte;
-    if (!priorMatte) return;
-    refinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      foregroundRefinement.release().then(foregroundRefinement.reset),
-    ]).then(() => {
-      const cleanSeed = { ...seed, foreground: undefined };
-      refinementTargetRef.current = { kind: "single", image: cleanSeed };
-      appliedRefinementRef.current = null;
-      refinement.start({
-        source: seed.source,
-        priorMatte,
-        guidedMatte: refinementContextRef.current.guidedMatte,
-        constraints: refinementContextRef.current.constraints,
-        mode: refinementMode,
-        path: deviceCapabilities?.inferencePath ?? "wasm",
-      });
-    });
-  }
-
-  function startBatchRefinement(itemId: string, image: ProcessedImage) {
-    const previousTarget = refinementTargetRef.current;
-    const seed =
-      refinement.state.status === "result" &&
-      previousTarget?.kind === "batch" &&
-      previousTarget.itemId === itemId
-        ? previousTarget.image
-        : image;
-    const priorMatte = seed.alphaMatte;
-    if (!priorMatte || batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
-    refinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      batch.releaseInference(),
-      foregroundRefinement.release().then(foregroundRefinement.reset),
-    ]).then(() => {
-      const cleanSeed = { ...seed, foreground: undefined };
-      refinementTargetRef.current = { kind: "batch", itemId, image: cleanSeed };
-      appliedRefinementRef.current = null;
-      refinement.start({
-        source: seed.source,
-        priorMatte,
-        guidedMatte: refinementContextRef.current.guidedMatte,
-        constraints: refinementContextRef.current.constraints,
-        mode: refinementMode,
-        path: deviceCapabilities?.inferencePath ?? "wasm",
-      });
-    });
-  }
-
-  useEffect(() => {
-    const result = refinement.state.result;
-    const target = refinementTargetRef.current;
-    if (!result || !target || appliedRefinementRef.current === result.matte) return;
-    appliedRefinementRef.current = result.matte;
-    const apply = target.kind === "single" ? recomposite : batch.recomposite;
-    void apply(target.image, result.matte)
-      .then((updated) => {
-        if (refinementTargetRef.current !== target) return;
-        if (target.kind === "single") replaceResult(updated);
-        else batch.replaceResult(target.itemId, updated);
-        finishRefinementApplying();
-      })
-      .catch((error: unknown) => {
-        finishRefinementApplying();
-        setCorrectionError({
-          message: `Could not apply refined matte: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }, [
+    releaseRefinementBeforeHeavyWork,
     batch,
-    recomposite,
-    finishRefinementApplying,
-    refinement.state.result,
-    replaceResult,
-  ]);
-
-  function startSingleForegroundRefinement(
-    image: ProcessedImage,
-    componentCleanup: boolean,
-  ) {
-    const matte = image.alphaMatte;
-    if (!matte) return;
-    foregroundRefinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      refinement.release().then(refinement.reset),
-    ]).then(() => {
-      const seed = { ...image, foreground: undefined };
-      foregroundTargetRef.current = { kind: "single", image: seed };
-      appliedForegroundRef.current = null;
-      foregroundRefinement.start({
-        source: seed.source,
-        matte,
-        constraints: refinementContextRef.current.constraints,
-        componentCleanup,
-      });
-    });
-  }
-
-  function startBatchForegroundRefinement(
-    itemId: string,
-    image: ProcessedImage,
-    componentCleanup: boolean,
-  ) {
-    const matte = image.alphaMatte;
-    if (!matte || batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
-    foregroundRefinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      refinement.release().then(refinement.reset),
-      batch.releaseInference(),
-    ]).then(() => {
-      const seed = { ...image, foreground: undefined };
-      foregroundTargetRef.current = { kind: "batch", itemId, image: seed };
-      appliedForegroundRef.current = null;
-      foregroundRefinement.start({
-        source: seed.source,
-        matte,
-        constraints: refinementContextRef.current.constraints,
-        componentCleanup,
-      });
-    });
-  }
-
-  useEffect(() => {
-    const result = foregroundRefinement.state.result;
-    const target = foregroundTargetRef.current;
-    if (!result || !target || appliedForegroundRef.current === result.foreground) return;
-    appliedForegroundRef.current = result.foreground;
-    const apply = target.kind === "single" ? recomposite : batch.recomposite;
-    const image = { ...target.image, foreground: result.foreground };
-    void apply(image, result.matte)
-      .then((updated) => {
-        if (foregroundTargetRef.current !== target) return;
-        if (target.kind === "single") replaceResult(updated);
-        else batch.replaceResult(target.itemId, updated);
-        finishForegroundApplying();
-      })
-      .catch((error: unknown) => {
-        finishForegroundApplying();
-        setCorrectionError({
-          message: `Could not apply foreground cleanup: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }, [
-    batch,
-    finishForegroundApplying,
-    foregroundRefinement.state.result,
-    recomposite,
-    replaceResult,
-  ]);
-
-  function handleRetry() {
-    if (correctionError && retryCorrectionRef.current) {
-      retryCorrectionRef.current();
-      return;
-    }
-    retry();
-  }
-
-  function handleEditMask() {
-    if (state.status !== "result") return;
-    const image = state.result;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    retryCorrectionRef.current = () => {
-      if (state.status === "result") handleEditMask();
-    };
-    setCorrectionError(null);
-    setExtractingMatte(true);
-    void extractMatte(image)
-      .then((matte) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setOriginalMatte(matte);
-        retryCorrectionRef.current = null;
-        enterCorrecting();
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
-
-  function handleBatchEditMask() {
-    if (!selectedBatchItem?.processedImage) return;
-    const image = selectedBatchItem.processedImage;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    setExtractingMatte(true);
-    void batch
-      .extractMatte(image)
-      .then((matte) => {
-        // The user may have selected a different batch item while this
-        // extraction was in flight — applying it now would seed the mask
-        // editor with a matte whose dimensions don't match the now-selected
-        // image's source. `handleSelectBatchItem` bumps `correctionRunRef`
-        // on every switch, so a stale run is simply dropped here.
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setOriginalMatte(matte);
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
-
-  function handleSelectBatchItem(id: string) {
-    if (id !== batch.session.selectedItemId) {
-      // Clear any in-progress correction state from the previously selected
-      // item — otherwise a stale `originalMatte` (wrong dimensions for the
-      // newly selected image) or a stale extraction/error can leak across
-      // the switch. Bumping `correctionRunRef` also invalidates any
-      // in-flight `extractMatte` from the item being switched away from.
-      correctionRunRef.current += 1;
-      guidedRunRef.current += 1;
-      setCorrectionError(null);
-      setExtractingMatte(false);
-      setOriginalMatte(null);
-      setCorrectionViewAnnouncement("");
-      refinement.cancel();
-      refinementTargetRef.current = null;
-      foregroundRefinement.cancel();
-      foregroundTargetRef.current = null;
-      refinementContextRef.current = { guidedMatte: null, constraints: null };
-      guidedTargetRef.current = null;
-      setGuidedVisualContext(null);
-      guided.reset();
-      setFinalizingCorrection(false);
-      retryCorrectionRef.current = null;
-    }
-    batch.selectItem(id);
-  }
-
-  function handleClearBatch() {
-    correctionRunRef.current += 1;
-    guidedRunRef.current += 1;
-    retryCorrectionRef.current = null;
-    setCorrectionError(null);
-    setExtractingMatte(false);
-    setFinalizingCorrection(false);
-    guided.reset();
-    guidedTargetRef.current = null;
-    setGuidedVisualContext(null);
-    setGuidedEntry(false);
-    refinementContextRef.current = { guidedMatte: null, constraints: null };
-    void Promise.all([
-      refinement.release().then(refinement.reset),
-      foregroundRefinement.release().then(foregroundRefinement.reset),
-    ]);
-    batch.reset();
-  }
-
-  function handleBatchDoneCorrecting(correctedMatte: AlphaMatte) {
-    if (!selectedBatchItem?.processedImage) return;
-    const image = selectedBatchItem.processedImage;
-    setFinalizingCorrection(true);
-    void batch
-      .recomposite(image, correctedMatte)
-      .then((updated) => {
-        setFinalizingCorrection(false);
-        setOriginalMatte(null);
-        batch.replaceResult(selectedBatchItem.id, updated);
-      })
-      .catch((error: unknown) => {
-        setFinalizingCorrection(false);
-        setCorrectionError({
-          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
-
-  function handleDoneCorrecting(correctedMatte: AlphaMatte) {
-    if (state.status !== "correcting") return;
-    const image = state.result;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    retryCorrectionRef.current = () => {
-      if (state.status === "correcting") handleDoneCorrecting(correctedMatte);
-    };
-    setCorrectionError(null);
-    setFinalizingCorrection(true);
-    void recomposite(image, correctedMatte)
-      .then((updated) => {
-        if (correctionRunRef.current !== runId) return;
-        setFinalizingCorrection(false);
-        setOriginalMatte(null);
-        retryCorrectionRef.current = null;
-        exitCorrecting(updated);
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setFinalizingCorrection(false);
-        setCorrectionError({
-          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
+    batchModelKey,
+    selectedBatchItem,
+    lastLogMessage,
+    handleUpload,
+    handleUploads,
+    handleReset,
+    handleAcceptGuided,
+    handleGuideAutomaticResult,
+    handleGuideBatchResult,
+    startSingleRefinement,
+    startBatchRefinement,
+    startSingleForegroundRefinement,
+    startBatchForegroundRefinement,
+    handleRetry,
+    handleEditMask,
+    handleBatchEditMask,
+    handleSelectBatchItem,
+    handleClearBatch,
+    handleBatchDoneCorrecting,
+    handleDoneCorrecting,
+    commitSingleBackground,
+    commitBatchBackground,
+    cancelGuided,
+  } = useToolWorkspaceController();
 
   const busy = state.status === "model-loading" || state.status === "processing";
+  const activeEditDocument = selectedBatchItem?.editDocument ?? singleDocument;
 
   const displayError: DisplayError | null = uploadError
     ? { message: localizedUploadError(uploadError), action: "reset" }
@@ -977,17 +343,7 @@ export function ToolWorkspace() {
         onContinueFromResult={guided.continueFromResult}
         onAccept={handleAcceptGuided}
         onRetry={guided.retry}
-        onCancel={() => {
-          guidedRunRef.current += 1;
-          guided.reset();
-          guidedTargetRef.current = null;
-          setGuidedVisualContext(null);
-          setGuidedEntry(false);
-          setExtractingMatte(false);
-          setFinalizingCorrection(false);
-          setCorrectionError(null);
-          retryCorrectionRef.current = null;
-        }}
+        onCancel={cancelGuided}
       />
     ) : null;
 
@@ -1198,7 +554,7 @@ export function ToolWorkspace() {
               batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
             }
             onResult={(updated) => {
-              batch.replaceResult(selectedBatchItem.id, updated);
+              commitBatchBackground(selectedBatchItem.id, updated);
               setBatchPreviewFills((current) => ({
                 ...current,
                 [selectedBatchItem.id]: updated.backgroundFill ?? {
@@ -1360,7 +716,7 @@ export function ToolWorkspace() {
           onPreview={setPreviewFill}
           onApply={(fill) => applyBackgroundFill(state.result, fill)}
           onResult={(updated) => {
-            replaceResult(updated);
+            commitSingleBackground(updated);
             setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
           }}
           onBusyChange={setBackgroundBusy}
@@ -1473,6 +829,10 @@ export function ToolWorkspace() {
   return (
     <div
       data-testid="tool-workspace"
+      data-document-id={activeEditDocument?.document.id}
+      data-document-revision={activeEditDocument?.document.revision}
+      data-document-worker-owner={activeEditDocument?.workerOwnerId}
+      data-document-artifact-count={activeEditDocument?.artifacts.stats().artifactCount}
       className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""} ${guided.state.session ? "tool-workspace-guided" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">

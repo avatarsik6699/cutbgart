@@ -55,7 +55,12 @@ export function GuidedBrushControls({
     status === "predicting";
   const hasKeep = session.strokes.some((stroke) => stroke.mode === "keep");
   const directKeepMissing = !session.hasBaseMatte && !hasKeep;
-  const canRecompute = session.strokes.length > 0 && !directKeepMissing && !busy;
+  const canRestoreBase =
+    session.hasBaseMatte &&
+    session.strokes.length === 0 &&
+    session.computedRevision !== session.revision;
+  const canRecompute =
+    ((session.strokes.length > 0 && !directKeepMissing) || canRestoreBase) && !busy;
   const selectedIndex = session.candidates.findIndex(
     (candidate) => candidate.id === session.selectedCandidateId,
   );
@@ -276,7 +281,9 @@ export function GuidedBrushControls({
         <Button type="button" disabled={!canRecompute} onClick={onRecompute}>
           {busy && status === "predicting"
             ? m.guidedBrushRecomputing()
-            : m.guidedBrushRecompute()}
+            : canRestoreBase
+              ? m.guidedBrushRestoreBase()
+              : m.guidedBrushRecompute()}
         </Button>
         <Button type="button" disabled={!canAccept || busy} onClick={onAccept}>
           {m.guidedAccept()}

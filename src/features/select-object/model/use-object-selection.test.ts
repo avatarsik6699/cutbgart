@@ -399,6 +399,47 @@ describe("useGuidedBrushSelection", () => {
     ).toHaveLength(promptCount);
   });
 
+  it("restores a base-backed zero-mark pass locally without a worker prompt", () => {
+    const worker = new FakeWorker();
+    const base = matte(33);
+    const { result } = renderHook(() =>
+      useGuidedBrushSelection(() => worker as unknown as Worker),
+    );
+    act(() => result.current.start(source, base));
+    const revision = (worker.posted[0] as { revision: number }).revision;
+    act(() => worker.emit({ type: "status", revision, status: "ready-for-prompt" }));
+    act(() =>
+      result.current.addStroke({
+        mode: "remove",
+        points: [{ x: 0.5, y: 0.5 }],
+        radius: 1,
+      }),
+    );
+    act(() => result.current.undo());
+    const promptCount = worker.posted.filter(
+      (message) => (message as { type: string }).type === "prompt",
+    ).length;
+
+    act(() => result.current.recompute());
+
+    expect(result.current.state).toMatchObject({
+      status: "preview",
+      matte: base,
+      error: null,
+      baseMatteRevision: result.current.state.session?.revision,
+    });
+    expect(result.current.state.session).toMatchObject({
+      strokes: [],
+      candidates: [],
+      selectedCandidateId: null,
+      computedRevision: result.current.state.session?.revision,
+    });
+    expect(result.current.canAccept).toBe(true);
+    expect(
+      worker.posted.filter((message) => (message as { type: string }).type === "prompt"),
+    ).toHaveLength(promptCount);
+  });
+
   it("disposes and terminates the worker on release", async () => {
     const worker = new FakeWorker();
     const { result } = renderHook(() =>

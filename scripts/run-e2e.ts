@@ -42,7 +42,18 @@ async function waitForServer(server: ChildProcess): Promise<void> {
 
 const server = spawn(
   "pnpm",
-  ["exec", "vite", "dev", "--host", "127.0.0.1", "--port", "3000", "--strictPort"],
+  [
+    "exec",
+    "vite",
+    "dev",
+    "--mode",
+    "e2e",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "3000",
+    "--strictPort",
+  ],
   { stdio: "inherit", detached: true },
 );
 

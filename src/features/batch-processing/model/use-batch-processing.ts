@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  createEditDocumentScope,
+  disposeEditDocumentScope,
+  type EditDocumentScope,
+} from "../../../entities/edit-document";
 import type {
   AlphaMatte,
   BackgroundFill,
@@ -122,6 +127,7 @@ export function useBatchProcessing({
     >(),
   );
   const pendingDisposalsRef = useRef(new Map<string, () => void>());
+  const documentScopesRef = useRef(new Map<string, EditDocumentScope>());
 
   const updateItem = useCallback((id: string, update: (item: BatchItem) => BatchItem) => {
     setSession((current) => ({
@@ -284,11 +290,8 @@ export function useBatchProcessing({
         modelReadyRef.current = false;
       } else if (message.type === "process-result") {
         activeRef.current.delete(message.requestId);
-        updateItem(message.requestId, (item) => ({
-          ...item,
-          status: "result",
-          completedAt: performance.now(),
-          processedImage: {
+        updateItem(message.requestId, (item) => {
+          const processedImage: ProcessedImage = {
             source: item.source,
             result: message.result,
             cutout: message.result,
@@ -296,13 +299,26 @@ export function useBatchProcessing({
             alphaMatte: message.matte,
             backgroundFill: { type: "transparent" },
             backgroundPending: false,
-          },
-          processingProgress: {
-            ...item.processingProgress,
-            stage: "complete",
-            elapsedMs: message.durationMs,
-          },
-        }));
+          };
+          const previousScope = documentScopesRef.current.get(item.id);
+          if (previousScope) disposeEditDocumentScope(previousScope);
+          const editDocument = createEditDocumentScope(processedImage, {
+            inferencePath,
+          });
+          documentScopesRef.current.set(item.id, editDocument);
+          return {
+            ...item,
+            status: "result",
+            completedAt: performance.now(),
+            processedImage,
+            editDocument,
+            processingProgress: {
+              ...item.processingProgress,
+              stage: "complete",
+              elapsedMs: message.durationMs,
+            },
+          };
+        });
         queueMicrotask(dispatchQueued);
       } else if (message.type === "error" && message.requestId) {
         const pendingMatte = pendingMattesRef.current.get(message.requestId);
@@ -333,6 +349,15 @@ export function useBatchProcessing({
       workerRef.current = null;
     };
   }, [batchStarted, dispatchQueued, inferencePath, updateItem, workerFactory]);
+
+  useEffect(
+    () => () => {
+      for (const scope of documentScopesRef.current.values())
+        disposeEditDocumentScope(scope);
+      documentScopesRef.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     const hasQueued = session.items.some((item) => item.status === "queued");
@@ -453,8 +478,12 @@ export function useBatchProcessing({
     [],
   );
   const replaceResult = useCallback(
-    (id: string, processedImage: ProcessedImage) =>
-      updateItem(id, (item) => ({ ...item, processedImage })),
+    (id: string, processedImage: ProcessedImage, editDocument?: EditDocumentScope) =>
+      updateItem(id, (item) => {
+        const nextScope = editDocument ?? item.editDocument;
+        if (nextScope) documentScopesRef.current.set(id, nextScope);
+        return { ...item, processedImage, editDocument: nextScope };
+      }),
     [updateItem],
   );
   const extractMatte = useCallback(
@@ -511,11 +540,15 @@ export function useBatchProcessing({
     (id: string) => {
       const enqueuedAt = performance.now();
       if (!queueRef.current.includes(id)) queueRef.current.push(id);
+      const scope = documentScopesRef.current.get(id);
+      if (scope) disposeEditDocumentScope(scope);
+      documentScopesRef.current.delete(id);
       updateItem(id, (item) => ({
         ...item,
         status: "queued",
         error: undefined,
         processedImage: undefined,
+        editDocument: undefined,
         enqueuedAt,
         processingProgress: {
           stage: "queued",
@@ -527,10 +560,26 @@ export function useBatchProcessing({
     },
     [updateItem],
   );
+  const removeItem = useCallback((id: string) => {
+    const scope = documentScopesRef.current.get(id);
+    if (scope) disposeEditDocumentScope(scope);
+    documentScopesRef.current.delete(id);
+    queueRef.current = queueRef.current.filter((queuedId) => queuedId !== id);
+    activeRef.current.delete(id);
+    workRef.current.delete(id);
+    setSession((current) => ({
+      ...current,
+      selectedItemId: current.selectedItemId === id ? null : current.selectedItemId,
+      items: current.items.filter((item) => item.id !== id),
+    }));
+  }, []);
   const reset = useCallback(() => {
     activeRef.current.clear();
     queueRef.current = [];
     workRef.current.clear();
+    for (const scope of documentScopesRef.current.values())
+      disposeEditDocumentScope(scope);
+    documentScopesRef.current.clear();
     setSession(emptySession);
   }, []);
   const releaseInference = useCallback((): Promise<void> => {
@@ -552,6 +601,7 @@ export function useBatchProcessing({
     enqueue,
     selectItem,
     replaceResult,
+    removeItem,
     retryItem,
     extractMatte,
     recomposite,
