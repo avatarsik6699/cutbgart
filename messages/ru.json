@@ -118,6 +118,7 @@
   "guidedBrushRedo": "Вернуть отметку",
   "guidedBrushClear": "Очистить отметки",
   "guidedBrushRecompute": "Пересчитать маску",
+  "guidedBrushRestoreBase": "Вернуть автоматический результат",
   "guidedBrushRecomputing": "Пересчитываем маску…",
   "guidedBrushApplying": "Применяем выбранный результат…",
   "guidedBrushReady": "Нарисуйте на изображении отметки «Оставить» или «Удалить».",

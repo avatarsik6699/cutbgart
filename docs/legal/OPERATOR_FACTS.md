@@ -44,7 +44,7 @@ topology, credentials and security configuration are never public-policy content
 
 | Required fact/decision | Why it matters | Status |
 |---|---|---|
-| Full legal name of the individual controller | Russian access/transparency rules and GDPR Article 13 require controller identification when applicable | **OWNER-DEFERRED — Phase-25 text may use individual administrator + privacy email without claiming full compliance** |
+| Full legal name of the individual controller | Russian access/transparency rules and GDPR Article 13 require controller identification when applicable | **OWNER-DEFERRED — Phase-34 text may use individual administrator + privacy email without claiming full compliance** |
 | Address suitable for legally required identification/service | Some notices and formal requests require an address; publishing email alone leaves risk | **OWNER-DEFERRED — no channel exists** |
 | Exact Cloudflare account entity, DPA/subprocessors, enabled products/cookies, NEL, log retention and localization settings | Determines roles, data, storage and transfer controls | **OWNER-DEFERRED — optional analytics stays disabled until applicable settings/retention are verified** |
 | Exact VPS contracting entity/country and processor terms | Must exist in the confidential processor/transfer register even if not advertised publicly | **OWNER-DEFERRED — record before active promotion or a material infrastructure change** |

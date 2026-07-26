@@ -1,13 +1,11 @@
-# PHASE 26 — Editor Document Foundation & Guided Reset
-
-<!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
+# PHASE 26 — Automatic-First Workspace
 
 ## Phase Metadata
 
 | Field | Value |
 |-------|-------|
 | Phase | `26` |
-| Title | Editor Document Foundation & Guided Reset |
+| Title | Automatic-First Workspace |
 | Status | `⏳ pending` |
 | Tag | `v0.26.0` |
 | Depends on | PHASE_25 gate passing |
@@ -16,13 +14,19 @@
 
 ## Phase Goal
 
-Create the bounded browser-memory document, artifact ownership, and committed-history foundation
-for both a single image and every completed batch item, required by the Phase-27–31 editor redesign
-without visually rebuilding the product yet. Extract
-orchestration from the current monolithic workspace and fix the reported Magic-brush regression:
-after a computed result, removing the last remaining mark over an existing base must restore that
-base without another SlimSAM call or a permanently disabled action (SPEC.md §2.2, §3, §5.2–§5.3,
+Replace the choice-heavy initial journey with one/many upload → automatic processing → stable
+editor, while introducing the toolbar/stage/panel shell used by later phases. A selected completed
+batch item uses the same shell in this phase. Preserve all current capabilities through temporary
+adapters, but remove model/runtime implementation details from the primary UI (SPEC.md §5.2–§5.4,
 §7.1, §7.3, §7.7, §8).
+
+## Design References
+
+- Architect-provided remove.bg screenshot (2026-07-24) — stable image stage, icon+text toolbar,
+  compact Cutout panel, toolbar history, and Download placement; reference for hierarchy, not a
+  pixel-identical clone.
+- [remove.bg Magic Brush help](https://www.remove.bg/uk/help/a/how-to-use-magic-brush) — upload is
+  followed by automatic removal before optional editing.
 
 ---
 
@@ -30,54 +34,53 @@ base without another SlimSAM call or a permanently disabled action (SPEC.md §2.
 
 ### Frontend
 
-- [ ] `F1` Add `entities/edit-document` pure contracts for document identity, immutable automatic
-  baseline/current artifact references, subject matte/foreground, background, composite,
-  processing provenance, and monotonic revision. A successful single upload and each successful
-  `BatchItem` own exactly one independent document scope; queued/processing/error items do not
-  allocate one early. Do not add persistence, serialization, generic layers, transforms, shadows,
-  perspective, or effects — _Depends on:_ —
-- [ ] `F2` Add an artifact store owning mattes/blobs/object URLs by opaque ID, tracking estimated
-  unique bytes and reachability from current/baseline/history snapshots. Release unreachable
-  resources on eviction, branch-after-undo, document reset/removal, and unmount — _Depends on:_ `F1`
-- [ ] `F3` Add `features/editor-history` with labeled atomic commit/undo/redo. Bound history to 20
-  entries and 96 MiB of retained historical artifacts; when one undo step alone exceeds the byte
-  budget, retain only that latest step. Current-document artifacts are not counted as avoidable
-  history, and a failed/stale/cancelled async action creates no entry — _Depends on:_ `F1`, `F2`
-- [ ] `F4` Define the history boundary: committed document mutations use `EditHistory`; active
-  Magic/Manual strokes remain bounded tool drafts. Expose selectors for `canUndo`, `canRedo`, and
-  localized next-action labels without adding the Phase-27 toolbar yet — _Depends on:_ `F3`
-- [ ] `F5` Extract a `useToolWorkspaceController` orchestration module from
-  `ToolWorkspace.tsx`: source/result adoption, worker lifecycle, refinement targets, background
-  application, correction entry/exit, reset, and stale-run guards move behind a typed interface.
-  Keep the current rendered UX materially unchanged and preserve feature public-API boundaries —
-  _Depends on:_ `F1`–`F4`
-- [ ] `F6` Add the base-backed zero-mark transition to guided brush state/hook logic. If undo/clear
-  removes the final stroke after a computed result and `baseMatte` exists, explicit recompute/apply
-  restores the base locally, invalidates stale candidates, advances the revision coherently, and
-  sends no worker request. A direct session with no base still requires green `keep` intent —
-  _Depends on:_ `F5`
-- [ ] `F7` Keep current candidate/Continue UI operational until Phase 28, but make its action state
-  reflect `F6` so manual testing can no longer reproduce the disabled-action trap. Add a
-  plain-language accessible label for the local reset path if copy is needed — _Depends on:_ `F6`
-- [ ] `F8` Add unit/hook/component tests for artifact reachability, byte/count eviction,
-  branch-after-undo cleanup, operation labels, failed/stale exclusion, controller reset/source
-  replacement, zero-mark base restoration, no-worker-call proof, and direct no-base validation —
-  _Depends on:_ `F2`–`F7`
-- [ ] `F9` Extend Playwright coverage for automatic-result Magic correction: add a stroke,
-  recompute, undo/clear until no strokes remain, trigger the action, verify the base result returns,
-  and assert no additional mocked inference post was made. Cover reset/source replacement cleanup
-  in both the single-image flow and a selected completed batch item without changing the broad
-  Phase-21 visual flow — _Depends on:_ `F8`
-- [ ] `F10` Add batch lifecycle tests proving item selection/reordering cannot share document,
-  artifact, history, revision, or worker ownership and that removal/clear releases only the target
-  item's resources. Keep the current batch presentation unchanged — _Depends on:_ `F1`–`F9`
+- [ ] `F1` Replace the initial Automatic/Guided method choice with one upload surface plus the
+  automatic processing selector. Every valid one-or-many upload starts processing immediately;
+  multiple files retain the existing grid/progress/error-isolation journey. Direct guided entry
+  leaves the public flow but reusable internal code remains — _Depends on:_ —
+- [ ] `F2` Rename public automatic modes to `Быстро/Fast`, `Оптимально/Optimal`, and
+  `Максимальное качество/Maximum quality` with a visible `Beta` badge. Map them to
+  `isnet-q8`/`isnet-fp32`/`ben2-fp16` internally and make Optimal the capable-device recommendation —
+  _Depends on:_ `F1`
+- [ ] `F3` Remove model IDs, dtype, MiB counts, WebGPU/WASM labels, raw worker log lines, and
+  technical fallback text from the primary mode/progress/result UI. Keep diagnostics in a compact
+  accessible `Details` disclosure that is collapsed by default — _Depends on:_ `F2`
+- [ ] `F4` Add an accessible help tooltip/popover for Maximum quality: it needs compatible WebGPU,
+  may not start on every device, and falls back once to Optimal without losing the upload. The
+  trigger works by hover, focus, and click; no technical exception is primary copy — _Depends on:_
+  `F2`, `F3`
+- [ ] `F5` Build a stable `EditorStage`, `EditorToolbar`, and reserved `ToolPanelSlot`. The stage
+  keeps one aspect-preserving footprint while tools switch; desktop uses stage+panel, mobile stacks
+  toolbar/stage/panel without remounting the image or resetting view state. Reuse this exact shell
+  for a single document and the selected completed batch document — _Depends on:_ `F1`
+- [ ] `F6` Add toolbar items with icons and text: Cutout, Enhancements (`Улучшения`), Background;
+  document Undo/Redo
+  icon controls; and a Download slot. Use a typed registry for identity/order/labels, not condition
+  chains duplicated through the workspace — _Depends on:_ `F5`
+- [ ] `F7` Adapt current guided/manual, matte/foreground, background, and download controls into
+  the new panel slots without yet performing the Phase-27–29 content simplification. A dirty
+  existing draft cannot be lost on tool switch; temporary adapters may show an apply/discard guard —
+  _Depends on:_ `F5`, `F6`
+- [ ] `F8` Reserve stage/panel dimensions and loading placeholders so tool switching produces no
+  visible stage jump. Keep tool panels lazy after the automatic result and preserve LCP/TTI budgets —
+  _Depends on:_ `F5`–`F7`
+- [ ] `F9` Implement ARIA toolbar keyboard navigation, active-tool announcement, focus restoration,
+  narrow-screen horizontal overflow, localized accessible icon names, reduced-motion behavior, and
+  focus/click-capable help content — _Depends on:_ `F6`–`F8`
+- [ ] `F10` Add component/integration tests for mapping/copy, automatic start, fallback preservation,
+  no-primary-technical-copy assertions, registry order, non-remounting stage, dirty-draft guard,
+  keyboard navigation, and responsive slot behavior — _Depends on:_ `F1`–`F9`
+- [ ] `F11` Add bilingual cross-browser Playwright coverage: choose each public mode, upload,
+  observe automatic start/result, switch all toolbar tools without stage geometry/view reset,
+  exercise keyboard navigation/tooltips, and assert forbidden technical terms are absent from the
+  primary workspace. Repeat the journey with multiple files, selecting at least two completed
+  items and proving shell/view/document identity do not leak between them — _Depends on:_ `F10`
 
 ### Infra
 
-- [ ] `I1` Keep Phase 26 free of new packages, model assets, runtime evidence commands, routes,
-  env vars, analytics payloads, persistence, and server work. Run the existing real-model smoke
-  only through the normal phase gate because the SlimSAM graph/protocol itself is unchanged —
-  _Depends on:_ `F10`
+- [ ] `I1` Add no model, package, route, env var, analytics event, persistence, or backend. Keep
+  diagnostics lazy/collapsed and do not increase the initial public bundle with future tools —
+  _Depends on:_ `F11`
 
 ---
 
@@ -86,43 +89,36 @@ base without another SlimSAM call or a permanently disabled action (SPEC.md §2.
 ### Create / modify
 
 ~~~
-src/entities/edit-document/model/types.ts
-src/entities/edit-document/model/edit-document.ts
-src/entities/edit-document/model/edit-document.test.ts
-src/entities/edit-document/model/artifact-store.ts
-src/entities/edit-document/model/artifact-store.test.ts
-src/entities/edit-document/index.ts
-src/features/editor-history/model/editor-history.ts
-src/features/editor-history/model/editor-history.test.ts
-src/features/editor-history/model/use-editor-history.ts
-src/features/editor-history/model/use-editor-history.test.ts
-src/features/editor-history/index.ts
-src/features/batch-processing/model/types.ts
-src/features/batch-processing/model/use-batch-processing.ts
-src/features/batch-processing/model/*.test.ts
-src/features/select-object/model/guided-brush-session.ts
-src/features/select-object/model/guided-brush-session.test.ts
-src/features/select-object/model/use-object-selection.ts
-src/features/select-object/model/use-object-selection.test.ts
-src/features/select-object/ui/GuidedBrushControls.tsx
-src/features/select-object/ui/GuidedBrushControls.test.tsx
+src/widgets/tool-workspace/model/editor-tool-registry.ts
+src/widgets/tool-workspace/model/editor-tool-registry.test.ts
 src/widgets/tool-workspace/model/use-tool-workspace-controller.ts
-src/widgets/tool-workspace/model/use-tool-workspace-controller.test.ts
+src/widgets/tool-workspace/ui/EditorStage.tsx
+src/widgets/tool-workspace/ui/EditorStage.test.tsx
+src/widgets/tool-workspace/ui/EditorToolbar.tsx
+src/widgets/tool-workspace/ui/EditorToolbar.test.tsx
+src/widgets/tool-workspace/ui/ToolPanelSlot.tsx
 src/widgets/tool-workspace/ui/ToolWorkspace.tsx
 src/widgets/tool-workspace/ui/ToolWorkspace.test.tsx
-src/widgets/tool-workspace/index.ts
+src/features/quality-mode-toggle/ui/QualityModeToggle.tsx
+src/features/quality-mode-toggle/ui/QualityModeToggle.test.tsx
+src/widgets/tool-workspace/ui/ProcessingLog.tsx
+src/features/batch-processing/ui/BatchGrid.tsx
+src/features/batch-processing/ui/BatchGrid.test.tsx
+src/app/styles/globals.css
+src/shared/ui/ (tooltip/popover primitive only if not already present)
 messages/ru.json
 messages/en.json
-e2e/brush-guided-correction.spec.ts
+e2e/home.spec.ts
+e2e/scenario-pages.spec.ts
 docs/PHASE_26.md
 ~~~
 
 ### Do NOT touch
 
-- Phase-27 toolbar/layout, automatic-mode naming, or removal of public technical copy
-- Candidate ranking/fusion algorithms, model IDs/revisions/assets, matting/foreground algorithms
-- Batch visual redesign or batch-wide editing; Phase 26 only establishes per-item document ownership
-- Routes, SEO content, analytics, server endpoints, accounts, persistence, or future Studio features
+- SlimSAM candidate/fusion algorithms or Cutout content simplification (Phase 27)
+- Matting/foreground algorithms or combined Enhancements semantics (Phase 28)
+- Export resizing/formats or batch-wide actions (Phases 29–30)
+- Legacy guided source deletion, public routes/SEO, models/CDN, persistence, or Studio functionality
 
 ---
 
@@ -130,54 +126,28 @@ docs/PHASE_26.md
 
 ### New persistent data (tables / collections / files)
 
-None. Documents, artifacts, histories, and drafts are browser-tab memory only. No IndexedDB,
-localStorage, Cache Storage user data, history export, or server persistence is added.
+None.
 
 ### New API endpoints / RPC methods / events
 
-None. The zero-mark reset is local and must send no SlimSAM worker request.
+None.
 
 ### New types / models / shared interfaces
 
 ```ts
-type EditorArtifactId = string;
-type EditOperationKind = "cutout" | "manual" | "enhance" | "background";
+type EditorToolId = "cutout" | "enhance" | "background";
 
-interface EditDocumentSnapshot {
-  alphaMatte: EditorArtifactId;
-  foreground: EditorArtifactId | null;
-  composite: EditorArtifactId;
-  backgroundFill: BackgroundFill;
-  processingMode: AutomaticModelMode;
-}
-
-interface EditDocument {
-  id: string;
-  source: SourceImage;
-  baseline: Readonly<EditDocumentSnapshot>;
-  current: Readonly<EditDocumentSnapshot>;
-  revision: number;
-}
-
-interface EditOperation {
-  id: string;
-  kind: EditOperationKind;
+interface EditorToolDefinition {
+  id: EditorToolId;
   label: string;
-  before: Readonly<EditDocumentSnapshot>;
-  after: Readonly<EditDocumentSnapshot>;
-  estimatedHistoricalBytes: number;
-}
-
-interface EditHistory {
-  past: readonly EditOperation[];
-  future: readonly EditOperation[];
-  retainedHistoricalBytes: number;
+  icon: React.ComponentType;
+  order: number;
+  loadPanel: () => Promise<unknown>;
 }
 ```
 
-Invariants: history has at most 20 entries and 96 MiB of avoidable retained artifacts; current and
-baseline stay reachable; eviction/reset releases unreachable resources; tool drafts are not
-committed operations; async results commit only if their document/run revision is still current.
+Public mode mapping is exactly Fast → `isnet-q8`, Optimal → `isnet-fp32`, Maximum quality (Beta) →
+`ben2-fp16`. The internal profile IDs remain out of primary localized copy.
 
 ### New env vars
 
@@ -187,21 +157,20 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 26` after all Scope items and review notes are resolved. In addition to the
-standard `docs/STACK.md` commands:
+Run `/phase-gate 26`; standard checks plus:
 
 ```bash
-pnpm vitest run src/entities/edit-document src/features/editor-history \
-  src/features/select-object src/widgets/tool-workspace
-pnpm e2e e2e/brush-guided-correction.spec.ts e2e/home.spec.ts
+pnpm vitest run src/features/quality-mode-toggle src/widgets/tool-workspace
+pnpm e2e e2e/home.spec.ts e2e/scenario-pages.spec.ts
 pnpm tsc --noEmit
 pnpm exec steiger ./src
 ```
 
-Phase 26 cannot close if the final-stroke flow remains disabled, a zero-mark base reset posts to
-SlimSAM, single/batch documents share ownership, current/baseline artifacts can be evicted,
-failed/stale work enters history, object URLs leak after reset/eviction, or `ToolWorkspace.tsx`
-still owns the extracted orchestration state.
+Fail the phase if upload needs a second start action, direct guidance remains an initial public
+choice, primary UI exposes model/dtype/runtime/quota copy, Maximum lacks an accessible warning and
+fallback, stage geometry/view resets on tool switch, or toolbar navigation is pointer-only.
+Also fail if multiple upload regresses, a completed batch item uses a different toolbar/panel
+contract, or switching items shares document/view state.
 
 ---
 
@@ -209,27 +178,18 @@ still owns the extracted orchestration state.
 
 - [x] No architect review issues recorded
 
----
-
 ## Implementation Notes
 
 None
 
----
-
 ## Atomic Commit Message
 
 ```text
-refactor(phase-26): add editor document history and guided reset
+feat(phase-26): introduce automatic-first editor workspace
 ```
-
----
 
 ## Post-Phase Checklist
 
-- [ ] All Scope checkboxes checked
-- [ ] All automated gate checks green
-- [ ] All architect review notes resolved
-- [ ] `docs/STATE.md` updated — run `/context-update 26`
-- [ ] Committed atomically on `feat/phase-26`
-- [ ] Tag created after merge: `v0.26.0`
+- [ ] Scope complete; automated gates green; review notes resolved
+- [ ] Run `/context-update 26`
+- [ ] Commit on `feat/phase-26`; tag `v0.26.0` after merge

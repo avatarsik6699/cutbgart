@@ -10,6 +10,7 @@ import {
   createGuidedBrushId,
   createGuidedBrushSession,
   redoGuidedBrushStroke,
+  restoreGuidedBrushBase,
   selectGuidedBrushCandidate,
   setGuidedBrushCandidates,
   setGuidedBrushRadius,
@@ -724,6 +725,24 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
       session.source.height,
     );
     if (!consolidated.points.length || !consolidated.editRegion) {
+      if (session.baseMatte && session.strokes.length === 0) {
+        const restored = restoreGuidedBrushBase(session);
+        revisionRef.current = restored.revision;
+        commitState({
+          ...current,
+          status: "preview",
+          session: restored,
+          matte: session.baseMatte,
+          error: null,
+          errorCode: null,
+          progress: null,
+          lastPromptCount: 0,
+          lastPromptKeepCount: 0,
+          lastPromptRemoveCount: 0,
+          baseMatteRevision: restored.revision,
+        });
+        return;
+      }
       fail("Add a brush marking before recomputing", "marking-required");
       return;
     }

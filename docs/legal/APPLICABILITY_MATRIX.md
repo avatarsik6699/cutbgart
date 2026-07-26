@@ -13,7 +13,7 @@ remain unresolved. The matrix therefore distinguishes:
 
 - **observed fact** — demonstrated by code, deployment, or official provider documentation;
 - **conditional duty** — applies if the stated territorial/controller condition is true;
-- **release decision** — conservative control selected for Phase 25 regardless of final
+- **release decision** — conservative control selected for Phase 34 regardless of final
   territorial outcome.
 
 Vendor statements such as “anonymous” or “GDPR compliant” do not decide the legal classification.
@@ -27,7 +27,7 @@ treated as personal or potentially personal where a party can single out a visit
 | Territorial/operator applicability | The confidential owner record and Russian base locale make the Russian baseline directly material; the exact residence/address is not published here | Treat 152-FZ as an implementation baseline and resolve notification, localization and transfers before active promotion |
 | Personal data | Cloudflare/Nginx process IP, headers and request history; Umami derives location/device and stores session-linked events; Telegram receives account/message data on voluntary contact | Do not claim “no personal data.” Publish field-level purposes, recipients, terms and rights |
 | Lawful basis | Page delivery/security is necessary for the user-requested service and protection of the site; product analytics is not necessary | Record the exact 152-FZ Article 6 basis per purpose. Use separate, specific, informed and unambiguous consent for optional analytics |
-| Separate consent | Article 9, as amended in 2025, requires consent to be separate from other information/documents the person confirms | Phase-25 analytics choice must not be bundled into Terms or mere continued use |
+| Separate consent | Article 9, as amended in 2025, requires consent to be separate from other information/documents the person confirms | Phase-34 analytics choice must not be bundled into Terms or mere continued use |
 | Operator notification | Article 22 generally requires notice before automated processing, with narrow remaining exceptions | The confidential register records no completed notification evidence. Validate exceptions, then file/update before qualifying processing; record purposes, categories, subjects, actions, methods, responsible person, database location and transfers |
 | Initial localization | Article 18(5) restricts initial recording/systematization/storage of Russian citizens' personal data in foreign databases | The confidential infrastructure fact creates a remediation question, not a disclosure workaround. Determine which collection databases are in scope; localize initial collection or stop the affected processing |
 | Cross-border transfer | Article 12 requires a separate prior notice and recipient/country/security information; transfers may be restricted | Inventory Cloudflare entities/subprocessors, Telegram, Hugging Face/jsDelivr, off-host backup, and any foreign VPS provider before filing/continuing a qualifying transfer |

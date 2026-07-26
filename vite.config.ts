@@ -5,9 +5,15 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
+    // Offline browser tests intentionally disconnect the network. Disable the
+    // development-only HMR and agent console-forwarding clients there so they
+    // cannot reload the page while an offline Service Worker request is being
+    // asserted.
+    hmr: mode === "e2e" ? false : undefined,
+    forwardConsole: mode === "e2e" ? false : undefined,
   },
   // Transformers.js and client-zip are imported lazily after user actions.
   // Pre-optimizing them prevents a late dependency scan from reloading the
@@ -77,4 +83,4 @@ export default defineConfig({
     // react's vite plugin must come after start's vite plugin
     viteReact(),
   ],
-});
+}));

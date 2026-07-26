@@ -80,7 +80,8 @@ operator's actual jurisdiction and market.
   generic templates or say “compliant” without evidence — _Depends on:_ `D7`
 - [x] `D9` Record qualified review or the owner's explicit, dated acceptance of the identified
   residual risks; distinguish owner acceptance from legal advice, preserve every deferred fact and
-  remediation item, and freeze the Phase-25 implementation matrix and draft texts. The owner
+  remediation item, and freeze the baseline implementation matrix and draft texts for the future
+  final legal phase. Phase 34 must refresh and re-approve them against the completed product. The owner
   accepted the recorded risks on `2026-07-25` and directed Phase 24 to close without external
   counsel — _Depends on:_ `D5`–`D8`
 
@@ -135,7 +136,8 @@ None.
 
 ### New types / models / shared interfaces
 
-None. `docs/legal/IMPLEMENTATION_MATRIX.md` is the reviewed input contract for Phase 25.
+None. `docs/legal/IMPLEMENTATION_MATRIX.md` is the reviewed Phase-24 baseline for Phase 34, which
+must refresh and re-approve it before implementation.
 
 ### New env vars
 
@@ -167,7 +169,7 @@ and smoke, code generation, TypeScript, 305 Vitest tests, formatting/placeholder
 Chromium smoke timed out twice after 240 seconds while waiting for the result slider, with the page
 still showing IS-Net/WASM model loading at 0%. The owner explicitly accepted this technical gate
 risk and authorized Phase 24 closure; the failure is not represented as fixed and must be rerun or
-resolved before Phase 25 is closed.
+resolved before the next product phase, Phase 25, is closed.
 
 ---
 
@@ -186,7 +188,7 @@ resolved before Phase 25 is closed.
   owner explicitly accepted the recorded risks of deferring full legal identity/address,
   provider/Cloudflare verification, Russian notification/localization/transfer remediation and
   qualified counsel, and directed Phase 24 to close. This is risk acceptance, not legal review or
-  a compliance claim. Optional analytics remains fail-closed until Phase-25 controls and the
+  a compliance claim. Optional analytics remains fail-closed until Phase-34 controls and the
   applicable provider/retention checks are implemented. No runtime behavior was changed.
 - On `2026-07-25`, after two identical serialized real-model smoke timeouts, the owner separately
   accepted the technical gate risk and authorized closure. All other gate rows passed; Phase 25

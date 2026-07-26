@@ -55,7 +55,7 @@ identifiers (SPEC.md §6–§8).
   success and Core Web Vitals. Select conservative, cost-appropriate targets from measured project
   evidence and the existing single-VPS architecture; record assumptions and trade-offs. Use
   external synthetic/aggregate infrastructure signals first; defer any new browser telemetry or
-  identifiers until Phase 24 approval and Phase 25 implementation — _Depends on:_ `I3`
+  identifiers until Phase 24 approval and Phase 34 implementation — _Depends on:_ `I3`
 - [x] `I6` Configure actionable alerts with severity, owner, escalation, maintenance suppression,
   deduplication and runbook links. Validate alert delivery and resolution for app down, CDN/model
   failure, certificate expiry, disk/resource pressure, backup failure and elevated 5xx; never put

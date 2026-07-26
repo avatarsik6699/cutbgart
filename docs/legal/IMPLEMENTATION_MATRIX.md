@@ -1,12 +1,15 @@
-# Phase-25 implementation matrix
+# Phase-34 implementation matrix
 
 **Version:** `0.24.0-draft.2`
 **Content version:** `2026-07-25`
-**Status:** owner-approved with recorded residual risks; optional analytics remains fail-closed
-until applicable technical/provider checks pass
+**Status:** Phase-24 baseline approved with recorded residual risks; Phase 34 must refresh and
+re-approve it against the finished product; optional analytics remains fail-closed until applicable
+technical/provider checks pass
 
-This is the only approved input contract for Phase 25. It does not authorize implementation during
-Phase 24.
+This is the conservative baseline input contract for Phase 34, not final-product authority. Phase
+34 must first reconcile it with the Phase-33 application, current production requests/storage,
+provider settings, operator facts and current law, then record a new dated approval before runtime
+implementation. It did not authorize implementation during Phase 24.
 
 ## Product decision
 
@@ -118,7 +121,7 @@ Before the drafts may be converted to production content:
 
 No placeholder identity may ship.
 
-## Operational controls required with Phase 25
+## Operational controls required with Phase 34
 
 - implement and test rolling deletion for Umami data older than 90 days;
 - verify/configure Uptime history at 90 days;
@@ -148,9 +151,10 @@ Playwright must verify in RU and EN:
 11. legal/footer routes SSR correctly with canonical/hreflang and current content version;
 12. storage/request behavior matches the notices.
 
-## Release decision
+## Baseline release decision
 
-Phase 25 must fail closed: missing/invalid choice state means analytics off. If retention
+Phase 34 must fail closed: missing/invalid choice state means analytics off. If retention
 enforcement or processor/transfer evidence is unavailable, ship the core editor and minimum
 owner-approved transparency with browser analytics disabled rather than publishing invented facts
-or running unapproved collection.
+or running unapproved collection. The finished product is not released from the legal gate merely
+because this Phase-24 baseline was approved.
