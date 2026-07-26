@@ -43,16 +43,16 @@
 | PHASE_22 | ✅ done | v0.22.0 | ✅ | 🤖 agent | Production Security & Supply Chain Hardening |
 | PHASE_23 | ✅ done | v0.23.0 | ✅ | 🤖 agent | Release Reliability & Operations |
 | PHASE_24 | ✅ done | v0.24.0 | ✅ | 🤖 agent | Legal/data contract; owner accepted legal and real-model gate residual risks |
-| PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Consent & Legal Surfaces |
-| PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
-| PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Automatic-First Workspace |
-| PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Unified Cutout Tool |
-| PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Enhancements Tool & Committed History |
-| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Background & Export Tools |
-| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
-| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
-| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Whole-Project Audit & Refactor |
-| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Accessibility, Device & Product Validation |
+| PHASE_25 | ⏳ pending | v0.25.0 | ⬜ | — | Editor Document Foundation & Guided Reset |
+| PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Automatic-First Workspace |
+| PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Unified Cutout Tool |
+| PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Enhancements Tool & Committed History |
+| PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Background & Export Tools |
+| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
+| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -809,6 +809,38 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-25 — Final legal work moved behind the completed product
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect decision to handle legal, consent and related release questions only
+after all planned product functionality and validation are complete
+
+### Changes / Decision
+- `SPEC.md` v1.19 moves the former PHASE_25 Consent & Legal Surfaces contract to final PHASE_34 and
+  expands it into Final Legal, Consent & Release Readiness. It must re-inspect the finished product
+  and current
+  provider configuration, refresh the Phase-24 legal/data corpus and drafts, and obtain a new dated
+  approval or residual-risk acceptance before implementation.
+- The former PHASE_26–34 product contracts shift intact to PHASE_25–33. PHASE_25 is now Editor
+  Document Foundation & Guided Reset; PHASE_33 is the final functional/accessibility/device
+  validation gate and its readiness result remains conditional on PHASE_34.
+- PHASE_32 no longer assumes legal UI already exists, and PHASE_33 validates the existing privacy
+  route plus finished product controls without pre-implementing PHASE_34 consent/legal surfaces.
+- No runtime, endpoint, persistence, environment, database or analytics contract changed in this
+  documentation-only reorder. All affected pending phase documents were synchronized and none
+  remains `NEEDS_REVIEW`.
+
+### Affected Phases / Consequences
+- PHASE_25–34 are pending sequential contracts; the next implementation branch remains
+  `feat/phase-25`.
+- Phase-24 audit artifacts remain the governance baseline, not final-product authority. Optional
+  analytics stays fail-closed until PHASE_34 refreshes and implements the approved matrix.
+- PHASE_25 inherits the unresolved Phase-24 real-model smoke timeout and must rerun or investigate
+  it before closure; moving legal work does not defer that technical gate.
+- `docs/STATE.md` § Current Contract remains at Phase 23 because neither Phase 24 nor this reorder
+  introduced runtime behavior.
 
 ## 2026-07-25 — Phase 24 complete with explicit owner risk acceptance
 
