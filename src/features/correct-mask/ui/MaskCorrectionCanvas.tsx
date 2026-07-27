@@ -1,5 +1,14 @@
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+  type RefObject,
+} from "react";
 import { m } from "@/paraglide/messages";
+import { sourcePixelsToViewportPixels } from "@/shared/lib/brush-geometry";
 
 import {
   extractAlphaRegion,
@@ -107,6 +116,10 @@ export interface MaskCanvasHandle {
   applyPatch: (box: BrushBoundingBox, alpha: Uint8ClampedArray) => void;
   /** Reads the full current matte out of the live buffer — call once, on Done. */
   extractMatte: () => AlphaMatte | null;
+  /** Restores the last document commit without ending the editor session. */
+  resetToBaseline: () => void;
+  /** Promotes the current live alpha to the next document baseline. */
+  commitBaseline: () => void;
 }
 
 export interface MaskCorrectionCanvasProps {
@@ -137,6 +150,7 @@ export interface MaskCorrectionCanvasProps {
   onPanBySourcePixels: (deltaX: number, deltaY: number) => void;
   /** Fires once per whole gesture (pointerdown → drag → pointerup), not per point. */
   onStrokeCommitted: (patch: MaskPatch) => void;
+  stageTargetRef?: RefObject<HTMLCanvasElement | null>;
 }
 
 /**
@@ -168,8 +182,16 @@ export function MaskCorrectionCanvas({
   onPan,
   onPanBySourcePixels,
   onStrokeCommitted,
+  stageTargetRef,
 }: MaskCorrectionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const setCanvasRef = useCallback(
+    (canvas: HTMLCanvasElement | null) => {
+      canvasRef.current = canvas;
+      if (stageTargetRef) stageTargetRef.current = canvas;
+    },
+    [stageTargetRef],
+  );
   const viewportRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const [pointerInside, setPointerInside] = useState(false);
@@ -188,6 +210,7 @@ export function MaskCorrectionCanvas({
   // `pointercancel` reverts the live buffer to. Kept in lockstep with the
   // live buffer at every gesture boundary.
   const committedAlphaRef = useRef<Uint8ClampedArray | null>(null);
+  const documentAlphaRef = useRef<Uint8ClampedArray | null>(null);
   const isPaintingRef = useRef(false);
   const isPanningRef = useRef(false);
   const lastPaintPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -322,6 +345,27 @@ export function MaskCorrectionCanvas({
         if (!imageData || !canvas) return null;
         return extractAlphaChannel(imageData.data, canvas.width, canvas.height);
       },
+      resetToBaseline() {
+        const imageData = rgbaRef.current;
+        const committed = committedAlphaRef.current;
+        const baseline = documentAlphaRef.current;
+        const canvas = canvasRef.current;
+        if (!imageData || !committed || !baseline || !canvas) return;
+        for (let pixel = 0; pixel < baseline.length; pixel++) {
+          imageData.data[pixel * 4 + 3] = baseline[pixel] ?? 0;
+        }
+        committed.set(baseline);
+        repaintAll();
+      },
+      commitBaseline() {
+        const imageData = rgbaRef.current;
+        const committed = committedAlphaRef.current;
+        const canvas = canvasRef.current;
+        if (!imageData || !committed || !canvas) return;
+        const matte = extractAlphaChannel(imageData.data, canvas.width, canvas.height);
+        documentAlphaRef.current = new Uint8ClampedArray(matte.data);
+        committed.set(matte.data);
+      },
     }),
     [],
   );
@@ -332,6 +376,7 @@ export function MaskCorrectionCanvas({
     let cancelled = false;
     rgbaRef.current = null;
     committedAlphaRef.current = null;
+    documentAlphaRef.current = null;
     ctxRef.current = null;
 
     void createImageBitmap(sourceImage.blob).then((bitmap) => {
@@ -352,6 +397,7 @@ export function MaskCorrectionCanvas({
       ctxRef.current = ctx;
       rgbaRef.current = imageData;
       committedAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
+      documentAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
       repaintAll();
     });
 
@@ -539,8 +585,11 @@ export function MaskCorrectionCanvas({
     if (geometry.canvasRect.width === 0) return;
     // Inverse of `toMattePoint`'s scale — brush radius is in source-image
     // pixels, the cursor is drawn in on-screen CSS pixels.
-    const cssRadius = brushRadius * geometry.cssPixelsPerSourcePixel;
-    const cssDiameter = cssRadius * 2;
+    const cssDiameter = sourcePixelsToViewportPixels(
+      brushRadius * 2,
+      geometry.canvasRect.width,
+      sourceImage.width,
+    );
     cursor.style.left = `${String(clientX - geometry.viewportRect.left)}px`;
     cursor.style.top = `${String(clientY - geometry.viewportRect.top)}px`;
     cursor.style.width = `${String(cssDiameter)}px`;
@@ -590,7 +639,7 @@ export function MaskCorrectionCanvas({
       className="relative overflow-hidden rounded-xl bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <canvas
-        ref={canvasRef}
+        ref={setCanvasRef}
         role="img"
         aria-label={m.maskCanvas()}
         className="block w-full touch-none"
@@ -688,6 +737,7 @@ export function MaskCorrectionCanvas({
       />
       <div
         ref={cursorRef}
+        data-testid="mask-brush-cursor"
         aria-hidden="true"
         className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full transition-opacity"
         style={{

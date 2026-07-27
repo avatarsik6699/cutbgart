@@ -45,7 +45,7 @@
 | PHASE_24 | ✅ done | v0.24.0 | ✅ | 🤖 agent | Legal/data contract; owner accepted legal and real-model gate residual risks |
 | PHASE_25 | ✅ done | v0.25.0 | ✅ | 🤖 agent | Editor Document Foundation & Guided Reset |
 | PHASE_26 | ✅ done | v0.26.0 | ✅ | 🤖 agent | Automatic-First Workspace |
-| PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Unified Cutout Tool |
+| PHASE_27 | ✅ done | v0.27.0 | ✅ | 🤖 agent | Unified Cutout Tool |
 | PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Enhancements Tool & Committed History |
 | PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Background & Export Tools |
 | PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `26` · **Phase in progress:** `—`
+**Phase completed:** `27` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -721,6 +721,27 @@ map Fast → `isnet-q8`, Optimal → `isnet-fp32`, and Maximum quality Beta → 
 dtype, runtime and quota details stay outside primary copy. Tool switching preserves the document,
 stage geometry, view state and active draft; document Undo/Redo remains owned by the Phase-25 scope.
 
+```ts
+// Phase 27 — one Cutout tool with semantic and exact-alpha drafts
+type CutoutMode = "magic" | "manual";
+type CutoutIntent = "keep" | "remove";
+type ManualCutoutMode = "restore" | "erase";
+
+interface CutoutDraft {
+  mode: CutoutMode;
+  dirty: boolean;
+  canApply: boolean;
+  applying: boolean;
+}
+```
+
+Phase 27 unifies semantic Magic and exact-alpha Manual editing inside the same Cutout panel and
+document stage. Magic automatically applies the intent-best safe fused candidate, promotes it to
+the next base and clears the applied draft; a base-backed empty reset stays local. Manual commits
+one exact-alpha operation through Apply, while Cancel restores the committed document. Draft
+history remains separate from committed document history, stage/zoom geometry is shared, and
+single/batch document boundaries reject stale or cross-item work.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -875,6 +896,37 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-27 — Phase 27 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_27 gate passed after architect manual verification
+
+### Changes / Decision
+- Replaced separate guided-selection and exact-mask entry points with one localized Cutout panel:
+  Magic provides directional Keep/Remove semantic passes, while Manual provides exact-alpha
+  Restore/Erase drafts with shared stage, zoom, brush geometry, Apply and Cancel behavior.
+- Made Magic application automatic and repeatable: safe fused candidates obey directional alpha
+  constraints, the latest stroke owns overlap, pixels outside local influence remain byte-exact,
+  each successful pass becomes the next base, and an empty base reset avoids model inference.
+- Preserved document-level workflows around the simplified tool: Process another image and batch
+  reprocessing remain available outside draft actions, reset/tool/item changes use the dirty-draft
+  guard, Enhancements enters Cutout Manual explicitly, and the editor stage keeps a stable
+  cross-tool footprint.
+- Updated legacy and phase-specific Playwright journeys to the unified Cutout contract. Gate
+  evidence passed the production Docker build/health, code generation, strict TypeScript,
+  architecture lint, 132 focused tests, all 333 Vitest tests, 265 deterministic cross-browser
+  cases with 15 expected opt-in skips, the serialized real-model Chromium/CDN smoke, and the
+  container-native HTTP smoke.
+
+### Affected Phases / Consequences
+- PHASE_28 can add Enhancements commits against the same stable editor document/history and shared
+  Cutout stage without retaining candidate/debug-shaped correction UI.
+- PHASE_29–30 inherit the global reset/reprocess actions, dirty-draft guard and isolated selected
+  batch document scopes.
+- Additive UI/type change only: no route, endpoint, persistent data, model revision, analytics
+  payload, package dependency or environment key was added.
 
 ## 2026-07-27 — Phase 26 complete
 

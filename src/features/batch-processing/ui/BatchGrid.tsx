@@ -105,7 +105,7 @@ export function BatchGrid({
 }: {
   items: BatchItem[];
   selectedItemId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, trigger: HTMLButtonElement) => void;
   onRetry: (id: string) => void;
 }) {
   const queuedIds = items
@@ -140,7 +140,7 @@ export function BatchGrid({
               <button
                 type="button"
                 disabled={!selectable}
-                onClick={() => onSelect(item.id)}
+                onClick={(event) => onSelect(item.id, event.currentTarget)}
                 aria-pressed={selectable ? selected : undefined}
                 aria-label={
                   selectable

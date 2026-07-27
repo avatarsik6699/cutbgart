@@ -11,6 +11,22 @@
 
 ## Gotcha Log
 
+### A semantic Keep/Remove brush must constrain the direction of candidate fusion
+
+- **Symptoms**: a green Keep pass restores the painted fragment but creates small transparent
+  holes in already-correct foreground under the brush halo; a red Remove pass can analogously add
+  foreground. Mocked browser tests stay green when their leading candidate is uniformly opaque.
+- **Root cause**: SlimSAM produces a fresh binary source-sized segmentation and the pinned decoder
+  cannot consume the current matte. Replacing the automatic base with that candidate throughout a
+  brush halo permits changes opposite to the user's intent; symmetric continuity scoring cannot
+  distinguish a desired restoration from a destructive loss.
+- **Fix**: retain the latest stroke intent across the full influence footprint. Fuse Keep with
+  `max(baseAlpha, candidateAlpha)` and Remove with `min(baseAlpha, candidateAlpha)`, then apply the
+  hard core last and rank the resulting safe mattes.
+- **Prevention**: keep adversarial unit/hook/E2E candidates that contain opposite-direction holes,
+  plus real-model recomposition checks requiring zero alpha loss for Keep-only and zero alpha gain
+  for Remove-only automatic-base passes.
+
 ### An awaited editor transition can resurrect a cancelled session
 
 - **Symptoms**: guided correction reopens after Reset, a result from the previously selected batch

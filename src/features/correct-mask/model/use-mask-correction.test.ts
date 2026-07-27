@@ -18,6 +18,8 @@ function makeCanvasRef() {
   const handle: MaskCanvasHandle = {
     applyPatch: vi.fn(),
     extractMatte: vi.fn(() => null),
+    resetToBaseline: vi.fn(),
+    commitBaseline: vi.fn(),
   };
   return { ref: { current: handle }, handle };
 }
@@ -97,6 +99,21 @@ describe("useMaskCorrection", () => {
     });
     expect(result.current.canRedo).toBe(false);
     expect(result.current.canUndo).toBe(true);
+  });
+
+  it("keeps draft clear and document commit separate from undo history", () => {
+    const { ref, handle } = makeCanvasRef();
+    const { result } = renderHook(() => useMaskCorrection(ref, imageSize));
+    act(() => result.current.commitStroke(makePatch(0, 255)));
+
+    act(() => result.current.clearDraft());
+    expect(handle.resetToBaseline).toHaveBeenCalledTimes(1);
+    expect(result.current.canUndo).toBe(false);
+
+    act(() => result.current.commitStroke(makePatch(0, 255)));
+    act(() => result.current.commitDraft());
+    expect(handle.commitBaseline).toHaveBeenCalledTimes(1);
+    expect(result.current.canUndo).toBe(false);
   });
 
   it("multiple commits each push their own undo step, undone in reverse order", () => {

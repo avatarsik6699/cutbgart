@@ -73,7 +73,7 @@ describe("BatchGrid", () => {
     expect(screen.getByText(m.batchSelect())).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /marketplace-chair\.jpg/i }));
-    expect(onSelect).toHaveBeenCalledWith("item-1");
+    expect(onSelect).toHaveBeenCalledWith("item-1", expect.any(HTMLButtonElement));
   });
 
   it("makes the selected state visible and accessible", () => {

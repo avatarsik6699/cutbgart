@@ -1,4 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolWorkspace } from "./ToolWorkspace";
@@ -82,47 +90,11 @@ async function completeAutomaticWorkspace(): Promise<MockWorker> {
   return worker;
 }
 
-async function enterDirectGuidedPreview(): Promise<MockWorker> {
-  fireEvent.change(screen.getByLabelText("Upload an image"), {
-    target: { files: [makeFile()] },
-  });
-  await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-  const automaticWorker = MockWorker.instances[0]!;
-  await waitFor(() =>
-    expect(automaticWorker.posted.some((message) => message.type === "load-model")).toBe(
-      true,
-    ),
-  );
-  act(() =>
-    automaticWorker.emit({
-      type: "model-ready",
-      qualityMode: "isnet-q8",
-      inferencePath: "wasm",
-      dtype: "q8",
-    }),
-  );
-  await waitFor(() =>
-    expect(automaticWorker.posted.some((message) => message.type === "process")).toBe(
-      true,
-    ),
-  );
-  const process = automaticWorker.posted.find((message) => message.type === "process");
-  act(() =>
-    automaticWorker.emit({
-      type: "process-result",
-      requestId: process?.requestId,
-      result: new Blob(["automatic"], { type: "image/png" }),
-      matte: {
-        width: 800,
-        height: 600,
-        data: new Uint8ClampedArray(800 * 600).fill(255),
-      },
-      durationMs: 1,
-    }),
-  );
-  fireEvent.click(
-    await screen.findByRole("button", { name: /refine selection with brush/i }),
-  );
+async function enterMagicDraft(): Promise<{
+  automaticWorker: MockWorker;
+  magicWorker: MockWorker;
+}> {
+  const automaticWorker = await completeAutomaticWorkspace();
   await waitFor(() =>
     expect(automaticWorker.posted.some((message) => message.type === "dispose")).toBe(
       true,
@@ -136,10 +108,10 @@ async function enterDirectGuidedPreview(): Promise<MockWorker> {
     }),
   );
   await waitFor(() => expect(MockWorker.instances).toHaveLength(2));
-  const worker = MockWorker.instances[1]!;
-  const encode = worker.posted.find((message) => message.type === "encode");
+  const magicWorker = MockWorker.instances[1]!;
+  const encode = magicWorker.posted.find((message) => message.type === "encode");
   act(() =>
-    worker.emit({
+    magicWorker.emit({
       type: "status",
       revision: encode?.revision,
       status: "ready-for-prompt",
@@ -157,34 +129,12 @@ async function enterDirectGuidedPreview(): Promise<MockWorker> {
     clientY: 10,
   });
   fireEvent.pointerUp(image, { pointerId: 1, clientX: 20, clientY: 20 });
-  fireEvent.click(screen.getByRole("button", { name: /recompute mask/i }));
-  const prompt = worker.posted.find((message) => message.type === "prompt") as
-    { prompt?: { revision: number } } | undefined;
-  act(() =>
-    worker.emit({
-      type: "candidates",
-      revision: prompt?.prompt?.revision,
-      candidates: [
-        {
-          id: "intent",
-          matte: {
-            width: 800,
-            height: 600,
-            data: new Uint8ClampedArray(800 * 600).fill(255),
-          },
-          score: 1,
-          differenceRatio: 0,
-        },
-      ],
-    }),
-  );
   await waitFor(() =>
     expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
-        .disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: /^apply$/i }).disabled,
     ).toBe(false),
   );
-  return worker;
+  return { automaticWorker, magicWorker };
 }
 
 // jsdom doesn't implement `ImageData` — MaskCorrectionCanvas's paint path
@@ -262,23 +212,41 @@ describe("ToolWorkspace", () => {
 
   it("locks guided interaction while applying and exposes a retryable apply error", async () => {
     render(<ToolWorkspace />);
-    await enterDirectGuidedPreview();
+    const { automaticWorker, magicWorker } = await enterMagicDraft();
 
-    fireEvent.click(screen.getByRole("button", { name: /accept and refine/i }));
-    await waitFor(() => expect(MockWorker.instances.length).toBeGreaterThan(1));
-    const compositeWorker = MockWorker.instances[0]!;
+    fireEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+    const prompt = magicWorker.posted.find((message) => message.type === "prompt") as
+      { prompt?: { revision: number } } | undefined;
+    act(() =>
+      magicWorker.emit({
+        type: "candidates",
+        revision: prompt?.prompt?.revision,
+        candidates: [
+          {
+            id: "intent",
+            matte: {
+              width: 800,
+              height: 600,
+              data: new Uint8ClampedArray(800 * 600).fill(255),
+            },
+            score: 1,
+            differenceRatio: 0,
+          },
+        ],
+      }),
+    );
+    const compositeWorker = automaticWorker;
+    await waitFor(() =>
+      expect(
+        compositeWorker.posted.some((message) => message.type === "recomposite"),
+      ).toBe(true),
+    );
     const firstRequest = compositeWorker.posted.find(
       (message) => message.type === "recomposite",
     );
     expect(firstRequest).toBeDefined();
     expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
-        .disabled,
-    ).toBe(true);
-    expect(
-      screen
-        .getAllByRole("status")
-        .some((status) => /applying.*result/i.test(status.textContent ?? "")),
+      screen.getByRole<HTMLButtonElement>("button", { name: /applying/i }).disabled,
     ).toBe(true);
 
     act(() =>
@@ -292,7 +260,12 @@ describe("ToolWorkspace", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toMatch(/mock recomposite failed/i),
     );
-    expect(screen.getByTestId("guided-brush-selection")).toBeDefined();
+    expect(
+      screen.getByTestId("guided-brush-selection").getAttribute("data-stroke-count"),
+    ).toBe("1");
+    const promptCount = magicWorker.posted.filter(
+      (message) => message.type === "prompt",
+    ).length;
 
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     await waitFor(() =>
@@ -300,62 +273,23 @@ describe("ToolWorkspace", () => {
         compositeWorker.posted.filter((message) => message.type === "recomposite"),
       ).toHaveLength(2),
     );
+    expect(
+      magicWorker.posted.filter((message) => message.type === "prompt"),
+    ).toHaveLength(promptCount);
   });
 
-  it("does not reopen guided correction when matte extraction finishes after reset", async () => {
+  it("opens one automatic-result Cutout panel without separate correction entry points", async () => {
     render(<ToolWorkspace />);
-    fireEvent.change(screen.getByLabelText("Upload an image"), {
-      target: { files: [makeFile()] },
-    });
-    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-    const worker = MockWorker.instances[0]!;
-    await waitFor(() =>
-      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
-    );
-    act(() => worker.emit({ type: "model-ready", qualityMode: "fast" }));
-    await waitFor(() =>
-      expect(worker.posted.some((message) => message.type === "process")).toBe(true),
-    );
-    const processRequest = worker.posted.find((message) => message.type === "process");
-    act(() =>
-      worker.emit({
-        type: "process-result",
-        requestId: processRequest?.requestId,
-        result: new Blob(["fake-png"], { type: "image/png" }),
-      }),
-    );
-    const guide = await screen.findByRole("button", {
-      name: /refine selection with brush/i,
-    });
-    fireEvent.click(guide);
-    await waitFor(() =>
-      expect(
-        worker.posted.some((message) => message.type === "extract-alpha-matte"),
-      ).toBe(true),
-    );
-    const extractRequest = worker.posted.find(
-      (message) => message.type === "extract-alpha-matte",
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
-    act(() =>
-      worker.emit({
-        type: "alpha-matte-result",
-        requestId: extractRequest?.requestId,
-        matte: {
-          width: 800,
-          height: 600,
-          data: new Uint8ClampedArray(800 * 600).fill(255),
-        },
-        durationMs: 1,
-      }),
-    );
-
-    await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
-    expect(screen.queryByTestId("guided-brush-selection")).toBeNull();
+    await completeAutomaticWorkspace();
+    expect(screen.getByTestId("cutout-tool-panel")).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Magic" })).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Manual" })).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: /refine selection with brush|edit mask/i }),
+    ).toBeNull();
   });
 
-  it("drives upload -> process -> result -> reset without a page reload", async () => {
+  it("drives upload -> process -> unified result editor without a page reload", async () => {
     render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
@@ -393,11 +327,8 @@ describe("ToolWorkspace", () => {
 
     await waitFor(() => expect(screen.getByRole("slider")).toBeDefined());
     expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /reprocess in optimal/i })).toBeDefined();
-
-    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
-
-    await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
+    expect(screen.getByTestId("cutout-tool-panel")).toBeDefined();
+    expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
   });
 
   it("switches registry tools without remounting the stage or resetting document view", async () => {
@@ -445,47 +376,56 @@ describe("ToolWorkspace", () => {
     );
   });
 
-  it("edit mask -> correcting -> done returns to result with the corrected composite (Phase 07)", async () => {
+  it("guards an unsaved Cutout draft before starting another image", async () => {
     render(<ToolWorkspace />);
+    await enterMagicDraft();
 
-    fireEvent.change(screen.getByLabelText("Upload an image"), {
-      target: { files: [makeFile()] },
-    });
+    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
 
-    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-    const worker = MockWorker.instances[0]!;
-    await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
-    );
-    act(() => {
-      worker.emit({ type: "model-ready", qualityMode: "fast" });
-    });
-    await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "process")).toBe(true),
-    );
-    const processRequest = worker.posted.find((m) => m.type === "process");
-    act(() => {
-      worker.emit({
-        type: "process-result",
-        requestId: processRequest?.requestId,
-        result: new Blob(["fake-png"], { type: "image/png" }),
-        matte: {
-          width: 800,
-          height: 600,
-          data: new Uint8ClampedArray(800 * 600).fill(255),
-        },
-      });
-    });
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined(),
+    expect(screen.getByTestId("editor-draft-guard")).toBeDefined();
+    expect(screen.queryByLabelText("Upload an image")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /continue editing/i }));
+    expect(screen.queryByTestId("editor-draft-guard")).toBeNull();
+    expect(screen.getByTestId("cutout-tool-panel")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
+    fireEvent.click(screen.getByRole("button", { name: /discard draft/i }));
+
+    await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
+  });
+
+  it("routes the Enhancements exact-brush action into Cutout Manual", async () => {
+    render(<ToolWorkspace />);
+    await completeAutomaticWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: /^Enhancements$/ }));
+    fireEvent.click(
+      within(screen.getByTestId("matte-refinement-controls")).getByRole("button", {
+        name: /skip and edit with brush/i,
+      }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /edit mask/i }));
-
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^done$/i })).toBeDefined(),
+      expect(screen.getByTestId("cutout-tool-panel").getAttribute("data-mode")).toBe(
+        "manual",
+      ),
+    );
+    expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
+      "cutout",
     );
     expect(screen.getByRole("img", { name: /mask correction canvas/i })).toBeDefined();
+    await waitFor(() =>
+      expect(vi.mocked(globalThis.createImageBitmap)).toHaveBeenCalled(),
+    );
+  });
+
+  it("Manual paints an exact-alpha draft and Apply commits one manual operation", async () => {
+    render(<ToolWorkspace />);
+    const worker = await completeAutomaticWorkspace();
+    fireEvent.click(screen.getByRole("tab", { name: "Manual" }));
+    await waitFor(() =>
+      expect(screen.getByRole("img", { name: /mask correction canvas/i })).toBeDefined(),
+    );
     expect(screen.getByRole("group", { name: /brush mode/i })).toBeDefined();
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toMatch(/mask editor zoom 100%/i),
@@ -496,7 +436,35 @@ describe("ToolWorkspace", () => {
       expect(screen.getByRole("status").textContent).toMatch(/mask editor zoom 125%/i),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    const canvas = screen.getByRole("img", { name: /mask correction canvas/i });
+    Object.defineProperties(canvas, {
+      setPointerCapture: { value: vi.fn() },
+      hasPointerCapture: { value: vi.fn(() => true) },
+      releasePointerCapture: { value: vi.fn() },
+      getBoundingClientRect: {
+        value: vi.fn(() => ({
+          left: 0,
+          top: 0,
+          width: 800,
+          height: 600,
+          right: 800,
+          bottom: 600,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        })),
+      },
+    });
+    fireEvent.pointerDown(canvas, {
+      pointerId: 1,
+      button: 0,
+      clientX: 200,
+      clientY: 200,
+    });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 220, clientY: 220 });
+    const apply = screen.getByRole<HTMLButtonElement>("button", { name: /^apply$/i });
+    await waitFor(() => expect(apply.disabled).toBe(false));
+    fireEvent.click(apply);
     await waitFor(() =>
       expect(worker.posted.some((m) => m.type === "recomposite")).toBe(true),
     );
@@ -509,16 +477,25 @@ describe("ToolWorkspace", () => {
           source: { blob: makeFile(), width: 800, height: 600, format: "image/jpeg" },
           result: new Blob(["corrected-png"], { type: "image/png" }),
           qualityMode: "fast",
+          alphaMatte: {
+            width: 800,
+            height: 600,
+            data: new Uint8ClampedArray(800 * 600).fill(255),
+          },
         },
         durationMs: 5,
       });
     });
 
-    await waitFor(() => expect(screen.getByRole("slider")).toBeDefined());
-    expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined();
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("tool-workspace").getAttribute("data-document-revision"),
+      ).toBe("1"),
+    );
+    expect(apply.disabled).toBe(true);
   });
 
-  it("shows retry/reset UI when worker-backed mask preparation fails", async () => {
+  it("preserves the committed document when Manual preparation fails", async () => {
     render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
@@ -544,15 +521,16 @@ describe("ToolWorkspace", () => {
         result: new Blob(["fake-png"], { type: "image/png" }),
       });
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Manual" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined(),
+      expect(
+        worker.posted.filter((message) => message.type === "extract-alpha-matte"),
+      ).toHaveLength(1),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /edit mask/i }));
-    await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
+    const extractRequests = worker.posted.filter(
+      (message) => message.type === "extract-alpha-matte",
     );
-    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
+    const extractRequest = extractRequests.at(-1);
     act(() => {
       worker.emit({
         type: "error",
@@ -563,16 +541,15 @@ describe("ToolWorkspace", () => {
     });
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
-    expect(screen.getByRole("alert").textContent).toMatch(/could not prepare mask/i);
-    expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined();
+    expect(screen.getByRole("alert").textContent).toMatch(/OffscreenCanvas unavailable/i);
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
 
     await waitFor(() =>
-      expect(worker.posted.filter((m) => m.type === "extract-alpha-matte")).toHaveLength(
-        2,
-      ),
+      expect(
+        worker.posted.filter((message) => message.type === "extract-alpha-matte"),
+      ).toHaveLength(2),
     );
   });
 });

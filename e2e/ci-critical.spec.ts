@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectAutomaticCutout, openManualCutout } from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE_IMAGE = path.join(
@@ -12,9 +13,9 @@ const SAMPLE_IMAGE = path.join(
 );
 
 async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /edit mask/i }).click();
-  const canvas = page.getByRole("img", { name: /mask correction canvas/i });
-  await expect(canvas).toBeVisible();
+  const workspace = page.getByTestId("tool-workspace");
+  const revisionBefore = Number(await workspace.getAttribute("data-document-revision"));
+  const canvas = await openManualCutout(page);
   const correctionPanel = page.getByTestId("tool-panel-slot");
   await correctionPanel.getByRole("button", { name: /^erase$/i }).click();
   await canvas.scrollIntoViewIfNeeded();
@@ -66,10 +67,11 @@ async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
   await undo.click();
   await expect(redo).toBeEnabled();
   await redo.click();
-  await page.getByRole("button", { name: /^done$/i }).click();
-  await expect(
-    page.getByRole("slider", { name: /before\/after comparison/i }),
-  ).toBeVisible();
+  await correctionPanel.getByRole("button", { name: /^apply$/i }).click();
+  await expect(workspace).toHaveAttribute(
+    "data-document-revision",
+    String(revisionBefore + 1),
+  );
 }
 
 async function expectDownload(page: Page, buttonName: RegExp, filename: string) {
@@ -87,9 +89,7 @@ test("mocked Chromium critical path: single and batch edit, history, switch and 
   const singleUpload = page.getByLabel("Upload an image");
   await expect(singleUpload).toBeEnabled();
   await singleUpload.setInputFiles(SAMPLE_IMAGE);
-  await expect(
-    page.getByRole("slider", { name: /before\/after comparison/i }),
-  ).toBeVisible();
+  await expectAutomaticCutout(page);
   await makeCorrectionWithUndoRedo(page);
   await expectDownload(page, /^download$/i, "result.png");
 

@@ -33,7 +33,7 @@ describe("guided brush sampling", () => {
     expect(result.points.filter((point) => point.label === 1)).toHaveLength(16);
     expect(result.points.filter((point) => point.label === 0)).toHaveLength(16);
     expect(result.constraints.data[40 * 120 + 60]).toBe(0);
-    expect(result.influenceMask[40 * 120 + 60]).toBe(1);
+    expect(result.influence.data[40 * 120 + 60]).toBe(0);
     expect(result.editRegion).not.toBeNull();
   });
 
@@ -52,7 +52,7 @@ describe("guided brush sampling", () => {
     );
     expect(result.keepCount).toBe(0);
     expect(result.points.every((point) => point.label === 0)).toBe(true);
-    expect(result.influenceMask.some((value) => value === 1)).toBe(true);
+    expect(result.influence.data.some((value) => value !== -1)).toBe(true);
   });
 
   it("is deterministic and spatially representative", () => {
@@ -90,8 +90,31 @@ describe("guided brush sampling", () => {
     expect(guidedBrushHardCoreRadius(10)).toBe(4);
     expect(result.constraints.data[at(54)]).toBe(0);
     expect(result.constraints.data[at(55)]).toBe(-1);
-    expect(result.influenceMask[at(60)]).toBe(1);
-    expect(result.influenceMask[at(61)]).toBe(0);
+    expect(result.influence.data[at(60)]).toBe(0);
+    expect(result.influence.data[at(61)]).toBe(-1);
+  });
+
+  it("lets the latest stroke own directional intent across overlapping halos", () => {
+    const result = consolidateGuidedBrushStrokes(
+      [
+        {
+          id: "keep-first",
+          mode: "keep",
+          points: [{ x: 0.5, y: 0.5 }],
+          radius: 8,
+        },
+        {
+          id: "remove-last",
+          mode: "remove",
+          points: [{ x: 0.55, y: 0.5 }],
+          radius: 8,
+        },
+      ],
+      100,
+      100,
+    );
+    expect(result.influence.data[50 * 100 + 50]).toBe(0);
+    expect(result.influence.data[50 * 100 + 44]).toBe(1);
   });
 
   it("samples model prompts from the stroke centreline rather than its disk", () => {

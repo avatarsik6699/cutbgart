@@ -1,4 +1,4 @@
-import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { Redo2, RotateCcw, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { BrushMode } from "../../../entities/processed-image";
 import { m } from "@/paraglide/messages";
@@ -12,12 +12,11 @@ export interface MaskCorrectionToolbarProps {
   onModeChange: (mode: BrushMode) => void;
   brushSize: number;
   onBrushSizeChange: (size: number) => void;
-  brushHardness: number;
-  onBrushHardnessChange: (hardness: number) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  onClear: () => void;
   zoomPercent: number;
   canZoomIn: boolean;
   canZoomOut: boolean;
@@ -37,12 +36,11 @@ export function MaskCorrectionToolbar({
   onModeChange,
   brushSize,
   onBrushSizeChange,
-  brushHardness,
-  onBrushHardnessChange,
   canUndo,
   canRedo,
   onUndo,
   onRedo,
+  onClear,
   zoomPercent,
   canZoomIn,
   canZoomOut,
@@ -52,9 +50,16 @@ export function MaskCorrectionToolbar({
   onResetView,
 }: MaskCorrectionToolbarProps) {
   const modes: { value: BrushMode; label: string; description: string }[] = [
-    { value: "add", label: m.maskAdd(), description: m.maskAddDescription() },
-    { value: "erase", label: m.maskErase(), description: m.maskEraseDescription() },
-    { value: "restore", label: m.maskRestore(), description: m.maskRestoreDescription() },
+    {
+      value: "add",
+      label: m.cutoutManualRestore(),
+      description: m.cutoutManualRestoreHint(),
+    },
+    {
+      value: "erase",
+      label: m.cutoutManualErase(),
+      description: m.cutoutManualEraseHint(),
+    },
   ];
   const activeModeDescription = modes.find(
     (option) => option.value === mode,
@@ -102,40 +107,41 @@ export function MaskCorrectionToolbar({
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        {m.brushHardness()}
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={brushHardness}
-          onChange={(event) => {
-            onBrushHardnessChange(Number(event.target.value));
-          }}
-        />
-      </label>
-
       <div className="flex gap-2">
         <Button
           type="button"
           variant="outline"
+          size="icon"
+          aria-label={m.undo()}
           aria-keyshortcuts="Control+Z Meta+Z"
           title={`${m.undo()} (Ctrl/Cmd+Z)`}
           disabled={!canUndo}
           onClick={onUndo}
         >
-          {m.undo()}
+          <Undo2 aria-hidden="true" />
         </Button>
         <Button
           type="button"
           variant="outline"
+          size="icon"
+          aria-label={m.redo()}
           aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
           title={`${m.redo()} (Ctrl/Cmd+Shift+Z or Ctrl+Y)`}
           disabled={!canRedo}
           onClick={onRedo}
         >
-          {m.redo()}
+          <Redo2 aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={m.cutoutClearDraft()}
+          title={m.cutoutClearDraft()}
+          disabled={!canUndo}
+          onClick={onClear}
+        >
+          <Trash2 aria-hidden="true" />
         </Button>
       </div>
 

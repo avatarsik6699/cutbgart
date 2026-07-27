@@ -19,7 +19,7 @@ export function EditorStage({ children, documentId, loading = false }: EditorSta
       aria-busy={loading}
       data-testid="editor-stage"
       data-stage-document-id={documentId}
-      className="editor-stage relative grid min-h-[20rem] place-items-center overflow-hidden rounded-2xl border bg-muted/25 p-3 sm:min-h-[28rem]"
+      className="editor-stage relative grid h-[20rem] place-items-center overflow-hidden rounded-2xl border bg-muted/25 p-3 sm:h-[28rem]"
     >
       {loading ? (
         <div

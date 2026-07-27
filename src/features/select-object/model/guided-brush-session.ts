@@ -223,3 +223,38 @@ export function canAcceptGuidedBrushSession(session: GuidedBrushSession): boolea
       (session.baseMatte !== null && session.strokes.length === 0))
   );
 }
+
+export function canApplyGuidedBrushSession(session: GuidedBrushSession): boolean {
+  const hasKeep = session.strokes.some((stroke) => stroke.mode === "keep");
+  const dirtyDraft = session.status === "dirty" || session.status === "error";
+  const canInfer =
+    dirtyDraft && session.strokes.length > 0 && (session.baseMatte !== null || hasKeep);
+  const canRestoreBase =
+    dirtyDraft &&
+    session.baseMatte !== null &&
+    session.strokes.length === 0 &&
+    session.computedRevision !== session.revision;
+  return canInfer || canRestoreBase;
+}
+
+export function cancelGuidedBrushDraft(session: GuidedBrushSession): GuidedBrushSession {
+  if (
+    session.strokes.length === 0 &&
+    session.candidates.length === 0 &&
+    session.status !== "error"
+  )
+    return session;
+  const revision = session.revision + 1;
+  return {
+    ...session,
+    strokes: [],
+    status: session.baseMatte ? "preview" : "ready",
+    revision,
+    computedRevision: session.baseMatte ? revision : null,
+    editRegion: null,
+    candidates: [],
+    selectedCandidateId: null,
+    history: [],
+    redo: [],
+  };
+}

@@ -3,6 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import {
+  applyMagicPass,
+  expectAutomaticCutout,
+  expectComparisonForTool,
+} from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE = path.join(
@@ -21,14 +26,8 @@ async function automaticResult(page: import("@playwright/test").Page, locale = "
   await page
     .getByLabel(locale === "/en" ? "Upload an image" : "Загрузить изображения")
     .setInputFiles(SAMPLE);
-  await expect(
-    page.getByRole("slider", { name: /before\/after|до и после/i }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", {
-      name: locale === "/en" ? "Enhancements" : "Улучшения",
-    })
-    .click();
+  await expectAutomaticCutout(page);
+  await expectComparisonForTool(page, locale === "/en" ? "Enhancements" : "Улучшения");
 }
 
 test("balanced refinement is lazy, disposes automatic inference, and continues to brush/download", async ({
@@ -57,7 +56,7 @@ test("balanced refinement is lazy, disposes automatic inference, and continues t
   await expect(
     page.getByRole("application", { name: /mask correction editor/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^Done$/ }).click();
+  await page.getByRole("button", { name: /^Cancel$/ }).click();
   await expect(page.getByRole("button", { name: /^Download$/ })).toBeVisible();
 });
 
@@ -120,14 +119,8 @@ test("an accepted guided result can enter refinement before the exact brush", as
   const upload = page.getByLabel("Upload an image");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
-  await page.getByRole("button", { name: /Refine selection with brush/ }).click();
-  const image = page.getByRole("img", { name: /brush-guided object correction/i });
-  await expect(image).toBeVisible();
-  await image.press("Enter");
-  await page.getByRole("button", { name: /Recompute mask/ }).click();
-  await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
-  await page.getByRole("button", { name: /Accept and refine/ }).click();
+  await expectAutomaticCutout(page);
+  await applyMagicPass(page);
   await page.getByRole("button", { name: "Enhancements" }).click();
   const controls = page.getByTestId("matte-refinement-controls");
   await expect(controls).toBeVisible();

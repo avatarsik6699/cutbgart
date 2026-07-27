@@ -14,7 +14,11 @@ export function guidedBrushHardCoreRadius(radius: number): number {
 
 export interface ConsolidatedGuidedBrush {
   constraints: RefinementConstraintMap;
-  influenceMask: Uint8Array;
+  /**
+   * Full visible brush footprint with the latest stroke's directional intent.
+   * Unlike `constraints`, this includes the tolerance halo.
+   */
+  influence: RefinementConstraintMap;
   editRegion: PixelRect | null;
   points: readonly GuidedPoint[];
   keepCount: number;
@@ -106,7 +110,11 @@ export function consolidateGuidedBrushStrokes(
     height,
     data: new Int8Array(width * height).fill(-1),
   };
-  const influenceMask = new Uint8Array(width * height);
+  const influence: RefinementConstraintMap = {
+    width,
+    height,
+    data: new Int8Array(width * height).fill(-1),
+  };
   let bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   for (const stroke of strokes) {
     const patch = semanticStrokeToPatch(
@@ -130,7 +138,10 @@ export function consolidateGuidedBrushStrokes(
       for (let x = influencePatch.box.minX; x <= influencePatch.box.maxX; x += 1) {
         const patchIndex =
           (y - influencePatch.box.minY) * influenceWidth + x - influencePatch.box.minX;
-        if (influencePatch.coverage[patchIndex]) influenceMask[y * width + x] = 1;
+        if (influencePatch.coverage[patchIndex]) {
+          const index = y * width + x;
+          influence.data[index] = stroke.mode === "keep" ? 1 : 0;
+        }
       }
   }
 
@@ -180,7 +191,7 @@ export function consolidateGuidedBrushStrokes(
   ];
   return {
     constraints,
-    influenceMask,
+    influence,
     editRegion: bounds
       ? {
           x: bounds.minX,

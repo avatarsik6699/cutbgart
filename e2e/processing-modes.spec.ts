@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { expectAutomaticCutout } from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE = path.join(
@@ -38,14 +39,14 @@ test("IS-Net q8 and fp32 each process with the explicitly selected mode", async 
   const upload = page.getByLabel("Upload an image");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await expectAutomaticCutout(page);
   await page.getByRole("button", { name: /Process another image/ }).click();
   const precise = page.getByRole("radio", { name: /^Optimal/ });
   await expect(precise).toBeEnabled();
   await precise.click();
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await expectAutomaticCutout(page);
   const modes = await page.evaluate(() =>
     (
       window as unknown as {
@@ -68,7 +69,7 @@ test("Maximum quality without WebGPU falls back once while preserving the upload
   await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await expectAutomaticCutout(page);
 });
 
 test("Maximum quality OOM keeps the image and falls back once to Optimal", async ({
@@ -85,7 +86,7 @@ test("Maximum quality OOM keeps the image and falls back once to Optimal", async
   await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await expectAutomaticCutout(page);
   const posts = await page.evaluate(
     () =>
       (window as unknown as { __mockInferencePosts: Array<{ type: string }> })

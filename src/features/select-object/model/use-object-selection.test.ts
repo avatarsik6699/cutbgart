@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { AlphaMatte } from "../../../entities/processed-image";
 import { useGuidedBrushSelection, useObjectSelection } from "./use-object-selection";
 
 class FakeWorker extends EventTarget {
@@ -144,6 +145,61 @@ describe("useObjectSelection", () => {
 });
 
 describe("useGuidedBrushSelection", () => {
+  it("applies an adversarial Keep candidate without losing existing foreground", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useGuidedBrushSelection(() => worker as unknown as Worker),
+    );
+    const base = matte(255);
+    const restoredIndex = 2 * source.width + 5;
+    const protectedIndex = 2 * source.width + 7;
+    base.data[restoredIndex] = 0;
+
+    act(() => result.current.start(source, base));
+    const encodeRevision = (worker.posted[0] as { revision: number }).revision;
+    act(() =>
+      worker.emit({
+        type: "status",
+        revision: encodeRevision,
+        status: "ready-for-prompt",
+      }),
+    );
+    act(() =>
+      result.current.addStroke({
+        mode: "keep",
+        points: [{ x: 0.5, y: 0.5 }],
+        radius: 2,
+      }),
+    );
+
+    let appliedPromise!: Promise<AlphaMatte>;
+    act(() => {
+      appliedPromise = result.current.apply();
+    });
+    const prompt = worker.posted.at(-1) as { prompt: { revision: number } };
+    const destructive = matte(255);
+    destructive.data[protectedIndex] = 0;
+    act(() =>
+      worker.emit({
+        type: "candidates",
+        revision: prompt.prompt.revision,
+        candidates: [
+          {
+            id: "restores-with-hole",
+            matte: destructive,
+            score: 1,
+            differenceRatio: 0,
+          },
+        ],
+      }),
+    );
+
+    const applied = await appliedPromise;
+    expect(applied.data[restoredIndex]).toBe(255);
+    expect(applied.data[protectedIndex]).toBe(255);
+    expect(applied.data.every((alpha, index) => alpha >= base.data[index]!)).toBe(true);
+  });
+
   it("keeps painting/history inference-free and enforces direct green validation", async () => {
     const worker = new FakeWorker();
     const { result } = renderHook(() =>
@@ -346,7 +402,7 @@ describe("useGuidedBrushSelection", () => {
     expect(third.posted[0]).toMatchObject({ type: "encode", source });
   });
 
-  it("promotes the chosen result to a clean base without rerunning the model", async () => {
+  it("Apply automatically chooses the intent-best result and promotes it for a repeated pass", async () => {
     const worker = new FakeWorker();
     const { result } = renderHook(() =>
       useGuidedBrushSelection(() => worker as unknown as Worker),
@@ -367,23 +423,32 @@ describe("useGuidedBrushSelection", () => {
         radius: 1,
       }),
     );
-    act(() => result.current.recompute());
+    expect(result.current.canApply).toBe(true);
+    let applied!: Promise<AlphaMatte>;
+    act(() => {
+      applied = result.current.apply();
+    });
     const computedRevision = (worker.posted.at(-1) as { prompt: { revision: number } })
       .prompt.revision;
     act(() =>
       worker.emit({
         type: "candidates",
         revision: computedRevision,
-        candidates: [{ id: "chosen", matte: matte(200), score: 1, differenceRatio: 0 }],
+        candidates: [
+          { id: "raw-first", matte: matte(0), score: 999, differenceRatio: 0 },
+          { id: "intent-best", matte: matte(200), score: -5, differenceRatio: 0 },
+        ],
       }),
     );
-    await waitFor(() => expect(result.current.canAccept).toBe(true));
+    const appliedMatte = await applied;
     const promptCount = worker.posted.filter(
       (message) => (message as { type: string }).type === "prompt",
     ).length;
 
-    act(() => result.current.continueFromResult());
-
+    expect(result.current.state.session?.strokes).toHaveLength(1);
+    act(() => {
+      expect(result.current.confirmApply(appliedMatte)).toBe(true);
+    });
     expect(result.current.state.session).toMatchObject({
       baseMatte: result.current.state.matte,
       strokes: [],
@@ -393,13 +458,22 @@ describe("useGuidedBrushSelection", () => {
       redo: [],
       status: "preview",
     });
-    expect(result.current.canAccept).toBe(true);
+    expect(result.current.canApply).toBe(false);
     expect(
       worker.posted.filter((message) => (message as { type: string }).type === "prompt"),
     ).toHaveLength(promptCount);
+
+    act(() =>
+      result.current.addStroke({
+        mode: "remove",
+        points: [{ x: 0.2, y: 0.2 }],
+        radius: 1,
+      }),
+    );
+    expect(result.current.canApply).toBe(true);
   });
 
-  it("restores a base-backed zero-mark pass locally without a worker prompt", () => {
+  it("restores a base-backed zero-mark pass locally on Apply without a worker prompt", async () => {
     const worker = new FakeWorker();
     const base = matte(33);
     const { result } = renderHook(() =>
@@ -420,7 +494,10 @@ describe("useGuidedBrushSelection", () => {
       (message) => (message as { type: string }).type === "prompt",
     ).length;
 
-    act(() => result.current.recompute());
+    expect(result.current.canApply).toBe(true);
+    await act(async () => {
+      await result.current.apply();
+    });
 
     expect(result.current.state).toMatchObject({
       status: "preview",
@@ -434,7 +511,7 @@ describe("useGuidedBrushSelection", () => {
       selectedCandidateId: null,
       computedRevision: result.current.state.session?.revision,
     });
-    expect(result.current.canAccept).toBe(true);
+    expect(result.current.canApply).toBe(false);
     expect(
       worker.posted.filter((message) => (message as { type: string }).type === "prompt"),
     ).toHaveLength(promptCount);

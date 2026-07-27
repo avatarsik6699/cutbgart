@@ -3,6 +3,7 @@ import type {
   PixelRect,
   RefinementConstraintMap,
 } from "../../../entities/processed-image";
+import { fuseGuidedBrushCandidate } from "./guided-fusion";
 import type { GuidedBrushCandidate, GuidedMaskCandidate } from "./types";
 
 export const MATERIAL_DIFFERENCE_RATIO = 0.001;
@@ -21,10 +22,15 @@ function forEachRegionPixel(
   width: number,
   height: number,
   visit: (index: number) => void,
-  influenceMask?: Uint8Array,
+  influence?: RefinementConstraintMap,
 ): void {
-  if (influenceMask && influenceMask.length !== width * height)
-    throw new Error("Guided influence mask dimensions do not match the candidate");
+  if (
+    influence &&
+    (influence.width !== width ||
+      influence.height !== height ||
+      influence.data.length !== width * height)
+  )
+    throw new Error("Guided influence dimensions do not match the candidate");
   const minX = Math.max(0, Math.floor(region.x));
   const minY = Math.max(0, Math.floor(region.y));
   const maxX = Math.min(width, Math.ceil(region.x + region.width));
@@ -32,7 +38,7 @@ function forEachRegionPixel(
   for (let y = minY; y < maxY; y += 1)
     for (let x = minX; x < maxX; x += 1) {
       const index = y * width + x;
-      if (!influenceMask || influenceMask[index]) visit(index);
+      if (!influence || influence.data[index] !== -1) visit(index);
     }
 }
 
@@ -40,7 +46,7 @@ export function localCandidateDifference(
   left: AlphaMatte,
   right: AlphaMatte,
   region: PixelRect,
-  influenceMask?: Uint8Array,
+  influence?: RefinementConstraintMap,
 ): number {
   assertDimensions(right, left.width, left.height);
   let compared = 0;
@@ -53,7 +59,7 @@ export function localCandidateDifference(
       compared += 1;
       if (left.data[index] !== right.data[index]) different += 1;
     },
-    influenceMask,
+    influence,
   );
   return compared ? different / compared : 0;
 }
@@ -77,7 +83,7 @@ function baseContinuity(
   matte: AlphaMatte,
   baseMatte: AlphaMatte | null,
   region: PixelRect,
-  influenceMask?: Uint8Array,
+  influence?: RefinementConstraintMap,
 ): number {
   if (!baseMatte) return 0;
   assertDimensions(baseMatte, matte.width, matte.height);
@@ -91,7 +97,7 @@ function baseContinuity(
       compared += 1;
       delta += Math.abs((matte.data[index] ?? 0) - (baseMatte.data[index] ?? 0));
     },
-    influenceMask,
+    influence,
   );
   return compared ? 1 - delta / (compared * 255) : 0;
 }
@@ -99,7 +105,7 @@ function baseContinuity(
 function foregroundRatio(
   matte: AlphaMatte,
   region: PixelRect,
-  influenceMask?: Uint8Array,
+  influence?: RefinementConstraintMap,
 ): number {
   let compared = 0;
   let foreground = 0;
@@ -111,7 +117,7 @@ function foregroundRatio(
       compared += 1;
       if ((matte.data[index] ?? 0) >= 128) foreground += 1;
     },
-    influenceMask,
+    influence,
   );
   return compared ? foreground / compared : 0;
 }
@@ -121,22 +127,29 @@ export function rankGuidedBrushCandidates(
   constraints: RefinementConstraintMap,
   editRegion: PixelRect,
   baseMatte: AlphaMatte | null,
-  influenceMask?: Uint8Array,
+  influence: RefinementConstraintMap,
 ): GuidedBrushCandidate[] {
   const ranked = rawCandidates
     .map((candidate, originalIndex) => {
       assertDimensions(candidate.matte, constraints.width, constraints.height);
+      const safeMatte = fuseGuidedBrushCandidate({
+        baseMatte,
+        candidate: candidate.matte,
+        constraints,
+        influence,
+        editRegion,
+      });
       return {
         id: candidate.id,
-        matte: candidate.matte,
+        matte: safeMatte,
         modelRankScore:
           typeof candidate.score === "number" && Number.isFinite(candidate.score)
             ? candidate.score
             : null,
         intentScore: intentAgreement(candidate.matte, constraints),
         differenceRatio: 0,
-        continuity: baseContinuity(candidate.matte, baseMatte, editRegion, influenceMask),
-        foregroundRatio: foregroundRatio(candidate.matte, editRegion, influenceMask),
+        continuity: baseContinuity(safeMatte, baseMatte, editRegion, influence),
+        foregroundRatio: foregroundRatio(safeMatte, editRegion, influence),
         originalIndex,
       };
     })
@@ -154,12 +167,8 @@ export function rankGuidedBrushCandidates(
     if (
       materiallyDifferent.some(
         (kept) =>
-          localCandidateDifference(
-            kept.matte,
-            candidate.matte,
-            editRegion,
-            influenceMask,
-          ) < MATERIAL_DIFFERENCE_RATIO,
+          localCandidateDifference(kept.matte, candidate.matte, editRegion, influence) <
+          MATERIAL_DIFFERENCE_RATIO,
       )
     )
       continue;
@@ -174,7 +183,7 @@ export function rankGuidedBrushCandidates(
       reference.matte,
       item.matte,
       editRegion,
-      influenceMask,
+      influence,
     ),
     foregroundRatio: item.foregroundRatio,
   }));
