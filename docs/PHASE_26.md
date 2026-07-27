@@ -203,4 +203,4 @@ feat(phase-26): introduce automatic-first editor workspace
 
 - [x] Scope complete; automated gates green; review notes resolved
 - [x] Run `/context-update 26`
-- [ ] Commit on `feat/phase-26`; tag `v0.26.0` after merge
+- [x] Commit on `feat/phase-26`; tag `v0.26.0` after merge
