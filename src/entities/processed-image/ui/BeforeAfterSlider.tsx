@@ -8,6 +8,8 @@ export interface BeforeAfterSliderProps {
   after: Blob;
   backgroundFill?: BackgroundFill;
   alt?: string;
+  position?: number;
+  onPositionChange?: (position: number) => void;
 }
 
 /** Mirrors `features/remove-background`'s `useObjectUrls` (RemoveBackgroundTestPanel). */
@@ -45,8 +47,11 @@ export function BeforeAfterSlider({
   after,
   backgroundFill = { type: "transparent" },
   alt = m.beforeAfterAlt(),
+  position: controlledPosition,
+  onPositionChange,
 }: BeforeAfterSliderProps) {
-  const [position, setPosition] = useState(50);
+  const [internalPosition, setInternalPosition] = useState(50);
+  const position = controlledPosition ?? internalPosition;
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -71,13 +76,25 @@ export function BeforeAfterSlider({
             }
           : undefined;
 
-  const updatePositionFromClientX = useCallback((clientX: number) => {
-    const container = containerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const ratio = rect.width === 0 ? 0 : (clientX - rect.left) / rect.width;
-    setPosition(Math.min(100, Math.max(0, ratio * 100)));
-  }, []);
+  const setPosition = useCallback(
+    (next: number | ((current: number) => number)) => {
+      const value = typeof next === "function" ? next(position) : next;
+      if (controlledPosition === undefined) setInternalPosition(value);
+      onPositionChange?.(value);
+    },
+    [controlledPosition, onPositionChange, position],
+  );
+
+  const updatePositionFromClientX = useCallback(
+    (clientX: number) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const ratio = rect.width === 0 ? 0 : (clientX - rect.left) / rect.width;
+      setPosition(Math.min(100, Math.max(0, ratio * 100)));
+    },
+    [setPosition],
+  );
 
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {

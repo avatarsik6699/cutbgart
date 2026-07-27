@@ -152,7 +152,6 @@ describe("BatchGrid", () => {
 
     expect(screen.getByTestId("scheduler-summary").textContent).toBe(
       m.batchSummary({
-        path: "WASM",
         active: 0,
         limit: 1,
         queued: 1,

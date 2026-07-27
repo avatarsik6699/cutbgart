@@ -20,8 +20,9 @@ describe("MatteRefinementControls", () => {
         onSkip={vi.fn()}
       />,
     );
-    expect(screen.getByText(/27\.5 MB/)).toBeDefined();
-    expect(screen.getByText(/104 MB/)).toBeDefined();
+    expect(screen.getByText(/practical default/i)).toBeDefined();
+    expect(screen.getByText(/finest soft edges/i)).toBeDefined();
+    expect(screen.queryByText(/MB|MiB|WebGPU|WASM/)).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: /maximum/i }));
     expect(onModeChange).toHaveBeenCalledWith("maximum");
   });

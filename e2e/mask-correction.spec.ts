@@ -81,13 +81,13 @@ async function stableCenterAlpha(page: Page): Promise<number> {
 }
 
 async function dragOnCanvasCenter(page: Page): Promise<void> {
-  const canvas = page.getByRole("img", { name: /mask correction canvas/i });
-  // The toolbar's mode-description text changes length per mode, so clicking
-  // a mode button can reflow the page and leave the canvas scrolled out of
-  // view by the time this runs — scroll it back into view before measuring.
-  await canvas.scrollIntoViewIfNeeded();
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("mask correction canvas has no bounding box");
+  const editor = page.getByRole("application", { name: /mask correction editor/i });
+  // The expected source point is derived from the visible viewport center.
+  // Target that same point after every toolbar-induced reflow; at zoom > 100%
+  // the transformed canvas center is not the visible viewport center.
+  await editor.scrollIntoViewIfNeeded();
+  const box = await editor.boundingBox();
+  if (!box) throw new Error("mask correction editor has no bounding box");
   const centerX = box.x + box.width / 2;
   const centerY = box.y + box.height / 2;
   await page.mouse.move(centerX, centerY);
@@ -274,6 +274,7 @@ test.describe("mask correction", () => {
     await page.mouse.up();
     await page.keyboard.up("Space");
     expect(await alphaAt(page, handPoint.x, handPoint.y)).toBe(alphaBeforeHandPan);
+    await canvasForHandPan.hover();
     const brushCursor = editor.locator('[aria-hidden="true"]');
     await expect(brushCursor).toHaveCSS("opacity", "1");
 

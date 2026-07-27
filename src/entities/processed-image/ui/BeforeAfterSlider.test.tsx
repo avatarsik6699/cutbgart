@@ -73,4 +73,21 @@ describe("BeforeAfterSlider", () => {
       "repeating-conic-gradient",
     );
   });
+
+  it("supports a document-owned comparison position", () => {
+    const onPositionChange = vi.fn();
+    render(
+      <BeforeAfterSlider
+        before={before}
+        after={after}
+        position={65}
+        onPositionChange={onPositionChange}
+      />,
+    );
+
+    const slider = screen.getByRole("slider");
+    expect(slider.getAttribute("aria-valuenow")).toBe("65");
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(onPositionChange).toHaveBeenCalledWith(70);
+  });
 });

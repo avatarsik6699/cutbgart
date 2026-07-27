@@ -23,6 +23,11 @@ async function uploadAutomatic(page: import("@playwright/test").Page, locale = "
   await expect(
     page.getByRole("slider", { name: /before\/after|до и после/i }),
   ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: locale === "/en" ? "Enhancements" : "Улучшения",
+    })
+    .click();
 }
 
 test("automatic result cleans once per request without accumulating colour transforms", async ({
@@ -72,8 +77,13 @@ test("accepted guided result can clean colours, enter the exact brush, and downl
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /Указать кистью/ }).click();
-  await page.getByLabel("Загрузить изображения").setInputFiles(SAMPLE);
+  const upload = page.getByLabel("Загрузить изображения");
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(SAMPLE);
+  await expect(page.getByRole("slider", { name: /до и после/i })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: /Уточнить выбор кистью/ }).click();
   const image = page.getByRole("img", {
     name: /коррекции объекта кистью/i,
   });
@@ -83,6 +93,7 @@ test("accepted guided result can clean colours, enter the exact brush, and downl
   await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
   await page.getByRole("button", { name: /Принять и уточнить/ }).click();
 
+  await page.getByRole("button", { name: "Улучшения" }).click();
   const controls = page.getByTestId("foreground-refinement-controls");
   await controls.getByRole("button", { name: /^Очистить цвет краёв$/ }).click();
   await expect(
@@ -106,6 +117,7 @@ test("settled batch applies cleanup only to the selected item", async ({ page })
     .getByRole("button", { name: /select sample\.jpg for review/i })
     .first()
     .click();
+  await page.getByRole("button", { name: "Enhancements" }).click();
   const controls = page.getByTestId("foreground-refinement-controls");
   await controls.getByRole("button", { name: /^Clean edge colours$/ }).click();
   await expect(controls.getByRole("button", { name: /^Clean again$/ })).toBeVisible();

@@ -1,10 +1,6 @@
 import type { InferencePath } from "../../../entities/processed-image";
 import { Button } from "../../../shared/ui";
-import {
-  MATTING_MODELS,
-  formatMattingModelSize,
-  recommendMattingMode,
-} from "../model/model-registry";
+import { MATTING_MODELS, recommendMattingMode } from "../model/model-registry";
 import type {
   MattingRefinementMode,
   MattingRefinementStatus,
@@ -83,12 +79,8 @@ export function MatteRefinementControls({
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {profile.mode === "balanced"
-                  ? m.matteRefinementBalancedHint({
-                      size: formatMattingModelSize(profile.approximateBytes),
-                    })
-                  : m.matteRefinementMaximumHint({
-                      size: formatMattingModelSize(profile.approximateBytes),
-                    })}
+                  ? m.matteRefinementBalancedHint()
+                  : m.matteRefinementMaximumHint()}
               </span>
             </span>
           </label>

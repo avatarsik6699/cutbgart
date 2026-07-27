@@ -15,18 +15,53 @@ async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
   await page.getByRole("button", { name: /edit mask/i }).click();
   const canvas = page.getByRole("img", { name: /mask correction canvas/i });
   await expect(canvas).toBeVisible();
+  const correctionPanel = page.getByTestId("tool-panel-slot");
+  await correctionPanel.getByRole("button", { name: /^erase$/i }).click();
   await canvas.scrollIntoViewIfNeeded();
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("Mask correction canvas has no bounds");
-  const x = bounds.x + bounds.width / 2;
-  const y = bounds.y + bounds.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + 4, y + 4, { steps: 4 });
-  await page.mouse.up();
+  const point = {
+    clientX: bounds.x + bounds.width / 2,
+    clientY: bounds.y + bounds.height / 2,
+  };
+  // The CI fixture is intentionally 1×1. Chromium/Firefox hit-test its
+  // stretched canvas against the surrounding stage differently, so use an
+  // explicit pointer pair here; the full mask-correction spec covers real
+  // pointer movement on the normal editing surface in every browser.
+  await canvas.dispatchEvent("pointerdown", {
+    ...point,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+  });
+  await canvas.dispatchEvent("pointerup", {
+    ...point,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+    button: 0,
+    buttons: 0,
+  });
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const surface = element as HTMLCanvasElement;
+        return surface
+          .getContext("2d")
+          ?.getImageData(
+            Math.floor(surface.width / 2),
+            Math.floor(surface.height / 2),
+            1,
+            1,
+          ).data[3];
+      }),
+    )
+    .toBeLessThan(255);
 
-  const undo = page.getByRole("button", { name: /^undo/i });
-  const redo = page.getByRole("button", { name: /^redo/i });
+  const undo = correctionPanel.getByRole("button", { name: /^undo$/i });
+  const redo = correctionPanel.getByRole("button", { name: /^redo$/i });
   await expect(undo).toBeEnabled();
   await undo.click();
   await expect(redo).toBeEnabled();

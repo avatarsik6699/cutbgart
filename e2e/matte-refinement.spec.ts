@@ -24,6 +24,11 @@ async function automaticResult(page: import("@playwright/test").Page, locale = "
   await expect(
     page.getByRole("slider", { name: /before\/after|до и после/i }),
   ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: locale === "/en" ? "Enhancements" : "Улучшения",
+    })
+    .click();
 }
 
 test("balanced refinement is lazy, disposes automatic inference, and continues to brush/download", async ({
@@ -31,8 +36,7 @@ test("balanced refinement is lazy, disposes automatic inference, and continues t
 }) => {
   await automaticResult(page);
   const controls = page.getByTestId("matte-refinement-controls");
-  await expect(controls.getByText(/27\.5 MB/)).toBeVisible();
-  await expect(controls.getByText(/104 MB/)).toBeVisible();
+  await expect(controls).not.toContainText(/MB|MiB|WebGPU|WASM/);
   await controls.getByRole("button", { name: /^Refine edges$/ }).click();
   await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
 
@@ -69,7 +73,9 @@ test("maximum falls back once to balanced and preserves the result", async ({ pa
   await controls.getByRole("radio", { name: /Maximum/ }).click();
   await controls.getByRole("button", { name: /^Refine edges$/ }).click();
   await expect(controls.getByText(/Continuing once with Balanced/)).toBeVisible();
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 test("balanced failure uses the localized deterministic fallback", async ({ page }) => {
@@ -103,7 +109,7 @@ test("balanced WebGPU execution failure retries once on WASM", async ({ page }) 
   const controls = page.getByTestId("matte-refinement-controls");
   await controls.getByRole("radio", { name: /Balanced/ }).click();
   await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByText(/same Balanced model on WASM/i)).toBeVisible();
+  await expect(controls.getByText(/compatible option/i)).toBeVisible();
   await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
 });
 
@@ -111,14 +117,18 @@ test("an accepted guided result can enter refinement before the exact brush", as
   page,
 }) => {
   await page.goto("/en");
-  await page.getByRole("button", { name: /Guide with a brush/ }).click();
-  await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
+  const upload = page.getByLabel("Upload an image");
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(SAMPLE);
+  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+  await page.getByRole("button", { name: /Refine selection with brush/ }).click();
   const image = page.getByRole("img", { name: /brush-guided object correction/i });
   await expect(image).toBeVisible();
   await image.press("Enter");
   await page.getByRole("button", { name: /Recompute mask/ }).click();
   await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
   await page.getByRole("button", { name: /Accept and refine/ }).click();
+  await page.getByRole("button", { name: "Enhancements" }).click();
   const controls = page.getByTestId("matte-refinement-controls");
   await expect(controls).toBeVisible();
   await controls.getByRole("button", { name: /^Refine edges$/ }).click();
@@ -135,6 +145,7 @@ test("a settled batch refines only the selected completed item", async ({ page }
     .getByRole("button", { name: /select sample\.jpg for review/i })
     .first()
     .click();
+  await page.getByRole("button", { name: "Enhancements" }).click();
   const controls = page.getByTestId("matte-refinement-controls");
   await expect(controls.getByRole("button", { name: /^Refine edges$/ })).toBeEnabled();
   await controls.getByRole("button", { name: /^Refine edges$/ }).click();

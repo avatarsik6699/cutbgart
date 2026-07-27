@@ -17,6 +17,9 @@ import { useBatchProcessing } from "../../../features/batch-processing";
 import {
   commitProcessedImage,
   commitProcessedImageIfCurrent,
+  redoEdit,
+  selectEditHistory,
+  undoEdit,
 } from "../../../features/editor-history";
 import {
   detectDeviceCapabilities,
@@ -36,6 +39,7 @@ import {
 import { useForegroundRefinement } from "../../../features/refine-foreground";
 import type { UploadResult, UploadValidationError } from "../../../features/upload-image";
 import { sourceImageToFile } from "../lib/source-image-to-file";
+import { getLocale } from "@/paraglide/runtime";
 
 export type WorkspaceDisplayError = {
   message: string;
@@ -171,6 +175,22 @@ export function useToolWorkspaceController() {
   const replaceBatchResult = batch.replaceResult;
   const selectedBatchItem = batch.session.items.find(
     (item) => item.id === batch.session.selectedItemId,
+  );
+  const activeEditDocument = selectedBatchItem?.editDocument ?? singleDocument;
+  const historySelectors = useMemo(
+    () =>
+      activeEditDocument
+        ? selectEditHistory(
+            activeEditDocument.history,
+            getLocale() === "ru" ? "ru" : "en",
+          )
+        : {
+            canUndo: false,
+            canRedo: false,
+            undoLabel: null,
+            redoLabel: null,
+          },
+    [activeEditDocument],
   );
   const batchModelKey =
     `${qualityMode}:${deviceCapabilities?.inferencePath ?? "wasm"}` as const;
@@ -957,6 +977,50 @@ export function useToolWorkspaceController() {
       });
   }
 
+  function handleCancelCorrection() {
+    correctionRunRef.current += 1;
+    setOriginalMatte(null);
+    setFinalizingCorrection(false);
+    setCorrectionError(null);
+    retryCorrectionRef.current = null;
+    if (state.status === "correcting") exitCorrecting(state.result);
+  }
+
+  function applySingleHistory(direction: "undo" | "redo") {
+    const current = singleDocumentRef.current;
+    if (!current) return;
+    const next = direction === "undo" ? undoEdit(current) : redoEdit(current);
+    if (next === current) return;
+    const image = resolveEditDocumentImage(next);
+    publishSingleDocument(next);
+    replaceResult(image);
+    setPreviewFill(image.backgroundFill ?? { type: "transparent" });
+  }
+
+  function applyBatchHistory(direction: "undo" | "redo") {
+    const item = selectedBatchItem;
+    if (!item?.editDocument) return;
+    const next =
+      direction === "undo" ? undoEdit(item.editDocument) : redoEdit(item.editDocument);
+    if (next === item.editDocument) return;
+    const image = resolveEditDocumentImage(next);
+    replaceBatchResult(item.id, image, next);
+    setBatchPreviewFills((current) => ({
+      ...current,
+      [item.id]: image.backgroundFill ?? { type: "transparent" },
+    }));
+  }
+
+  function handleUndoDocument() {
+    if (selectedBatchItem) applyBatchHistory("undo");
+    else applySingleHistory("undo");
+  }
+
+  function handleRedoDocument() {
+    if (selectedBatchItem) applyBatchHistory("redo");
+    else applySingleHistory("redo");
+  }
+
   function commitSingleBackground(updated: ProcessedImage) {
     commitSingleResult(updated, "background", "Background");
   }
@@ -1023,6 +1087,8 @@ export function useToolWorkspaceController() {
     batch,
     batchModelKey,
     selectedBatchItem,
+    activeEditDocument,
+    historySelectors,
     lastLogMessage,
     handleUpload,
     handleUploads,
@@ -1041,6 +1107,9 @@ export function useToolWorkspaceController() {
     handleClearBatch,
     handleBatchDoneCorrecting,
     handleDoneCorrecting,
+    handleCancelCorrection,
+    handleUndoDocument,
+    handleRedoDocument,
     commitSingleBackground,
     commitBatchBackground,
     cancelGuided,

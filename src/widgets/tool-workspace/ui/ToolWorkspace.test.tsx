@@ -44,15 +44,99 @@ function makeFile(overrides: { type?: string; size?: number } = {}): File {
   });
 }
 
-async function enterDirectGuidedPreview(): Promise<MockWorker> {
-  const method = screen.getByRole("button", { name: /guide with a brush/i });
-  await waitFor(() => expect((method as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(method);
+async function completeAutomaticWorkspace(): Promise<MockWorker> {
   fireEvent.change(screen.getByLabelText("Upload an image"), {
     target: { files: [makeFile()] },
   });
   await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
   const worker = MockWorker.instances[0]!;
+  await waitFor(() =>
+    expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+  );
+  act(() =>
+    worker.emit({
+      type: "model-ready",
+      qualityMode: "isnet-q8",
+      inferencePath: "wasm",
+      dtype: "q8",
+    }),
+  );
+  await waitFor(() =>
+    expect(worker.posted.some((message) => message.type === "process")).toBe(true),
+  );
+  const process = worker.posted.find((message) => message.type === "process");
+  act(() =>
+    worker.emit({
+      type: "process-result",
+      requestId: process?.requestId,
+      result: new Blob(["automatic"], { type: "image/png" }),
+      matte: {
+        width: 800,
+        height: 600,
+        data: new Uint8ClampedArray(800 * 600).fill(255),
+      },
+      durationMs: 1,
+    }),
+  );
+  await waitFor(() => expect(screen.getByTestId("editor-toolbar")).toBeDefined());
+  return worker;
+}
+
+async function enterDirectGuidedPreview(): Promise<MockWorker> {
+  fireEvent.change(screen.getByLabelText("Upload an image"), {
+    target: { files: [makeFile()] },
+  });
+  await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+  const automaticWorker = MockWorker.instances[0]!;
+  await waitFor(() =>
+    expect(automaticWorker.posted.some((message) => message.type === "load-model")).toBe(
+      true,
+    ),
+  );
+  act(() =>
+    automaticWorker.emit({
+      type: "model-ready",
+      qualityMode: "isnet-q8",
+      inferencePath: "wasm",
+      dtype: "q8",
+    }),
+  );
+  await waitFor(() =>
+    expect(automaticWorker.posted.some((message) => message.type === "process")).toBe(
+      true,
+    ),
+  );
+  const process = automaticWorker.posted.find((message) => message.type === "process");
+  act(() =>
+    automaticWorker.emit({
+      type: "process-result",
+      requestId: process?.requestId,
+      result: new Blob(["automatic"], { type: "image/png" }),
+      matte: {
+        width: 800,
+        height: 600,
+        data: new Uint8ClampedArray(800 * 600).fill(255),
+      },
+      durationMs: 1,
+    }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: /refine selection with brush/i }),
+  );
+  await waitFor(() =>
+    expect(automaticWorker.posted.some((message) => message.type === "dispose")).toBe(
+      true,
+    ),
+  );
+  const dispose = automaticWorker.posted.find((message) => message.type === "dispose");
+  act(() =>
+    automaticWorker.emit({
+      type: "disposed",
+      requestId: dispose?.requestId,
+    }),
+  );
+  await waitFor(() => expect(MockWorker.instances).toHaveLength(2));
+  const worker = MockWorker.instances[1]!;
   const encode = worker.posted.find((message) => message.type === "encode");
   act(() =>
     worker.emit({
@@ -162,86 +246,18 @@ describe("ToolWorkspace", () => {
     expect(MockWorker.instances).toHaveLength(0);
   });
 
-  it("uses the brush-only primary guided flow and recomputes only explicitly", async () => {
+  it("starts automatic processing from the single upload surface", async () => {
     render(<ToolWorkspace />);
-    const method = screen.getByRole("button", { name: /guide with a brush/i });
-    await waitFor(() => expect((method as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(method);
+    expect(screen.queryByRole("button", { name: /guide with a brush/i })).toBeNull();
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile()] },
     });
     await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
     const worker = MockWorker.instances[0]!;
-    const encode = worker.posted.find((message) => message.type === "encode");
-    expect(encode).toBeDefined();
-    act(() =>
-      worker.emit({
-        type: "status",
-        revision: encode?.revision,
-        status: "ready-for-prompt",
-      }),
-    );
-    const image = await screen.findByRole("img", {
-      name: /brush-guided object correction/i,
-    });
-    expect(screen.queryByRole("button", { name: /keep point/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^box$/i })).toBeNull();
-    Object.defineProperty(image, "setPointerCapture", { value: vi.fn() });
-    fireEvent.pointerDown(image, {
-      pointerId: 1,
-      button: 0,
-      isPrimary: true,
-      clientX: 10,
-      clientY: 10,
-    });
-    fireEvent.pointerUp(image, { pointerId: 1, clientX: 20, clientY: 20 });
-    expect(worker.posted.some((message) => message.type === "prompt")).toBe(false);
-    expect(
-      screen
-        .getAllByRole("status")
-        .some((status) => /markings changed/i.test(status.textContent ?? "")),
-    ).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: /recompute mask/i }));
-    const prompt = worker.posted.find((message) => message.type === "prompt") as
-      { prompt?: { revision: number; points: Array<{ label: number }> } } | undefined;
-    expect(prompt?.prompt?.points.length).toBeLessThanOrEqual(32);
-    expect(prompt?.prompt?.points.every((point) => point.label === 1)).toBe(true);
-    act(() =>
-      worker.emit({
-        type: "candidates",
-        revision: prompt?.prompt?.revision,
-        candidates: [
-          {
-            id: "intent",
-            matte: {
-              width: 800,
-              height: 600,
-              data: new Uint8ClampedArray(800 * 600).fill(255),
-            },
-            score: -5,
-            differenceRatio: 0,
-          },
-          {
-            id: "raw",
-            matte: {
-              width: 800,
-              height: 600,
-              data: new Uint8ClampedArray(800 * 600),
-            },
-            score: 50,
-            differenceRatio: 1,
-          },
-        ],
-      }),
-    );
     await waitFor(() =>
-      expect(screen.getByTestId("guided-brush-candidates")).toBeDefined(),
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
     );
-    expect(screen.queryByText(/quality estimate|estimate unavailable|50%/i)).toBeNull();
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: /accept and refine/i })
-        .disabled,
-    ).toBe(false);
+    expect(worker.posted.some((message) => message.type === "encode")).toBe(false);
   });
 
   it("locks guided interaction while applying and exposes a retryable apply error", async () => {
@@ -250,7 +266,7 @@ describe("ToolWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /accept and refine/i }));
     await waitFor(() => expect(MockWorker.instances.length).toBeGreaterThan(1));
-    const compositeWorker = MockWorker.instances.at(-1)!;
+    const compositeWorker = MockWorker.instances[0]!;
     const firstRequest = compositeWorker.posted.find(
       (message) => message.type === "recomposite",
     );
@@ -367,18 +383,66 @@ describe("ToolWorkspace", () => {
         type: "process-result",
         requestId: processRequest?.requestId,
         result: resultBlob,
+        matte: {
+          width: 800,
+          height: 600,
+          data: new Uint8ClampedArray(800 * 600).fill(255),
+        },
       });
     });
 
     await waitFor(() => expect(screen.getByRole("slider")).toBeDefined());
     expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: /recompute in max quality/i }),
-    ).toBeDefined();
+    expect(screen.getByRole("button", { name: /reprocess in optimal/i })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
 
     await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
+  });
+
+  it("switches registry tools without remounting the stage or resetting document view", async () => {
+    render(<ToolWorkspace />);
+    await completeAutomaticWorkspace();
+    const stage = screen.getByTestId("editor-stage");
+    const slider = screen.getByRole("slider");
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(slider.getAttribute("aria-valuenow")).toBe("55");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Enhancements$/ }));
+    expect(screen.getByTestId("editor-stage")).toBe(stage);
+    expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("55");
+    expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
+      "enhance",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Background$/ }));
+    expect(screen.getByTestId("editor-stage")).toBe(stage);
+    expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
+      "background",
+    );
+    expect(screen.getByTestId("tool-workspace").textContent).not.toMatch(
+      /IS-Net|BEN2|WebGPU|WASM|MiB|dtype/i,
+    );
+  });
+
+  it("guards an unsaved background draft before switching tools", async () => {
+    render(<ToolWorkspace />);
+    await completeAutomaticWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: /^Background$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Ocean" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Cutout$/ }));
+
+    expect(screen.getByTestId("editor-draft-guard")).toBeDefined();
+    expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
+      "background",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /discard draft/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
+        "cutout",
+      ),
+    );
   });
 
   it("edit mask -> correcting -> done returns to result with the corrected composite (Phase 07)", async () => {
@@ -405,6 +469,11 @@ describe("ToolWorkspace", () => {
         type: "process-result",
         requestId: processRequest?.requestId,
         result: new Blob(["fake-png"], { type: "image/png" }),
+        matte: {
+          width: 800,
+          height: 600,
+          data: new Uint8ClampedArray(800 * 600).fill(255),
+        },
       });
     });
     await waitFor(() =>
@@ -412,22 +481,6 @@ describe("ToolWorkspace", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /edit mask/i }));
-    await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "extract-alpha-matte")).toBe(true),
-    );
-    const extractRequest = worker.posted.find((m) => m.type === "extract-alpha-matte");
-    act(() => {
-      worker.emit({
-        type: "alpha-matte-result",
-        requestId: extractRequest?.requestId,
-        matte: {
-          width: 800,
-          height: 600,
-          data: new Uint8ClampedArray(800 * 600).fill(255),
-        },
-        durationMs: 4,
-      });
-    });
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /^done$/i })).toBeDefined(),
@@ -511,7 +564,6 @@ describe("ToolWorkspace", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
     expect(screen.getByRole("alert").textContent).toMatch(/could not prepare mask/i);
-    expect(screen.getByRole("button", { name: /download/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /edit mask/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDefined();
 

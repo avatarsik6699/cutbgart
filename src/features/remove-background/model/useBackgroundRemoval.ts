@@ -286,7 +286,7 @@ export function useBackgroundRemoval(
         case "fallback-to-isnet": {
           setBen2FallbackNotice(true);
           setLightweightMode(message.reason === "webgpu-unavailable");
-          appendLog(`BEN2 fallback to IS-Net q8 (${message.reason})`);
+          appendLog(`BEN2 fallback to IS-Net fp32 (${message.reason})`);
           break;
         }
         case "model-ready": {

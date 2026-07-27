@@ -299,6 +299,49 @@
 - **Prevention**: invoke Playwright through the package scripts and keep server lifecycle in the
   runner; after manually killing processes outside it, confirm port 3000 is free before retrying.
 
+### Hoverable Base UI popovers can reopen immediately after explicit dismissal
+
+- **Symptoms**: a popover closes on its Close button or Escape in Chromium but remains visible in
+  Firefox/WebKit, especially when the trigger also opens on hover and restored focus.
+- **Root cause**: `openOnHover` can emit `trigger-hover` or `trigger-focus` immediately after
+  `close-press`/`escape-key`. Adding a trigger `onFocus` that synthesizes another click creates a
+  second competing interaction path and makes the result browser-order dependent.
+- **Fix**: control `Popover.Root` with `open`/`onOpenChange`, use Base UI's change reasons, and
+  ignore only the immediate hover/focus reopen after explicit dismissal. Release that lock when
+  the trigger loses focus or hover; let a new `trigger-press` open normally.
+- **Prevention**: when one floating trigger must support hover, focus, and click together, arbitrate
+  those interactions in the root's controlled state instead of synthesizing clicks from focus.
+
+### Paraglide SSR locale can leak through cold-start and response-stream boundaries
+
+- **Symptoms**: with Playwright `fullyParallel`, the first `/en/*` pages intermittently render the
+  Russian shell while their URL remains English; isolated or serial locale tests pass.
+- **Root cause**: `paraglideMiddleware()` lazily imports and installs its server
+  `AsyncLocalStorage`. Concurrent first requests can both observe an empty storage reference; the
+  later initialization replaces the instance that already carries the other request's locale.
+  Separately, wrapping the returned streaming body in a new `Response` after the middleware exits
+  can schedule TanStack's stream pulls outside the request-local context.
+- **Fix**: start a one-time no-op request through the same generated `paraglideMiddleware` instance
+  at module load and await that warm-up before accepting real requests. Calling the public
+  middleware avoids Vite resolving a direct runtime import as a distinct development module. Add
+  security headers directly to the returned response instead of re-wrapping its streaming body.
+- **Prevention**: retain a parallel RU/EN SSR regression check and do not move locale ownership to a
+  process-global mutable value.
+
+### Collecting every Playwright project together can destabilize Paraglide dev SSR
+
+- **Symptoms**: `pnpm e2e --project=chromium` is green and production SSR survives concurrent
+  locale stress, but one unfiltered Playwright invocation renders `/en/*` in Russian across every
+  browser project.
+- **Root cause**: collecting the complete multi-project matrix in one Playwright process can
+  invalidate or split Paraglide's Vite development SSR module context. This is confined to the
+  host test server; production SSR and single-project runs remain request-local.
+- **Fix**: keep one managed Vite server but have `scripts/run-e2e.ts` invoke each configured browser
+  project sequentially with an explicit `--project`; preserve `fullyParallel` and the worker count
+  inside each project.
+- **Prevention**: do not collapse the default matrix back into one Playwright process unless an
+  upstream Paraglide/Vite upgrade is verified against parallel RU/EN SSR and the full E2E suite.
+
 ### Never pass large typed arrays through changing React props — dev-mode React 19.2 freezes for seconds
 
 - **Symptoms**: under `pnpm dev` (development react-dom only), any state commit whose re-render

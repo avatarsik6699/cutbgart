@@ -3,6 +3,7 @@ import { loadEnv } from "vite";
 
 const ROOT_URL = "http://127.0.0.1:3000";
 const START_TIMEOUT_MS = 30_000;
+const DEFAULT_PROJECTS = ["chromium", "firefox", "webkit", "Mobile Safari"] as const;
 
 // Vite reads `.env*` itself, while the Playwright config runs in a separate
 // Node process. Mirror Vite's public client env into that process so test
@@ -73,18 +74,31 @@ process.once("SIGTERM", () => {
 let exitCode: number;
 try {
   await waitForServer(server);
-  const playwright = spawn(
-    "pnpm",
-    ["exec", "playwright", "test", ...process.argv.slice(2)],
-    {
-      stdio: "inherit",
-    },
+  const forwardedArgs = process.argv.slice(2);
+  const hasExplicitProject = forwardedArgs.some(
+    (argument) => argument === "--project" || argument.startsWith("--project="),
   );
-  exitCode = await new Promise<number>((resolve) => {
-    playwright.once("exit", (code, signal) => {
-      resolve(code ?? (signal === "SIGINT" ? 130 : 1));
+  // Keep one Vite lifecycle, but let Playwright collect and execute one browser
+  // project at a time. A single multi-project invocation can invalidate
+  // Paraglide's dev SSR module context while projects are collected, causing
+  // English requests to hydrate from the Russian base locale. Tests inside
+  // each project remain fully parallel according to playwright.config.ts.
+  const runs = hasExplicitProject
+    ? [forwardedArgs]
+    : DEFAULT_PROJECTS.map((project) => [...forwardedArgs, `--project=${project}`]);
+
+  exitCode = 0;
+  for (const args of runs) {
+    const playwright = spawn("pnpm", ["exec", "playwright", "test", ...args], {
+      stdio: "inherit",
     });
-  });
+    exitCode = await new Promise<number>((resolve) => {
+      playwright.once("exit", (code, signal) => {
+        resolve(code ?? (signal === "SIGINT" ? 130 : 1));
+      });
+    });
+    if (exitCode !== 0) break;
+  }
 } finally {
   stopServer();
 }

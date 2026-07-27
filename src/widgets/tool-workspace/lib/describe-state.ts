@@ -46,7 +46,6 @@ export function describeRefinementState(
  */
 export function describeState(
   state: RemoveBackgroundState,
-  lightweightMode: boolean,
   uploadError: UploadValidationError | null,
 ): string {
   if (uploadError) return uploadErrorMessage(uploadError);
@@ -62,7 +61,7 @@ export function describeState(
             ? m.processingModeBen2()
             : m.processingModeFast();
       return m.stateLoading({
-        mode: lightweightMode ? `${modeLabel} · WASM` : modeLabel,
+        mode: modeLabel,
         progress: Math.round(state.progress),
       });
     }

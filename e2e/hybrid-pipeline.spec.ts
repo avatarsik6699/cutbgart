@@ -17,6 +17,9 @@ const locales = [
   {
     path: "/en",
     upload: "Upload an image",
+    cutout: "Cutout",
+    enhance: "Enhancements",
+    background: "Background",
     refine: /^Refine edges$/,
     refineAgain: /^Refine again$/,
     clean: /^Clean edge colours$/,
@@ -32,6 +35,9 @@ const locales = [
   {
     path: "/",
     upload: "Загрузить изображения",
+    cutout: "Вырезание",
+    enhance: "Улучшения",
+    background: "Фон",
     refine: /^Уточнить края$/,
     refineAgain: /^Уточнить ещё раз$/,
     clean: /^Очистить цвет краёв$/,
@@ -66,6 +72,7 @@ for (const locale of locales) {
       page.getByRole("slider", { name: /before\/after|до и после/i }),
     ).toBeVisible();
 
+    await page.getByRole("button", { name: locale.enhance }).click();
     const matte = page.getByTestId("matte-refinement-controls");
     await matte.getByRole("button", { name: locale.refine }).click();
     await expect(matte.getByRole("button", { name: locale.refineAgain })).toBeVisible();
@@ -80,6 +87,7 @@ for (const locale of locales) {
     await paintCenter(page);
     await page.getByRole("button", { name: locale.done }).click();
 
+    await page.getByRole("button", { name: locale.background }).click();
     await page.getByRole("button", { name: locale.ocean }).click();
     const save = page.getByRole("button", { name: locale.save });
     await expect(save).toBeEnabled();
@@ -89,6 +97,7 @@ for (const locale of locales) {
     const downloaded = page.waitForEvent("download");
     await page.getByRole("button", { name: locale.download }).click();
     expect((await downloaded).suggestedFilename()).toBe("result.png");
+    await page.getByRole("button", { name: locale.cutout }).click();
     await page.getByRole("button", { name: locale.another }).click();
     await expect(page.getByLabel(locale.upload)).toBeAttached();
   });

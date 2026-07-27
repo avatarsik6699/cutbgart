@@ -346,7 +346,7 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
     let actualMode: QualityMode = requestedMode;
     let actualPath = request.inferencePath;
     if (requestedProfile.requiresWebGPU && request.inferencePath !== "webgpu") {
-      actualMode = "isnet-q8";
+      actualMode = "isnet-fp32";
       actualPath = "wasm";
       ben2FallbackMode = actualPath;
       post({
@@ -360,7 +360,7 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
     } catch (error) {
       if (requestedMode !== "ben2-fp16") throw error;
       await disposeActiveSegmenter();
-      actualMode = "isnet-q8";
+      actualMode = "isnet-fp32";
       actualPath = request.inferencePath === "webgpu" ? "webgpu" : "wasm";
       ben2FallbackMode = actualPath;
       post({
@@ -397,8 +397,8 @@ async function segmentWithWebGpuFallback(request: ProcessRequest): Promise<{
 }> {
   const requestedMode = normalizeModelMode(request.qualityMode);
   if (requestedMode === "ben2-fp16" && ben2FallbackMode) {
-    const segmenter = await loadSegmenter("isnet-q8", ben2FallbackMode);
-    return { output: await segmenter(request.source.blob), actualMode: "isnet-q8" };
+    const segmenter = await loadSegmenter("isnet-fp32", ben2FallbackMode);
+    return { output: await segmenter(request.source.blob), actualMode: "isnet-fp32" };
   }
   try {
     const segmenter = await loadSegmenter(request.qualityMode, request.inferencePath);
@@ -416,8 +416,8 @@ async function segmentWithWebGpuFallback(request: ProcessRequest): Promise<{
         qualityMode: request.qualityMode,
         reason: isOutOfMemoryError(error) ? "device-out-of-memory" : "model-failed",
       });
-      const fallback = await loadSegmenter("isnet-q8", path);
-      return { output: await fallback(request.source.blob), actualMode: "isnet-q8" };
+      const fallback = await loadSegmenter("isnet-fp32", path);
+      return { output: await fallback(request.source.blob), actualMode: "isnet-fp32" };
     }
     if (request.inferencePath !== "webgpu" || !isWebGpuExecutionError(error)) {
       throw error;
