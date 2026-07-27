@@ -234,7 +234,7 @@ describe("useBackgroundRemoval", () => {
     await waitFor(() => expect(result.current.lightweightMode).toBe(true));
   });
 
-  it("surfaces BEN2 fallback and records the actual q8 result without retry looping", async () => {
+  it("surfaces BEN2 fallback and records the actual optimal result without retry looping", async () => {
     const { result } = renderHook(() => useBackgroundRemoval("ben2-fp16"));
     act(() => result.current.selectFile(makeFile()));
     await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
@@ -254,7 +254,7 @@ describe("useBackgroundRemoval", () => {
         type: "model-ready",
         qualityMode: "ben2-fp16",
         inferencePath: "wasm",
-        dtype: "q8",
+        dtype: "fp32",
       }),
     );
     await waitFor(() =>
@@ -268,13 +268,13 @@ describe("useBackgroundRemoval", () => {
         result: new Blob(["png"]),
         matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
         durationMs: 1,
-        actualMode: "isnet-q8",
+        actualMode: "isnet-fp32",
       }),
     );
     await waitFor(() => expect(result.current.state.status).toBe("result"));
     expect(result.current.ben2FallbackNotice).toBe(true);
     if (result.current.state.status === "result")
-      expect(result.current.state.result.qualityMode).toBe("isnet-q8");
+      expect(result.current.state.result.qualityMode).toBe("isnet-fp32");
     expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(1);
   });
 

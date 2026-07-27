@@ -44,7 +44,7 @@
 | PHASE_23 | ✅ done | v0.23.0 | ✅ | 🤖 agent | Release Reliability & Operations |
 | PHASE_24 | ✅ done | v0.24.0 | ✅ | 🤖 agent | Legal/data contract; owner accepted legal and real-model gate residual risks |
 | PHASE_25 | ✅ done | v0.25.0 | ✅ | 🤖 agent | Editor Document Foundation & Guided Reset |
-| PHASE_26 | ⏳ pending | v0.26.0 | ⬜ | — | Automatic-First Workspace |
+| PHASE_26 | ✅ done | v0.26.0 | ✅ | 🤖 agent | Automatic-First Workspace |
 | PHASE_27 | ⏳ pending | v0.27.0 | ⬜ | — | Unified Cutout Tool |
 | PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Enhancements Tool & Committed History |
 | PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Background & Export Tools |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `25` · **Phase in progress:** `—`
+**Phase completed:** `26` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -702,6 +702,25 @@ labeled and bounded to 20 entries / 96 MiB of avoidable historical artifacts; st
 cancelled async work never commits. Tool strokes remain drafts. `useToolWorkspaceController`
 owns workspace orchestration and worker/run guards, while `ToolWorkspace` remains presentation.
 
+```ts
+// Phase 26 — typed automatic-first editor toolbar registry
+type EditorToolId = "cutout" | "enhance" | "background";
+
+interface EditorToolDefinition {
+  id: EditorToolId;
+  label: string;
+  icon: React.ComponentType;
+  order: number;
+  loadPanel: () => Promise<unknown>;
+}
+```
+
+Phase 26 gives single and selected completed-batch documents the same stable editor stage, typed
+toolbar and reserved lazy panel slot. Upload starts automatic processing immediately; public modes
+map Fast → `isnet-q8`, Optimal → `isnet-fp32`, and Maximum quality Beta → `ben2-fp16`, while model,
+dtype, runtime and quota details stay outside primary copy. Tool switching preserves the document,
+stage geometry, view state and active draft; document Undo/Redo remains owned by the Phase-25 scope.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -814,6 +833,10 @@ owns workspace orchestration and worker/run guards, while `ToolWorkspace` remain
 - Phase 25 preserves the existing workspace presentation while moving orchestration behind
   `useToolWorkspaceController`. Removing the last guided mark over an automatic base exposes an
   explicit localized restore action that returns the base locally and sends no SlimSAM request.
+- Phase 26 replaces the initial method choice with one automatic-first upload surface and a stable
+  editor shell shared by single and selected completed-batch documents. Its typed Cutout,
+  Enhancements and Background toolbar is keyboard navigable; tool panels load into a reserved slot
+  without remounting the stage or resetting document/view state.
 
 ### Env Config
 
@@ -852,6 +875,37 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-27 — Phase 26 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_26 gate passed
+
+### Changes / Decision
+- Replaced the initial Automatic/Guided choice with a single upload surface that immediately starts
+  automatic processing, retained multiple-file scheduling, and exposed Fast, Optimal and Maximum
+  quality Beta through the exact approved internal model mapping without technical primary copy.
+- Added the stable `EditorStage`, typed `EditorToolbar` registry and reserved lazy `ToolPanelSlot`
+  shared by single and selected completed-batch documents. Cutout, Enhancements, Background,
+  document Undo/Redo and Download preserve stage geometry, document/view state and active drafts
+  across pointer and keyboard tool changes.
+- Hardened Maximum-quality help dismissal, cross-browser brush commit/cursor interactions,
+  responsive guided-result controls and Paraglide request-local SSR. The host E2E runner now
+  isolates browser-project collection while retaining per-project parallelism and one managed Vite
+  lifecycle.
+- Gate evidence passed production Docker build/health, code generation, strict TypeScript,
+  architecture lint, 326 Vitest tests, 28 focused phase tests, 297 deterministic cross-browser
+  cases with 15 expected skips, the serialized real-model Chromium/CDN smoke, container HTTP smoke,
+  and parallel production RU/EN locale stress.
+
+### Affected Phases / Consequences
+- PHASE_27 can simplify and unify Cutout content inside the established toolbar/stage/panel shell
+  without changing editor document ownership.
+- PHASE_28–30 inherit the stable shell, typed tool identity, lazy panel boundary and independent
+  selected-batch document scopes.
+- Additive UI/type/tooling change only: no route, endpoint, persistent data, model revision,
+  analytics payload, package dependency or environment key was added.
 
 ## 2026-07-27 — Phase 25 complete
 

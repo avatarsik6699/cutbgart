@@ -13,6 +13,13 @@ function pathLabel(path: BatchSchedulerSnapshot["inferencePath"]) {
 }
 
 function progressText(progress: ModelLoadProgress): string {
+  if (progress.status === "ready") return m.batchReady();
+  return progress.percent === null
+    ? m.preparing()
+    : `${m.preparing()} ${progress.percent.toFixed(0)}%`;
+}
+
+function diagnosticProgressText(progress: ModelLoadProgress): string {
   if (progress.status === "checking-cache") return m.batchCheckingCache();
   if (progress.status === "building-session") return m.batchBuildingSession();
   if (progress.status === "ready")
@@ -208,7 +215,6 @@ export function BatchStatus({
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground" data-testid="scheduler-summary">
         {m.batchSummary({
-          path: pathLabel(snapshot.inferencePath),
           active: snapshot.activeCount,
           limit: snapshot.concurrencyLimit,
           queued: snapshot.queuedCount,
@@ -227,6 +233,14 @@ export function BatchStatus({
           {modelLoad.percent !== null && modelLoad.status !== "ready" && (
             <progress className="mt-2 w-full" max={100} value={modelLoad.percent} />
           )}
+          <details className="mt-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer underline underline-offset-2">
+              {m.details()}
+            </summary>
+            <p className="mt-2 font-mono">
+              {pathLabel(snapshot.inferencePath)} · {diagnosticProgressText(modelLoad)}
+            </p>
+          </details>
         </div>
       )}
     </div>

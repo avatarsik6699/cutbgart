@@ -445,7 +445,7 @@ export async function installMockInference(page: Page): Promise<void> {
                     ((window as unknown as { __mockBen2Failure?: boolean })
                       .__mockBen2Failure ||
                       message.inferencePath === "wasm")
-                      ? "isnet-q8"
+                      ? "isnet-fp32"
                       : message.qualityMode,
                 });
               }, "image/png");

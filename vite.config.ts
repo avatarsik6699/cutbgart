@@ -15,11 +15,12 @@ export default defineConfig(({ mode }) => ({
     hmr: mode === "e2e" ? false : undefined,
     forwardConsole: mode === "e2e" ? false : undefined,
   },
-  // Transformers.js and client-zip are imported lazily after user actions.
+  // Transformers.js/client-zip are imported lazily after user actions, while
+  // Base UI's popover subpath first appears in the quality help control.
   // Pre-optimizing them prevents a late dependency scan from reloading the
   // page or returning an "Outdated Optimize Dep" response mid-flow.
   optimizeDeps: {
-    include: ["@huggingface/transformers", "client-zip"],
+    include: ["@huggingface/transformers", "@base-ui/react/popover", "client-zip"],
   },
   resolve: {
     tsconfigPaths: true,

@@ -83,8 +83,10 @@ async function guidedPromptPosts(page: Page) {
 const locales = [
   {
     path: "/en",
-    method: /Guide with a brush/,
     upload: "Upload an image",
+    guidedRefine: /Refine selection with brush/,
+    enhance: "Enhancements",
+    background: "Background",
     keep: /^Keep$/,
     remove: /^Remove$/,
     size: /Guided brush size/,
@@ -93,7 +95,7 @@ const locales = [
     clear: /Clear markings/,
     recompute: /Recompute mask/,
     nextResult: /Next result/,
-    markingsTab: /^Markings$/,
+    markingsTab: /^(?:Base & markings|Markings)$/,
     resultTab: /^Result$/,
     continueResult: /Continue from this result/,
     accept: /Accept and refine/,
@@ -110,8 +112,10 @@ const locales = [
   },
   {
     path: "/",
-    method: /Указать кистью/,
     upload: "Загрузить изображения",
+    guidedRefine: /Уточнить выбор кистью/,
+    enhance: "Улучшения",
+    background: "Фон",
     keep: /^Оставить$/,
     remove: /^Удалить$/,
     size: /Размер управляемой кисти/,
@@ -120,7 +124,7 @@ const locales = [
     clear: /Очистить отметки/,
     recompute: /Пересчитать маску/,
     nextResult: /Следующий результат/,
-    markingsTab: /^Отметки$/,
+    markingsTab: /^(?:Основа и отметки|Отметки)$/,
     resultTab: /^Результат$/,
     continueResult: /Продолжить с этого результата/,
     accept: /Принять и уточнить/,
@@ -138,14 +142,17 @@ const locales = [
 ] as const;
 
 for (const locale of locales) {
-  test(`direct brush guidance is explicit and continues through the result pipeline (${locale.path})`, async ({
+  test(`automatic result guidance is explicit and continues through the result pipeline (${locale.path})`, async ({
     page,
   }) => {
     await page.goto(locale.path);
-    const method = page.getByRole("button", { name: locale.method });
-    await expect(method).toBeEnabled();
-    await method.click();
-    await page.getByLabel(locale.upload).setInputFiles(SAMPLE);
+    const upload = page.getByLabel(locale.upload);
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE);
+    await expect(
+      page.getByRole("slider", { name: /before\/after|до и после/i }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: locale.guidedRefine }).click();
     const guided = page.getByTestId("guided-brush-selection");
     await expect(guided).toBeVisible();
     await expect(guided.getByText(/Paint Keep|Нарисуйте.*Оставить/)).toBeVisible({
@@ -167,7 +174,7 @@ for (const locale of locales) {
     await brushStroke(page, [0.68, 0.42], [0.78, 0.58]);
     const cursorBox = await guided.getByTestId("guided-brush-cursor").boundingBox();
     expect(Math.abs((cursorBox?.width ?? 0) - (cursorBox?.height ?? 1))).toBeLessThan(1);
-    await expect(guided.getByRole("button", { name: locale.recompute })).toBeDisabled();
+    await expect(guided.getByRole("button", { name: locale.recompute })).toBeEnabled();
     await guided.getByRole("button", { name: locale.keep }).click();
     await brushStroke(page, [0.25, 0.35], [0.42, 0.65]);
     expect(await guidedPromptPosts(page)).toHaveLength(0);
@@ -234,6 +241,7 @@ for (const locale of locales) {
     await expect(guided.getByTestId("guided-brush-result-stale")).toHaveCount(0);
 
     await guided.getByRole("button", { name: locale.accept }).click();
+    await page.getByRole("button", { name: locale.enhance }).click();
     const matte = page.getByTestId("matte-refinement-controls");
     await matte.getByRole("button", { name: locale.refine }).click();
     await expect(matte.getByRole("button", { name: locale.refineAgain })).toBeVisible();
@@ -245,6 +253,7 @@ for (const locale of locales) {
     await foreground.getByRole("button", { name: locale.exactBrush }).click();
     await expect(page.getByRole("application", { name: locale.editor })).toBeVisible();
     await page.getByRole("button", { name: locale.done }).click();
+    await page.getByRole("button", { name: locale.background }).click();
     await page.getByRole("button", { name: locale.ocean }).click();
     const save = page.getByRole("button", { name: locale.save });
     await save.click();
@@ -574,6 +583,7 @@ test("automatic-result guidance collapses duplicates and rejects an older sessio
   await expect(candidates).not.toContainText(/score|estimate|unavailable|\/100/i);
 
   await page.getByRole("button", { name: /Accept and refine/ }).click();
+  await page.getByRole("button", { name: "Enhancements" }).click();
   await page
     .getByTestId("matte-refinement-controls")
     .getByRole("button", { name: /Skip and edit with brush/ })

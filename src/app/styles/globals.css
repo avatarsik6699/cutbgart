@@ -143,6 +143,8 @@
       "notice"
       "error"
       "batch-header"
+      "toolbar"
+      "guard"
       "surface"
       "rail"
       "batch"
@@ -159,6 +161,8 @@
         "notice notice"
         "error error"
         "batch-header batch-header"
+        "toolbar toolbar"
+        "guard guard"
         "surface rail"
         "batch batch"
         "log log";
@@ -172,6 +176,7 @@
       "info"
       "notice"
       "error"
+      "guard"
       "surface"
       "batch"
       "log";
@@ -183,6 +188,8 @@
       "notice"
       "error"
       "batch-header"
+      "toolbar"
+      "guard"
       "surface"
       "rail"
       "batch"
@@ -197,6 +204,8 @@
       "notice"
       "error"
       "batch-header"
+      "toolbar"
+      "guard"
       "surface"
       "rail"
       "batch"
@@ -214,6 +223,8 @@
         "notice notice"
         "error error"
         "batch-header batch-header"
+        "toolbar toolbar"
+        "guard guard"
         "surface rail"
         "batch batch"
         "log log";
@@ -229,5 +240,31 @@
 
   .tool-workspace-idle > .\[grid-area\:toggle\] {
     justify-self: center;
+  }
+
+  .editor-stage,
+  .editor-tool-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .editor-stage > div {
+    min-height: inherit;
+  }
+
+  .editor-toolbar {
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-stage *,
+  .editor-toolbar *,
+  .editor-tool-panel * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

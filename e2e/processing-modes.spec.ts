@@ -11,24 +11,24 @@ const SAMPLE = path.join(
 
 test.beforeEach(async ({ page }) => installMockInference(page));
 
-test("all production modes are localized and IS-Net preference persists", async ({
+test("all production modes are localized and the Optimal preference persists", async ({
   page,
 }) => {
   await page.goto("/en");
   await expect(page.getByRole("radio")).toHaveCount(3);
-  await expect(page.getByRole("radio", { name: /IS-Net Precise/ })).toBeEnabled();
-  await page.getByRole("radio", { name: /IS-Net Precise/ }).click();
+  await expect(page.getByRole("radio", { name: /^Optimal/ })).toBeEnabled();
+  await page.getByRole("radio", { name: /^Optimal/ }).click();
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("qualityMode")))
     .toBe("max");
-  await page.getByRole("radio", { name: /BEN2 Fine detail/ }).click();
+  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("qualityMode")))
     .toBe("max");
   await page.reload();
-  await expect(page.getByRole("radio", { name: /IS-Net Precise/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /^Optimal/ })).toBeChecked();
   await page.goto("/");
-  await expect(page.getByRole("radio", { name: /IS-Net Точно/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /^Оптимально/ })).toBeChecked();
 });
 
 test("IS-Net q8 and fp32 each process with the explicitly selected mode", async ({
@@ -40,7 +40,7 @@ test("IS-Net q8 and fp32 each process with the explicitly selected mode", async 
   await upload.setInputFiles(SAMPLE);
   await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
   await page.getByRole("button", { name: /Process another image/ }).click();
-  const precise = page.getByRole("radio", { name: /IS-Net Precise/ });
+  const precise = page.getByRole("radio", { name: /^Optimal/ });
   await expect(precise).toBeEnabled();
   await precise.click();
   await expect(upload).toBeEnabled();
@@ -58,20 +58,22 @@ test("IS-Net q8 and fp32 each process with the explicitly selected mode", async 
   expect(modes).toEqual(["isnet-q8", "isnet-fp32"]);
 });
 
-test("BEN2 without WebGPU falls back once while preserving the upload", async ({
+test("Maximum quality without WebGPU falls back once while preserving the upload", async ({
   page,
 }) => {
   await page.addInitScript(() =>
     Object.defineProperty(navigator, "gpu", { configurable: true, value: undefined }),
   );
   await page.goto("/en");
-  await page.getByRole("radio", { name: /BEN2 Fine detail/ }).click();
+  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
-  await expect(page.getByText(/BEN2 could not run/)).toBeVisible();
+  await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
   await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
 });
 
-test("BEN2 OOM keeps the image and falls back once to IS-Net q8", async ({ page }) => {
+test("Maximum quality OOM keeps the image and falls back once to Optimal", async ({
+  page,
+}) => {
   await page.addInitScript(() =>
     Object.defineProperty(window, "__mockBen2Failure", {
       configurable: true,
@@ -79,10 +81,10 @@ test("BEN2 OOM keeps the image and falls back once to IS-Net q8", async ({ page 
     }),
   );
   await page.goto("/en");
-  await expect(page.getByRole("radio", { name: /BEN2 Fine detail/ })).toBeEnabled();
-  await page.getByRole("radio", { name: /BEN2 Fine detail/ }).click();
+  await expect(page.getByRole("radio", { name: /^Maximum quality/ })).toBeEnabled();
+  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
-  await expect(page.getByText(/BEN2 could not run/)).toBeVisible();
+  await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
   await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
   const posts = await page.evaluate(
     () =>
@@ -96,8 +98,8 @@ test("reuses a loaded mode for a batch while BEN2 scheduling stays sequential", 
   page,
 }) => {
   await page.goto("/en");
-  await expect(page.getByRole("radio", { name: /BEN2 Fine detail/ })).toBeEnabled();
-  await page.getByRole("radio", { name: /BEN2 Fine detail/ }).click();
+  await expect(page.getByRole("radio", { name: /^Maximum quality/ })).toBeEnabled();
+  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
   await page.getByLabel("Upload an image").setInputFiles([SAMPLE, SAMPLE]);
   await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
   await expect(page.getByTestId("scheduler-summary")).toContainText("0/1 active");

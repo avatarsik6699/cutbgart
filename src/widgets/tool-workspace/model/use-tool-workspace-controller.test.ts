@@ -128,6 +128,26 @@ describe("useToolWorkspaceController", () => {
       kind: "background",
       label: "Background",
     });
+    expect(result.current.historySelectors).toMatchObject({
+      canUndo: true,
+      canRedo: false,
+    });
+
+    act(() => result.current.handleUndoDocument());
+    expect(result.current.singleDocument?.history.future).toHaveLength(1);
+    expect(result.current.state.status).toBe("result");
+    if (result.current.state.status === "result")
+      expect(result.current.state.result.backgroundFill).toEqual({
+        type: "transparent",
+      });
+
+    act(() => result.current.handleRedoDocument());
+    expect(result.current.singleDocument?.history.past).toHaveLength(1);
+    if (result.current.state.status === "result")
+      expect(result.current.state.result.backgroundFill).toEqual({
+        type: "color",
+        value: "#ffffff",
+      });
 
     act(() => result.current.handleReset());
     expect(result.current.singleDocument).toBeNull();

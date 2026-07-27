@@ -34,43 +34,43 @@ adapters, but remove model/runtime implementation details from the primary UI (S
 
 ### Frontend
 
-- [ ] `F1` Replace the initial Automatic/Guided method choice with one upload surface plus the
+- [x] `F1` Replace the initial Automatic/Guided method choice with one upload surface plus the
   automatic processing selector. Every valid one-or-many upload starts processing immediately;
   multiple files retain the existing grid/progress/error-isolation journey. Direct guided entry
   leaves the public flow but reusable internal code remains — _Depends on:_ —
-- [ ] `F2` Rename public automatic modes to `Быстро/Fast`, `Оптимально/Optimal`, and
+- [x] `F2` Rename public automatic modes to `Быстро/Fast`, `Оптимально/Optimal`, and
   `Максимальное качество/Maximum quality` with a visible `Beta` badge. Map them to
   `isnet-q8`/`isnet-fp32`/`ben2-fp16` internally and make Optimal the capable-device recommendation —
   _Depends on:_ `F1`
-- [ ] `F3` Remove model IDs, dtype, MiB counts, WebGPU/WASM labels, raw worker log lines, and
+- [x] `F3` Remove model IDs, dtype, MiB counts, WebGPU/WASM labels, raw worker log lines, and
   technical fallback text from the primary mode/progress/result UI. Keep diagnostics in a compact
   accessible `Details` disclosure that is collapsed by default — _Depends on:_ `F2`
-- [ ] `F4` Add an accessible help tooltip/popover for Maximum quality: it needs compatible WebGPU,
+- [x] `F4` Add an accessible help tooltip/popover for Maximum quality: it needs compatible WebGPU,
   may not start on every device, and falls back once to Optimal without losing the upload. The
   trigger works by hover, focus, and click; no technical exception is primary copy — _Depends on:_
   `F2`, `F3`
-- [ ] `F5` Build a stable `EditorStage`, `EditorToolbar`, and reserved `ToolPanelSlot`. The stage
+- [x] `F5` Build a stable `EditorStage`, `EditorToolbar`, and reserved `ToolPanelSlot`. The stage
   keeps one aspect-preserving footprint while tools switch; desktop uses stage+panel, mobile stacks
   toolbar/stage/panel without remounting the image or resetting view state. Reuse this exact shell
   for a single document and the selected completed batch document — _Depends on:_ `F1`
-- [ ] `F6` Add toolbar items with icons and text: Cutout, Enhancements (`Улучшения`), Background;
+- [x] `F6` Add toolbar items with icons and text: Cutout, Enhancements (`Улучшения`), Background;
   document Undo/Redo
   icon controls; and a Download slot. Use a typed registry for identity/order/labels, not condition
   chains duplicated through the workspace — _Depends on:_ `F5`
-- [ ] `F7` Adapt current guided/manual, matte/foreground, background, and download controls into
+- [x] `F7` Adapt current guided/manual, matte/foreground, background, and download controls into
   the new panel slots without yet performing the Phase-27–29 content simplification. A dirty
   existing draft cannot be lost on tool switch; temporary adapters may show an apply/discard guard —
   _Depends on:_ `F5`, `F6`
-- [ ] `F8` Reserve stage/panel dimensions and loading placeholders so tool switching produces no
+- [x] `F8` Reserve stage/panel dimensions and loading placeholders so tool switching produces no
   visible stage jump. Keep tool panels lazy after the automatic result and preserve LCP/TTI budgets —
   _Depends on:_ `F5`–`F7`
-- [ ] `F9` Implement ARIA toolbar keyboard navigation, active-tool announcement, focus restoration,
+- [x] `F9` Implement ARIA toolbar keyboard navigation, active-tool announcement, focus restoration,
   narrow-screen horizontal overflow, localized accessible icon names, reduced-motion behavior, and
   focus/click-capable help content — _Depends on:_ `F6`–`F8`
-- [ ] `F10` Add component/integration tests for mapping/copy, automatic start, fallback preservation,
+- [x] `F10` Add component/integration tests for mapping/copy, automatic start, fallback preservation,
   no-primary-technical-copy assertions, registry order, non-remounting stage, dirty-draft guard,
   keyboard navigation, and responsive slot behavior — _Depends on:_ `F1`–`F9`
-- [ ] `F11` Add bilingual cross-browser Playwright coverage: choose each public mode, upload,
+- [x] `F11` Add bilingual cross-browser Playwright coverage: choose each public mode, upload,
   observe automatic start/result, switch all toolbar tools without stage geometry/view reset,
   exercise keyboard navigation/tooltips, and assert forbidden technical terms are absent from the
   primary workspace. Repeat the journey with multiple files, selecting at least two completed
@@ -78,7 +78,7 @@ adapters, but remove model/runtime implementation details from the primary UI (S
 
 ### Infra
 
-- [ ] `I1` Add no model, package, route, env var, analytics event, persistence, or backend. Keep
+- [x] `I1` Add no model, package, route, env var, analytics event, persistence, or backend. Keep
   diagnostics lazy/collapsed and do not increase the initial public bundle with future tools —
   _Depends on:_ `F11`
 
@@ -176,7 +176,18 @@ contract, or switching items shares document/view state.
 
 ## Architect Review Notes
 
-- [x] No architect review issues recorded
+- [x] Maximum-quality help must close reliably after Close and Escape without being immediately
+  reopened by restored focus or a lingering hover in Firefox, WebKit, and Mobile Safari.
+- [x] The CI-critical correction journey must wait for a committed brush change before asserting
+  that document Undo is enabled across the full browser matrix.
+- [x] Mask-correction keyboard coverage must establish the real canvas hover/focus precondition
+  before asserting the custom brush cursor in Firefox.
+- [x] Guided-result mobile coverage must target the responsive result/markings controls that are
+  actually rendered after a stale result in Mobile Safari.
+- [x] Concurrent first-load RU/EN SSR requests must keep their request-local Paraglide locale so
+  `/en/*` never renders the Russian shell during the fully parallel cross-browser suite.
+- [x] The default host E2E runner must retain all four browser projects and per-project parallelism
+  while isolating Playwright project collection so Vite dev SSR cannot cross-contaminate locales.
 
 ## Implementation Notes
 
@@ -190,6 +201,6 @@ feat(phase-26): introduce automatic-first editor workspace
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; automated gates green; review notes resolved
-- [ ] Run `/context-update 26`
+- [x] Scope complete; automated gates green; review notes resolved
+- [x] Run `/context-update 26`
 - [ ] Commit on `feat/phase-26`; tag `v0.26.0` after merge

@@ -615,7 +615,13 @@ export function MaskCorrectionCanvas({
           if (!handGesture && event.button !== 0) return;
           event.preventDefault();
           viewportRef.current?.focus();
-          event.currentTarget.setPointerCapture(event.pointerId);
+          try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          } catch {
+            // Synthetic and already-interrupted pointer sequences may not
+            // have an active pointer to capture. Painting still remains
+            // valid while events continue targeting the canvas.
+          }
           gestureGeometryRef.current = readCanvasGeometry();
           if (handGesture) {
             isPanningRef.current = true;
@@ -651,7 +657,12 @@ export function MaskCorrectionCanvas({
           stampInterpolatedSegment(toMattePoint(event.clientX, event.clientY, geometry));
         }}
         onPointerUp={(event) => {
-          event.currentTarget.releasePointerCapture(event.pointerId);
+          if (
+            typeof event.currentTarget.hasPointerCapture !== "function" ||
+            event.currentTarget.hasPointerCapture(event.pointerId)
+          ) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
           if (isPanningRef.current) {
             stopPanning();
             return;

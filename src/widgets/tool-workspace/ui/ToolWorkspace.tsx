@@ -1,4 +1,13 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Trash2 } from "lucide-react";
 
 import type {
@@ -37,10 +46,33 @@ import {
   describeState,
 } from "../lib/describe-state";
 import { useToolWorkspaceController } from "../model/use-tool-workspace-controller";
+import {
+  createEditorToolRegistry,
+  type EditorToolId,
+} from "../model/editor-tool-registry";
+import { EditorStage } from "./EditorStage";
+import { EditorToolbar } from "./EditorToolbar";
 import { ProcessingLog } from "./ProcessingLog";
 
-function pathLabel(path: "webgpu" | "wasm"): string {
-  return path === "webgpu" ? "WebGPU" : "WASM";
+const LazyToolPanelSlot = lazy(async () => {
+  const module = await import("./ToolPanelSlot");
+  return { default: module.ToolPanelSlot };
+});
+
+function ToolPanelSlot(props: import("./ToolPanelSlot").ToolPanelSlotProps) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          aria-busy="true"
+          className="editor-tool-panel min-h-[20rem] animate-pulse rounded-2xl border bg-muted/25 motion-reduce:animate-none sm:min-h-[28rem]"
+          data-testid="tool-panel-placeholder"
+        />
+      }
+    >
+      <LazyToolPanelSlot {...props} />
+    </Suspense>
+  );
 }
 
 function modeLabel(mode: QualityMode): string {
@@ -56,6 +88,8 @@ interface MaskCorrectionSlotsProps {
   onDone: (matte: AlphaMatte) => void;
   doneDisabled?: boolean;
   onViewAnnouncementChange: (announcement: string) => void;
+  onDirtyChange: (dirty: boolean) => void;
+  onCancel: () => void;
   children: (slots: { surface: ReactNode; rail: ReactNode }) => ReactNode;
 }
 
@@ -76,6 +110,8 @@ function MaskCorrectionSlots({
   onDone,
   doneDisabled = false,
   onViewAnnouncementChange,
+  onDirtyChange,
+  onCancel,
   children,
 }: MaskCorrectionSlotsProps) {
   const canvasHandleRef = useRef<MaskCanvasHandle>(null);
@@ -114,6 +150,11 @@ function MaskCorrectionSlots({
       onViewAnnouncementChange("");
     };
   }, [onViewAnnouncementChange, zoomAnnouncement]);
+
+  useEffect(() => {
+    onDirtyChange(canUndo);
+    return () => onDirtyChange(false);
+  }, [canUndo, onDirtyChange]);
 
   const surface = (
     <MaskCorrectionCanvas
@@ -167,6 +208,9 @@ function MaskCorrectionSlots({
         className="self-start"
       >
         {m.done()}
+      </Button>
+      <Button type="button" variant="outline" onClick={onCancel} className="self-start">
+        {m.cancel()}
       </Button>
     </div>
   );
@@ -242,8 +286,6 @@ export function ToolWorkspace() {
     batchBackgroundBusy,
     setBatchBackgroundBusy,
     hydrated,
-    guidedEntry,
-    setGuidedEntry,
     guidedVisualContext,
     guided,
     guidedViewSession,
@@ -251,7 +293,6 @@ export function ToolWorkspace() {
     foregroundRefinement,
     refinementMode,
     setRefinementMode,
-    singleDocument,
     qualityMode,
     setQualityMode,
     state,
@@ -269,7 +310,8 @@ export function ToolWorkspace() {
     batch,
     batchModelKey,
     selectedBatchItem,
-    lastLogMessage,
+    activeEditDocument,
+    historySelectors,
     handleUpload,
     handleUploads,
     handleReset,
@@ -287,13 +329,90 @@ export function ToolWorkspace() {
     handleClearBatch,
     handleBatchDoneCorrecting,
     handleDoneCorrecting,
+    handleCancelCorrection,
+    handleUndoDocument,
+    handleRedoDocument,
     commitSingleBackground,
     commitBatchBackground,
     cancelGuided,
   } = useToolWorkspaceController();
 
   const busy = state.status === "model-loading" || state.status === "processing";
-  const activeEditDocument = selectedBatchItem?.editDocument ?? singleDocument;
+  const tools = useMemo(() => createEditorToolRegistry(), []);
+  const activeDocumentId =
+    activeEditDocument?.document.id ??
+    selectedBatchItem?.id ??
+    (state.status === "result" || state.status === "correcting" ? "single-result" : null);
+  const [toolByDocument, setToolByDocument] = useState<Record<string, EditorToolId>>({});
+  const [viewPositionByDocument, setViewPositionByDocument] = useState<
+    Record<string, number>
+  >({});
+  const [backgroundDraftByDocument, setBackgroundDraftByDocument] = useState<
+    Record<string, boolean>
+  >({});
+  const [manualDraftDirty, setManualDraftDirty] = useState(false);
+  const [pendingTool, setPendingTool] = useState<EditorToolId | null>(null);
+  const pendingToolTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const activeTool = activeDocumentId
+    ? (toolByDocument[activeDocumentId] ?? "cutout")
+    : "cutout";
+  const guidedDraftDirty = Boolean(guided.state.session);
+  const manualSessionActive = Boolean(originalMatte);
+  const backgroundDraftDirty = activeDocumentId
+    ? Boolean(backgroundDraftByDocument[activeDocumentId])
+    : false;
+  const activeDraftDirty =
+    activeTool === "cutout"
+      ? guidedDraftDirty || manualSessionActive || manualDraftDirty
+      : activeTool === "background" && backgroundDraftDirty;
+
+  const handleManualDirtyChange = useCallback((dirty: boolean) => {
+    setManualDraftDirty(dirty);
+  }, []);
+
+  function activateTool(tool: EditorToolId) {
+    if (!activeDocumentId) return;
+    setToolByDocument((current) => ({ ...current, [activeDocumentId]: tool }));
+    const definition = tools.find(({ id }) => id === tool);
+    if (definition) void definition.loadPanel();
+  }
+
+  function requestTool(tool: EditorToolId, trigger: HTMLButtonElement) {
+    if (tool === activeTool) return;
+    if (activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingTool(tool);
+      return;
+    }
+    activateTool(tool);
+  }
+
+  function discardActiveDraft() {
+    if (guided.state.session) cancelGuided();
+    if (originalMatte) handleCancelCorrection();
+    if (activeDocumentId && backgroundDraftDirty) {
+      const appliedFill = selectedBatchItem?.processedImage?.backgroundFill ??
+        (state.status === "result" || state.status === "correcting"
+          ? state.result.backgroundFill
+          : undefined) ?? { type: "transparent" };
+      if (selectedBatchItem) {
+        setBatchPreviewFills((current) => ({
+          ...current,
+          [selectedBatchItem.id]: appliedFill,
+        }));
+      } else {
+        setPreviewFill(appliedFill);
+      }
+      setBackgroundDraftByDocument((current) => ({
+        ...current,
+        [activeDocumentId]: false,
+      }));
+    }
+    setManualDraftDirty(false);
+    if (pendingTool) activateTool(pendingTool);
+    setPendingTool(null);
+    requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
+  }
 
   const displayError: DisplayError | null = uploadError
     ? { message: localizedUploadError(uploadError), action: "reset" }
@@ -352,13 +471,13 @@ export function ToolWorkspace() {
       <div className="flex flex-col gap-3">
         <UploadDropzone
           onUpload={handleUpload}
-          onUploads={guidedEntry ? undefined : handleUploads}
+          onUploads={handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <ChoosePhotoButton
           onUpload={handleUpload}
-          onUploads={guidedEntry ? undefined : handleUploads}
+          onUploads={handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
@@ -422,6 +541,9 @@ export function ToolWorkspace() {
           <QualityModeToggle
             qualityMode={qualityMode}
             onQualityModeChange={setQualityMode}
+            recommendedMode={
+              deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
+            }
             disabled={!hydrated}
           />
           <div
@@ -483,6 +605,16 @@ export function ToolWorkspace() {
               batchPreviewFills[selectedBatchItem.id] ??
               selectedBatchItem.processedImage.backgroundFill
             }
+            position={
+              activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+            }
+            onPositionChange={(position) => {
+              if (!activeDocumentId) return;
+              setViewPositionByDocument((current) => ({
+                ...current,
+                [activeDocumentId]: position,
+              }));
+            }}
           />
         </div>
       )}
@@ -495,130 +627,146 @@ export function ToolWorkspace() {
   ) : null;
 
   const batchRailBase = batchActive ? (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h3 className="text-sm font-semibold">{m.batchSettingsTitle()}</h3>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {selectedBatchItem?.originalFileName ?? m.batchSettingsEmpty()}
-        </p>
-      </div>
-      {selectedBatchItem?.processedImage && !originalMatte && (
+    <ToolPanelSlot
+      toolId={activeTool}
+      label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
+    >
+      {selectedBatchItem?.processedImage && !originalMatte ? (
         <div className="flex flex-col gap-4" data-testid="batch-controls">
-          <MatteRefinementControls
-            mode={refinementMode}
-            path={deviceCapabilities?.inferencePath ?? null}
-            status={refinement.state.status}
-            progress={refinement.state.progress}
-            fallbackReason={refinement.state.fallbackReason}
-            fallback={refinement.state.fallback}
-            disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
-            onModeChange={setRefinementMode}
-            onStart={() =>
-              startBatchRefinement(
-                selectedBatchItem.id,
-                selectedBatchItem.processedImage!,
-              )
-            }
-            onCancel={refinement.cancel}
-            onSkip={handleBatchEditMask}
-          />
-          <ForegroundRefinementControls
-            status={foregroundRefinement.state.status}
-            progress={foregroundRefinement.state.progress}
-            fallbackReason={foregroundRefinement.state.fallbackReason}
-            result={foregroundRefinement.state.result}
-            error={foregroundRefinement.state.error}
-            disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
-            onStart={(componentCleanup) =>
-              startBatchForegroundRefinement(
-                selectedBatchItem.id,
-                selectedBatchItem.processedImage!,
-                componentCleanup,
-              )
-            }
-            onCancel={foregroundRefinement.cancel}
-            onSkip={handleBatchEditMask}
-          />
-          <BackgroundFillSelector
-            image={{
-              source: selectedBatchItem.processedImage.source,
-              backgroundFill: selectedBatchItem.processedImage.backgroundFill,
-            }}
-            onPreview={(fill) => {
-              setBatchPreviewFills((current) => ({
-                ...current,
-                [selectedBatchItem.id]: fill,
-              }));
-            }}
-            onApply={(fill) =>
-              batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
-            }
-            onResult={(updated) => {
-              commitBatchBackground(selectedBatchItem.id, updated);
-              setBatchPreviewFills((current) => ({
-                ...current,
-                [selectedBatchItem.id]: updated.backgroundFill ?? {
-                  type: "transparent",
-                },
-              }));
-            }}
-            onBusyChange={(itemBusy) =>
-              setBatchBackgroundBusy((current) => ({
-                ...current,
-                [selectedBatchItem.id]: itemBusy,
-              }))
-            }
-          />
-          <div className="flex flex-wrap gap-3">
-            <DownloadResultButton
-              image={selectedBatchItem.processedImage.result}
-              disabled={batchBackgroundBusy[selectedBatchItem.id]}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                void releaseRefinementBeforeHeavyWork().then(() =>
-                  batch.retryItem(selectedBatchItem.id),
-                );
+          {activeTool === "cutout" && (
+            <>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    void releaseRefinementBeforeHeavyWork().then(() =>
+                      batch.retryItem(selectedBatchItem.id),
+                    );
+                  }}
+                >
+                  {m.reprocessMode({
+                    mode: modeLabel(selectedBatchItem.qualityMode),
+                  })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleBatchEditMask}
+                  disabled={extractingMatte || batchBackgroundBusy[selectedBatchItem.id]}
+                >
+                  {extractingMatte ? m.preparing() : m.editMask()}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleGuideBatchResult}
+                  disabled={
+                    extractingMatte ||
+                    batchBackgroundBusy[selectedBatchItem.id] ||
+                    Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)
+                  }
+                >
+                  {extractingMatte ? m.preparing() : m.guidedRefineResult()}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {m.batchQualityHint({
+                  mode: modeLabel(selectedBatchItem.qualityMode),
+                })}
+              </p>
+            </>
+          )}
+          {activeTool === "enhance" && (
+            <>
+              <MatteRefinementControls
+                mode={refinementMode}
+                path={deviceCapabilities?.inferencePath ?? null}
+                status={refinement.state.status}
+                progress={refinement.state.progress}
+                fallbackReason={refinement.state.fallbackReason}
+                fallback={refinement.state.fallback}
+                disabled={Boolean(
+                  batch.snapshot.activeCount || batch.snapshot.queuedCount,
+                )}
+                onModeChange={setRefinementMode}
+                onStart={() =>
+                  startBatchRefinement(
+                    selectedBatchItem.id,
+                    selectedBatchItem.processedImage!,
+                  )
+                }
+                onCancel={refinement.cancel}
+                onSkip={handleBatchEditMask}
+              />
+              <ForegroundRefinementControls
+                status={foregroundRefinement.state.status}
+                progress={foregroundRefinement.state.progress}
+                fallbackReason={foregroundRefinement.state.fallbackReason}
+                result={foregroundRefinement.state.result}
+                error={foregroundRefinement.state.error}
+                disabled={Boolean(
+                  batch.snapshot.activeCount || batch.snapshot.queuedCount,
+                )}
+                onStart={(componentCleanup) =>
+                  startBatchForegroundRefinement(
+                    selectedBatchItem.id,
+                    selectedBatchItem.processedImage!,
+                    componentCleanup,
+                  )
+                }
+                onCancel={foregroundRefinement.cancel}
+                onSkip={handleBatchEditMask}
+              />
+            </>
+          )}
+          {activeTool === "background" && (
+            <BackgroundFillSelector
+              image={{
+                source: selectedBatchItem.processedImage.source,
+                backgroundFill: selectedBatchItem.processedImage.backgroundFill,
               }}
-            >
-              {m.reprocessMode({
-                mode: modeLabel(selectedBatchItem.qualityMode),
-              })}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleBatchEditMask}
-              disabled={extractingMatte || batchBackgroundBusy[selectedBatchItem.id]}
-            >
-              {extractingMatte ? m.preparing() : m.editMask()}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleGuideBatchResult}
-              disabled={
-                extractingMatte ||
-                batchBackgroundBusy[selectedBatchItem.id] ||
-                Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)
+              onPreview={(fill) => {
+                setBatchPreviewFills((current) => ({
+                  ...current,
+                  [selectedBatchItem.id]: fill,
+                }));
+                if (activeDocumentId)
+                  setBackgroundDraftByDocument((current) => ({
+                    ...current,
+                    [activeDocumentId]: true,
+                  }));
+              }}
+              onApply={(fill) =>
+                batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
               }
-            >
-              {extractingMatte ? m.preparing() : m.guidedRefineResult()}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {m.batchQualityHint({
-              mode: modeLabel(selectedBatchItem.qualityMode),
-            })}
-          </p>
+              onResult={(updated) => {
+                commitBatchBackground(selectedBatchItem.id, updated);
+                setBatchPreviewFills((current) => ({
+                  ...current,
+                  [selectedBatchItem.id]: updated.backgroundFill ?? {
+                    type: "transparent",
+                  },
+                }));
+                if (activeDocumentId)
+                  setBackgroundDraftByDocument((current) => ({
+                    ...current,
+                    [activeDocumentId]: false,
+                  }));
+              }}
+              onBusyChange={(itemBusy) =>
+                setBatchBackgroundBusy((current) => ({
+                  ...current,
+                  [selectedBatchItem.id]: itemBusy,
+                }))
+              }
+            />
+          )}
         </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{m.batchSettingsEmpty()}</p>
       )}
-      {!selectedBatchItem && (
-        <div className="hidden min-h-48 rounded-xl border border-transparent lg:block" />
-      )}
-    </div>
+    </ToolPanelSlot>
   ) : null;
 
   const batchCorrecting =
@@ -637,10 +785,6 @@ export function ToolWorkspace() {
             mode: modeLabel(state.qualityMode),
             progress: state.progress.toFixed(0),
           })}
-          {modelLoadBytes.loaded > 0
-            ? ` · ${(modelLoadBytes.loaded / 1_048_576).toFixed(1)}${modelLoadBytes.total ? ` / ${(modelLoadBytes.total / 1_048_576).toFixed(1)}` : ""} MiB`
-            : ""}
-          {deviceCapabilities ? ` on ${pathLabel(deviceCapabilities.inferencePath)}` : ""}
         </p>
         <div
           role="progressbar"
@@ -654,9 +798,6 @@ export function ToolWorkspace() {
             style={{ width: `${String(Math.round(state.progress))}%` }}
           />
         </div>
-        {lastLogMessage && (
-          <p className="truncate text-xs text-muted-foreground/70">{lastLogMessage}</p>
-        )}
       </div>
     );
   }
@@ -667,9 +808,6 @@ export function ToolWorkspace() {
         <p className="text-sm text-muted-foreground">
           {state.status === "processing" ? m.removingBackground() : m.preparing()}
         </p>
-        {lastLogMessage && (
-          <p className="truncate text-xs text-muted-foreground/70">{lastLogMessage}</p>
-        )}
       </div>
     );
   }
@@ -680,80 +818,114 @@ export function ToolWorkspace() {
         before={state.result.source}
         after={state.result.cutout ?? state.result.result}
         backgroundFill={previewFill}
+        position={
+          activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+        }
+        onPositionChange={(position) => {
+          if (!activeDocumentId) return;
+          setViewPositionByDocument((current) => ({
+            ...current,
+            [activeDocumentId]: position,
+          }));
+        }}
       />
     );
     railNode = (
-      <div className="flex flex-col gap-4">
-        <MatteRefinementControls
-          mode={refinementMode}
-          path={deviceCapabilities?.inferencePath ?? null}
-          status={refinement.state.status}
-          progress={refinement.state.progress}
-          fallbackReason={refinement.state.fallbackReason}
-          fallback={refinement.state.fallback}
-          onModeChange={setRefinementMode}
-          onStart={() => startSingleRefinement(state.result)}
-          onCancel={refinement.cancel}
-          onSkip={handleEditMask}
-        />
-        <ForegroundRefinementControls
-          status={foregroundRefinement.state.status}
-          progress={foregroundRefinement.state.progress}
-          fallbackReason={foregroundRefinement.state.fallbackReason}
-          result={foregroundRefinement.state.result}
-          error={foregroundRefinement.state.error}
-          onStart={(componentCleanup) =>
-            startSingleForegroundRefinement(state.result, componentCleanup)
-          }
-          onCancel={foregroundRefinement.cancel}
-          onSkip={handleEditMask}
-        />
-        <BackgroundFillSelector
-          image={{
-            source: state.result.source,
-            backgroundFill: state.result.backgroundFill,
-          }}
-          onPreview={setPreviewFill}
-          onApply={(fill) => applyBackgroundFill(state.result, fill)}
-          onResult={(updated) => {
-            commitSingleBackground(updated);
-            setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
-          }}
-          onBusyChange={setBackgroundBusy}
-        />
-        <div className="flex flex-wrap gap-3">
-          <DownloadResultButton image={state.result.result} disabled={backgroundBusy} />
-          <Button type="button" variant="outline" onClick={handleReset}>
-            {m.processAnother()}
-          </Button>
-          {state.result.qualityMode !== "max" &&
-            state.result.qualityMode !== "isnet-fp32" && (
+      <ToolPanelSlot
+        toolId={activeTool}
+        label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
+      >
+        <div className="flex flex-col gap-4">
+          {activeTool === "cutout" && (
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" variant="outline" onClick={handleReset}>
+                {m.processAnother()}
+              </Button>
+              {state.result.qualityMode !== "max" &&
+                state.result.qualityMode !== "isnet-fp32" && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      void releaseRefinementBeforeHeavyWork().then(recomputeMaxQuality);
+                    }}
+                  >
+                    {m.recomputeMax()}
+                  </Button>
+                )}
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  void releaseRefinementBeforeHeavyWork().then(recomputeMaxQuality);
-                }}
+                onClick={handleEditMask}
+                disabled={extractingMatte || backgroundBusy}
               >
-                {m.recomputeMax()}
+                {extractingMatte ? m.preparing() : m.editMask()}
               </Button>
-            )}
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleEditMask}
-            disabled={extractingMatte || backgroundBusy}
-          >
-            {extractingMatte ? m.preparing() : m.editMask()}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleGuideAutomaticResult}
-            disabled={extractingMatte || backgroundBusy}
-          >
-            {extractingMatte ? m.preparing() : m.guidedRefineResult()}
-          </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleGuideAutomaticResult}
+                disabled={extractingMatte || backgroundBusy}
+              >
+                {extractingMatte ? m.preparing() : m.guidedRefineResult()}
+              </Button>
+            </div>
+          )}
+          {activeTool === "enhance" && (
+            <>
+              <MatteRefinementControls
+                mode={refinementMode}
+                path={deviceCapabilities?.inferencePath ?? null}
+                status={refinement.state.status}
+                progress={refinement.state.progress}
+                fallbackReason={refinement.state.fallbackReason}
+                fallback={refinement.state.fallback}
+                onModeChange={setRefinementMode}
+                onStart={() => startSingleRefinement(state.result)}
+                onCancel={refinement.cancel}
+                onSkip={handleEditMask}
+              />
+              <ForegroundRefinementControls
+                status={foregroundRefinement.state.status}
+                progress={foregroundRefinement.state.progress}
+                fallbackReason={foregroundRefinement.state.fallbackReason}
+                result={foregroundRefinement.state.result}
+                error={foregroundRefinement.state.error}
+                onStart={(componentCleanup) =>
+                  startSingleForegroundRefinement(state.result, componentCleanup)
+                }
+                onCancel={foregroundRefinement.cancel}
+                onSkip={handleEditMask}
+              />
+            </>
+          )}
+          {activeTool === "background" && (
+            <BackgroundFillSelector
+              image={{
+                source: state.result.source,
+                backgroundFill: state.result.backgroundFill,
+              }}
+              onPreview={(fill) => {
+                setPreviewFill(fill);
+                if (activeDocumentId)
+                  setBackgroundDraftByDocument((current) => ({
+                    ...current,
+                    [activeDocumentId]: true,
+                  }));
+              }}
+              onApply={(fill) => applyBackgroundFill(state.result, fill)}
+              onResult={(updated) => {
+                commitSingleBackground(updated);
+                setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
+                if (activeDocumentId)
+                  setBackgroundDraftByDocument((current) => ({
+                    ...current,
+                    [activeDocumentId]: false,
+                  }));
+              }}
+              onBusyChange={setBackgroundBusy}
+            />
+          )}
         </div>
         {correctionError && (
           <CorrectionErrorAlert
@@ -762,7 +934,7 @@ export function ToolWorkspace() {
             onReset={handleReset}
           />
         )}
-      </div>
+      </ToolPanelSlot>
     );
   }
 
@@ -782,19 +954,29 @@ export function ToolWorkspace() {
         onDone={handleDoneCorrecting}
         doneDisabled={finalizingCorrection}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
+        onDirtyChange={handleManualDirtyChange}
+        onCancel={handleCancelCorrection}
       >
         {({ surface, rail }) => (
           <>
-            <div className="[grid-area:surface]">{surface}</div>
-            <div className="flex flex-col gap-4 [grid-area:rail]">
-              {correctionError && (
-                <CorrectionErrorAlert
-                  error={correctionError}
-                  onRetry={handleRetry}
-                  onReset={handleReset}
-                />
-              )}
-              {rail}
+            <div className="[grid-area:surface]">
+              <EditorStage documentId={activeDocumentId ?? "single-correction"}>
+                {surface}
+              </EditorStage>
+            </div>
+            <div className="[grid-area:rail]">
+              <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
+                <div className="flex flex-col gap-4">
+                  {correctionError && (
+                    <CorrectionErrorAlert
+                      error={correctionError}
+                      onRetry={handleRetry}
+                      onReset={handleReset}
+                    />
+                  )}
+                  {rail}
+                </div>
+              </ToolPanelSlot>
             </div>
           </>
         )}
@@ -809,22 +991,102 @@ export function ToolWorkspace() {
         onDone={handleBatchDoneCorrecting}
         doneDisabled={finalizingCorrection}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
+        onDirtyChange={handleManualDirtyChange}
+        onCancel={handleCancelCorrection}
       >
         {({ surface, rail }) => (
           <>
-            <div className="flex flex-col gap-4 [grid-area:surface]">
-              {batchSurfaceBase}
-              {surface}
+            <div className="[grid-area:surface]">
+              <EditorStage documentId={activeDocumentId ?? "batch-correction"}>
+                {surface}
+              </EditorStage>
             </div>
-            <div className="flex flex-col gap-4 [grid-area:rail]">
-              {batchRailBase}
-              {rail}
+            <div className="[grid-area:rail]">
+              <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
+                {rail}
+              </ToolPanelSlot>
             </div>
           </>
         )}
       </MaskCorrectionSlots>
     );
   }
+
+  if (activeEditDocument && guidedCanvas && !railNode) {
+    railNode = (
+      <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
+        <p className="text-sm text-muted-foreground">{m.editorGuidedAdapterHint()}</p>
+      </ToolPanelSlot>
+    );
+  }
+
+  const activeDownloadImage =
+    selectedBatchItem?.processedImage?.result ??
+    (state.status === "result" || state.status === "correcting"
+      ? state.result.result
+      : null);
+  const editorToolbarNode = activeDocumentId ? (
+    <EditorToolbar
+      tools={tools}
+      activeTool={activeTool}
+      onToolChange={requestTool}
+      canUndo={!activeDraftDirty && historySelectors.canUndo}
+      canRedo={!activeDraftDirty && historySelectors.canRedo}
+      undoLabel={historySelectors.undoLabel}
+      redoLabel={historySelectors.redoLabel}
+      onUndo={handleUndoDocument}
+      onRedo={handleRedoDocument}
+      downloadSlot={
+        activeDownloadImage ? (
+          <DownloadResultButton
+            image={activeDownloadImage}
+            disabled={
+              selectedBatchItem
+                ? batchBackgroundBusy[selectedBatchItem.id]
+                : backgroundBusy
+            }
+          />
+        ) : undefined
+      }
+    />
+  ) : null;
+  const stagedSurfaceNode =
+    activeDocumentId && surfaceNode && !correctionGridBody ? (
+      <EditorStage documentId={activeDocumentId}>{surfaceNode}</EditorStage>
+    ) : (
+      surfaceNode
+    );
+  const draftGuardNode = pendingTool ? (
+    <div
+      role="alertdialog"
+      aria-labelledby="editor-draft-guard-title"
+      aria-describedby="editor-draft-guard-body"
+      className="rounded-xl border border-amber-400/60 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100 [grid-area:guard]"
+      data-testid="editor-draft-guard"
+    >
+      <h2 id="editor-draft-guard-title" className="font-semibold">
+        {m.editorDraftGuardTitle()}
+      </h2>
+      <p id="editor-draft-guard-body" className="mt-1">
+        {m.editorDraftGuardBody()}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setPendingTool(null);
+            requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
+          }}
+        >
+          {m.editorDraftContinue()}
+        </Button>
+        <Button type="button" variant="destructive" onClick={discardActiveDraft}>
+          {m.editorDraftDiscard()}
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div
@@ -851,7 +1113,7 @@ export function ToolWorkspace() {
                     total: batch.snapshot.totalCount,
                     failed: batch.snapshot.failedCount,
                   })
-                : describeState(state, lightweightMode, uploadError)}
+                : describeState(state, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}
@@ -859,75 +1121,15 @@ export function ToolWorkspace() {
 
       {!batchActive && !guided.state.session && (
         <div className="[grid-area:toggle]">
-          {state.status === "idle" && (
-            <fieldset className="mb-3 space-y-2" data-testid="processing-method-selector">
-              <legend className="text-sm font-semibold">
-                {m.processingMethodLabel()}
-              </legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant={guidedEntry ? "outline" : "default"}
-                  className="h-auto justify-start whitespace-normal p-3 text-left"
-                  aria-pressed={!guidedEntry}
-                  disabled={!hydrated}
-                  onClick={() => setGuidedEntry(false)}
-                >
-                  <span>
-                    <span className="block font-medium">{m.automaticMethod()}</span>
-                    <span className="mt-1 block text-xs font-normal opacity-80">
-                      {m.automaticMethodHint()}
-                    </span>
-                  </span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={guidedEntry ? "default" : "outline"}
-                  className="h-auto justify-start whitespace-normal p-3 text-left"
-                  aria-pressed={guidedEntry}
-                  disabled={!hydrated}
-                  onClick={() => setGuidedEntry(true)}
-                >
-                  <span>
-                    <span className="block font-medium">{m.guidedMethod()}</span>
-                    <span className="mt-1 block text-xs font-normal opacity-80">
-                      {m.guidedMethodHint()}
-                    </span>
-                  </span>
-                </Button>
-              </div>
-            </fieldset>
-          )}
-          {!guidedEntry && (
-            <QualityModeToggle
-              qualityMode={qualityMode}
-              onQualityModeChange={setQualityMode}
-              disabled={!hydrated}
-            />
-          )}
-          {state.status === "idle" && guidedEntry && (
-            <div
-              role="status"
-              className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm"
-            >
-              <p className="font-medium">{m.guidedMethodMeta()}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{m.guidedUploadHint()}</p>
-            </div>
-          )}
+          <QualityModeToggle
+            qualityMode={qualityMode}
+            onQualityModeChange={setQualityMode}
+            recommendedMode={
+              deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
+            }
+            disabled={!hydrated || state.status !== "idle"}
+          />
         </div>
-      )}
-
-      {runInfo && (
-        <p className="text-xs text-muted-foreground [grid-area:info]">
-          Model: IS-Net ({runInfo.dtype}) · Running on {pathLabel(runInfo.inferencePath)}
-        </p>
-      )}
-
-      {lightweightMode && !displayError && (
-        <p className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground [grid-area:notice]">
-          Running in lightweight mode — WebGPU is unavailable
-          {runInfo ? " for this model" : ""}, using the slower WASM path.
-        </p>
       )}
 
       {ben2FallbackNotice && !displayError && (
@@ -993,17 +1195,29 @@ export function ToolWorkspace() {
       {batchHeaderNode && (
         <div className="[grid-area:batch-header]">{batchHeaderNode}</div>
       )}
+      {editorToolbarNode && (
+        <div className="[grid-area:toolbar]">{editorToolbarNode}</div>
+      )}
+      {draftGuardNode}
       {batchListNode && <div className="[grid-area:batch]">{batchListNode}</div>}
 
       {correctionGridBody ?? (
         <>
-          {surfaceNode && <div className="[grid-area:surface]">{surfaceNode}</div>}
+          {stagedSurfaceNode && (
+            <div className="[grid-area:surface]">{stagedSurfaceNode}</div>
+          )}
           {railNode && <div className="[grid-area:rail]">{railNode}</div>}
         </>
       )}
 
       <div className="[grid-area:log]">
-        <ProcessingLog logs={logs} />
+        <ProcessingLog
+          logs={logs}
+          runInfo={runInfo}
+          lightweightMode={lightweightMode}
+          fallbackUsed={ben2FallbackNotice}
+          modelLoadBytes={modelLoadBytes}
+        />
       </div>
     </div>
   );
