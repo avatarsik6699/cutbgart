@@ -8,7 +8,7 @@ import type { MaskCanvasHandle } from "../ui/MaskCorrectionCanvas";
 // whole-canvas strokes from accumulating without bound.
 const MAX_HISTORY = 20;
 const DEFAULT_BRUSH_RADIUS = 24;
-const DEFAULT_BRUSH_HARDNESS = 0.5;
+const DEFAULT_BRUSH_HARDNESS = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
@@ -134,81 +134,35 @@ export interface UseMaskCorrectionResult {
   commitStroke: (patch: MaskPatch) => void;
   undo: () => void;
   redo: () => void;
+  clearDraft: () => void;
+  commitDraft: () => void;
 }
 
-/**
- * Owns brush mode/size/hardness plus the patch-based undo/redo history
- * (Phase 07, SPEC.md §5.2). The working matte itself lives in
- * `MaskCorrectionCanvas`'s persistent buffer, reached through `canvas`
- * (undo/redo write patches back imperatively; "Done" reads the final matte
- * via `extractMatte`) — deliberately NOT through React state/props, since a
- * changing megapixel matte prop is what React 19.2's dev-mode Performance
- * Track chokes on for 1-2s per commit (Architect Review Notes R4,
- * docs/KNOWN_GOTCHAS.md).
- */
-export function useMaskCorrection(
-  canvas: RefObject<MaskCanvasHandle | null>,
+export interface MaskCorrectionViewportControls {
+  viewport: MaskCorrectionViewport;
+  zoomPercent: number;
+  zoomAnnouncement: string;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+  canPan: boolean;
+  zoomIn: (anchor?: MaskCorrectionViewportPoint) => void;
+  zoomOut: (anchor?: MaskCorrectionViewportPoint) => void;
+  zoomByWheel: (deltaY: number, anchor: MaskCorrectionViewportPoint) => void;
+  resetView: () => void;
+  panView: (deltaX: number, deltaY: number, speed?: "normal" | "fast") => void;
+  panBySourcePixels: (deltaX: number, deltaY: number) => void;
+}
+
+export function useMaskCorrectionViewport(
   imageSize: MaskCorrectionImageSize,
-): UseMaskCorrectionResult {
+): MaskCorrectionViewportControls {
   const imageWidth = imageSize.width;
   const imageHeight = imageSize.height;
-  const [mode, setMode] = useState<BrushMode>("add");
-  const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_RADIUS);
-  const [brushHardness, setBrushHardness] = useState(DEFAULT_BRUSH_HARDNESS);
-  const [undoStack, setUndoStack] = useState<MaskPatch[]>([]);
-  const [redoStack, setRedoStack] = useState<MaskPatch[]>([]);
   const [viewport, setViewport] = useState<MaskCorrectionViewport>(DEFAULT_VIEWPORT);
   const safeViewport = clampViewport(viewport, {
     width: imageWidth,
     height: imageHeight,
   });
-
-  const commitStroke = useCallback((patch: MaskPatch) => {
-    setUndoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
-    setRedoStack([]);
-  }, []);
-
-  const undo = useCallback(() => {
-    const patch = undoStack.at(-1);
-    if (!patch) return;
-    canvas.current?.applyPatch(patch.box, patch.before);
-    setUndoStack((stack) => stack.slice(0, -1));
-    setRedoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
-  }, [undoStack, canvas]);
-
-  const redo = useCallback(() => {
-    const patch = redoStack.at(-1);
-    if (!patch) return;
-    canvas.current?.applyPatch(patch.box, patch.after);
-    setRedoStack((stack) => stack.slice(0, -1));
-    setUndoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
-  }, [redoStack, canvas]);
-
-  useEffect(() => {
-    function handleHistoryShortcut(event: KeyboardEvent): void {
-      if (event.altKey) return;
-
-      const key = event.key.toLowerCase();
-      const accelerator = event.ctrlKey || event.metaKey;
-      const wantsUndo = accelerator && key === "z" && !event.shiftKey;
-      const wantsRedo =
-        (accelerator && key === "z" && event.shiftKey) ||
-        (event.ctrlKey && !event.metaKey && key === "y" && !event.shiftKey);
-
-      if (wantsUndo && undoStack.length > 0) {
-        event.preventDefault();
-        undo();
-      } else if (wantsRedo && redoStack.length > 0) {
-        event.preventDefault();
-        redo();
-      }
-    }
-
-    window.addEventListener("keydown", handleHistoryShortcut);
-    return () => {
-      window.removeEventListener("keydown", handleHistoryShortcut);
-    };
-  }, [redo, redoStack.length, undo, undoStack.length]);
 
   const zoomIn = useCallback(
     (anchor?: MaskCorrectionViewportPoint) => {
@@ -301,6 +255,103 @@ export function useMaskCorrection(
   );
 
   const zoomPercent = Math.round(safeViewport.zoom * 100);
+  return {
+    viewport: safeViewport,
+    zoomPercent,
+    zoomAnnouncement: `Mask editor zoom ${String(zoomPercent)}%`,
+    canZoomIn: safeViewport.zoom < MAX_ZOOM,
+    canZoomOut: safeViewport.zoom > MIN_ZOOM,
+    canPan: safeViewport.zoom > MIN_ZOOM,
+    zoomIn,
+    zoomOut,
+    zoomByWheel,
+    resetView,
+    panView,
+    panBySourcePixels,
+  };
+}
+
+/**
+ * Owns brush mode/size/hardness plus the patch-based undo/redo history
+ * (Phase 07, SPEC.md §5.2). The working matte itself lives in
+ * `MaskCorrectionCanvas`'s persistent buffer, reached through `canvas`
+ * (undo/redo write patches back imperatively; "Done" reads the final matte
+ * via `extractMatte`) — deliberately NOT through React state/props, since a
+ * changing megapixel matte prop is what React 19.2's dev-mode Performance
+ * Track chokes on for 1-2s per commit (Architect Review Notes R4,
+ * docs/KNOWN_GOTCHAS.md).
+ */
+export function useMaskCorrection(
+  canvas: RefObject<MaskCanvasHandle | null>,
+  imageSize: MaskCorrectionImageSize,
+  sharedViewport?: MaskCorrectionViewportControls,
+): UseMaskCorrectionResult {
+  const [mode, setMode] = useState<BrushMode>("add");
+  const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_RADIUS);
+  const [brushHardness, setBrushHardness] = useState(DEFAULT_BRUSH_HARDNESS);
+  const [undoStack, setUndoStack] = useState<MaskPatch[]>([]);
+  const [redoStack, setRedoStack] = useState<MaskPatch[]>([]);
+  const ownViewport = useMaskCorrectionViewport(imageSize);
+  const viewportControls = sharedViewport ?? ownViewport;
+
+  const commitStroke = useCallback((patch: MaskPatch) => {
+    setUndoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
+    setRedoStack([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    const patch = undoStack.at(-1);
+    if (!patch) return;
+    canvas.current?.applyPatch(patch.box, patch.before);
+    setUndoStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
+  }, [undoStack, canvas]);
+
+  const redo = useCallback(() => {
+    const patch = redoStack.at(-1);
+    if (!patch) return;
+    canvas.current?.applyPatch(patch.box, patch.after);
+    setRedoStack((stack) => stack.slice(0, -1));
+    setUndoStack((stack) => [...stack, patch].slice(-MAX_HISTORY));
+  }, [redoStack, canvas]);
+
+  const clearDraft = useCallback(() => {
+    canvas.current?.resetToBaseline();
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [canvas]);
+
+  const commitDraft = useCallback(() => {
+    canvas.current?.commitBaseline();
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [canvas]);
+
+  useEffect(() => {
+    function handleHistoryShortcut(event: KeyboardEvent): void {
+      if (event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      const accelerator = event.ctrlKey || event.metaKey;
+      const wantsUndo = accelerator && key === "z" && !event.shiftKey;
+      const wantsRedo =
+        (accelerator && key === "z" && event.shiftKey) ||
+        (event.ctrlKey && !event.metaKey && key === "y" && !event.shiftKey);
+
+      if (wantsUndo && undoStack.length > 0) {
+        event.preventDefault();
+        undo();
+      } else if (wantsRedo && redoStack.length > 0) {
+        event.preventDefault();
+        redo();
+      }
+    }
+
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleHistoryShortcut);
+    };
+  }, [redo, redoStack.length, undo, undoStack.length]);
 
   return {
     mode,
@@ -314,17 +365,8 @@ export function useMaskCorrection(
     commitStroke,
     undo,
     redo,
-    viewport: safeViewport,
-    zoomPercent,
-    zoomAnnouncement: `Mask editor zoom ${String(zoomPercent)}%`,
-    canZoomIn: safeViewport.zoom < MAX_ZOOM,
-    canZoomOut: safeViewport.zoom > MIN_ZOOM,
-    canPan: safeViewport.zoom > MIN_ZOOM,
-    zoomIn,
-    zoomOut,
-    zoomByWheel,
-    resetView,
-    panView,
-    panBySourcePixels,
+    clearDraft,
+    commitDraft,
+    ...viewportControls,
   };
 }

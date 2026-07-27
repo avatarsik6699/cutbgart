@@ -15,12 +15,11 @@ function renderToolbar(
     onModeChange: vi.fn(),
     brushSize: 24,
     onBrushSizeChange: vi.fn(),
-    brushHardness: 0.5,
-    onBrushHardnessChange: vi.fn(),
     canUndo: false,
     canRedo: false,
     onUndo: vi.fn(),
     onRedo: vi.fn(),
+    onClear: vi.fn(),
     zoomPercent: 100,
     canZoomIn: true,
     canZoomOut: false,
@@ -41,9 +40,9 @@ describe("MaskCorrectionToolbar", () => {
     expect(
       screen.getByRole("button", { name: "Erase" }).getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(screen.getByRole("button", { name: "Add" }).getAttribute("aria-pressed")).toBe(
-      "false",
-    );
+    expect(
+      screen.getByRole("button", { name: "Restore" }).getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 
   it("calls onModeChange when a mode button is clicked", () => {
@@ -51,19 +50,17 @@ describe("MaskCorrectionToolbar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
 
-    expect(props.onModeChange).toHaveBeenCalledWith("restore");
+    expect(props.onModeChange).toHaveBeenCalledWith("add");
   });
 
-  it("calls onBrushSizeChange/onBrushHardnessChange from the range inputs", () => {
+  it("calls onBrushSizeChange and exposes no ambiguous model-restore mode", () => {
     const props = renderToolbar();
 
     fireEvent.change(screen.getByLabelText("Brush size"), { target: { value: "40" } });
-    fireEvent.change(screen.getByLabelText("Brush hardness"), {
-      target: { value: "0.8" },
-    });
 
     expect(props.onBrushSizeChange).toHaveBeenCalledWith(40);
-    expect(props.onBrushHardnessChange).toHaveBeenCalledWith(0.8);
+    expect(screen.queryByLabelText("Brush hardness")).toBeNull();
+    expect(screen.queryAllByRole("button", { name: /model/i })).toHaveLength(0);
   });
 
   it("caps the brush at a 150px diameter and exposes the current diameter", () => {
@@ -90,9 +87,11 @@ describe("MaskCorrectionToolbar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear draft" }));
 
     expect(props.onUndo).toHaveBeenCalledTimes(1);
     expect(props.onRedo).toHaveBeenCalledTimes(1);
+    expect(props.onClear).toHaveBeenCalledTimes(1);
     expect(
       screen.getByRole("button", { name: "Undo" }).getAttribute("aria-keyshortcuts"),
     ).toBe("Control+Z Meta+Z");

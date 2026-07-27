@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Trash2 } from "lucide-react";
 
@@ -21,14 +22,16 @@ import {
   MaskCorrectionCanvas,
   MaskCorrectionToolbar,
   useMaskCorrection,
+  useMaskCorrectionViewport,
   type MaskCanvasHandle,
+  type MaskCorrectionViewportControls,
 } from "../../../features/correct-mask";
 import { DownloadResultButton } from "../../../features/download-result";
 import { BackgroundFillSelector } from "../../../features/background-replacement";
 import { DownloadAllButton } from "../../../features/download-result";
 import { BatchGrid, BatchStatus } from "../../../features/batch-processing";
 import { QualityModeToggle } from "../../../features/quality-mode-toggle";
-import { GuidedBrushCanvas } from "../../../features/select-object";
+import { GuidedBrushCanvas, GuidedBrushControls } from "../../../features/select-object";
 import { MatteRefinementControls } from "../../../features/refine-matte";
 import { ForegroundRefinementControls } from "../../../features/refine-foreground";
 import {
@@ -52,6 +55,8 @@ import {
 } from "../model/editor-tool-registry";
 import { EditorStage } from "./EditorStage";
 import { EditorToolbar } from "./EditorToolbar";
+import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
+import { CutoutToolPanel, type CutoutIntent, type CutoutMode } from "./CutoutToolPanel";
 import { ProcessingLog } from "./ProcessingLog";
 
 const LazyToolPanelSlot = lazy(async () => {
@@ -85,11 +90,14 @@ interface MaskCorrectionSlotsProps {
   sourceImage: SourceImage;
   originalMatte: AlphaMatte;
   backgroundFill?: BackgroundFill;
-  onDone: (matte: AlphaMatte) => void;
+  onDone: (matte: AlphaMatte) => Promise<boolean>;
   doneDisabled?: boolean;
+  viewportControls: MaskCorrectionViewportControls;
+  surfaceTargetRef: RefObject<HTMLCanvasElement | null>;
+  onBrushSizeInteraction: () => void;
+  previewInteractionKey: number;
   onViewAnnouncementChange: (announcement: string) => void;
   onDirtyChange: (dirty: boolean) => void;
-  onCancel: () => void;
   children: (slots: { surface: ReactNode; rail: ReactNode }) => ReactNode;
 }
 
@@ -109,9 +117,12 @@ function MaskCorrectionSlots({
   backgroundFill,
   onDone,
   doneDisabled = false,
+  viewportControls,
+  surfaceTargetRef,
+  onBrushSizeInteraction,
+  previewInteractionKey,
   onViewAnnouncementChange,
   onDirtyChange,
-  onCancel,
   children,
 }: MaskCorrectionSlotsProps) {
   const canvasHandleRef = useRef<MaskCanvasHandle>(null);
@@ -120,8 +131,6 @@ function MaskCorrectionSlots({
     setMode,
     brushSize,
     setBrushSize,
-    brushHardness,
-    setBrushHardness,
     canUndo,
     canRedo,
     commitStroke,
@@ -139,10 +148,16 @@ function MaskCorrectionSlots({
     resetView,
     panView,
     panBySourcePixels,
-  } = useMaskCorrection(canvasHandleRef, {
-    width: sourceImage.width,
-    height: sourceImage.height,
-  });
+    clearDraft,
+    commitDraft,
+  } = useMaskCorrection(
+    canvasHandleRef,
+    {
+      width: sourceImage.width,
+      height: sourceImage.height,
+    },
+    viewportControls,
+  );
 
   useEffect(() => {
     onViewAnnouncementChange(zoomAnnouncement);
@@ -157,24 +172,34 @@ function MaskCorrectionSlots({
   }, [canUndo, onDirtyChange]);
 
   const surface = (
-    <MaskCorrectionCanvas
-      ref={canvasHandleRef}
-      sourceImage={sourceImage}
-      backgroundFill={backgroundFill}
-      initialMatte={originalMatte}
-      original={originalMatte}
-      mode={mode}
-      brushRadius={brushSize}
-      brushHardness={brushHardness}
-      viewport={viewport}
-      onZoomIn={zoomIn}
-      onZoomOut={zoomOut}
-      onWheelZoom={zoomByWheel}
-      onResetView={resetView}
-      onPan={panView}
-      onPanBySourcePixels={panBySourcePixels}
-      onStrokeCommitted={commitStroke}
-    />
+    <div className="relative">
+      <MaskCorrectionCanvas
+        ref={canvasHandleRef}
+        sourceImage={sourceImage}
+        backgroundFill={backgroundFill}
+        initialMatte={originalMatte}
+        original={originalMatte}
+        mode={mode}
+        brushRadius={brushSize}
+        brushHardness={1}
+        viewport={viewport}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onWheelZoom={zoomByWheel}
+        onResetView={resetView}
+        onPan={panView}
+        onPanBySourcePixels={panBySourcePixels}
+        onStrokeCommitted={commitStroke}
+        stageTargetRef={surfaceTargetRef}
+      />
+      <BrushSizeStagePreview
+        sourceDiameter={brushSize * 2}
+        sourceWidth={sourceImage.width}
+        targetRef={surfaceTargetRef}
+        interactionKey={previewInteractionKey}
+        tone={mode === "erase" ? "erase" : "restore"}
+      />
+    </div>
   );
 
   const rail = (
@@ -183,13 +208,15 @@ function MaskCorrectionSlots({
         mode={mode}
         onModeChange={setMode}
         brushSize={brushSize}
-        onBrushSizeChange={setBrushSize}
-        brushHardness={brushHardness}
-        onBrushHardnessChange={setBrushHardness}
+        onBrushSizeChange={(size) => {
+          setBrushSize(size);
+          onBrushSizeInteraction();
+        }}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        onClear={clearDraft}
         zoomPercent={zoomPercent}
         canZoomIn={canZoomIn}
         canZoomOut={canZoomOut}
@@ -200,16 +227,19 @@ function MaskCorrectionSlots({
       />
       <Button
         type="button"
-        disabled={doneDisabled}
+        disabled={doneDisabled || !canUndo}
         onClick={() => {
           const matte = canvasHandleRef.current?.extractMatte();
-          if (matte) onDone(matte);
+          if (matte)
+            void onDone(matte).then((committed) => {
+              if (committed) commitDraft();
+            });
         }}
         className="self-start"
       >
-        {m.done()}
+        {doneDisabled ? m.cutoutApplying() : m.cutoutApply()}
       </Button>
-      <Button type="button" variant="outline" onClick={onCancel} className="self-start">
+      <Button type="button" variant="outline" onClick={clearDraft} className="self-start">
         {m.cancel()}
       </Button>
     </div>
@@ -302,7 +332,6 @@ export function ToolWorkspace() {
     logs,
     modelLoadBytes,
     ben2FallbackNotice,
-    recomputeMaxQuality,
     retry,
     retryInLightweightMode,
     applyBackgroundFill,
@@ -315,7 +344,7 @@ export function ToolWorkspace() {
     handleUpload,
     handleUploads,
     handleReset,
-    handleAcceptGuided,
+    handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
     startSingleRefinement,
@@ -350,28 +379,128 @@ export function ToolWorkspace() {
   const [backgroundDraftByDocument, setBackgroundDraftByDocument] = useState<
     Record<string, boolean>
   >({});
+  const [cutoutModeByDocument, setCutoutModeByDocument] = useState<
+    Record<string, CutoutMode>
+  >({});
+  const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
+  const [magicPreviewKey, setMagicPreviewKey] = useState(0);
+  const [manualPreviewKey, setManualPreviewKey] = useState(0);
   const [manualDraftDirty, setManualDraftDirty] = useState(false);
   const [pendingTool, setPendingTool] = useState<EditorToolId | null>(null);
+  const [pendingBatchItem, setPendingBatchItem] = useState<string | null>(null);
+  const [pendingBatchClear, setPendingBatchClear] = useState(false);
+  const [pendingReset, setPendingReset] = useState(false);
   const pendingToolTriggerRef = useRef<HTMLButtonElement | null>(null);
   const activeTool = activeDocumentId
     ? (toolByDocument[activeDocumentId] ?? "cutout")
     : "cutout";
-  const guidedDraftDirty = Boolean(guided.state.session);
-  const manualSessionActive = Boolean(originalMatte);
+  const cutoutMode = activeDocumentId
+    ? (cutoutModeByDocument[activeDocumentId] ?? "magic")
+    : "magic";
+  const activeSource =
+    selectedBatchItem?.processedImage?.source ??
+    (state.status === "result" || state.status === "correcting"
+      ? state.result.source
+      : null);
+  const cutoutViewport = useMaskCorrectionViewport({
+    width: activeSource?.width ?? 1,
+    height: activeSource?.height ?? 1,
+  });
+  const magicSurfaceRef = useRef<HTMLCanvasElement>(null);
+  const manualSurfaceRef = useRef<HTMLCanvasElement>(null);
+  const initializedMagicDocumentRef = useRef<string | null>(null);
+  const initializedManualDocumentRef = useRef<string | null>(null);
+  const guidedDraftDirty = Boolean(
+    guided.state.session?.strokes.length ||
+    guided.state.status === "predicting" ||
+    finalizingCorrection,
+  );
   const backgroundDraftDirty = activeDocumentId
     ? Boolean(backgroundDraftByDocument[activeDocumentId])
     : false;
   const activeDraftDirty =
     activeTool === "cutout"
-      ? guidedDraftDirty || manualSessionActive || manualDraftDirty
+      ? guidedDraftDirty || manualDraftDirty
       : activeTool === "background" && backgroundDraftDirty;
+
+  useEffect(() => {
+    if (
+      !activeDocumentId ||
+      activeTool !== "cutout" ||
+      cutoutMode !== "magic" ||
+      guided.state.session ||
+      extractingMatte ||
+      initializedMagicDocumentRef.current === activeDocumentId
+    )
+      return;
+    if (selectedBatchItem?.processedImage && selectedBatchItem.status === "result") {
+      initializedMagicDocumentRef.current = activeDocumentId;
+      handleGuideBatchResult();
+    } else if (state.status === "result") {
+      initializedMagicDocumentRef.current = activeDocumentId;
+      handleGuideAutomaticResult();
+    }
+    // The controller handlers intentionally capture the current document
+    // target; document identity is the effect's lifecycle key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeDocumentId,
+    activeTool,
+    cutoutMode,
+    extractingMatte,
+    guided.state.session,
+    selectedBatchItem?.id,
+    state.status,
+  ]);
+
+  useEffect(() => {
+    if (
+      !activeDocumentId ||
+      activeTool !== "cutout" ||
+      cutoutMode !== "manual" ||
+      originalMatte ||
+      extractingMatte ||
+      initializedManualDocumentRef.current === activeDocumentId
+    )
+      return;
+    initializedManualDocumentRef.current = activeDocumentId;
+    if (selectedBatchItem?.processedImage) handleBatchEditMask();
+    else if (state.status === "result") handleEditMask();
+    // As above, the active document identity owns this transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeDocumentId,
+    activeTool,
+    cutoutMode,
+    extractingMatte,
+    originalMatte,
+    selectedBatchItem?.id,
+    state.status,
+  ]);
 
   const handleManualDirtyChange = useCallback((dirty: boolean) => {
     setManualDraftDirty(dirty);
   }, []);
 
+  function selectCutoutMode(mode: CutoutMode) {
+    if (!activeDocumentId || mode === cutoutMode) return;
+    if (mode === "manual" && extractingMatte && !guided.state.session) {
+      cancelGuided();
+    } else if (mode === "magic" && extractingMatte && !originalMatte) {
+      handleCancelCorrection();
+    }
+    setCutoutModeByDocument((current) => ({
+      ...current,
+      [activeDocumentId]: mode,
+    }));
+  }
+
   function activateTool(tool: EditorToolId) {
     if (!activeDocumentId) return;
+    if (tool !== "cutout" && originalMatte) {
+      initializedManualDocumentRef.current = null;
+      handleCancelCorrection();
+    }
     setToolByDocument((current) => ({ ...current, [activeDocumentId]: tool }));
     const definition = tools.find(({ id }) => id === tool);
     if (definition) void definition.loadPanel();
@@ -385,6 +514,54 @@ export function ToolWorkspace() {
       return;
     }
     activateTool(tool);
+  }
+
+  function requestBatchItem(id: string, trigger: HTMLButtonElement) {
+    if (id === batch.session.selectedItemId) return;
+    if (activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingBatchItem(id);
+      return;
+    }
+    handleSelectBatchItem(id);
+  }
+
+  function requestBatchClear(trigger: HTMLButtonElement) {
+    if (activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingBatchClear(true);
+      return;
+    }
+    handleClearBatch();
+  }
+
+  function requestReset(trigger: HTMLButtonElement) {
+    if (activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingReset(true);
+      return;
+    }
+    handleReset();
+  }
+
+  function enterSingleManualFromEnhancements() {
+    if (!activeDocumentId) return;
+    setToolByDocument((current) => ({ ...current, [activeDocumentId]: "cutout" }));
+    setCutoutModeByDocument((current) => ({
+      ...current,
+      [activeDocumentId]: "manual",
+    }));
+    handleEditMask();
+  }
+
+  function enterBatchManualFromEnhancements() {
+    if (!activeDocumentId) return;
+    setToolByDocument((current) => ({ ...current, [activeDocumentId]: "cutout" }));
+    setCutoutModeByDocument((current) => ({
+      ...current,
+      [activeDocumentId]: "manual",
+    }));
+    handleBatchEditMask();
   }
 
   function discardActiveDraft() {
@@ -410,7 +587,13 @@ export function ToolWorkspace() {
     }
     setManualDraftDirty(false);
     if (pendingTool) activateTool(pendingTool);
+    else if (pendingBatchItem) handleSelectBatchItem(pendingBatchItem);
+    else if (pendingBatchClear) handleClearBatch();
+    else if (pendingReset) handleReset();
     setPendingTool(null);
+    setPendingBatchItem(null);
+    setPendingBatchClear(false);
+    setPendingReset(false);
     requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
   }
 
@@ -432,39 +615,59 @@ export function ToolWorkspace() {
 
   const guidedCanvas =
     guided.state.session && guidedViewSession && guidedVisualContext ? (
-      <GuidedBrushCanvas
+      <div className="relative size-full">
+        <GuidedBrushCanvas
+          session={guidedViewSession}
+          status={guided.state.status}
+          baseMatteRef={guided.baseMatteRef}
+          baseMatteRevision={guided.state.baseMatteRevision}
+          entryKind={guidedVisualContext.entryKind}
+          applying={finalizingCorrection}
+          mode={magicIntent}
+          viewportControls={cutoutViewport}
+          surfaceTargetRef={magicSurfaceRef}
+          promptCounts={{
+            total: guided.state.lastPromptCount,
+            keep: guided.state.lastPromptKeepCount,
+            remove: guided.state.lastPromptRemoveCount,
+          }}
+          onStroke={guided.addStroke}
+          onUndo={guided.undo}
+          onRedo={guided.redo}
+        />
+        <BrushSizeStagePreview
+          sourceDiameter={guidedViewSession.brushRadius * 2}
+          sourceWidth={guidedViewSession.source.width}
+          targetRef={magicSurfaceRef}
+          interactionKey={magicPreviewKey}
+          tone={magicIntent}
+          coreRatio={1 / 3}
+        />
+      </div>
+    ) : null;
+
+  const magicControls =
+    guided.state.session && guidedViewSession ? (
+      <GuidedBrushControls
+        mode={magicIntent}
+        onModeChange={setMagicIntent}
         session={guidedViewSession}
         status={guided.state.status}
-        matteRef={guided.matteRef}
-        matteRevision={`${String(guided.state.session.computedRevision ?? "base")}:${guided.state.session.selectedCandidateId ?? "none"}`}
-        baseMatteRef={guided.baseMatteRef}
-        baseMatteRevision={guided.state.baseMatteRevision}
-        entryKind={guidedVisualContext.entryKind}
-        resultColorSource={guidedVisualContext.resultColorSource}
-        hasMatte={Boolean(guided.state.matte)}
-        progress={guided.state.progress}
-        error={guided.state.error}
-        errorCode={guided.state.errorCode}
-        promptCounts={{
-          total: guided.state.lastPromptCount,
-          keep: guided.state.lastPromptKeepCount,
-          remove: guided.state.lastPromptRemoveCount,
-        }}
         applying={finalizingCorrection}
-        canAccept={guided.canAccept}
-        onStroke={guided.addStroke}
+        canApply={guided.canApply}
         onBrushRadiusChange={guided.setBrushRadius}
-        onSelectCandidate={guided.selectCandidate}
+        onBrushSizeInteraction={() => setMagicPreviewKey((current) => current + 1)}
         onUndo={guided.undo}
         onRedo={guided.redo}
         onClear={guided.clear}
-        onRecompute={guided.recompute}
-        onContinueFromResult={guided.continueFromResult}
-        onAccept={handleAcceptGuided}
-        onRetry={guided.retry}
-        onCancel={cancelGuided}
+        onApply={() => void handleApplyGuided()}
+        onCancel={guided.cancelDraft}
       />
-    ) : null;
+    ) : (
+      <p className="text-sm text-muted-foreground" aria-busy={extractingMatte}>
+        {extractingMatte ? m.preparing() : m.cutoutMagicReady()}
+      </p>
+    );
 
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
     surfaceNode = guidedCanvas ?? (
@@ -484,22 +687,6 @@ export function ToolWorkspace() {
         <UploadPreparationNotice fileCount={preparingFileCount} />
       </div>
     );
-  }
-
-  if (!displayError && guidedCanvas) {
-    surfaceNode = (
-      <div className="flex flex-col gap-4">
-        {guidedCanvas}
-        {correctionError && (
-          <CorrectionErrorAlert
-            error={correctionError}
-            onRetry={handleRetry}
-            onReset={handleReset}
-          />
-        )}
-      </div>
-    );
-    railNode = null;
   }
 
   // Batch base content — independent of whether the selected item is
@@ -525,7 +712,7 @@ export function ToolWorkspace() {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={handleClearBatch}
+            onClick={(event) => requestBatchClear(event.currentTarget)}
             className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 aria-hidden="true" />
@@ -566,6 +753,13 @@ export function ToolWorkspace() {
             />
           </div>
         </div>
+        {selectedBatchItem?.processedImage && (
+          <p className="text-xs text-muted-foreground">
+            {m.batchQualityHint({
+              mode: modeLabel(selectedBatchItem.qualityMode),
+            })}
+          </p>
+        )}
       </div>
       <UploadPreparationNotice fileCount={preparingFileCount} />
     </section>
@@ -574,7 +768,7 @@ export function ToolWorkspace() {
     <BatchGrid
       items={batch.session.items}
       selectedItemId={batch.session.selectedItemId}
-      onSelect={handleSelectBatchItem}
+      onSelect={requestBatchItem}
       onRetry={batch.retryItem}
     />
   ) : null;
@@ -595,27 +789,31 @@ export function ToolWorkspace() {
           className="flex flex-col gap-4"
           aria-label={m.batchSelectedAria({ name: selectedBatchItem.originalFileName })}
         >
-          <BeforeAfterSlider
-            before={selectedBatchItem.processedImage.source}
-            after={
-              selectedBatchItem.processedImage.cutout ??
-              selectedBatchItem.processedImage.result
-            }
-            backgroundFill={
-              batchPreviewFills[selectedBatchItem.id] ??
-              selectedBatchItem.processedImage.backgroundFill
-            }
-            position={
-              activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-            }
-            onPositionChange={(position) => {
-              if (!activeDocumentId) return;
-              setViewPositionByDocument((current) => ({
-                ...current,
-                [activeDocumentId]: position,
-              }));
-            }}
-          />
+          {activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas ? (
+            guidedCanvas
+          ) : (
+            <BeforeAfterSlider
+              before={selectedBatchItem.processedImage.source}
+              after={
+                selectedBatchItem.processedImage.cutout ??
+                selectedBatchItem.processedImage.result
+              }
+              backgroundFill={
+                batchPreviewFills[selectedBatchItem.id] ??
+                selectedBatchItem.processedImage.backgroundFill
+              }
+              position={
+                activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+              }
+              onPositionChange={(position) => {
+                if (!activeDocumentId) return;
+                setViewPositionByDocument((current) => ({
+                  ...current,
+                  [activeDocumentId]: position,
+                }));
+              }}
+            />
+          )}
         </div>
       )}
       {!selectedBatchItem && (
@@ -634,48 +832,16 @@ export function ToolWorkspace() {
       {selectedBatchItem?.processedImage && !originalMatte ? (
         <div className="flex flex-col gap-4" data-testid="batch-controls">
           {activeTool === "cutout" && (
-            <>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    void releaseRefinementBeforeHeavyWork().then(() =>
-                      batch.retryItem(selectedBatchItem.id),
-                    );
-                  }}
-                >
-                  {m.reprocessMode({
-                    mode: modeLabel(selectedBatchItem.qualityMode),
-                  })}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleBatchEditMask}
-                  disabled={extractingMatte || batchBackgroundBusy[selectedBatchItem.id]}
-                >
-                  {extractingMatte ? m.preparing() : m.editMask()}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleGuideBatchResult}
-                  disabled={
-                    extractingMatte ||
-                    batchBackgroundBusy[selectedBatchItem.id] ||
-                    Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)
-                  }
-                >
-                  {extractingMatte ? m.preparing() : m.guidedRefineResult()}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {m.batchQualityHint({
-                  mode: modeLabel(selectedBatchItem.qualityMode),
-                })}
-              </p>
-            </>
+            <CutoutToolPanel
+              mode={cutoutMode}
+              onModeChange={selectCutoutMode}
+              magicControls={magicControls}
+              manualControls={
+                <p className="text-sm text-muted-foreground" aria-busy={extractingMatte}>
+                  {extractingMatte ? m.preparing() : m.cutoutManualReady()}
+                </p>
+              }
+            />
           )}
           {activeTool === "enhance" && (
             <>
@@ -697,7 +863,7 @@ export function ToolWorkspace() {
                   )
                 }
                 onCancel={refinement.cancel}
-                onSkip={handleBatchEditMask}
+                onSkip={enterBatchManualFromEnhancements}
               />
               <ForegroundRefinementControls
                 status={foregroundRefinement.state.status}
@@ -716,7 +882,7 @@ export function ToolWorkspace() {
                   )
                 }
                 onCancel={foregroundRefinement.cancel}
-                onSkip={handleBatchEditMask}
+                onSkip={enterBatchManualFromEnhancements}
               />
             </>
           )}
@@ -772,7 +938,7 @@ export function ToolWorkspace() {
   const batchCorrecting =
     batchActive && selectedBatchItem?.processedImage && originalMatte;
 
-  if (batchActive && !batchCorrecting && !guidedCanvas) {
+  if (batchActive && !batchCorrecting) {
     surfaceNode = batchSurfaceBase;
     railNode = batchRailBase;
   }
@@ -812,24 +978,27 @@ export function ToolWorkspace() {
     );
   }
 
-  if (!displayError && state.status === "result" && !guided.state.session) {
-    surfaceNode = (
-      <BeforeAfterSlider
-        before={state.result.source}
-        after={state.result.cutout ?? state.result.result}
-        backgroundFill={previewFill}
-        position={
-          activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-        }
-        onPositionChange={(position) => {
-          if (!activeDocumentId) return;
-          setViewPositionByDocument((current) => ({
-            ...current,
-            [activeDocumentId]: position,
-          }));
-        }}
-      />
-    );
+  if (!displayError && state.status === "result") {
+    surfaceNode =
+      activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas ? (
+        guidedCanvas
+      ) : (
+        <BeforeAfterSlider
+          before={state.result.source}
+          after={state.result.cutout ?? state.result.result}
+          backgroundFill={previewFill}
+          position={
+            activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+          }
+          onPositionChange={(position) => {
+            if (!activeDocumentId) return;
+            setViewPositionByDocument((current) => ({
+              ...current,
+              [activeDocumentId]: position,
+            }));
+          }}
+        />
+      );
     railNode = (
       <ToolPanelSlot
         toolId={activeTool}
@@ -837,39 +1006,16 @@ export function ToolWorkspace() {
       >
         <div className="flex flex-col gap-4">
           {activeTool === "cutout" && (
-            <div className="flex flex-wrap gap-3">
-              <Button type="button" variant="outline" onClick={handleReset}>
-                {m.processAnother()}
-              </Button>
-              {state.result.qualityMode !== "max" &&
-                state.result.qualityMode !== "isnet-fp32" && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      void releaseRefinementBeforeHeavyWork().then(recomputeMaxQuality);
-                    }}
-                  >
-                    {m.recomputeMax()}
-                  </Button>
-                )}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleEditMask}
-                disabled={extractingMatte || backgroundBusy}
-              >
-                {extractingMatte ? m.preparing() : m.editMask()}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleGuideAutomaticResult}
-                disabled={extractingMatte || backgroundBusy}
-              >
-                {extractingMatte ? m.preparing() : m.guidedRefineResult()}
-              </Button>
-            </div>
+            <CutoutToolPanel
+              mode={cutoutMode}
+              onModeChange={selectCutoutMode}
+              magicControls={magicControls}
+              manualControls={
+                <p className="text-sm text-muted-foreground" aria-busy={extractingMatte}>
+                  {extractingMatte ? m.preparing() : m.cutoutManualReady()}
+                </p>
+              }
+            />
           )}
           {activeTool === "enhance" && (
             <>
@@ -883,7 +1029,7 @@ export function ToolWorkspace() {
                 onModeChange={setRefinementMode}
                 onStart={() => startSingleRefinement(state.result)}
                 onCancel={refinement.cancel}
-                onSkip={handleEditMask}
+                onSkip={enterSingleManualFromEnhancements}
               />
               <ForegroundRefinementControls
                 status={foregroundRefinement.state.status}
@@ -895,7 +1041,7 @@ export function ToolWorkspace() {
                   startSingleForegroundRefinement(state.result, componentCleanup)
                 }
                 onCancel={foregroundRefinement.cancel}
-                onSkip={handleEditMask}
+                onSkip={enterSingleManualFromEnhancements}
               />
             </>
           )}
@@ -953,15 +1099,31 @@ export function ToolWorkspace() {
         backgroundFill={state.result.backgroundFill}
         onDone={handleDoneCorrecting}
         doneDisabled={finalizingCorrection}
+        viewportControls={cutoutViewport}
+        surfaceTargetRef={manualSurfaceRef}
+        onBrushSizeInteraction={() => setManualPreviewKey((current) => current + 1)}
+        previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
         onDirtyChange={handleManualDirtyChange}
-        onCancel={handleCancelCorrection}
       >
         {({ surface, rail }) => (
           <>
             <div className="[grid-area:surface]">
               <EditorStage documentId={activeDocumentId ?? "single-correction"}>
-                {surface}
+                <div className="relative size-full">
+                  <div
+                    className={cutoutMode === "magic" ? "size-full" : "hidden"}
+                    aria-hidden={cutoutMode !== "magic"}
+                  >
+                    {guidedCanvas}
+                  </div>
+                  <div
+                    className={cutoutMode === "manual" ? "size-full" : "hidden"}
+                    aria-hidden={cutoutMode !== "manual"}
+                  >
+                    {surface}
+                  </div>
+                </div>
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
@@ -974,7 +1136,12 @@ export function ToolWorkspace() {
                       onReset={handleReset}
                     />
                   )}
-                  {rail}
+                  <CutoutToolPanel
+                    mode={cutoutMode}
+                    onModeChange={selectCutoutMode}
+                    magicControls={magicControls}
+                    manualControls={rail}
+                  />
                 </div>
               </ToolPanelSlot>
             </div>
@@ -990,33 +1157,46 @@ export function ToolWorkspace() {
         backgroundFill={selectedBatchItem.processedImage.backgroundFill}
         onDone={handleBatchDoneCorrecting}
         doneDisabled={finalizingCorrection}
+        viewportControls={cutoutViewport}
+        surfaceTargetRef={manualSurfaceRef}
+        onBrushSizeInteraction={() => setManualPreviewKey((current) => current + 1)}
+        previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
         onDirtyChange={handleManualDirtyChange}
-        onCancel={handleCancelCorrection}
       >
         {({ surface, rail }) => (
           <>
             <div className="[grid-area:surface]">
               <EditorStage documentId={activeDocumentId ?? "batch-correction"}>
-                {surface}
+                <div className="relative size-full">
+                  <div
+                    className={cutoutMode === "magic" ? "size-full" : "hidden"}
+                    aria-hidden={cutoutMode !== "magic"}
+                  >
+                    {guidedCanvas}
+                  </div>
+                  <div
+                    className={cutoutMode === "manual" ? "size-full" : "hidden"}
+                    aria-hidden={cutoutMode !== "manual"}
+                  >
+                    {surface}
+                  </div>
+                </div>
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
               <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
-                {rail}
+                <CutoutToolPanel
+                  mode={cutoutMode}
+                  onModeChange={selectCutoutMode}
+                  magicControls={magicControls}
+                  manualControls={rail}
+                />
               </ToolPanelSlot>
             </div>
           </>
         )}
       </MaskCorrectionSlots>
-    );
-  }
-
-  if (activeEditDocument && guidedCanvas && !railNode) {
-    railNode = (
-      <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
-        <p className="text-sm text-muted-foreground">{m.editorGuidedAdapterHint()}</p>
-      </ToolPanelSlot>
     );
   }
 
@@ -1036,6 +1216,31 @@ export function ToolWorkspace() {
       redoLabel={historySelectors.redoLabel}
       onUndo={handleUndoDocument}
       onRedo={handleRedoDocument}
+      documentActionSlot={
+        batchActive && selectedBatchItem?.processedImage ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void releaseRefinementBeforeHeavyWork().then(() =>
+                batch.retryItem(selectedBatchItem.id),
+              );
+            }}
+          >
+            {m.reprocessMode({
+              mode: modeLabel(selectedBatchItem.qualityMode),
+            })}
+          </Button>
+        ) : !batchActive ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={(event) => requestReset(event.currentTarget)}
+          >
+            {m.processAnother()}
+          </Button>
+        ) : undefined
+      }
       downloadSlot={
         activeDownloadImage ? (
           <DownloadResultButton
@@ -1056,7 +1261,10 @@ export function ToolWorkspace() {
     ) : (
       surfaceNode
     );
-  const draftGuardNode = pendingTool ? (
+  const draftGuardOpen = Boolean(
+    pendingTool || pendingBatchItem || pendingBatchClear || pendingReset,
+  );
+  const draftGuardNode = draftGuardOpen ? (
     <div
       role="alertdialog"
       aria-labelledby="editor-draft-guard-title"
@@ -1076,6 +1284,9 @@ export function ToolWorkspace() {
           variant="outline"
           onClick={() => {
             setPendingTool(null);
+            setPendingBatchItem(null);
+            setPendingBatchClear(false);
+            setPendingReset(false);
             requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
           }}
         >

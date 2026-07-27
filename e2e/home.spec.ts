@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import {
+  expectAutomaticCutout,
+  expectComparisonForTool,
+  openManualCutout,
+} from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -128,9 +133,7 @@ test.describe("/ (home)", () => {
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
 
-    await expect(
-      page.getByRole("slider", { name: /before\/after comparison/i }),
-    ).toBeVisible();
+    await expectAutomaticCutout(page);
     await expect(page.getByRole("button", { name: /download/i })).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");
@@ -181,17 +184,19 @@ test.describe("/ (home)", () => {
       }
 
       await upload.setInputFiles(SAMPLE_IMAGE);
+      await expectAutomaticCutout(page);
       const stage = page.getByTestId("editor-stage");
       await expect(stage).toBeVisible();
       await stage.evaluate((node) => {
         node.setAttribute("data-stability-probe", "mounted");
       });
       const initialBox = await stage.boundingBox();
-      const slider = page.getByRole("slider", { name: /before|до и после/i });
+      const slider = await expectComparisonForTool(page, locale.enhance);
       await slider.press("ArrowRight");
       await expect(slider).toHaveAttribute("aria-valuenow", "55");
 
       const cutout = page.getByRole("button", { name: locale.cutout });
+      await cutout.click();
       await cutout.focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.getByRole("button", { name: locale.enhance })).toBeFocused();
@@ -227,8 +232,11 @@ test.describe("/ (home)", () => {
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
-    await expect(page.getByRole("slider")).toBeVisible();
+    await expectAutomaticCutout(page);
     await page.getByRole("button", { name: /^Background$/ }).click();
+    await expect(
+      page.getByRole("slider", { name: /before\/after comparison/i }),
+    ).toBeVisible();
     const preview = page.getByTestId("after-preview-background");
     await expect(page.getByTestId("fill-swatch")).toHaveCount(8);
 
@@ -277,14 +285,9 @@ test.describe("/ (home)", () => {
     expect(colorPixel[2]).toBeLessThan(80);
     expect(colorPixel[3]).toBe(255);
 
-    await page.getByRole("button", { name: /^Cutout$/ }).click();
-    await page.getByRole("button", { name: /edit mask/i }).click();
-    const correctionCanvas = page.getByRole("img", {
-      name: /mask correction canvas/i,
-    });
+    const correctionCanvas = await openManualCutout(page);
     await expect(correctionCanvas).toHaveCSS("background-color", /rgb\(25\d, \d+, \d+\)/);
-    await page.getByRole("button", { name: /^done$/i }).click();
-    await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible();
+    await page.getByRole("button", { name: /^cancel$/i }).click();
 
     await page.getByRole("button", { name: /^Background$/ }).click();
     await page.getByRole("button", { name: "Ocean" }).click();
@@ -311,17 +314,17 @@ test.describe("/ (home)", () => {
     await expect(page.getByTestId("scheduler-summary")).toContainText("3 done");
     await expect(page.getByText("sample.jpg")).toHaveCount(3);
     await page.getByText("sample.jpg").first().click();
-    await expect(page.getByRole("slider")).toBeVisible();
+    await expectAutomaticCutout(page);
     const workspace = page.getByTestId("tool-workspace");
     const firstDocumentId = await workspace.getAttribute("data-document-id");
     expect(firstDocumentId).toBeTruthy();
+    await page.getByRole("button", { name: /^Background$/ }).click();
     await page
       .getByRole("slider", { name: /before\/after comparison/i })
       .press("ArrowRight");
     await expect(
       page.getByRole("slider", { name: /before\/after comparison/i }),
     ).toHaveAttribute("aria-valuenow", "55");
-    await page.getByRole("button", { name: /^Background$/ }).click();
     await expect(page.getByRole("toolbar", { name: /editor tools/i })).toBeVisible();
     const selectedTile = page
       .getByRole("button", {
@@ -390,10 +393,10 @@ test.describe("/ (home)", () => {
       "data-active-tool",
       "cutout",
     );
+    await page.getByRole("button", { name: /^Background$/ }).click();
     await expect(
       page.getByRole("slider", { name: /before\/after comparison/i }),
     ).toHaveAttribute("aria-valuenow", "50");
-    await page.getByRole("button", { name: /^Background$/ }).click();
     await expect(page.getByRole("button", { name: "Transparent" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -403,7 +406,6 @@ test.describe("/ (home)", () => {
     await expect(
       page.getByRole("slider", { name: /before\/after comparison/i }),
     ).toHaveAttribute("aria-valuenow", "55");
-    await page.getByRole("button", { name: /^Background$/ }).click();
     await expect(page.getByRole("button", { name: "Ocean" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -413,15 +415,11 @@ test.describe("/ (home)", () => {
     await page.getByRole("button", { name: /^download$/i }).click();
     expect((await individual).suggestedFilename()).toBe("result.png");
 
-    await page.getByRole("button", { name: /^Cutout$/ }).click();
-    await page.getByRole("button", { name: /edit mask/i }).click();
+    await openManualCutout(page);
     await expect(
       page.getByRole("application", { name: /mask correction editor/i }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /^done$/i }).click();
-    await expect(
-      page.getByRole("slider", { name: /before\/after comparison/i }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: /^cancel$/i }).click();
 
     await page.getByRole("radio", { name: /^Optimal/i }).click();
     await expect(page.getByRole("radio", { name: /^Optimal/i })).toBeChecked();

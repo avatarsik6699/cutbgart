@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectAutomaticCutout } from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE = path.join(
@@ -59,7 +60,29 @@ async function paintCenter(page: Page): Promise<void> {
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Mask correction canvas has no bounding box");
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await canvas.click({
+    position: { x: box.width / 2, y: box.height / 2 },
+  });
+}
+
+async function centerAlpha(page: Page): Promise<number> {
+  return page
+    .getByRole("img", {
+      name: /mask correction canvas|холст коррекции/i,
+    })
+    .evaluate((node) => {
+      const canvas = node as HTMLCanvasElement;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Mask correction canvas has no 2D context");
+      return (
+        context.getImageData(
+          Math.floor(canvas.width / 2),
+          Math.floor(canvas.height / 2),
+          1,
+          1,
+        ).data[3] ?? -1
+      );
+    });
 }
 
 for (const locale of locales) {
@@ -68,9 +91,7 @@ for (const locale of locales) {
     const upload = page.getByLabel(locale.upload);
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE);
-    await expect(
-      page.getByRole("slider", { name: /before\/after|до и после/i }),
-    ).toBeVisible();
+    await expectAutomaticCutout(page);
 
     await page.getByRole("button", { name: locale.enhance }).click();
     const matte = page.getByTestId("matte-refinement-controls");
@@ -83,9 +104,21 @@ for (const locale of locales) {
       foreground.getByRole("button", { name: locale.cleanAgain }),
     ).toBeVisible();
     await foreground.getByRole("button", { name: locale.brush }).click();
+    const cutout = page.getByTestId("cutout-tool-panel");
+    await expect(cutout).toHaveAttribute("data-mode", "manual");
     await expect(page.getByRole("application", { name: locale.editor })).toBeVisible();
+    const initialAlpha = await centerAlpha(page);
+    await cutout
+      .getByRole("button", {
+        name: initialAlpha > 0 ? /^(?:Erase|Стереть)$/ : /^(?:Restore|Восстановить)$/,
+      })
+      .click();
     await paintCenter(page);
-    await page.getByRole("button", { name: locale.done }).click();
+    const apply = cutout.getByRole("button", {
+      name: /^(?:Apply|Применить)$/,
+    });
+    await expect(apply).toBeEnabled();
+    await apply.click();
 
     await page.getByRole("button", { name: locale.background }).click();
     await page.getByRole("button", { name: locale.ocean }).click();

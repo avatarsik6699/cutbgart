@@ -1,5 +1,9 @@
-export { useMaskCorrection } from "./model/use-mask-correction";
+export {
+  useMaskCorrection,
+  useMaskCorrectionViewport,
+} from "./model/use-mask-correction";
 export type {
+  MaskCorrectionViewportControls,
   MaskCorrectionViewport,
   UseMaskCorrectionResult,
 } from "./model/use-mask-correction";

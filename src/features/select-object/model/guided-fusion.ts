@@ -158,20 +158,22 @@ export interface GuidedBrushFusionInput {
   baseMatte: AlphaMatte | null;
   candidate: AlphaMatte;
   constraints: RefinementConstraintMap;
-  influenceMask: Uint8Array;
+  influence: RefinementConstraintMap;
   editRegion: PixelRect;
 }
 
 /**
  * Phase-21 primary fusion. The model may propose a source-sized mask, but an
- * automatic base is replaced only in the union of compact stroke-shaped
- * influence zones. Binary user intent is applied last and is authoritative.
+ * automatic base changes only in the union of compact stroke-shaped
+ * influence zones. Keep zones are additive and Remove zones are subtractive,
+ * so a binary model candidate cannot make the opposite kind of edit. Binary
+ * hard-core intent is applied last and is authoritative.
  */
 export function fuseGuidedBrushCandidate({
   baseMatte,
   candidate,
   constraints,
-  influenceMask,
+  influence,
   editRegion,
 }: GuidedBrushFusionInput): AlphaMatte {
   const { width, height } = candidate;
@@ -182,8 +184,12 @@ export function fuseGuidedBrushCandidate({
     constraints.data.length !== width * height
   )
     throw new Error("Guided constraints do not match the candidate dimensions");
-  if (influenceMask.length !== width * height)
-    throw new Error("Guided influence mask does not match the candidate dimensions");
+  if (
+    influence.width !== width ||
+    influence.height !== height ||
+    influence.data.length !== width * height
+  )
+    throw new Error("Guided influence map does not match the candidate dimensions");
   if (baseMatte) assertDimensions(baseMatte, width, height);
   const data = baseMatte?.data.slice() ?? candidate.data.slice();
   if (baseMatte) {
@@ -194,7 +200,11 @@ export function fuseGuidedBrushCandidate({
     for (let y = minY; y < maxY; y += 1)
       for (let x = minX; x < maxX; x += 1) {
         const index = y * width + x;
-        if (influenceMask[index]) data[index] = candidate.data[index]!;
+        const intent = influence.data[index] ?? -1;
+        const base = baseMatte.data[index] ?? 0;
+        const proposed = candidate.data[index] ?? 0;
+        if (intent === 1) data[index] = Math.max(base, proposed);
+        else if (intent === 0) data[index] = Math.min(base, proposed);
       }
   }
   constraints.data.forEach((intent, index) => {

@@ -52,4 +52,24 @@ describe("EditorToolbar", () => {
       screen.getByRole<HTMLButtonElement>("button", { name: /redo/i }).disabled,
     ).toBe(true);
   });
+
+  it("renders an optional document action outside the tool panels", () => {
+    const reset = vi.fn();
+    render(
+      <EditorToolbar
+        tools={createEditorToolRegistry()}
+        activeTool="cutout"
+        onToolChange={vi.fn()}
+        canUndo={false}
+        canRedo={false}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        documentActionSlot={<button onClick={reset}>Process another image</button>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Process another image" }));
+    expect(reset).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("editor-document-action-slot")).toBeDefined();
+  });
 });

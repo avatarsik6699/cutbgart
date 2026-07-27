@@ -22,10 +22,14 @@ describe("Phase-21 guided brush fusion", () => {
         height: 2,
         data: new Int8Array(8).fill(-1),
       },
-      influenceMask: new Uint8Array([0, 1, 1, 0, 0, 1, 1, 0]),
+      influence: {
+        width: 4,
+        height: 2,
+        data: new Int8Array([-1, 1, 1, -1, -1, 0, 0, -1]),
+      },
       editRegion: { x: 1, y: 0, width: 2, height: 2 },
     });
-    expect(result.data).toEqual(new Uint8ClampedArray([1, 100, 100, 4, 5, 100, 100, 8]));
+    expect(result.data).toEqual(new Uint8ClampedArray([1, 100, 100, 4, 5, 6, 7, 8]));
     expect(base.data).toEqual(new Uint8ClampedArray([1, 2, 3, 4, 5, 6, 7, 8]));
   });
 
@@ -41,7 +45,11 @@ describe("Phase-21 guided brush fusion", () => {
         data: new Uint8ClampedArray([0, 10, 20, 255]),
       },
       constraints: { width: 2, height: 2, data: constraints },
-      influenceMask: new Uint8Array(4).fill(1),
+      influence: {
+        width: 2,
+        height: 2,
+        data: new Int8Array(4).fill(-1),
+      },
       editRegion: { x: 0, y: 0, width: 2, height: 2 },
     });
     expect(result.data).toEqual(new Uint8ClampedArray([255, 10, 20, 0]));
@@ -80,7 +88,7 @@ describe("Phase-21 guided brush fusion", () => {
         data: new Uint8ClampedArray(width * height),
       },
       constraints: consolidated.constraints,
-      influenceMask: consolidated.influenceMask,
+      influence: consolidated.influence,
       editRegion: consolidated.editRegion!,
     });
 
@@ -88,5 +96,63 @@ describe("Phase-21 guided brush fusion", () => {
     expect(result.data[2 * width + Math.floor(width / 2)]).toBe(255);
     expect(result.data[2 * width + 3]).toBe(0);
     expect(result.data[2 * width + 26]).toBe(0);
+  });
+
+  it("never lets a Keep candidate punch holes in the automatic base", () => {
+    const base = {
+      width: 5,
+      height: 1,
+      data: new Uint8ClampedArray([255, 200, 0, 180, 255]),
+    };
+    const result = fuseGuidedBrushCandidate({
+      baseMatte: base,
+      candidate: {
+        width: 5,
+        height: 1,
+        data: new Uint8ClampedArray([0, 0, 255, 0, 0]),
+      },
+      constraints: {
+        width: 5,
+        height: 1,
+        data: new Int8Array([-1, -1, 1, -1, -1]),
+      },
+      influence: {
+        width: 5,
+        height: 1,
+        data: new Int8Array([1, 1, 1, 1, 1]),
+      },
+      editRegion: { x: 0, y: 0, width: 5, height: 1 },
+    });
+    expect(result.data).toEqual(new Uint8ClampedArray([255, 200, 255, 180, 255]));
+    expect(result.data.every((alpha, index) => alpha >= base.data[index]!)).toBe(true);
+  });
+
+  it("never lets a Remove candidate add foreground to the automatic base", () => {
+    const base = {
+      width: 5,
+      height: 1,
+      data: new Uint8ClampedArray([0, 100, 255, 200, 0]),
+    };
+    const result = fuseGuidedBrushCandidate({
+      baseMatte: base,
+      candidate: {
+        width: 5,
+        height: 1,
+        data: new Uint8ClampedArray([255, 255, 0, 255, 255]),
+      },
+      constraints: {
+        width: 5,
+        height: 1,
+        data: new Int8Array([-1, -1, 0, -1, -1]),
+      },
+      influence: {
+        width: 5,
+        height: 1,
+        data: new Int8Array([0, 0, 0, 0, 0]),
+      },
+      editRegion: { x: 0, y: 0, width: 5, height: 1 },
+    });
+    expect(result.data).toEqual(new Uint8ClampedArray([0, 100, 0, 200, 0]));
+    expect(result.data.every((alpha, index) => alpha <= base.data[index]!)).toBe(true);
   });
 });

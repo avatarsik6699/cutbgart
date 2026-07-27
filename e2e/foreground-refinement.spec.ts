@@ -3,6 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import {
+  applyMagicPass,
+  expectAutomaticCutout,
+  expectComparisonForTool,
+} from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE = path.join(
@@ -20,14 +25,8 @@ async function uploadAutomatic(page: import("@playwright/test").Page, locale = "
   );
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(
-    page.getByRole("slider", { name: /before\/after|до и после/i }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", {
-      name: locale === "/en" ? "Enhancements" : "Улучшения",
-    })
-    .click();
+  await expectAutomaticCutout(page);
+  await expectComparisonForTool(page, locale === "/en" ? "Enhancements" : "Улучшения");
 }
 
 test("automatic result cleans once per request without accumulating colour transforms", async ({
@@ -80,18 +79,8 @@ test("accepted guided result can clean colours, enter the exact brush, and downl
   const upload = page.getByLabel("Загрузить изображения");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /до и после/i })).toBeVisible({
-    timeout: 15_000,
-  });
-  await page.getByRole("button", { name: /Уточнить выбор кистью/ }).click();
-  const image = page.getByRole("img", {
-    name: /коррекции объекта кистью/i,
-  });
-  await expect(image).toBeVisible();
-  await image.press("Enter");
-  await page.getByRole("button", { name: /Пересчитать маску/ }).click();
-  await expect(page.getByTestId("guided-brush-candidates")).toBeVisible();
-  await page.getByRole("button", { name: /Принять и уточнить/ }).click();
+  await expectAutomaticCutout(page);
+  await applyMagicPass(page);
 
   await page.getByRole("button", { name: "Улучшения" }).click();
   const controls = page.getByTestId("foreground-refinement-controls");
@@ -100,8 +89,12 @@ test("accepted guided result can clean colours, enter the exact brush, and downl
     controls.getByRole("button", { name: /^Очистить ещё раз$/ }),
   ).toBeVisible();
   await controls.getByRole("button", { name: /Пропустить и править кистью/ }).click();
+  await expect(page.getByTestId("cutout-tool-panel")).toHaveAttribute(
+    "data-mode",
+    "manual",
+  );
   await expect(page.getByRole("application", { name: /редактор маски/i })).toBeVisible();
-  await page.getByRole("button", { name: /^Готово$/ }).click();
+  await page.getByRole("button", { name: /^Отмена$/ }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: /^Скачать$/ }).click();
   expect(await download).toBeTruthy();

@@ -22,6 +22,8 @@ export async function installMockInference(page: Page): Promise<void> {
         requestedMode?: string;
         componentCleanup?: boolean;
         sourceIsOriginal?: boolean;
+        matteLossCount?: number;
+        matteGainCount?: number;
       }>,
     });
     class MockInferenceWorker extends EventTarget {
@@ -45,6 +47,7 @@ export async function installMockInference(page: Page): Promise<void> {
           cutout?: Blob;
           qualityMode: string;
           backgroundFill?: unknown;
+          alphaMatte?: { data: Uint8ClampedArray };
         };
         matte?: { data: Uint8ClampedArray };
         backgroundFill?: unknown;
@@ -85,28 +88,52 @@ export async function installMockInference(page: Page): Promise<void> {
               requestedMode?: string;
               componentCleanup?: boolean;
               sourceIsOriginal?: boolean;
+              matteLossCount?: number;
+              matteGainCount?: number;
             }>;
           }
-        ).__mockInferencePosts.push({
-          type: message.type,
-          qualityMode: message.qualityMode,
-          promptType: message.prompt ? (message.prompt.box ? "box" : "point") : undefined,
-          revision: message.revision ?? message.prompt?.revision,
-          pointLabels: message.prompt?.points.map((point) => point.label),
-          promptPoints: message.prompt?.points.map((point) => ({ ...point })),
-          requestedMode: message.request?.requestedMode,
-          componentCleanup: message.request?.componentCleanup,
-          sourceIsOriginal:
-            message.type === "encode" && message.source
-              ? message.source.blob ===
-                (window as unknown as { __mockOriginalSourceBlob?: Blob })
-                  .__mockOriginalSourceBlob
-              : message.type === "refine-foreground" && message.request?.source
-                ? message.request.source.blob ===
-                  (window as unknown as { __mockOriginalSourceBlob?: Blob })
-                    .__mockOriginalSourceBlob
+        ).__mockInferencePosts.push(
+          (() => {
+            const prior = message.image?.alphaMatte?.data;
+            const next = message.matte?.data;
+            let matteLossCount: number | undefined;
+            let matteGainCount: number | undefined;
+            if (prior && next && prior.length === next.length) {
+              matteLossCount = 0;
+              matteGainCount = 0;
+              for (let index = 0; index < next.length; index += 1) {
+                if (next[index]! < prior[index]!) matteLossCount += 1;
+                else if (next[index]! > prior[index]!) matteGainCount += 1;
+              }
+            }
+            return {
+              type: message.type,
+              qualityMode: message.qualityMode,
+              promptType: message.prompt
+                ? message.prompt.box
+                  ? "box"
+                  : "point"
                 : undefined,
-        });
+              revision: message.revision ?? message.prompt?.revision,
+              pointLabels: message.prompt?.points.map((point) => point.label),
+              promptPoints: message.prompt?.points.map((point) => ({ ...point })),
+              requestedMode: message.request?.requestedMode,
+              componentCleanup: message.request?.componentCleanup,
+              sourceIsOriginal:
+                message.type === "encode" && message.source
+                  ? message.source.blob ===
+                    (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                      .__mockOriginalSourceBlob
+                  : message.type === "refine-foreground" && message.request?.source
+                    ? message.request.source.blob ===
+                      (window as unknown as { __mockOriginalSourceBlob?: Blob })
+                        .__mockOriginalSourceBlob
+                    : undefined,
+              matteLossCount,
+              matteGainCount,
+            };
+          })(),
+        );
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
           if (message.type === "load-model") {
@@ -221,7 +248,25 @@ export async function installMockInference(page: Page): Promise<void> {
                     ).__mockBoundaryTolerantGuidedCandidate,
                   );
                   const data = new Uint8ClampedArray(pixelCount);
-                  if (collapsed) data.fill(255);
+                  const destructiveKeep = Boolean(
+                    (
+                      window as unknown as {
+                        __mockDestructiveGuidedCandidate?: boolean;
+                      }
+                    ).__mockDestructiveGuidedCandidate,
+                  );
+                  if (destructiveKeep && index === 0) {
+                    data.fill(255);
+                    for (const point of message.prompt!.points) {
+                      if (point.label !== 1) continue;
+                      const centreX = Math.round(point.x * source.width);
+                      const centreY = Math.round(point.y * source.height);
+                      for (let y = centreY - 1; y <= centreY + 1; y += 1)
+                        for (let x = centreX + 9; x <= centreX + 11; x += 1)
+                          if (x >= 0 && x < source.width && y >= 0 && y < source.height)
+                            data[y * source.width + x] = 0;
+                    }
+                  } else if (collapsed) data.fill(255);
                   else if (boundaryTolerant && index === 0)
                     for (let pixel = 0; pixel < pixelCount; pixel += 1)
                       data[pixel] =
@@ -420,6 +465,18 @@ export async function installMockInference(page: Page): Promise<void> {
                       message.source!.width * message.source!.height,
                     ).fill(255);
                     if (
+                      (
+                        window as unknown as {
+                          __mockDestructiveGuidedCandidate?: boolean;
+                        }
+                      ).__mockDestructiveGuidedCandidate
+                    ) {
+                      const centreX = Math.floor(message.source!.width / 2);
+                      const centreY = Math.floor(message.source!.height / 2);
+                      for (let y = centreY - 2; y <= centreY + 2; y += 1)
+                        for (let x = centreX - 2; x <= centreX + 2; x += 1)
+                          data[y * message.source!.width + x] = 0;
+                    } else if (
                       (
                         window as unknown as {
                           __mockBoundaryTolerantGuidedCandidate?: boolean;

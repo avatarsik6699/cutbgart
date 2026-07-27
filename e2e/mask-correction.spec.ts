@@ -1,373 +1,140 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { installMockInference } from "./support/mock-inference";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SAMPLE_IMAGE = path.join(__dirname, "fixtures", "sample.jpg");
+const SAMPLE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "public",
+  "images",
+  "document-photo-example.webp",
+);
 
-async function centerAlpha(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const canvas = document.querySelector("canvas");
-    if (!canvas) throw new Error("mask correction canvas not found");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("2D context unavailable");
-    const { width, height } = canvas;
-    const { data } = ctx.getImageData(
-      Math.floor(width / 2),
-      Math.floor(height / 2),
-      1,
-      1,
+test.beforeEach(async ({ page }) => installMockInference(page));
+
+async function centerAlpha(canvas: Locator): Promise<number> {
+  return canvas.evaluate((node) => {
+    const element = node as HTMLCanvasElement;
+    const context = element.getContext("2d");
+    if (!context) throw new Error("2D context unavailable");
+    return (
+      context.getImageData(
+        Math.floor(element.width / 2),
+        Math.floor(element.height / 2),
+        1,
+        1,
+      ).data[3] ?? -1
     );
-    return data[3] ?? -1;
   });
 }
 
-async function alphaAt(page: Page, x: number, y: number): Promise<number> {
-  return page.evaluate(
-    ({ sourceX, sourceY }) => {
-      const canvas = document.querySelector("canvas");
-      if (!canvas) throw new Error("mask correction canvas not found");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("2D context unavailable");
-      const { data } = ctx.getImageData(sourceX, sourceY, 1, 1);
-      return data[3] ?? -1;
-    },
-    { sourceX: x, sourceY: y },
+async function paintCenter(page: Page): Promise<void> {
+  const canvas = page.getByRole("img", { name: /mask correction canvas/i });
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Manual canvas has no bounding box");
+  await canvas.click({
+    position: { x: box.width / 2, y: box.height / 2 },
+  });
+}
+
+test("Manual keeps exact-alpha drafts, viewport state, Cancel, Apply, and document history separate", async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto("/en/");
+  const upload = page.getByLabel("Upload an image");
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(SAMPLE);
+  const panel = page.getByTestId("cutout-tool-panel");
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await panel.getByRole("tab", { name: "Manual" }).click();
+
+  const canvas = page.getByRole("img", { name: /mask correction canvas/i });
+  await expect(canvas).toBeVisible({ timeout: 15_000 });
+  const workspace = page.getByTestId("tool-workspace");
+  const originalAlpha = await centerAlpha(canvas);
+  expect(originalAlpha).toBe(255);
+
+  const size = panel.getByRole("slider", { name: "Brush size" });
+  await size.focus();
+  await size.press("End");
+  const preview = page.locator(
+    '[data-testid="brush-size-stage-preview"][data-visible="true"]',
   );
-}
-
-async function visibleCenterSourcePoint(page: Page): Promise<{ x: number; y: number }> {
-  return page.evaluate(() => {
-    const canvas = document.querySelector("canvas");
-    if (!canvas) throw new Error("mask correction canvas not found");
-    const viewport = canvas.parentElement;
-    if (!viewport) throw new Error("mask correction viewport not found");
-    const canvasRect = canvas.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-    return {
-      x: Math.floor(
-        (viewportRect.left + viewportRect.width / 2 - canvasRect.left) *
-          (canvas.width / canvasRect.width),
-      ),
-      y: Math.floor(
-        (viewportRect.top + viewportRect.height / 2 - canvasRect.top) *
-          (canvas.height / canvasRect.height),
-      ),
-    };
-  });
-}
-
-/**
- * The correction canvas's first paint races an async `createImageBitmap`
- * decode of the source image (see MaskCorrectionCanvas.tsx) — reads a
- * snapshot value once it's stable across consecutive polls, instead of
- * trusting a single read that might land before the decode settles.
- */
-async function stableCenterAlpha(page: Page): Promise<number> {
-  let previous = await centerAlpha(page);
+  await expect(preview).toBeVisible();
+  await canvas.scrollIntoViewIfNeeded();
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox) throw new Error("Manual canvas has no bounding box");
+  await canvas.hover({ position: { x: canvasBox.width / 2, y: canvasBox.height / 2 } });
   await expect
     .poll(async () => {
-      const current = await centerAlpha(page);
-      const stable = current === previous;
-      previous = current;
-      return stable;
-    })
-    .toBe(true);
-  return previous;
-}
-
-async function dragOnCanvasCenter(page: Page): Promise<void> {
-  const editor = page.getByRole("application", { name: /mask correction editor/i });
-  // The expected source point is derived from the visible viewport center.
-  // Target that same point after every toolbar-induced reflow; at zoom > 100%
-  // the transformed canvas center is not the visible viewport center.
-  await editor.scrollIntoViewIfNeeded();
-  const box = await editor.boundingBox();
-  if (!box) throw new Error("mask correction editor has no bounding box");
-  const centerX = box.x + box.width / 2;
-  const centerY = box.y + box.height / 2;
-  await page.mouse.move(centerX, centerY);
-  await page.mouse.down();
-  await page.mouse.move(centerX + 3, centerY + 3, { steps: 3 });
-  await page.mouse.up();
-}
-
-test.describe("mask correction", () => {
-  test("keeps the completed result visible when worker-backed mask preparation fails", async ({
-    page,
-  }) => {
-    await page.addInitScript(() => {
-      const posts: unknown[] = [];
-      Object.defineProperty(window, "__maskCorrectionWorkerPosts", {
-        value: posts,
-        configurable: true,
-      });
-
-      class MockWorker extends EventTarget {
-        postMessage(message: {
-          type: string;
-          requestId?: string;
-          qualityMode?: string;
-          inferencePath?: string;
-        }): void {
-          posts.push(message);
-          if (message.type === "load-model") {
-            queueMicrotask(() => {
-              this.dispatchEvent(
-                new MessageEvent("message", {
-                  data: {
-                    type: "model-ready",
-                    qualityMode: message.qualityMode,
-                    inferencePath: message.inferencePath ?? "wasm",
-                    dtype: "mock",
-                  },
-                }),
-              );
-            });
-          }
-          if (message.type === "process") {
-            queueMicrotask(() => {
-              this.dispatchEvent(
-                new MessageEvent("message", {
-                  data: {
-                    type: "process-result",
-                    requestId: message.requestId,
-                    result: new Blob(["mock-png"], { type: "image/png" }),
-                    durationMs: 1,
-                  },
-                }),
-              );
-            });
-          }
-          if (message.type === "extract-alpha-matte") {
-            queueMicrotask(() => {
-              this.dispatchEvent(
-                new MessageEvent("message", {
-                  data: {
-                    type: "error",
-                    code: "compositing-failed",
-                    requestId: message.requestId,
-                    message: "mock correction failure",
-                  },
-                }),
-              );
-            });
-          }
-        }
-
-        terminate(): void {
-          // no-op
-        }
+      const previewBox = await preview
+        .getByTestId("brush-size-stage-preview-ring")
+        .boundingBox();
+      if (!isMobile) {
+        const cursorBox = await page.getByTestId("mask-brush-cursor").boundingBox();
+        return Math.abs((previewBox?.width ?? 0) - (cursorBox?.width ?? 0));
       }
+      const sourceWidth = await canvas.evaluate(
+        (node) => (node as HTMLCanvasElement).width,
+      );
+      const currentCanvasBox = await canvas.boundingBox();
+      const actualStampDiameter = 150 * ((currentCanvasBox?.width ?? 0) / sourceWidth);
+      return Math.abs((previewBox?.width ?? 0) - actualStampDiameter);
+    })
+    .toBeLessThan(3);
 
-      Object.defineProperty(window, "Worker", {
-        value: MockWorker,
-        configurable: true,
-      });
-    });
+  await panel.getByRole("button", { name: "Zoom in" }).click();
+  await expect(panel.getByLabel(/Zoom 125%/)).toBeVisible();
+  await panel.getByRole("button", { name: "Erase", exact: true }).click();
+  await paintCenter(page);
+  await expect.poll(() => centerAlpha(canvas)).toBe(0);
+  await expect(panel.getByRole("button", { name: "Undo" })).toBeEnabled();
 
-    await page.goto("/en");
-    const uploadInput = page.getByLabel("Upload an image");
-    await expect(uploadInput).toBeEnabled();
-    await uploadInput.setInputFiles(SAMPLE_IMAGE);
-    await expect(
-      page.getByRole("slider", { name: "Before/after comparison position" }),
-    ).toBeVisible();
+  await panel.getByRole("tab", { name: "Magic" }).click();
+  await expect(page.getByTestId("guided-brush-selection")).toHaveAttribute(
+    "data-zoom",
+    "125",
+  );
+  await panel.getByRole("tab", { name: "Manual" }).click();
+  await expect.poll(() => centerAlpha(canvas)).toBe(0);
+  await expect(panel.getByRole("button", { name: "Undo" })).toBeEnabled();
 
-    await page.getByRole("button", { name: /edit mask/i }).click();
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect.poll(() => centerAlpha(canvas)).toBe(originalAlpha);
+  await expect(workspace).toHaveAttribute("data-document-revision", "0");
+  await expect(panel.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
 
-    await expect(page.getByRole("alert")).toContainText(/could not prepare mask/i);
-    await expect(page.getByRole("button", { name: /^download$/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /edit mask/i })).toBeVisible();
+  await panel.getByRole("button", { name: "Erase", exact: true }).click();
+  await paintCenter(page);
+  await expect.poll(() => centerAlpha(canvas)).toBe(0);
+  await panel.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(workspace).toHaveAttribute("data-document-revision", "1");
+  await expect(panel.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
 
-    await page.getByRole("button", { name: /try again/i }).click();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as unknown as {
-                __maskCorrectionWorkerPosts: { type: string }[];
-              }
-            ).__maskCorrectionWorkerPosts.filter(
-              (message) => message.type === "extract-alpha-matte",
-            ).length,
-        ),
-      )
-      .toBe(2);
-  });
+  await panel.getByRole("button", { name: "Restore", exact: true }).click();
+  await paintCenter(page);
+  await expect.poll(() => centerAlpha(canvas)).toBe(255);
+  await panel.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(workspace).toHaveAttribute("data-document-revision", "2");
 
-  test("enter correcting -> add/erase/restore each change the composite -> undo/redo -> done -> download reflects the correction", async ({
-    page,
-  }) => {
-    await installMockInference(page);
-    await page.goto("/en");
-    const upload = page.getByLabel("Upload an image");
-    await expect(upload).toBeEnabled();
-    await upload.setInputFiles(SAMPLE_IMAGE);
-    const beforeAfterSlider = page.getByRole("slider", {
-      name: "Before/after comparison position",
-    });
-    await expect(beforeAfterSlider).toBeVisible();
+  await panel.getByRole("button", { name: "Erase", exact: true }).click();
+  await paintCenter(page);
+  await page.getByRole("button", { name: "Enhancements", exact: true }).click();
+  await expect(page.getByTestId("editor-draft-guard")).toBeVisible();
+  await expect(workspace).toHaveAttribute("data-document-revision", "2");
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  await expect(page.getByTestId("tool-panel-slot")).toHaveAttribute(
+    "data-active-tool",
+    "enhance",
+  );
 
-    const preEditDownloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download$/i }).click();
-    const preEditDownload = await preEditDownloadPromise;
-    const preEditPath = await preEditDownload.path();
-    if (!preEditPath) throw new Error("pre-edit download did not save to disk");
-    const preEditBytes = await readFile(preEditPath);
-
-    await page.getByRole("button", { name: /edit mask/i }).click();
-    await expect(page.getByRole("button", { name: /^done$/i })).toBeVisible();
-    await expect(page.getByRole("status")).toContainText(/editing mask corrections/i);
-    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
-
-    const editor = page.getByRole("application", { name: /mask correction editor/i });
-    await editor.focus();
-    const browserScale = await page.evaluate(() => window.visualViewport?.scale ?? 1);
-    await page.keyboard.press("ControlOrMeta+=");
-    await page.keyboard.press("ControlOrMeta+=");
-    await expect(page.getByRole("status")).toContainText(/mask editor zoom 150%/i);
-    await expect
-      .poll(() => page.evaluate(() => window.visualViewport?.scale ?? 1))
-      .toBe(browserScale);
-
-    const canvasTransformBeforeWheel = await page
-      .getByRole("img", { name: /mask correction canvas/i })
-      .evaluate((canvas) => canvas.style.transform);
-    const wheelPrevented = await editor.evaluate((element) => {
-      const event = new WheelEvent("wheel", {
-        deltaY: 80,
-        bubbles: true,
-        cancelable: true,
-      });
-      element.dispatchEvent(event);
-      return event.defaultPrevented;
-    });
-    expect(wheelPrevented).toBe(true);
-    await expect
-      .poll(() =>
-        page
-          .getByRole("img", { name: /mask correction canvas/i })
-          .evaluate((canvas) => canvas.style.transform),
-      )
-      .not.toBe(canvasTransformBeforeWheel);
-
-    const handPoint = await visibleCenterSourcePoint(page);
-    const alphaBeforeHandPan = await alphaAt(page, handPoint.x, handPoint.y);
-    const canvasForHandPan = page.getByRole("img", {
-      name: /mask correction canvas/i,
-    });
-    const handBox = await canvasForHandPan.boundingBox();
-    if (!handBox) throw new Error("mask correction canvas has no bounding box");
-    await page.keyboard.down("Space");
-    await page.mouse.move(handBox.x + handBox.width / 2, handBox.y + handBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(
-      handBox.x + handBox.width / 2 - 20,
-      handBox.y + handBox.height / 2 - 10,
-    );
-    await page.mouse.up();
-    await page.keyboard.up("Space");
-    expect(await alphaAt(page, handPoint.x, handPoint.y)).toBe(alphaBeforeHandPan);
-    await canvasForHandPan.hover();
-    const brushCursor = editor.locator('[aria-hidden="true"]');
-    await expect(brushCursor).toHaveCSS("opacity", "1");
-
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("Shift+ArrowDown");
-
-    const mappedPoint = await visibleCenterSourcePoint(page);
-    const mappedOriginalAlpha = await alphaAt(page, mappedPoint.x, mappedPoint.y);
-    const mappingMode = mappedOriginalAlpha === 255 ? "Erase" : "Add";
-    const mappedExpectedAlpha = mappedOriginalAlpha === 255 ? 0 : 255;
-    await page.getByLabel("Brush size").focus();
-    await page.keyboard.press("Home");
-    await page.getByRole("button", { name: mappingMode }).click();
-    await dragOnCanvasCenter(page);
-    await expect
-      .poll(() => alphaAt(page, mappedPoint.x, mappedPoint.y))
-      .toBe(mappedExpectedAlpha);
-    await page.getByRole("button", { name: "Restore" }).click();
-    await dragOnCanvasCenter(page);
-    await expect
-      .poll(() => alphaAt(page, mappedPoint.x, mappedPoint.y))
-      .toBe(mappedOriginalAlpha);
-
-    await page.getByRole("button", { name: "Reset view" }).click();
-    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
-    await page.getByRole("button", { name: "Zoom in" }).click();
-    await expect(page.getByRole("status")).toContainText(/mask editor zoom 125%/i);
-    await page.getByRole("button", { name: "Zoom out" }).click();
-    await expect(page.getByRole("status")).toContainText(/mask editor zoom 100%/i);
-
-    // Max out the bounded brush radius and verify the UI's 150px diameter
-    // contract while also exercising the slider's keyboard operability.
-    const brushSize = page.getByLabel("Brush size");
-    await expect(brushSize).toHaveAttribute("max", "75");
-    await brushSize.focus();
-    await page.keyboard.press("End");
-    await expect(brushSize).toHaveValue("75");
-    await expect(brushSize).toHaveAttribute("aria-valuetext", "150 px diameter");
-
-    const originalAlpha = await stableCenterAlpha(page);
-
-    // erase -> center alpha goes fully transparent.
-    await page.getByRole("button", { name: "Erase" }).click();
-    await dragOnCanvasCenter(page);
-    await expect.poll(() => centerAlpha(page)).toBe(0);
-
-    // add -> center alpha goes fully opaque.
-    await page.getByRole("button", { name: "Add" }).click();
-    await dragOnCanvasCenter(page);
-    await expect.poll(() => centerAlpha(page)).toBe(255);
-
-    // Cmd/Ctrl+Z reverts the "add" stroke back to the erased (0) state.
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => centerAlpha(page)).toBe(0);
-
-    // Cmd/Ctrl+Shift+Z re-applies the "add" stroke.
-    await page.keyboard.press("ControlOrMeta+Shift+z");
-    await expect.poll(() => centerAlpha(page)).toBe(255);
-
-    // Ctrl+Y uses the same redo stack.
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => centerAlpha(page)).toBe(0);
-    await page.keyboard.press("Control+y");
-    await expect.poll(() => centerAlpha(page)).toBe(255);
-
-    // restore -> back to the model's original (pre-correction) alpha.
-    await page.getByRole("button", { name: "Restore" }).click();
-    await dragOnCanvasCenter(page);
-    await expect.poll(() => centerAlpha(page)).toBe(originalAlpha);
-
-    // Leave the matte in a state that's *guaranteed* to differ from
-    // originalAlpha before downloading — restoring to the pristine value
-    // above means the composite (correctly) matches the pre-edit download at
-    // that point, so the final download-diff check below needs one more,
-    // deliberately-different edit rather than asserting right after restore.
-    const finalMode = originalAlpha === 255 ? "Erase" : "Add";
-    const finalAlpha = originalAlpha === 255 ? 0 : 255;
-    await page.getByRole("button", { name: finalMode }).click();
-    await dragOnCanvasCenter(page);
-    await expect.poll(() => centerAlpha(page)).toBe(finalAlpha);
-
-    await page.getByRole("button", { name: /^done$/i }).click();
-    await expect(beforeAfterSlider).toBeVisible();
-    await expect(page.getByRole("status")).toContainText(/background removed/i);
-
-    const postEditDownloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download$/i }).click();
-    const postEditDownload = await postEditDownloadPromise;
-    expect(postEditDownload.suggestedFilename()).toBe("result.png");
-    const postEditPath = await postEditDownload.path();
-    if (!postEditPath) throw new Error("post-edit download did not save to disk");
-    const postEditBytes = await readFile(postEditPath);
-
-    expect(postEditBytes.equals(preEditBytes)).toBe(false);
-  });
+  await page.getByRole("button", { name: /^Undo:/ }).click();
+  await expect(workspace).toHaveAttribute("data-document-revision", "3");
+  await page.getByRole("button", { name: /^Redo:/ }).click();
+  await expect(workspace).toHaveAttribute("data-document-revision", "4");
 });

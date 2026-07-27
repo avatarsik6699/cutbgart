@@ -15,6 +15,7 @@ export interface EditorToolbarProps {
   redoLabel?: string | null;
   onUndo: () => void;
   onRedo: () => void;
+  documentActionSlot?: ReactNode;
   downloadSlot?: ReactNode;
 }
 
@@ -28,6 +29,7 @@ export function EditorToolbar({
   redoLabel,
   onUndo,
   onRedo,
+  documentActionSlot,
   downloadSlot,
 }: EditorToolbarProps) {
   const toolRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -110,6 +112,14 @@ export function EditorToolbar({
       >
         <Redo2 aria-hidden="true" />
       </Button>
+      {documentActionSlot && (
+        <>
+          <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
+          <div className="shrink-0" data-testid="editor-document-action-slot">
+            {documentActionSlot}
+          </div>
+        </>
+      )}
       {downloadSlot && (
         <>
           <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />

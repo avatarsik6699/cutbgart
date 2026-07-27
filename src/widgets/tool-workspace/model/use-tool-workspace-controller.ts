@@ -410,10 +410,14 @@ export function useToolWorkspaceController() {
     resetRemoval();
   }
 
-  function handleAcceptGuided() {
+  async function handleApplyGuided(): Promise<boolean> {
     const session = guided.state.session;
     const target = guidedTargetRef.current;
-    if (!session || !guided.state.matte || !target || !guided.canAccept) return;
+    if (!session || !target || !guided.canApply) return false;
+    const isBaseBackedEmptyReset =
+      session.baseMatte !== null &&
+      session.strokes.length === 0 &&
+      session.computedRevision !== session.revision;
     const seed =
       target.kind === "single" || target.kind === "batch"
         ? target.image
@@ -421,23 +425,45 @@ export function useToolWorkspaceController() {
             source: session.source,
             result: session.source.blob,
             qualityMode: "isnet-q8" as const,
-            alphaMatte: guided.state.matte,
+            alphaMatte: session.baseMatte ?? undefined,
             backgroundFill: { type: "transparent" as const },
           };
     const guidedRunId = guidedRunRef.current + 1;
     guidedRunRef.current = guidedRunId;
     retryCorrectionRef.current = () => {
-      if (guidedTargetRef.current === target) handleAcceptGuided();
+      if (guidedTargetRef.current === target) void handleApplyGuided();
     };
     setCorrectionError(null);
     setFinalizingCorrection(true);
     const constraints = createGuidedBrushConstraints(session);
-    const guidedMatte = guided.state.matte;
     const apply = target.kind === "batch" ? batch.recomposite : recomposite;
-    void apply(seed, guided.state.matte)
-      .then((result) => {
+    let guidedMatte: AlphaMatte;
+    try {
+      guidedMatte = await guided.apply();
+      if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
+        return false;
+    } catch (error: unknown) {
+      if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
+        return false;
+      setFinalizingCorrection(false);
+      setCorrectionError({
+        message: error instanceof Error ? error.message : String(error),
+        action: "retry",
+      });
+      return false;
+    }
+
+    if (isBaseBackedEmptyReset) {
+      setFinalizingCorrection(false);
+      retryCorrectionRef.current = null;
+      return true;
+    }
+
+    const commitGuidedMatte = async (): Promise<boolean> => {
+      try {
+        const result = await apply(seed, guidedMatte);
         if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
-          return;
+          return false;
         const committed =
           target.kind === "batch"
             ? commitBatchResult(
@@ -451,28 +477,51 @@ export function useToolWorkspaceController() {
             : target.kind === "single"
               ? commitSingleResult(result, "cutout", "Cutout", target.documentRevision)
               : commitSingleResult(result, "cutout", "Cutout");
-        if (!committed) return;
+        if (!committed) {
+          setFinalizingCorrection(false);
+          return false;
+        }
+        guided.confirmApply(guidedMatte);
         setFinalizingCorrection(false);
         refinementContextRef.current = {
           guidedMatte,
           constraints,
         };
-        setOriginalMatte(null);
-        guided.reset();
-        guidedTargetRef.current = null;
-        setGuidedVisualContext(null);
-        setGuidedEntry(false);
+        if (target.kind === "batch") {
+          guidedTargetRef.current = {
+            ...target,
+            image: result,
+            documentRevision: target.documentRevision + 1,
+          };
+        } else if (target.kind === "single") {
+          guidedTargetRef.current = {
+            ...target,
+            image: result,
+            documentRevision: target.documentRevision + 1,
+          };
+        }
         retryCorrectionRef.current = null;
-      })
-      .catch((error: unknown) => {
+        return true;
+      } catch (error: unknown) {
         if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
-          return;
+          return false;
         setFinalizingCorrection(false);
         setCorrectionError({
           message: error instanceof Error ? error.message : String(error),
           action: "retry",
         });
-      });
+        retryCorrectionRef.current = () => {
+          if (guidedRunRef.current !== guidedRunId || guidedTargetRef.current !== target)
+            return;
+          setCorrectionError(null);
+          setFinalizingCorrection(true);
+          void commitGuidedMatte();
+        };
+        return false;
+      }
+    };
+
+    return commitGuidedMatte();
   }
 
   function handleGuideAutomaticResult() {
@@ -909,7 +958,7 @@ export function useToolWorkspaceController() {
     batch.reset();
   }
 
-  function handleBatchDoneCorrecting(correctedMatte: AlphaMatte) {
+  async function handleBatchDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
     const target = refinementTargetRef.current;
     if (
       !selectedBatchItem?.processedImage ||
@@ -917,69 +966,88 @@ export function useToolWorkspaceController() {
       target.kind !== "batch" ||
       target.itemId !== selectedBatchItem.id
     )
-      return;
+      return false;
     const image = selectedBatchItem.processedImage;
+    const runId = correctionRunRef.current + 1;
+    correctionRunRef.current = runId;
     setFinalizingCorrection(true);
-    void batch
-      .recomposite(image, correctedMatte)
-      .then((updated) => {
-        if (refinementTargetRef.current !== target) return;
+    try {
+      const updated = await batch.recomposite(image, correctedMatte);
+      if (correctionRunRef.current !== runId || refinementTargetRef.current !== target)
+        return false;
+      const committed = commitBatchResult(
+        target.itemId,
+        updated,
+        "manual",
+        "Manual",
+        target.documentRevision,
+        target.workerOwnerId,
+      );
+      if (!committed) {
         setFinalizingCorrection(false);
-        setOriginalMatte(null);
-        commitBatchResult(
-          target.itemId,
-          updated,
-          "manual",
-          "Manual",
-          target.documentRevision,
-          target.workerOwnerId,
-        );
-      })
-      .catch((error: unknown) => {
-        setFinalizingCorrection(false);
-        setCorrectionError({
-          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
+        return false;
+      }
+      refinementTargetRef.current = {
+        ...target,
+        image: updated,
+        documentRevision: target.documentRevision + 1,
+      };
+      setFinalizingCorrection(false);
+      return true;
+    } catch (error: unknown) {
+      if (correctionRunRef.current !== runId) return false;
+      setFinalizingCorrection(false);
+      setCorrectionError({
+        message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
+        action: "retry",
       });
+      return false;
+    }
   }
 
-  function handleDoneCorrecting(correctedMatte: AlphaMatte) {
-    if (state.status !== "correcting") return;
+  async function handleDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
+    if (state.status !== "correcting") return false;
     const target = refinementTargetRef.current;
-    if (!target || target.kind !== "single") return;
+    if (!target || target.kind !== "single") return false;
     const image = state.result;
     const runId = correctionRunRef.current + 1;
     correctionRunRef.current = runId;
     retryCorrectionRef.current = () => {
-      if (state.status === "correcting") handleDoneCorrecting(correctedMatte);
+      if (state.status === "correcting") void handleDoneCorrecting(correctedMatte);
     };
     setCorrectionError(null);
     setFinalizingCorrection(true);
-    void recomposite(image, correctedMatte)
-      .then((updated) => {
-        if (correctionRunRef.current !== runId || refinementTargetRef.current !== target)
-          return;
-        if (!commitSingleResult(updated, "manual", "Manual", target.documentRevision))
-          return;
+    try {
+      const updated = await recomposite(image, correctedMatte);
+      if (correctionRunRef.current !== runId || refinementTargetRef.current !== target)
+        return false;
+      if (!commitSingleResult(updated, "manual", "Manual", target.documentRevision)) {
         setFinalizingCorrection(false);
-        setOriginalMatte(null);
-        retryCorrectionRef.current = null;
-        exitCorrecting(updated);
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setFinalizingCorrection(false);
-        setCorrectionError({
-          message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
+        return false;
+      }
+      refinementTargetRef.current = {
+        ...target,
+        image: updated,
+        documentRevision: target.documentRevision + 1,
+      };
+      setFinalizingCorrection(false);
+      retryCorrectionRef.current = null;
+      return true;
+    } catch (error: unknown) {
+      if (correctionRunRef.current !== runId) return false;
+      setFinalizingCorrection(false);
+      setCorrectionError({
+        message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
+        action: "retry",
       });
+      return false;
+    }
   }
 
   function handleCancelCorrection() {
     correctionRunRef.current += 1;
     setOriginalMatte(null);
+    setExtractingMatte(false);
     setFinalizingCorrection(false);
     setCorrectionError(null);
     retryCorrectionRef.current = null;
@@ -1093,7 +1161,7 @@ export function useToolWorkspaceController() {
     handleUpload,
     handleUploads,
     handleReset,
-    handleAcceptGuided,
+    handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
     startSingleRefinement,

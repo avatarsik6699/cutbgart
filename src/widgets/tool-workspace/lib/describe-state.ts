@@ -17,15 +17,15 @@ export function describeGuidedState(
   status: GuidedBrushStatus,
   progress: number | null,
 ): string {
-  if (status === "loading-model")
-    return m.guidedLoadingModel({ progress: String(Math.round(progress ?? 0)) });
-  if (status === "encoding-image") return m.guidedEncodingImage();
-  if (status === "predicting") return m.guidedBrushRecomputing();
-  if (status === "preview") return m.guidedBrushPreviewReady();
-  if (status === "dirty") return m.guidedBrushDirty();
-  if (status === "error") return m.guidedBrushError();
+  void progress;
+  if (status === "loading-model" || status === "encoding-image")
+    return m.cutoutPreparing();
+  if (status === "predicting") return m.cutoutApplying();
+  if (status === "preview") return m.cutoutMagicReady();
+  if (status === "dirty") return m.cutoutMagicDraftReady();
+  if (status === "error") return m.cutoutMagicError();
   if (status === "idle") return m.stateIdle();
-  return m.guidedBrushReady();
+  return m.cutoutMagicReady();
 }
 
 export function describeRefinementState(

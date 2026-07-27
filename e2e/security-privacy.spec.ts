@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import { expectAutomaticCutout } from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
@@ -65,7 +66,7 @@ test.describe("Phase 22 security and privacy", () => {
       mimeType: "image/jpeg",
       buffer: sample,
     });
-    await expect(page.getByRole("slider")).toBeVisible();
+    await expectAutomaticCutout(page);
 
     const singleDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: /^download$/i }).click();
@@ -105,7 +106,7 @@ test.describe("Phase 22 security and privacy", () => {
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(samplePath);
-    await expect(page.getByRole("slider")).toBeVisible();
+    await expectAutomaticCutout(page);
     await page.evaluate(async () => {
       const cache = await caches.open("bg-remove-model-cache-v2-v0.22.0");
       await cache.put(
@@ -129,7 +130,7 @@ test.describe("Phase 22 security and privacy", () => {
     );
     await page.getByRole("button", { name: /clear downloaded models/i }).click();
     await expect(page.getByText(/active editor work was kept/i)).toBeVisible();
-    await expect(page.getByRole("slider")).toBeVisible();
+    await expect(page.getByTestId("cutout-tool-panel")).toBeVisible();
     await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
   });
 
