@@ -6,7 +6,7 @@
 Every future field must appear here before implementation. An unspecified category such as
 “usage metadata,” “diagnostics,” or “AI improvement data” is rejected.
 
-## Phase-34 local privacy choice
+## Phase-35 local privacy choice
 
 One browser-local record is approved for implementation because it prevents non-essential code
 from running without a choice:
@@ -29,12 +29,12 @@ continue without interacting; in that case no record is required and analytics r
 evidence and must not be joined to analytics. It is set only after an explicit choice and can be
 deleted from the storage manager/privacy controls.
 
-## Phase-31 local help-state allowance
+## Phase-32 local help-state allowance
 
-Phase 31 may implement the contract already enumerated in `docs/PHASE_31.md`: a bounded local-only
+Phase 32 may implement the contract already enumerated in `docs/PHASE_32.md`: a bounded local-only
 `helpState` containing schema/content versions plus allow-listed viewed/dismissed task IDs. It may
 contain no timestamps, visitor ID, image or interaction details, cross-device sync, server
-recipient, or analytics linkage. Phase 34 must re-audit the final key and published storage notice.
+recipient, or analytics linkage. Phase 35 must re-audit the final key and published storage notice.
 
 ## Explicitly prohibited
 
@@ -57,7 +57,7 @@ improvement, or consent evidence:
 ## Existing analytics is not “future metadata”
 
 Umami's current page/session fields and the Cloudflare RUM fields are inventoried in
-`DATA_INVENTORY.md`. Phase 34 may retain them only after the approved analytics choice and may not
+`DATA_INVENTORY.md`. Phase 35 may retain them only after the approved analytics choice and may not
 add `umami.identify`, custom IDs, session replay, heatmaps, or new event dimensions without a new
 review and version bump to this register.
 

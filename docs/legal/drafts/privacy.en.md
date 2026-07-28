@@ -2,7 +2,7 @@
 
 **Content version:** `2026-07-25-draft.2`
 **Status:** internal draft; do not publish
-**Publication condition:** Phase 34 refreshes and re-approves `IMPLEMENTATION_MATRIX.md` against
+**Publication condition:** Phase 35 refreshes and re-approves `IMPLEMENTATION_MATRIX.md` against
 the finished product, then uses the owner-approved minimum public profile without invented facts
 or a claim of full legal compliance.
 

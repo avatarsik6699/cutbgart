@@ -3,11 +3,11 @@
 **Version:** `0.24.0-draft.2`
 **Observed:** `2026-07-25`
 **Scope:** Phase-24 baseline of deployed `v0.23.0` behavior; it must be refreshed against the
-finished Phase-33 product before any Phase-34 implementation
+finished Phase-34 product before any Phase-35 implementation
 
 This inventory remains useful as an audit baseline, but it is intentionally not a statement of the
-final application's complete storage/request behavior. Phase 34 must add every material change
-introduced in Phases 25–33 and current production/provider evidence before approving public text.
+final application's complete storage/request behavior. Phase 35 must add every material change
+introduced in Phases 25–34 and current production/provider evidence before approving public text.
 
 ## Method and live evidence
 
@@ -138,7 +138,7 @@ sends and requires mailbox security/retention controls.
 | Backup capability for Umami/Uptime/release/TLS state | `scripts/operations/backup.sh` writes to local `.ops/backups` by default; a production schedule, existing artifacts and off-host destination are not proven | Script deletes daily artifacts after 14 days; the owner reports no known configured remote backup. Treat actual storage as unknown until host verification |
 | TLS subscriber/domain data and certificate transparency records | Let's Encrypt/ISRG | provider policy; certificate/domain facts are public |
 
-## Current factual defects requiring Phase 34
+## Current factual defects requiring Phase 35
 
 1. The published privacy page says analytics receives no personal data. That absolute statement is
    unsupported because IP/request data is processed and Umami stores session-level behavior.

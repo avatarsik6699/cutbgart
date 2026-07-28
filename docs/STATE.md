@@ -48,11 +48,12 @@
 | PHASE_27 | ✅ done | v0.27.0 | ✅ | 🤖 agent | Unified Cutout Tool |
 | PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
-| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
-| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
-| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Whole-Project Audit & Refactor |
-| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
-| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
+| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Design System & Redesign (Pencil) |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Redesign & Legacy Consolidation Implementation |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Accessibility, Device & Product Validation |
+| PHASE_35 | ⏳ pending | v0.35.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -950,6 +951,47 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-28 — Design-driven redesign inserted as Phase 30–31; downstream phases renumbered
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect decision to use the newly available Pencil design tool (pen.dev MCP,
+`docs/design/index.pen`) to redesign the product's visual language and UX before further
+hardening/help/audit/legal work, requested as "the next phase" after Phase 29
+
+### Changes / Decision
+- `SPEC.md` v1.20 inserts two new phases immediately after Phase 29: PHASE_30 "Design System &
+  Redesign (Pencil)" (design-only, produces `docs/design/DESIGN_SYSTEM.md` and exports, zero
+  `src/` change, may propose bounded UX/IA deltas against §5.3) and PHASE_31 "Redesign & Legacy
+  Consolidation Implementation" (implements the approved design system/IA delta and absorbs the
+  former PHASE_30 "Batch Workflow Consolidation & UX Hardening" scope in the same pass, since both
+  touch the same components).
+- The former PHASE_31–34 (Guided Help & Onboarding; Whole-Project Audit & Refactor; Accessibility,
+  Device & Product Validation; Final Legal, Consent & Release Readiness) shift intact to
+  PHASE_32–35 with repaired metadata, tags, dependencies, and cross-references. No scope content
+  changed for these four phases beyond the renumbering and light annotations noting they now run
+  against the redesigned UI.
+- §1.3, §5 (design-reference blockquote, §5.3 target-workflow note, FSD slice table), §6 (new
+  "Design tooling" infra row for Pencil/pen.dev), §7.1 (redesign performance-budget paragraph),
+  §7.4/§7.7 (renumbered validation/testing references, new "E2E (redesigned workspace)" row), §8
+  (rewritten phase table rows 30–35), §9, and §10 (two new open questions: Pencil's editor-open
+  precondition, and IA-delta approval gating) were updated in `SPEC.md`.
+- Pencil is documented as human-in-the-loop design tooling only: MCP tools operate on the currently
+  open `.pen` editor tab, not an arbitrary path, so the architect must have `docs/design/index.pen`
+  open in VS Code for any Pencil MCP call in Phase 30 to succeed. It is not wired into the repo's
+  `.mcp.json` and is not a runtime/build dependency.
+
+### Affected Phases / Consequences
+- PHASE_30, PHASE_31 — new pending phase docs created (`docs/PHASE_30.md`, `docs/PHASE_31.md`);
+  PHASE_31 folds in every Scope task from the removed `docs/PHASE_30.md` (batch consolidation).
+- PHASE_32 (was 31), PHASE_33 (was 32), PHASE_34 (was 33), PHASE_35 (was 34) — file-renamed and
+  internally renumbered; no scope content changed.
+- PHASE_01–29 remain completed historical contracts, unaffected.
+- `docs/STATE.md` § Current Contract remains at Phase 29 until PHASE_30 is implemented, gated, and
+  closed.
+- Earlier Project Log entries remain immutable historical records; any "PHASE_30"/"PHASE_31"/etc.
+  phase numbers they mention refer to the numbering that was current on their own date, not today's.
 
 ## 2026-07-28 — Phase 29 complete
 

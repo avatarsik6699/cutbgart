@@ -1,13 +1,13 @@
-# Phase-34 implementation matrix
+# Phase-35 implementation matrix
 
 **Version:** `0.24.0-draft.2`
 **Content version:** `2026-07-25`
-**Status:** Phase-24 baseline approved with recorded residual risks; Phase 34 must refresh and
+**Status:** Phase-24 baseline approved with recorded residual risks; Phase 35 must refresh and
 re-approve it against the finished product; optional analytics remains fail-closed until applicable
 technical/provider checks pass
 
-This is the conservative baseline input contract for Phase 34, not final-product authority. Phase
-34 must first reconcile it with the Phase-33 application, current production requests/storage,
+This is the conservative baseline input contract for Phase 35, not final-product authority. Phase
+35 must first reconcile it with the Phase-34 application, current production requests/storage,
 provider settings, operator facts and current law, then record a new dated approval before runtime
 implementation. It did not authorize implementation during Phase 24.
 
@@ -121,7 +121,7 @@ Before the drafts may be converted to production content:
 
 No placeholder identity may ship.
 
-## Operational controls required with Phase 34
+## Operational controls required with Phase 35
 
 - implement and test rolling deletion for Umami data older than 90 days;
 - verify/configure Uptime history at 90 days;
@@ -153,7 +153,7 @@ Playwright must verify in RU and EN:
 
 ## Baseline release decision
 
-Phase 34 must fail closed: missing/invalid choice state means analytics off. If retention
+Phase 35 must fail closed: missing/invalid choice state means analytics off. If retention
 enforcement or processor/transfer evidence is unavailable, ship the core editor and minimum
 owner-approved transparency with browser analytics disabled rather than publishing invented facts
 or running unapproved collection. The finished product is not released from the legal gate merely

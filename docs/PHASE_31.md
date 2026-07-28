@@ -1,4 +1,4 @@
-# PHASE 31 — Guided Help & Onboarding
+# PHASE 31 — Redesign & Legacy Consolidation Implementation
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | Phase | `31` |
-| Title | Guided Help & Onboarding |
+| Title | Redesign & Legacy Consolidation Implementation |
 | Status | `⏳ pending` |
 | Tag | `v0.31.0` |
 | Depends on | PHASE_30 gate passing |
@@ -16,74 +16,91 @@
 
 ## Phase Goal
 
-Research how short animated demonstrations and contextual onboarding can clarify the redesigned
-workflow, then ship a small, replayable, accessible help system. Guidance must explain the real
-current controls for both single and selected-batch workflows without blocking the automatic first
-result, bloating the initial bundle, or becoming the only source of required information
-(SPEC.md §5.2–§5.4, §7.1, §7.7–§8).
+Implement the Phase-30 approved design system (and any approved IA delta) across the app, in the
+same pass that removes superseded pre-redesign UI and hardens the single/selected-batch contract
+already delivered incrementally in Phases 25–29 — one pass over `ToolWorkspace`/`EditorToolbar`/tool
+panels instead of two. This is a consolidation and visual-implementation gate, not authorization for
+Studio features (SPEC.md §2.2, §5.2–§5.4, §7.1, §9). Any Phase-25–29 batch capability missing here is
+a regression to fix, not accepted scope deferral.
+
+---
 
 ## Design References
 
-- [remove.bg Magic Brush help](https://www.remove.bg/uk/help/a/how-to-use-magic-brush) — reference
-  for compact visual instruction tied to a tool, not a pixel-identical implementation.
-- [WCAG 2.2: Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)
-  and [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) —
-  reduced-motion and user-control acceptance criteria.
+- `docs/design/DESIGN_SYSTEM.md` and `docs/design/exports/` — the Phase-30 approved design record
+  (tokens, component visual language, screens, and the IA-delta decision) this phase implements.
 
 ---
 
 ## Scope
 
-### Other
-
-- [ ] `T1` Inventory every point where users may need help: one/many upload and modes, first result,
-  Cutout Magic/Manual, brush size/zoom, Enhancements, Background, undo/redo, individual download,
-  ZIP, dirty-draft switching, and recoverable errors. Rank by observed confusion and define one
-  measurable learning goal per retained item; do not create a tour for self-explanatory controls —
-  _Depends on:_ —
-- [ ] `T2` Research and record the delivery decision in `docs/research/GUIDED_HELP.md`: authored
-  video/animated WebP/AVIF, CSS/canvas, and a code animation runtime are compared for file size,
-  transparency, crispness, localization, reduced motion, pause/replay, CSP, cacheability,
-  maintainability, and creation workflow. Include a representative prototype and measured build/
-  network/decode cost before selecting a format or dependency — _Depends on:_ `T1`
-- [ ] `T3` Define a repeatable content pipeline: capture/source ownership, safe fixture images,
-  crop/dimensions, duration/looping, compression, poster/static alternative, RU/EN text/transcript,
-  naming/versioning, review checklist, and how a designer or agent updates an instruction without
-  editing orchestration code — _Depends on:_ `T2`
-
 ### Frontend
 
-- [ ] `F1` Add `features/guided-help` with a typed, versioned registry keyed by user task and
-  context (`single` or `batch-selected`). Definitions reference lazy instruction assets, localized
-  title/body/accessible description, eligibility, placement, and completion/dismiss rules; no
-  editor business logic is duplicated in help definitions — _Depends on:_ `T2`, `T3`
-- [ ] `F2` Add unobtrusive contextual help cards/popovers for only the retained high-risk
-  interactions and a persistent toolbar/site Help entry that reopens the complete task list.
-  First-use guidance never interrupts upload, processing, or download and never uses a forced
-  modal carousel — _Depends on:_ `F1`
-- [ ] `F3` Produce the approved small instruction set for upload/modes, Magic vs Manual and brush
-  size, Enhancements, Background/download, and batch item switching/ZIP. Each demonstration must
-  match the implemented UI and have localized text plus a static poster/step alternative —
-  _Depends on:_ `F1`, `F2`
-- [ ] `F4` Persist only versioned viewed/dismissed task IDs in `helpState`; allow dismiss, replay,
-  and reset. A content-version bump reopens only materially changed guidance. Never store image,
-  filename, action coordinates, or a behavioral profile — _Depends on:_ `F1`
-- [ ] `F5` Honor `prefers-reduced-motion`, never flash, expose pause/replay for continuing motion,
-  make every trigger/control keyboard and screen-reader operable, preserve focus, and ensure the
-  static/text path completes the same learning goal — _Depends on:_ `F2`, `F3`
-- [ ] `F6` Lazy-load help code/assets only after editor intent or explicit Help activation. Record
-  and enforce the asset/initial-bundle budgets selected by `T2`; failed asset loading falls back to
-  static/text guidance without affecting editing — _Depends on:_ `F1`–`F5`
-- [ ] `F7` Add unit/component tests for eligibility, version migration, dismiss/replay/reset,
-  single/batch context, missing-asset fallback, localization, focus, and reduced motion. Add
-  bilingual cross-browser Playwright coverage proving guidance never blocks the core flow and
-  accurately targets the visible controls — _Depends on:_ `F1`–`F6`
+- [ ] `F1` Implement `docs/design/DESIGN_SYSTEM.md`'s tokens into `src/app/styles/globals.css`
+  `@theme`/`:root` custom properties (light/dark), reusing the existing shadcn token names where
+  they still apply. No new dependency (icon set, animation library) unless Phase-30 evidence
+  justified one — _Depends on:_ —
+- [ ] `F2` Restyle every `src/shared/ui` component (`button`, `card`, `switch`) and
+  `site-header`/`site-footer`/`site-shell` per the approved component visual language — _Depends
+  on:_ `F1`
+- [ ] `F3` Restyle the upload surface, `widgets/tool-workspace` (stage, toolbar, tool panel slot,
+  Cutout/Enhancements/Background panels, processing log) and the batch grid per the approved screens.
+  Preserve every existing state-machine/document/history contract from Phases 25–29 unless `F4`
+  implements an approved delta — _Depends on:_ `F2`
+- [ ] `F4` If Phase 30 recorded an approved bounded IA delta (`docs/design/DESIGN_SYSTEM.md`,
+  synced into SPEC.md §5.3), implement exactly that delta and no more. If Phase 30 approved no IA
+  delta, this task is N/A and the Phases 25–29 information architecture is preserved as-is —
+  _Depends on:_ `F3`
+- [ ] `F5` Audit and normalize the Phase-25 per-item ownership contract: each successful `BatchItem`
+  has one independent `EditDocument`, artifact-store scope, committed history, active tool, and
+  draft; queued/model-loading/error items retain lightweight status only. Remove any remaining
+  duplicate or late-adoption adapter — _Depends on:_ `F3`
+- [ ] `F6` Verify the redesigned shared stage/toolbar/panel for the selected completed item has full
+  Cutout Magic/Manual, Enhancements, Background, undo/redo, and sized individual PNG behavior —
+  _Depends on:_ `F5`
+- [ ] `F7` Preserve per-item tool/draft/history/zoom state on safe selection changes. If the current
+  item has a dirty draft, require Apply/Discard/Stay; never silently apply, discard, or transfer it
+  to another item — _Depends on:_ `F5`, `F6`
+- [ ] `F8` Keep batch processing concurrency/error isolation and heavy-stage serialization from
+  Phases 10/16/19. Stale async results from an unselected/removed item cannot update another
+  document or global toolbar — _Depends on:_ `F5`–`F7`
+- [ ] `F9` Keep Download all as client-side ZIP of each item's committed PNG. Preserve existing
+  original-size behavior for bulk export in this phase; individual size settings do not silently
+  change other items or the ZIP — _Depends on:_ `F6`
+- [ ] `F10` On item removal/clear/reset, release its current/baseline/history artifacts, uploaded
+  background blobs, object URLs, drafts, and workers without disturbing other items — _Depends on:_
+  `F5`–`F9`
+- [ ] `F11` Remove superseded public UI/copy: pre-redesign visual remnants; initial Guided path;
+  separate Edit mask/Refine selection buttons; candidate/Current result/Continue controls; technical
+  matting/cleanup cards; duplicate rail Download/Background controls; prompt/model/runtime/quota
+  explanations. Retain internal model-lab diagnostics and legacy source still required by active
+  protocols — _Depends on:_ `F3`, `F6`
+- [ ] `F12` Audit `ToolWorkspace` after migration: no duplicated single/batch state machine, no
+  same-layer feature imports, no unbounded artifact/stroke retention, no full changing image buffers
+  in React state/props, no broad god-component regression. Delete only proven-dead adapters after
+  callsite/test verification — _Depends on:_ `F5`–`F11`
+- [ ] `F13` Complete bilingual/responsive/accessibility polish under the new design system: stable
+  stage/panel geometry, toolbar overflow/navigation, touch targets, focus restoration, dirty-draft
+  dialogs, screen-reader statuses, reduced motion, WCAG AA contrast on every restyled surface,
+  mobile camera/upload, and icon tooltips — _Depends on:_ `F2`–`F12`
+- [ ] `F14` Add focused tests for per-item isolation, selection guards, stale work, cleanup, ZIP
+  committed output, retained internal diagnostics, removed public copy/callsites, architecture
+  boundaries, and memory/history budgets under many-item churn — _Depends on:_ `F5`–`F13`
+- [ ] `F15` Rewrite/extend deterministic Playwright flows across configured browsers/locales for
+  single and batch journeys under the redesigned UI: upload/automatic result, every tool, draft
+  guards, per-item history, individual export, ZIP, reset/new upload, errors/fallbacks,
+  keyboard/touch behavior, stage layout stability, and absence of superseded UI/legacy visuals —
+  _Depends on:_ `F14`
 
 ### Infra
 
-- [ ] `I1` Add a runtime/package only if `T2` demonstrates a net advantage over native assets/CSS.
-  Pin and document any dependency/license in `docs/STACK.md`; keep instruction assets self-hosted,
-  immutable, and absent from the initial critical path — _Depends on:_ `T2`, `F7`
+- [ ] `I1` Run the complete existing real-model evidence chain applicable to automatic removal,
+  Magic, Enhancements, foreground cleanup, and downloads on the available host. Add no new
+  model/package, route, API, env var, analytics payload, persistence, Docker/CI Playwright, or
+  Studio bundle — _Depends on:_ `F15`
+- [ ] `I2` Re-measure TTI/LCP/INP (SPEC.md §1.2) after the redesign on the available host; a
+  regression against the pre-redesign baseline is release-blocking for this phase, not deferred to
+  Phase 33 — _Depends on:_ `F13`
 
 ---
 
@@ -92,32 +109,53 @@ result, bloating the initial bundle, or becoming the only source of required inf
 ### Create / modify
 
 ~~~
-docs/research/GUIDED_HELP.md
-src/features/guided-help/model/types.ts
-src/features/guided-help/model/help-registry.ts
-src/features/guided-help/model/use-guided-help.ts
-src/features/guided-help/model/*.test.ts
-src/features/guided-help/ui/ContextualHelp.tsx
-src/features/guided-help/ui/HelpCenter.tsx
-src/features/guided-help/ui/*.test.tsx
-src/features/guided-help/index.ts
-src/widgets/tool-workspace/ui/EditorToolbar.tsx
+src/app/styles/globals.css
+src/shared/ui/button.tsx
+src/shared/ui/card.tsx
+src/shared/ui/switch.tsx
+src/shared/ui/site-header.tsx
+src/shared/ui/site-footer.tsx
+src/shared/ui/site-shell.tsx
+src/features/batch-processing/model/types.ts
+src/features/batch-processing/model/use-batch-processing.ts
+src/features/batch-processing/model/*.test.ts
+src/features/batch-processing/ui/BatchGrid.tsx
+src/features/batch-processing/ui/BatchGrid.test.tsx
+src/entities/edit-document/
+src/features/editor-history/
+src/features/download-result/lib/create-results-zip.ts
+src/features/download-result/lib/create-results-zip.test.ts
+src/widgets/tool-workspace/model/use-tool-workspace-controller.ts
+src/widgets/tool-workspace/model/use-tool-workspace-controller.test.ts
 src/widgets/tool-workspace/ui/ToolWorkspace.tsx
-src/shared/ui/site-header/
-public/help/
+src/widgets/tool-workspace/ui/ToolWorkspace.test.tsx
+src/widgets/tool-workspace/ui/EditorStage.tsx
+src/widgets/tool-workspace/ui/EditorToolbar.tsx
+src/widgets/tool-workspace/ui/ToolPanelSlot.tsx
+src/widgets/tool-workspace/ui/CutoutToolPanel.tsx
+src/widgets/tool-workspace/ui/EnhancementsToolPanel.tsx
+src/widgets/tool-workspace/ui/BackgroundToolPanel.tsx
+src/widgets/tool-workspace/ui/ProcessingLog.tsx
+src/features/upload-image/
 messages/ru.json
 messages/en.json
-e2e/guided-help.spec.ts
-docs/STACK.md
+e2e/home.spec.ts
+e2e/brush-guided-correction.spec.ts
+e2e/mask-correction.spec.ts
+e2e/hybrid-pipeline.spec.ts
+e2e/foreground-refinement.spec.ts
+e2e/scenario-pages.spec.ts
+e2e/support/mock-inference.ts
 docs/PHASE_31.md
 ~~~
 
 ### Do NOT touch
 
-- Editor processing, model, matte, compositing, history, or export semantics
-- Add product analytics for tutorial views/completion or store interaction-level behavior
-- Add a third-party hosted media/tracking embed, forced tour, autoplay audio, or image upload
-- Studio layers/transforms/effects, accounts, backend persistence, or future metadata collection
+- Add batch-wide editing/templates, bulk size conversion, cloud history, accounts, storage, API
+- Delete model-lab/internal runtime evidence or legacy protocol code still imported/tested
+- Change model pins/quality algorithms without new evidence and an explicit spec change
+- Add layers, transforms, shadows, perspective, text, templates, or any Studio route/bundle
+- Any IA change beyond what `docs/design/DESIGN_SYSTEM.md` explicitly approved in `F4`
 
 ---
 
@@ -125,17 +163,7 @@ docs/PHASE_31.md
 
 ### New persistent data (tables / collections / files)
 
-```text
-localStorage.helpState = {
-  schemaVersion: 1,
-  contentVersion: string,
-  viewedTaskIds: string[],
-  dismissedTaskIds: string[]
-}
-```
-
-Only bounded allow-listed task IDs are accepted. Invalid/old state is discarded safely. No server
-storage, identifier, timestamp trail, source image, filename, or action telemetry is added.
+None. Every batch document/history remains browser-tab memory only and is released with its item.
 
 ### New API endpoints / RPC methods / events
 
@@ -144,18 +172,16 @@ None.
 ### New types / models / shared interfaces
 
 ```ts
-type HelpContext = "single" | "batch-selected";
-
-interface GuidedHelpDefinition {
-  id: string;
-  contentVersion: string;
-  contexts: readonly HelpContext[];
-  asset: { animated: string; poster: string };
-  title: string;
-  body: string;
-  accessibleDescription: string;
+interface EditableBatchItem extends BatchItem {
+  document: EditDocument | null;
+  history: EditHistory;
+  activeTool: EditorToolId | null;
+  hasDirtyDraft: boolean;
 }
 ```
+
+An item owns its document/history; no artifact ID or draft is valid across item scopes. ZIP reads
+committed current composites only and keeps Phase-10 per-item error isolation.
 
 ### New env vars
 
@@ -165,19 +191,24 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 31`; standard commands plus:
+Run `/phase-gate 31` with the complete `docs/STACK.md` gate. Also:
 
 ```bash
-pnpm vitest run src/features/guided-help src/widgets/tool-workspace
-pnpm e2e e2e/guided-help.spec.ts e2e/home.spec.ts
-pnpm build
-pnpm tsc --noEmit
+pnpm vitest run
 pnpm exec steiger ./src
+pnpm e2e
+pnpm e2e:real-model
+pnpm e2e:phase-21-real
+pnpm e2e:phase-19-real
+pnpm e2e:phase-20-real
+pnpm tsc --noEmit
 ```
 
-Fail if onboarding blocks the first result, assets enter the initial critical path, motion cannot
-be reduced/paused where required, static/text alternatives are missing, content shows stale
-controls, help state captures behavior/image data, or single and selected-batch guidance diverge.
+Fail if single/batch editors diverge, item state/history leaks, dirty work is silently lost, stale
+work crosses items, ZIP captures drafts, cleanup leaks resources, removed/superseded UI remains,
+internal diagnostics are accidentally deleted, Studio scope enters the focused bundle, an
+unapproved IA change ships, WCAG AA contrast/motion regresses, or TTI/LCP/INP regresses against the
+pre-redesign baseline.
 
 ---
 
@@ -192,11 +223,11 @@ None
 ## Atomic Commit Message
 
 ```text
-feat(phase-31): add contextual help and onboarding
+refactor(phase-31): implement redesign and consolidate legacy batch UX
 ```
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
+- [ ] Scope complete; full gates green; review notes resolved
 - [ ] Run `/context-update 31`
 - [ ] Commit on `feat/phase-31`; tag `v0.31.0` after merge
