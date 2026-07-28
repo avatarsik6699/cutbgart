@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
+import { expectAutomaticCutout } from "./support/editor-ui";
+
 const SAMPLE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "fixtures",
@@ -11,7 +13,7 @@ const SAMPLE = path.join(
 
 test.skip(!process.env.E2E_PHASE19_REAL, "opt-in real Phase 19 runtime evidence");
 
-test("real Phase 19 refinement: q8/fp32 warm reuse, hard constraints, and disposal", async ({
+test("real Phase 19 refinement: current enhancement path, hard constraints, and disposal", async ({
   page,
 }) => {
   test.setTimeout(10 * 60_000);
@@ -140,55 +142,54 @@ test("real Phase 19 refinement: q8/fp32 warm reuse, hard constraints, and dispos
   await page.goto("/en");
   await expect(page.getByLabel("Upload an image")).toBeEnabled();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible({
+  await expectAutomaticCutout(page, {
     timeout: 180_000,
   });
-  const controls = page.getByTestId("matte-refinement-controls");
+  await page.getByRole("button", { name: "Enhancements" }).click();
+  const controls = page.getByTestId("enhancements-tool-panel");
+  await controls.getByRole("checkbox", { name: /Remove colour halo/i }).uncheck();
   const observations: Array<{ mode: string; elapsedMs: number }> = [];
-  for (const mode of ["Balanced", "Balanced", "Maximum", "Maximum"] as const) {
-    await controls.getByRole("radio", { name: new RegExp(mode, "i") }).click();
-    const startedAt = Date.now();
-    const previousResultCount = await page.evaluate(
-      () =>
-        (window as unknown as { __phase19Trace: { results: unknown[] } }).__phase19Trace
-          .results.length,
-    );
-    await controls.getByRole("button", { name: /Refine edges|Refine again/ }).click();
-    try {
-      await expect
-        .poll(
-          () =>
-            page.evaluate(
-              () =>
-                (window as unknown as { __phase19Trace: { results: unknown[] } })
-                  .__phase19Trace.results.length,
-            ),
-          { timeout: 180_000 },
-        )
-        .toBe(previousResultCount + 1);
-    } catch (error) {
-      console.log(
-        "[phase-19-timeout-trace]",
-        JSON.stringify(await page.evaluate(() => (window as never)["__phase19Trace"])),
-      );
-      throw error;
-    }
-    const latestResult = await page.evaluate(() =>
-      (
-        window as unknown as {
-          __phase19Trace: { results: Array<Record<string, unknown>> };
-        }
-      ).__phase19Trace.results.at(-1),
-    );
+  const startedAt = Date.now();
+  const previousResultCount = await page.evaluate(
+    () =>
+      (window as unknown as { __phase19Trace: { results: unknown[] } }).__phase19Trace
+        .results.length,
+  );
+  await controls.getByRole("button", { name: /^Apply$/ }).click();
+  try {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as unknown as { __phase19Trace: { results: unknown[] } })
+                .__phase19Trace.results.length,
+          ),
+        { timeout: 180_000 },
+      )
+      .toBe(previousResultCount + 1);
+  } catch (error) {
     console.log(
-      "[phase-19-observation]",
-      JSON.stringify({ mode: mode.toLowerCase(), latestResult }),
+      "[phase-19-timeout-trace]",
+      JSON.stringify(await page.evaluate(() => (window as never)["__phase19Trace"])),
     );
-    await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible({
-      timeout: 180_000,
-    });
-    observations.push({ mode: mode.toLowerCase(), elapsedMs: Date.now() - startedAt });
+    throw error;
   }
+  const latestResult = await page.evaluate(() =>
+    (
+      window as unknown as {
+        __phase19Trace: { results: Array<{ actualMode: string }> };
+      }
+    ).__phase19Trace.results.at(-1),
+  );
+  console.log("[phase-19-observation]", JSON.stringify({ latestResult }));
+  await expect(controls.getByRole("button", { name: /^Apply$/ })).toBeVisible({
+    timeout: 180_000,
+  });
+  observations.push({
+    mode: latestResult?.actualMode ?? "unknown",
+    elapsedMs: Date.now() - startedAt,
+  });
 
   const disposedBeforeReset = await page.evaluate(
     () =>
@@ -250,15 +251,16 @@ test("real Phase 19 refinement: q8/fp32 warm reuse, hard constraints, and dispos
       2,
     ),
   );
-  expect(trace.results).toHaveLength(4);
+  expect(trace.results).toHaveLength(1);
   expect(trace.results.every((result) => result.constrainedAlpha === 255)).toBe(true);
+  const requestedModes = trace.requests
+    .filter((request) => request.type === "refine")
+    .map((request) => request.mode);
+  expect(requestedModes).toHaveLength(1);
+  expect(["balanced", "maximum"]).toContain(requestedModes[0]);
   expect(
-    trace.requests
-      .filter((request) => request.type === "refine")
-      .map((request) => request.mode),
-  ).toEqual(["balanced", "balanced", "maximum", "maximum"]);
-  expect(vitmatteResponses.some((url) => url.endsWith("model_quantized.onnx"))).toBe(
-    true,
-  );
-  expect(vitmatteResponses.some((url) => url.endsWith("model.onnx"))).toBe(true);
+    vitmatteResponses.some(
+      (url) => url.endsWith("model_quantized.onnx") || url.endsWith("model.onnx"),
+    ),
+  ).toBe(true);
 });

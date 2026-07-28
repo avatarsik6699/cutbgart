@@ -236,6 +236,21 @@
 - **Prevention**: new UI E2E tests should install the mock inference Worker. Add behavior to the
   single real-model smoke only when it specifically validates the model/CDN boundary.
 
+### Real-model E2E readiness must follow the automatic-first editor contract
+
+- **Symptoms**: a Phase 19/20 real-model test waits for the before/after slider until its full
+  runtime timeout even though the automatic result has already opened a usable Cutout editor, or
+  waits for a second worker result after repeating the same unchanged Enhance selection.
+- **Root cause**: since Phases 26–27, successful automatic processing opens Cutout Magic first.
+  The comparison slider is tool-specific and appears only after switching to a comparison-based
+  tool, so it is no longer a valid signal that automatic processing finished. Phase 28 also treats
+  one Apply as one atomic transaction; an unchanged repeat is allowed to produce no new result.
+- **Fix**: wait through `e2e/support/editor-ui.ts`'s `expectAutomaticCutout`, passing the
+  phase-specific real-model timeout, then switch to Enhancements and validate one real Apply.
+- **Prevention**: real-model journeys must wait on the stable user-facing editor state they enter,
+  using Playwright web-first assertions; do not retain readiness selectors owned by a later tool
+  or require no-op repeats to create worker/history activity.
+
 ### Serialize pipeline loads when switching Transformers.js model sources
 
 - **Symptoms**: with two model pipelines loading concurrently, some requests use the private CDN
@@ -350,13 +365,29 @@
   locale stress, but one unfiltered Playwright invocation renders `/en/*` in Russian across every
   browser project.
 - **Root cause**: collecting the complete multi-project matrix in one Playwright process can
-  invalidate or split Paraglide's Vite development SSR module context. This is confined to the
-  host test server; production SSR and single-project runs remain request-local.
-- **Fix**: keep one managed Vite server but have `scripts/run-e2e.ts` invoke each configured browser
-  project sequentially with an explicit `--project`; preserve `fullyParallel` and the worker count
-  inside each project.
+  invalidate or split Paraglide's Vite development SSR module context. Freshly regenerated
+  Paraglide modules can also make the first Vite process hydrate `/en/` from the Russian base
+  locale even when SSR chose English; the transformed module cache is correct after that cold
+  process exits.
+- **Fix**: use a short managed Vite process to hydrate English `/en/` and Russian `/` in isolated
+  service-worker-free browser contexts, stop it completely, then start the test server and verify
+  both hydrated locales before collection. Invoke each configured browser project sequentially
+  with an explicit `--project`; preserve `fullyParallel` and the worker count inside each project.
 - **Prevention**: do not collapse the default matrix back into one Playwright process unless an
-  upstream Paraglide/Vite upgrade is verified against parallel RU/EN SSR and the full E2E suite.
+  upstream Paraglide/Vite upgrade is verified against parallel RU/EN SSR and the full E2E suite;
+  readiness probes must consume response bodies rather than abandon the initial stream.
+
+### Deferred worker creation must stop at hook teardown
+
+- **Symptoms**: every assertion passes, but full Vitest exits non-zero with an unhandled
+  `ReferenceError: Worker is not defined` or `window is not defined` after jsdom teardown; in the
+  application, rapidly leaving a route during capability detection can create an orphan worker.
+- **Root cause**: upload preparation and capability detection can resolve after the hook unmounts;
+  a local test `afterEach` can also restore `Worker` before Testing Library's automatic cleanup.
+- **Fix**: guard deferred upload/capability continuations with mounted lifecycle state, and call
+  Testing Library `cleanup()` before clearing storage or restoring mocked globals.
+- **Prevention**: every deferred path that can allocate a worker must re-check mounted state, and
+  tests must teardown mounted hooks before dismantling globals they can still reach.
 
 ### Never pass large typed arrays through changing React props — dev-mode React 19.2 freezes for seconds
 

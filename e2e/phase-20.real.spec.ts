@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 
 import { computeMattingInputSize } from "../src/features/refine-matte";
 import { FOREGROUND_RUNTIME_THRESHOLDS } from "../src/features/refine-foreground";
+import { expectAutomaticCutout } from "./support/editor-ui";
 
 const SAMPLE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -129,67 +130,73 @@ test("real Phase 20 hybrid pipeline and bounded large-input refinement", async (
   const upload = page.getByLabel("Upload an image");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible({
+  await expectAutomaticCutout(page, {
     timeout: FOREGROUND_RUNTIME_THRESHOLDS.automaticMs,
   });
   const automaticMs = Date.now() - automaticStartedAt;
 
-  const matte = page.getByTestId("matte-refinement-controls");
+  await page.getByRole("button", { name: "Enhancements" }).click();
+  const enhancements = page.getByTestId("enhancements-tool-panel");
   const refinementObservations: Array<{
     mode: "balanced" | "maximum";
     warm: boolean;
     elapsedMs: number;
   }> = [];
-  for (const mode of ["balanced", "balanced", "maximum", "maximum"] as const) {
-    await matte.getByRole("radio", { name: new RegExp(mode, "i") }).click();
-    const previousCount = await page.evaluate(
+  const enhancementStartedAt = Date.now();
+  await enhancements.getByRole("button", { name: /^Apply$/ }).click();
+  await expect
+    .poll(
       () =>
-        (
-          window as unknown as {
-            __phase20Trace: { matteResults: unknown[] };
-          }
-        ).__phase20Trace.matteResults.length,
-    );
-    const startedAt = Date.now();
-    await matte.getByRole("button", { name: /Refine edges|Refine again/ }).click();
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            () =>
-              (
-                window as unknown as {
-                  __phase20Trace: { matteResults: unknown[] };
-                }
-              ).__phase20Trace.matteResults.length,
-          ),
-        { timeout: FOREGROUND_RUNTIME_THRESHOLDS.coldRefinementMs },
-      )
-      .toBe(previousCount + 1);
-    const sameModeCount = refinementObservations.filter(
-      (observation) => observation.mode === mode,
-    ).length;
-    refinementObservations.push({
-      mode,
-      warm: sameModeCount > 0,
-      elapsedMs: Date.now() - startedAt,
-    });
-  }
-  for (const observation of refinementObservations) {
-    expect(observation.elapsedMs).toBeLessThanOrEqual(
-      observation.warm
-        ? FOREGROUND_RUNTIME_THRESHOLDS.warmRefinementMs
-        : FOREGROUND_RUNTIME_THRESHOLDS.coldRefinementMs,
-    );
-  }
-
-  const foreground = page.getByTestId("foreground-refinement-controls");
-  const cleanupStartedAt = Date.now();
-  await foreground.getByRole("button", { name: /^Clean edge colours$/ }).click();
-  await expect(foreground.getByRole("button", { name: /^Clean again$/ })).toBeVisible({
-    timeout: FOREGROUND_RUNTIME_THRESHOLDS.cleanupMs,
+        page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __phase20Trace: { matteResults: unknown[] };
+              }
+            ).__phase20Trace.matteResults.length,
+        ),
+      { timeout: FOREGROUND_RUNTIME_THRESHOLDS.coldRefinementMs },
+    )
+    .toBe(1);
+  const refinementElapsedMs = Date.now() - enhancementStartedAt;
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __phase20Trace: { foregroundResults: unknown[] };
+              }
+            ).__phase20Trace.foregroundResults.length,
+        ),
+      {
+        timeout:
+          FOREGROUND_RUNTIME_THRESHOLDS.coldRefinementMs +
+          FOREGROUND_RUNTIME_THRESHOLDS.cleanupMs,
+      },
+    )
+    .toBe(1);
+  const cleanupMs = Date.now() - enhancementStartedAt - refinementElapsedMs;
+  const requestedMode = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __phase20Trace: {
+            requests: Array<{ type?: string; mode?: "balanced" | "maximum" }>;
+          };
+        }
+      ).__phase20Trace.requests.find((request) => request.type === "refine")?.mode,
+  );
+  if (!requestedMode) throw new Error("Enhancements did not start fine-detail work");
+  refinementObservations.push({
+    mode: requestedMode,
+    warm: false,
+    elapsedMs: refinementElapsedMs,
   });
-  const cleanupMs = Date.now() - cleanupStartedAt;
+  expect(refinementElapsedMs).toBeLessThanOrEqual(
+    FOREGROUND_RUNTIME_THRESHOLDS.coldRefinementMs,
+  );
 
   const largeInputSize = computeMattingInputSize({ width: 2500, height: 2500 });
   const largeObservation = await page.evaluate(
@@ -302,7 +309,7 @@ test("real Phase 20 hybrid pipeline and bounded large-input refinement", async (
         refinementObservations,
         cleanupMs,
         largeObservation,
-        interactionCount: 2,
+        interactionCount: 1,
         thresholdResult: "pass",
         memoryObservation: "unavailable-or-worker-measured-delta",
         trace,

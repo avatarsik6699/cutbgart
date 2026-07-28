@@ -1,13 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import {
-  applyMagicPass,
-  expectAutomaticCutout,
-  expectComparisonForTool,
-} from "./support/editor-ui";
+import { applyMagicPass, expectAutomaticCutout } from "./support/editor-ui";
 import { installMockInference } from "./support/mock-inference";
 
 const SAMPLE = path.join(
@@ -18,30 +14,36 @@ const SAMPLE = path.join(
 
 test.beforeEach(async ({ page }) => installMockInference(page));
 
-async function uploadAutomatic(page: import("@playwright/test").Page, locale = "/en") {
+async function openEnhancements(page: Page, locale = "/en") {
   await page.goto(locale);
-  const upload = page.getByLabel(
-    locale === "/en" ? "Upload an image" : "Загрузить изображения",
-  );
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
   await expectAutomaticCutout(page);
-  await expectComparisonForTool(page, locale === "/en" ? "Enhancements" : "Улучшения");
+  await page
+    .getByRole("button", {
+      name: /^(?:Enhancements|Улучшения)$/,
+    })
+    .click();
+  return page.getByTestId("enhancements-tool-panel");
 }
 
-test("automatic result cleans once per request without accumulating colour transforms", async ({
+async function chooseHaloOnly(panel: Locator) {
+  await panel
+    .getByRole("checkbox", { name: /improve fine details|улучшить мелкие детали/i })
+    .uncheck();
+}
+
+test("halo removal starts from the original source on every non-accumulating Apply", async ({
   page,
 }) => {
-  await uploadAutomatic(page);
-  const controls = page.getByTestId("foreground-refinement-controls");
-  const components = controls.getByRole("checkbox", {
-    name: /remove isolated soft specks/i,
-  });
-  await components.uncheck();
-  await controls.getByRole("button", { name: /^Clean edge colours$/ }).click();
-  await expect(controls.getByRole("button", { name: /^Clean again$/ })).toBeVisible();
-  await expect(controls.getByText(/cleanup was applied/i)).toBeVisible();
-  await controls.getByRole("button", { name: /^Clean again$/ }).click();
+  const panel = await openEnhancements(page);
+  await chooseHaloOnly(panel);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -49,7 +51,6 @@ test("automatic result cleans once per request without accumulating colour trans
           window as unknown as {
             __mockInferencePosts: Array<{
               type: string;
-              componentCleanup?: boolean;
               sourceIsOriginal?: boolean;
             }>;
           }
@@ -62,58 +63,53 @@ test("automatic result cleans once per request without accumulating colour trans
       window as unknown as {
         __mockInferencePosts: Array<{
           type: string;
-          componentCleanup?: boolean;
           sourceIsOriginal?: boolean;
         }>;
       }
     ).__mockInferencePosts.filter((post) => post.type === "refine-foreground"),
   );
-  expect(cleanupPosts.map((post) => post.componentCleanup)).toEqual([false, false]);
   expect(cleanupPosts.every((post) => post.sourceIsOriginal)).toBe(true);
 });
 
-test("accepted guided result can clean colours, enter the exact brush, and download in Russian", async ({
+test("an applied Magic result uses the same plain-language Russian halo operation", async ({
   page,
 }) => {
   await page.goto("/");
-  const upload = page.getByLabel("Загрузить изображения");
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
   await expectAutomaticCutout(page);
   await applyMagicPass(page);
 
-  await page.getByRole("button", { name: "Улучшения" }).click();
-  const controls = page.getByTestId("foreground-refinement-controls");
-  await controls.getByRole("button", { name: /^Очистить цвет краёв$/ }).click();
+  await page.getByRole("button", { name: /^(?:Enhancements|Улучшения)$/ }).click();
+  const panel = page.getByTestId("enhancements-tool-panel");
+  await chooseHaloOnly(panel);
+  await expect(panel).not.toContainText(/Пропустить и править кистью|компонент|модель/i);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
   await expect(
-    controls.getByRole("button", { name: /^Очистить ещё раз$/ }),
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
   ).toBeVisible();
-  await controls.getByRole("button", { name: /Пропустить и править кистью/ }).click();
-  await expect(page.getByTestId("cutout-tool-panel")).toHaveAttribute(
-    "data-mode",
-    "manual",
-  );
-  await expect(page.getByRole("application", { name: /редактор маски/i })).toBeVisible();
-  await page.getByRole("button", { name: /^Отмена$/ }).click();
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^Скачать$/ }).click();
-  expect(await download).toBeTruthy();
 });
 
-test("settled batch applies cleanup only to the selected item", async ({ page }) => {
+test("settled batch applies halo removal only to the selected item", async ({ page }) => {
   await page.goto("/en");
-  const upload = page.getByLabel("Upload an image");
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
   await expect(upload).toBeEnabled();
   await upload.setInputFiles([SAMPLE, SAMPLE]);
-  await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
+  await expect(page.getByTestId("scheduler-summary")).toContainText(/2 done|готово 2/);
   await page
-    .getByRole("button", { name: /select sample\.jpg for review/i })
+    .getByRole("button", {
+      name: /select sample\.jpg for review|выбрать sample\.jpg для просмотра/i,
+    })
     .first()
     .click();
-  await page.getByRole("button", { name: "Enhancements" }).click();
-  const controls = page.getByTestId("foreground-refinement-controls");
-  await controls.getByRole("button", { name: /^Clean edge colours$/ }).click();
-  await expect(controls.getByRole("button", { name: /^Clean again$/ })).toBeVisible();
+  await page.getByRole("button", { name: /^(?:Enhancements|Улучшения)$/ }).click();
+  const panel = page.getByTestId("enhancements-tool-panel");
+  await chooseHaloOnly(panel);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
   const count = await page.evaluate(
     () =>
       (
@@ -123,7 +119,7 @@ test("settled batch applies cleanup only to the selected item", async ({ page })
   expect(count).toBe(1);
 });
 
-test("cleanup reports unchanged and recoverable error outcomes without diagnostics", async ({
+test("unchanged and recoverable failures preserve the committed result without diagnostics", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -133,11 +129,13 @@ test("cleanup reports unchanged and recoverable error outcomes without diagnosti
       writable: true,
     });
   });
-  await uploadAutomatic(page);
-  const controls = page.getByTestId("foreground-refinement-controls");
-  await controls.getByRole("button", { name: /^Clean edge colours$/ }).click();
-  await expect(controls.getByText(/no safe soft-edge colour changes/i)).toBeVisible();
-  await expect(controls.getByText(/private no-soft-edge diagnostic/i)).toHaveCount(0);
+  const panel = await openEnhancements(page);
+  await chooseHaloOnly(panel);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/No safe visible change was needed|Безопасные заметные изменения/i),
+  ).toBeVisible();
+  await expect(panel.getByText(/private no-soft-edge diagnostic/i)).toHaveCount(0);
 
   await page.evaluate(() => {
     (
@@ -145,11 +143,22 @@ test("cleanup reports unchanged and recoverable error outcomes without diagnosti
     ).__mockForegroundUnchanged = false;
     Object.defineProperty(window, "__mockForegroundFailure", {
       configurable: true,
+      writable: true,
       value: true,
     });
   });
-  await controls.getByRole("button", { name: /^Clean again$/ }).click();
-  await expect(controls.getByRole("alert")).toContainText(/could not be completed/i);
-  await expect(controls.getByRole("button", { name: /^Retry cleanup$/ })).toBeEnabled();
-  await expect(controls.getByText(/private mock diagnostic/i)).toHaveCount(0);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(panel.getByRole("alert")).toContainText(
+    /could not be completed|не удалось завершить/i,
+  );
+  await expect(panel.getByText(/private mock diagnostic/i)).toHaveCount(0);
+
+  await page.evaluate(() => {
+    (window as unknown as { __mockForegroundFailure: boolean }).__mockForegroundFailure =
+      false;
+  });
+  await panel.getByRole("button", { name: /Try again|Повторить/i }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
 });

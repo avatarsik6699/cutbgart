@@ -27,47 +27,47 @@ implementation. The same contract applies to a single image and a selected compl
 
 ### Frontend
 
-- [ ] `F1` Add one `Улучшения` / `Enhancements` panel with two benefit-labeled operations:
+- [x] `F1` Add one `Улучшения` / `Enhancements` panel with two benefit-labeled operations:
   `Улучшить мелкие детали/Improve fine details` (soft alpha for hair, fur, glass) and
   `Убрать цветной ореол/Remove colour halo` (foreground decontamination). Default the safe,
   capability-recommended combination without showing a model selector. Bind it through the shared
   editor controller for a single document or selected completed batch document — _Depends on:_ —
-- [ ] `F10` Define an ordered typed enhancement-operation registry with user label/help, availability,
+- [x] `F10` Define an ordered typed enhancement-operation registry with user label/help, availability,
   default policy, execution adapter, and history label. It must support an operation backed by a
   model or deterministic code without exposing that distinction in public copy; it is not a
   generic plugin runtime and does not authorize new operations in this phase — _Depends on:_ `F1`
-- [ ] `F2` Remove separate public `Refine soft edges`/`Clean edge colours` cards, graph download
+- [x] `F2` Remove separate public `Refine soft edges`/`Clean edge colours` cards, graph download
   sizes, model/provider/path names, mode recommendations, raw fallback chains, component-cleanup
   implementation language, and both `Skip and edit with brush` actions — _Depends on:_ `F1`, `F10`
-- [ ] `F3` One Apply action serializes selected operations through the existing one-heavy-stage
+- [x] `F3` One Apply action serializes selected operations through the existing one-heavy-stage
   lifecycle, updates the stable stage, and commits one `enhance` operation only after final
   recomposition succeeds. Do not accumulate colour transforms on repeated use — _Depends on:_
   `F1`, `F2`, `F10`
-- [ ] `F4` Cancel during work keeps the last committed document. Classified internal fallback may
+- [x] `F4` Cancel during work keeps the last committed document. Classified internal fallback may
   keep the current result or use the existing safe path, but primary notices say only what the user
   can do (`Try again`, `Keep current result`, `Use a smaller image`) — _Depends on:_ `F3`
-- [ ] `F5` Wire the Phase-25 document history to the Phase-26 toolbar for applied Cutout, Manual,
+- [x] `F5` Wire the Phase-25 document history to the Phase-26 toolbar for applied Cutout, Manual,
   and Enhance operations. Undo/redo restores matte, foreground, composite, and processing
   provenance consistently; active draft icons remain tool-local and every selected batch item
   retains an isolated history — _Depends on:_ `F3`
-- [ ] `F6` Show localized toolbar tooltips/status labels for the operation that Undo/Redo will
+- [x] `F6` Show localized toolbar tooltips/status labels for the operation that Undo/Redo will
   affect. Branching after undo evicts the redo branch and releases artifacts that are no longer
   reachable — _Depends on:_ `F5`
-- [ ] `F7` Enforce 20-entry/96-MiB historical budgets with realistic alpha/foreground/composite
+- [x] `F7` Enforce 20-entry/96-MiB historical budgets with realistic alpha/foreground/composite
   artifacts. Release superseded workers/tensors/object URLs and verify current/baseline plus the
   newest oversized undo step remain safe — _Depends on:_ `F3`, `F5`
-- [ ] `F8` Add tests for registry/option orchestration, stage ordering, no-op/unchanged results, cancellation,
+- [x] `F8` Add tests for registry/option orchestration, stage ordering, no-op/unchanged results, cancellation,
   deterministic/failure recovery, no accumulation, one atomic history entry, cross-tool undo/redo,
   draft/item separation, byte eviction, branch cleanup, stale-result exclusion, and accessible
   copy — _Depends on:_ `F1`–`F7`, `F10`
-- [ ] `F9` Add bilingual cross-browser Playwright coverage for Enhancements
+- [x] `F9` Add bilingual cross-browser Playwright coverage for Enhancements
   Apply/Cancel/retry/current result, then toolbar undo/redo across Cutout → Manual → Enhancements.
   Run the core flow for a single upload and two selected items from a multiple upload; assert the
   primary UI contains none of the removed model/path/size/skip-to-brush copy — _Depends on:_ `F8`
 
 ### Infra
 
-- [ ] `I1` Reuse current ViTMatte/foreground models, pins, CDN fallback, workers, quality corpus,
+- [x] `I1` Reuse current ViTMatte/foreground models, pins, CDN fallback, workers, quality corpus,
   and real-model commands. Add no dependency, asset, env var, route, analytics, persistence, or
   server work — _Depends on:_ `F9`
 
@@ -167,7 +167,14 @@ unverified.
 
 ## Architect Review Notes
 
-- [x] No architect review issues recorded
+- [x] Phase 19/20 real-model scenarios must follow the automatic-first Cutout readiness contract
+  and validate one atomic Enhance transaction instead of waiting for a later-tool comparison
+  slider or requiring an unchanged repeat Apply to emit another worker result.
+- [x] Controller teardown must prevent deferred capability detection from creating workers after
+  unmount, and hook tests must unmount before restoring mocked browser globals.
+- [x] The managed E2E runner must prime the freshly generated locale graph, restart Vite, then
+  verify hydrated RU and EN pages before parallel browser workers start so Paraglide locale state
+  cannot leak across first requests.
 
 ## Implementation Notes
 
@@ -181,6 +188,6 @@ feat(phase-28): add enhancements and committed undo redo
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
-- [ ] Run `/context-update 28`
-- [ ] Commit on `feat/phase-28`; tag `v0.28.0` after merge
+- [x] Scope complete; gates green; review notes resolved
+- [x] Run `/context-update 28`
+- [x] Commit on `feat/phase-28`; tag `v0.28.0` after merge

@@ -353,35 +353,47 @@ export async function installMockInference(page: Page): Promise<void> {
               });
             }
             const deterministic = balancedFailure;
-            this.emit({
-              type: "result",
-              requestId: request.requestId,
-              result: {
-                matte: {
-                  ...priorMatte,
-                  data: priorMatte.data.slice(),
-                },
-                requestedMode: request.requestedMode,
-                actualMode: deterministic
-                  ? "deterministic"
-                  : request.requestedMode === "maximum" && maximumFailure
-                    ? "balanced"
-                    : request.requestedMode,
-                actualPath: deterministic
-                  ? null
-                  : balancedWebGpuFailure
-                    ? "wasm"
-                    : request.requestedPath,
-                inputSize: request.inputSize,
-                fallback: deterministic
-                  ? "deterministic"
-                  : request.requestedMode === "maximum" && maximumFailure
-                    ? "balanced"
+            const emitMattingResult = () =>
+              this.emit({
+                type: "result",
+                requestId: request.requestId,
+                result: {
+                  matte: {
+                    ...priorMatte,
+                    data: priorMatte.data.slice(),
+                  },
+                  requestedMode: request.requestedMode,
+                  actualMode: deterministic
+                    ? "deterministic"
+                    : request.requestedMode === "maximum" && maximumFailure
+                      ? "balanced"
+                      : request.requestedMode,
+                  actualPath: deterministic
+                    ? null
                     : balancedWebGpuFailure
                       ? "wasm"
-                      : "none",
-              },
-            });
+                      : request.requestedPath,
+                  inputSize: request.inputSize,
+                  fallback: deterministic
+                    ? "deterministic"
+                    : request.requestedMode === "maximum" && maximumFailure
+                      ? "balanced"
+                      : balancedWebGpuFailure
+                        ? "wasm"
+                        : "none",
+                },
+              });
+            const emitWhenReleased = () => {
+              if (
+                (window as unknown as { __mockDelayMattingResponse?: boolean })
+                  .__mockDelayMattingResponse
+              ) {
+                window.setTimeout(emitWhenReleased, 25);
+                return;
+              }
+              emitMattingResult();
+            };
+            emitWhenReleased();
             return;
           }
           if (

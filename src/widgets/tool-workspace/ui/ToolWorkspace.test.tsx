@@ -1,12 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolWorkspace } from "./ToolWorkspace";
@@ -395,28 +387,19 @@ describe("ToolWorkspace", () => {
     await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());
   });
 
-  it("routes the Enhancements exact-brush action into Cutout Manual", async () => {
+  it("replaces the technical refinement cards with one benefit-led Enhancements panel", async () => {
     render(<ToolWorkspace />);
     await completeAutomaticWorkspace();
     fireEvent.click(screen.getByRole("button", { name: /^Enhancements$/ }));
-    fireEvent.click(
-      within(screen.getByTestId("matte-refinement-controls")).getByRole("button", {
-        name: /skip and edit with brush/i,
-      }),
-    );
 
-    await waitFor(() =>
-      expect(screen.getByTestId("cutout-tool-panel").getAttribute("data-mode")).toBe(
-        "manual",
-      ),
+    const panel = screen.getByTestId("enhancements-tool-panel");
+    expect(screen.getByRole("checkbox", { name: /improve fine details/i })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: /remove colour halo/i })).toBeDefined();
+    expect(panel.textContent).not.toMatch(
+      /refine soft edges|clean edge colours|skip and edit with brush|ViTMatte|WASM|WebGPU|MiB/i,
     );
-    expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
-      "cutout",
-    );
-    expect(screen.getByRole("img", { name: /mask correction canvas/i })).toBeDefined();
-    await waitFor(() =>
-      expect(vi.mocked(globalThis.createImageBitmap)).toHaveBeenCalled(),
-    );
+    expect(screen.queryByTestId("matte-refinement-controls")).toBeNull();
+    expect(screen.queryByTestId("foreground-refinement-controls")).toBeNull();
   });
 
   it("Manual paints an exact-alpha draft and Apply commits one manual operation", async () => {

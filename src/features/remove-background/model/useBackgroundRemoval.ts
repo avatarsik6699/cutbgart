@@ -203,6 +203,7 @@ export function useBackgroundRemoval(
   }, []);
 
   const workerRef = useRef<Worker | null>(null);
+  const mountedRef = useRef(true);
   const capabilitiesPromiseRef = useRef<Promise<DeviceCapabilities> | null>(null);
   const requestCounterRef = useRef(0);
   const pendingRequestIdRef = useRef<string | null>(null);
@@ -422,7 +423,9 @@ export function useBackgroundRemoval(
   }, [handleWorkerMessage]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       workerRef.current?.terminate();
       workerRef.current = null;
     };
@@ -441,6 +444,7 @@ export function useBackgroundRemoval(
       setRunInfo(null);
       dispatch({ type: "SELECT_FILE", qualityMode });
       void getDeviceCapabilities().then((capabilities) => {
+        if (!mountedRef.current) return;
         lastAttemptRef.current = {
           source,
           qualityMode,
@@ -462,12 +466,14 @@ export function useBackgroundRemoval(
   const selectFile = useCallback(
     (file: File) => {
       void buildSourceImage(file).then((result) => {
+        if (!mountedRef.current) return;
         if (!result.ok) {
           appendLog(`Upload rejected: ${result.error.message}`);
           dispatch({ type: "FAILED", error: result.error });
           return;
         }
         void getDeviceCapabilities().then((capabilities) => {
+          if (!mountedRef.current) return;
           startAttempt(result.source, qualityMode ?? capabilities.defaultQualityMode);
         });
       });

@@ -39,6 +39,8 @@ import {
 import { useForegroundRefinement } from "../../../features/refine-foreground";
 import type { UploadResult, UploadValidationError } from "../../../features/upload-image";
 import { sourceImageToFile } from "../lib/source-image-to-file";
+import type { EnhancementOperationId } from "./enhancement-operation-registry";
+import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 
 export type WorkspaceDisplayError = {
@@ -76,6 +78,50 @@ type ResultTarget =
       workerOwnerId: string;
     };
 
+export interface EnhancementControllerState {
+  status: "idle" | "applying" | "error";
+  activeOperationId: EnhancementOperationId | null;
+  outcome: "applied" | "unchanged" | "kept-current" | null;
+  errorCode: "out-of-memory" | "failed" | null;
+  documentId: string | null;
+}
+
+interface EnhancementRun {
+  id: number;
+  target: ResultTarget;
+  operationIds: readonly EnhancementOperationId[];
+  operationIndex: number;
+  image: ProcessedImage;
+  changed: boolean;
+  historyLabel: string;
+  documentId: string;
+}
+
+interface EnhancementRequest {
+  target: ResultTarget;
+  operationIds: readonly EnhancementOperationId[];
+  historyLabel: string;
+  documentId: string;
+}
+
+const initialEnhancementState: EnhancementControllerState = {
+  status: "idle",
+  activeOperationId: null,
+  outcome: null,
+  errorCode: null,
+  documentId: null,
+};
+
+function sameAlphaMatte(left: AlphaMatte, right: AlphaMatte): boolean {
+  if (
+    left.width !== right.width ||
+    left.height !== right.height ||
+    left.data.length !== right.data.length
+  )
+    return false;
+  return left.data.every((value, index) => value === right.data[index]);
+}
+
 function disposeScope(scope: EditDocumentScope | null): void {
   if (scope) disposeEditDocumentScope(scope);
 }
@@ -112,6 +158,9 @@ export function useToolWorkspaceController() {
     useState<GuidedBrushVisualContext | null>(null);
   const [refinementMode, setRefinementMode] = useState<MattingRefinementMode>("balanced");
   const [singleDocument, setSingleDocument] = useState<EditDocumentScope | null>(null);
+  const [enhancementState, setEnhancementState] = useState<EnhancementControllerState>(
+    initialEnhancementState,
+  );
 
   const singleDocumentRef = useRef<EditDocumentScope | null>(null);
   const retryCorrectionRef = useRef<(() => void) | null>(null);
@@ -126,6 +175,9 @@ export function useToolWorkspaceController() {
   const appliedRefinementRef = useRef<AlphaMatte | null>(null);
   const foregroundTargetRef = useRef<ResultTarget | null>(null);
   const appliedForegroundRef = useRef<Blob | null>(null);
+  const enhancementSequenceRef = useRef(0);
+  const enhancementRunRef = useRef<EnhancementRun | null>(null);
+  const enhancementRequestRef = useRef<EnhancementRequest | null>(null);
 
   const guided = useGuidedBrushSelection();
   const guidedViewSession = useMemo(
@@ -239,6 +291,7 @@ export function useToolWorkspaceController() {
     () => () => {
       correctionRunRef.current += 1;
       guidedRunRef.current += 1;
+      enhancementSequenceRef.current += 1;
       disposeScope(singleDocumentRef.current);
       singleDocumentRef.current = null;
     },
@@ -246,6 +299,10 @@ export function useToolWorkspaceController() {
   );
 
   async function releaseRefinementBeforeHeavyWork() {
+    enhancementSequenceRef.current += 1;
+    enhancementRunRef.current = null;
+    enhancementRequestRef.current = null;
+    setEnhancementState(initialEnhancementState);
     await Promise.all([refinement.release(), foregroundRefinement.release()]);
     refinement.reset();
     foregroundRefinement.reset();
@@ -379,6 +436,7 @@ export function useToolWorkspaceController() {
   }
 
   function handleReset() {
+    cancelEnhancements();
     correctionRunRef.current += 1;
     guidedRunRef.current += 1;
     disposeScope(singleDocumentRef.current);
@@ -470,13 +528,18 @@ export function useToolWorkspaceController() {
                 target.itemId,
                 result,
                 "cutout",
-                "Cutout",
+                m.editorHistoryCutout(),
                 target.documentRevision,
                 target.workerOwnerId,
               )
             : target.kind === "single"
-              ? commitSingleResult(result, "cutout", "Cutout", target.documentRevision)
-              : commitSingleResult(result, "cutout", "Cutout");
+              ? commitSingleResult(
+                  result,
+                  "cutout",
+                  m.editorHistoryCutout(),
+                  target.documentRevision,
+                )
+              : commitSingleResult(result, "cutout", m.editorHistoryCutout());
         if (!committed) {
           setFinalizingCorrection(false);
           return false;
@@ -648,189 +711,302 @@ export function useToolWorkspaceController() {
       : null;
   }
 
-  function startSingleRefinement(image: ProcessedImage) {
-    const previousTarget = refinementTargetRef.current;
-    const seed =
-      refinement.state.status === "result" && previousTarget?.kind === "single"
-        ? previousTarget.image
-        : image;
-    if (!seed.alphaMatte) return;
-    refinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      foregroundRefinement.release().then(foregroundRefinement.reset),
-    ]).then(() => {
-      const cleanSeed = { ...seed, foreground: undefined };
-      refinementTargetRef.current = targetForSingle(cleanSeed);
-      appliedRefinementRef.current = null;
-      refinement.start({
-        source: seed.source,
-        priorMatte: seed.alphaMatte!,
-        guidedMatte: refinementContextRef.current.guidedMatte,
-        constraints: refinementContextRef.current.constraints,
-        mode: refinementMode,
-        path: deviceCapabilities?.inferencePath ?? "wasm",
-      });
+  function finishEnhancementRun(run: EnhancementRun) {
+    if (enhancementRunRef.current !== run) return;
+    let outcome: EnhancementControllerState["outcome"] = "unchanged";
+    if (run.changed) {
+      const committed =
+        run.target.kind === "single"
+          ? commitSingleResult(
+              run.image,
+              "enhance",
+              run.historyLabel,
+              run.target.documentRevision,
+            )
+          : commitBatchResult(
+              run.target.itemId,
+              run.image,
+              "enhance",
+              run.historyLabel,
+              run.target.documentRevision,
+              run.target.workerOwnerId,
+            );
+      outcome = committed ? "applied" : "kept-current";
+    }
+    enhancementRunRef.current = null;
+    refinementTargetRef.current = null;
+    foregroundTargetRef.current = null;
+    setEnhancementState({
+      status: "idle",
+      activeOperationId: null,
+      outcome,
+      errorCode: null,
+      documentId: run.documentId,
     });
   }
 
-  function startBatchRefinement(itemId: string, image: ProcessedImage) {
-    const previousTarget = refinementTargetRef.current;
-    const seed =
-      refinement.state.status === "result" &&
-      previousTarget?.kind === "batch" &&
-      previousTarget.itemId === itemId
-        ? previousTarget.image
-        : image;
-    if (!seed.alphaMatte || batch.snapshot.activeCount || batch.snapshot.queuedCount)
+  function failEnhancementRun(run: EnhancementRun, code: "out-of-memory" | "failed") {
+    if (enhancementRunRef.current !== run) return;
+    enhancementRunRef.current = null;
+    refinementTargetRef.current = null;
+    foregroundTargetRef.current = null;
+    setEnhancementState({
+      status: "error",
+      activeOperationId: run.operationIds[run.operationIndex] ?? null,
+      outcome: null,
+      errorCode: code,
+      documentId: run.documentId,
+    });
+  }
+
+  function startEnhancementStage(run: EnhancementRun) {
+    if (enhancementRunRef.current !== run) return;
+    const operationId = run.operationIds[run.operationIndex];
+    const matte = run.image.alphaMatte;
+    if (!operationId || !matte) {
+      finishEnhancementRun(run);
       return;
-    refinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      batch.releaseInference(),
-      foregroundRefinement.release().then(foregroundRefinement.reset),
-    ]).then(() => {
-      const cleanSeed = { ...seed, foreground: undefined };
-      refinementTargetRef.current = targetForBatch(itemId, cleanSeed);
+    }
+    setEnhancementState({
+      status: "applying",
+      activeOperationId: operationId,
+      outcome: null,
+      errorCode: null,
+      documentId: run.documentId,
+    });
+    if (operationId === "fine-detail") {
+      const target = { ...run.target, image: { ...run.image, foreground: undefined } };
+      refinementTargetRef.current = target;
       appliedRefinementRef.current = null;
       refinement.start({
-        source: seed.source,
-        priorMatte: seed.alphaMatte!,
+        source: run.image.source,
+        priorMatte: matte,
         guidedMatte: refinementContextRef.current.guidedMatte,
         constraints: refinementContextRef.current.constraints,
         mode: refinementMode,
         path: deviceCapabilities?.inferencePath ?? "wasm",
       });
+      return;
+    }
+    const target = { ...run.target, image: { ...run.image, foreground: undefined } };
+    foregroundTargetRef.current = target;
+    appliedForegroundRef.current = null;
+    foregroundRefinement.start({
+      source: run.image.source,
+      matte,
+      constraints: refinementContextRef.current.constraints,
+      componentCleanup: true,
     });
+  }
+
+  // The run object and refs deliberately own this event-driven pipeline; a stable
+  // callback would require memoizing the entire controller orchestration graph.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  function continueEnhancementRun(run: EnhancementRun) {
+    if (enhancementRunRef.current !== run) return;
+    run.operationIndex += 1;
+    if (run.operationIndex >= run.operationIds.length) {
+      finishEnhancementRun(run);
+      return;
+    }
+    const previousOperation = run.operationIds[run.operationIndex - 1];
+    const releasePrevious =
+      previousOperation === "fine-detail"
+        ? refinement.release().then(refinement.reset)
+        : foregroundRefinement.release().then(foregroundRefinement.reset);
+    void releasePrevious.then(() => startEnhancementStage(run));
+  }
+
+  function beginEnhancementRun(request: EnhancementRequest) {
+    if (!request.operationIds.length || !request.target.image.alphaMatte) return;
+    const id = enhancementSequenceRef.current + 1;
+    enhancementSequenceRef.current = id;
+    const run: EnhancementRun = {
+      id,
+      target: request.target,
+      operationIds: request.operationIds,
+      operationIndex: 0,
+      image: request.target.image,
+      changed: false,
+      historyLabel: request.historyLabel,
+      documentId: request.documentId,
+    };
+    enhancementRequestRef.current = request;
+    enhancementRunRef.current = run;
+    setEnhancementState({
+      status: "applying",
+      activeOperationId: request.operationIds[0] ?? null,
+      outcome: null,
+      errorCode: null,
+      documentId: request.documentId,
+    });
+    void Promise.all([
+      releaseInference(),
+      guided.release(),
+      refinement.release(),
+      foregroundRefinement.release(),
+      request.target.kind === "batch" ? batch.releaseInference() : Promise.resolve(),
+    ]).then(() => {
+      if (enhancementRunRef.current !== run || enhancementSequenceRef.current !== id)
+        return;
+      refinement.reset();
+      foregroundRefinement.reset();
+      startEnhancementStage(run);
+    });
+  }
+
+  function applySingleEnhancements(
+    image: ProcessedImage,
+    operationIds: readonly EnhancementOperationId[],
+    historyLabel: string,
+  ) {
+    const target = targetForSingle(image);
+    const documentId = singleDocumentRef.current?.document.id;
+    if (target && documentId)
+      beginEnhancementRun({ target, operationIds, historyLabel, documentId });
+  }
+
+  function applyBatchEnhancements(
+    itemId: string,
+    image: ProcessedImage,
+    operationIds: readonly EnhancementOperationId[],
+    historyLabel: string,
+  ) {
+    if (batch.snapshot.activeCount || batch.snapshot.queuedCount) return;
+    const target = targetForBatch(itemId, image);
+    const documentId = batch.session.items.find((item) => item.id === itemId)
+      ?.editDocument?.document.id;
+    if (target && documentId)
+      beginEnhancementRun({ target, operationIds, historyLabel, documentId });
+  }
+
+  function cancelEnhancements() {
+    const hadRun =
+      enhancementState.status === "applying" || enhancementState.status === "error";
+    enhancementSequenceRef.current += 1;
+    enhancementRunRef.current = null;
+    enhancementRequestRef.current = null;
+    refinementTargetRef.current = null;
+    foregroundTargetRef.current = null;
+    refinement.cancel();
+    foregroundRefinement.cancel();
+    setEnhancementState({
+      ...initialEnhancementState,
+      outcome: hadRun ? "kept-current" : null,
+      documentId: enhancementState.documentId,
+    });
+  }
+
+  function retryEnhancements() {
+    const request = enhancementRequestRef.current;
+    if (request) beginEnhancementRun(request);
   }
 
   useEffect(() => {
     const result = refinement.state.result;
     const target = refinementTargetRef.current;
-    if (!result || !target || appliedRefinementRef.current === result.matte) return;
+    const run = enhancementRunRef.current;
+    if (
+      !result ||
+      !target ||
+      !run ||
+      run.operationIds[run.operationIndex] !== "fine-detail" ||
+      appliedRefinementRef.current === result.matte
+    )
+      return;
     appliedRefinementRef.current = result.matte;
+    if (!run.image.alphaMatte || sameAlphaMatte(run.image.alphaMatte, result.matte)) {
+      finishRefinementApplying();
+      continueEnhancementRun(run);
+      return;
+    }
     const apply = target.kind === "single" ? recomposite : batch.recomposite;
-    void apply(target.image, result.matte)
+    void apply({ ...run.image, foreground: undefined }, result.matte)
       .then((updated) => {
-        if (refinementTargetRef.current !== target) return;
-        const committed =
-          target.kind === "single"
-            ? commitSingleResult(updated, "enhance", "Enhance", target.documentRevision)
-            : commitBatchResult(
-                target.itemId,
-                updated,
-                "enhance",
-                "Enhance",
-                target.documentRevision,
-                target.workerOwnerId,
-              );
-        if (committed) finishRefinementApplying();
-      })
-      .catch((error: unknown) => {
+        if (enhancementRunRef.current !== run || refinementTargetRef.current !== target)
+          return;
+        run.image = updated;
+        run.changed = true;
         finishRefinementApplying();
-        setCorrectionError({
-          message: `Could not apply refined matte: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
+        continueEnhancementRun(run);
+      })
+      .catch(() => failEnhancementRun(run, "failed"));
   }, [
-    batch,
-    commitBatchResult,
-    commitSingleResult,
+    batch.recomposite,
+    continueEnhancementRun,
     finishRefinementApplying,
     recomposite,
     refinement.state.result,
   ]);
 
-  function startSingleForegroundRefinement(
-    image: ProcessedImage,
-    componentCleanup: boolean,
-  ) {
-    if (!image.alphaMatte) return;
-    foregroundRefinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      refinement.release().then(refinement.reset),
-    ]).then(() => {
-      const seed = { ...image, foreground: undefined };
-      foregroundTargetRef.current = targetForSingle(seed);
-      appliedForegroundRef.current = null;
-      foregroundRefinement.start({
-        source: seed.source,
-        matte: image.alphaMatte!,
-        constraints: refinementContextRef.current.constraints,
-        componentCleanup,
-      });
-    });
-  }
-
-  function startBatchForegroundRefinement(
-    itemId: string,
-    image: ProcessedImage,
-    componentCleanup: boolean,
-  ) {
-    if (!image.alphaMatte || batch.snapshot.activeCount || batch.snapshot.queuedCount)
+  useEffect(() => {
+    const error = refinement.state.error;
+    const run = enhancementRunRef.current;
+    if (
+      refinement.state.status !== "error" ||
+      !error ||
+      !run ||
+      run.operationIds[run.operationIndex] !== "fine-detail"
+    )
       return;
-    foregroundRefinement.prepareNext();
-    void Promise.all([
-      releaseInference(),
-      guided.release(),
-      refinement.release().then(refinement.reset),
-      batch.releaseInference(),
-    ]).then(() => {
-      const seed = { ...image, foreground: undefined };
-      foregroundTargetRef.current = targetForBatch(itemId, seed);
-      appliedForegroundRef.current = null;
-      foregroundRefinement.start({
-        source: seed.source,
-        matte: image.alphaMatte!,
-        constraints: refinementContextRef.current.constraints,
-        componentCleanup,
-      });
-    });
-  }
+    failEnhancementRun(
+      run,
+      error.code === "device-out-of-memory" ? "out-of-memory" : "failed",
+    );
+  }, [refinement.state.error, refinement.state.status]);
 
   useEffect(() => {
     const result = foregroundRefinement.state.result;
     const target = foregroundTargetRef.current;
-    if (!result || !target || appliedForegroundRef.current === result.foreground) return;
+    const run = enhancementRunRef.current;
+    if (
+      !result ||
+      !target ||
+      !run ||
+      run.operationIds[run.operationIndex] !== "colour-halo" ||
+      appliedForegroundRef.current === result.foreground
+    )
+      return;
     appliedForegroundRef.current = result.foreground;
+    if (result.actualPath === "unchanged") {
+      finishForegroundApplying();
+      continueEnhancementRun(run);
+      return;
+    }
     const apply = target.kind === "single" ? recomposite : batch.recomposite;
-    const image = { ...target.image, foreground: result.foreground };
-    void apply(image, result.matte)
+    void apply({ ...run.image, foreground: result.foreground }, result.matte)
       .then((updated) => {
-        if (foregroundTargetRef.current !== target) return;
-        const committed =
-          target.kind === "single"
-            ? commitSingleResult(updated, "enhance", "Enhance", target.documentRevision)
-            : commitBatchResult(
-                target.itemId,
-                updated,
-                "enhance",
-                "Enhance",
-                target.documentRevision,
-                target.workerOwnerId,
-              );
-        if (committed) finishForegroundApplying();
-      })
-      .catch((error: unknown) => {
+        if (enhancementRunRef.current !== run || foregroundTargetRef.current !== target)
+          return;
+        run.image = updated;
+        run.changed = true;
         finishForegroundApplying();
-        setCorrectionError({
-          message: `Could not apply foreground cleanup: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
+        continueEnhancementRun(run);
+      })
+      .catch(() => failEnhancementRun(run, "failed"));
   }, [
-    batch,
-    commitBatchResult,
-    commitSingleResult,
+    batch.recomposite,
+    continueEnhancementRun,
     finishForegroundApplying,
     foregroundRefinement.state.result,
     recomposite,
   ]);
+
+  useEffect(() => {
+    const error = foregroundRefinement.state.error;
+    const run = enhancementRunRef.current;
+    if (
+      foregroundRefinement.state.status !== "error" ||
+      !error ||
+      !run ||
+      run.operationIds[run.operationIndex] !== "colour-halo"
+    )
+      return;
+    failEnhancementRun(
+      run,
+      error.code === "device-out-of-memory" ? "out-of-memory" : "failed",
+    );
+  }, [foregroundRefinement.state.error, foregroundRefinement.state.status]);
 
   function handleRetry() {
     if (correctionError && retryCorrectionRef.current) {
@@ -913,6 +1089,7 @@ export function useToolWorkspaceController() {
 
   function handleSelectBatchItem(id: string) {
     if (id !== batch.session.selectedItemId) {
+      cancelEnhancements();
       correctionRunRef.current += 1;
       guidedRunRef.current += 1;
       setCorrectionError(null);
@@ -937,6 +1114,7 @@ export function useToolWorkspaceController() {
   }
 
   function handleClearBatch() {
+    cancelEnhancements();
     correctionRunRef.current += 1;
     guidedRunRef.current += 1;
     retryCorrectionRef.current = null;
@@ -979,7 +1157,7 @@ export function useToolWorkspaceController() {
         target.itemId,
         updated,
         "manual",
-        "Manual",
+        m.editorHistoryManual(),
         target.documentRevision,
         target.workerOwnerId,
       );
@@ -1021,7 +1199,14 @@ export function useToolWorkspaceController() {
       const updated = await recomposite(image, correctedMatte);
       if (correctionRunRef.current !== runId || refinementTargetRef.current !== target)
         return false;
-      if (!commitSingleResult(updated, "manual", "Manual", target.documentRevision)) {
+      if (
+        !commitSingleResult(
+          updated,
+          "manual",
+          m.editorHistoryManual(),
+          target.documentRevision,
+        )
+      ) {
         setFinalizingCorrection(false);
         return false;
       }
@@ -1135,6 +1320,13 @@ export function useToolWorkspaceController() {
     guidedViewSession,
     refinement,
     foregroundRefinement,
+    enhancementState,
+    enhancementProgress:
+      enhancementState.activeOperationId === "fine-detail"
+        ? refinement.state.progress
+        : enhancementState.activeOperationId === "colour-halo"
+          ? foregroundRefinement.state.progress
+          : null,
     refinementMode,
     setRefinementMode,
     singleDocument,
@@ -1164,10 +1356,10 @@ export function useToolWorkspaceController() {
     handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
-    startSingleRefinement,
-    startBatchRefinement,
-    startSingleForegroundRefinement,
-    startBatchForegroundRefinement,
+    applySingleEnhancements,
+    applyBatchEnhancements,
+    cancelEnhancements,
+    retryEnhancements,
     handleRetry,
     handleEditMask,
     handleBatchEditMask,

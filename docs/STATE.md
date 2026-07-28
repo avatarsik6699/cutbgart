@@ -46,7 +46,7 @@
 | PHASE_25 | ✅ done | v0.25.0 | ✅ | 🤖 agent | Editor Document Foundation & Guided Reset |
 | PHASE_26 | ✅ done | v0.26.0 | ✅ | 🤖 agent | Automatic-First Workspace |
 | PHASE_27 | ✅ done | v0.27.0 | ✅ | 🤖 agent | Unified Cutout Tool |
-| PHASE_28 | ⏳ pending | v0.28.0 | ⬜ | — | Enhancements Tool & Committed History |
+| PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
 | PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Background & Export Tools |
 | PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
 | PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `27` · **Phase in progress:** `—`
+**Phase completed:** `28` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -742,6 +742,38 @@ one exact-alpha operation through Apply, while Cancel restores the committed doc
 history remains separate from committed document history, stage/zoom geometry is shared, and
 single/batch document boundaries reject stale or cross-item work.
 
+```ts
+// Phase 28 — ordered user-outcome enhancement registry and document-owned draft
+type EnhancementOperationId = "fine-detail" | "colour-halo";
+type EnhancementExecutionAdapter = "matte-refinement" | "foreground-cleanup";
+
+interface EnhancementOperationDefinition {
+  id: EnhancementOperationId;
+  label: string;
+  help: string;
+  order: number;
+  isAvailable: (context: EnhancementAvailabilityContext) => boolean;
+  isSelectedByDefault: (context: EnhancementDefaultContext) => boolean;
+  executionAdapter: EnhancementExecutionAdapter;
+  historyLabel: string;
+}
+
+interface EnhancementDraft {
+  selectedOperationIds: readonly EnhancementOperationId[];
+  improveDetail: boolean;
+  removeColourHalo: boolean;
+  dirty: boolean;
+  status: "idle" | "applying" | "error";
+}
+```
+
+Phase 28 replaces the separate technical refinement surfaces with one bilingual Enhancements
+transaction shared by a single document and the selected completed batch document. One Apply runs
+selected heavy stages serially and commits one `enhance` operation only after final recomposition;
+unchanged, failed, cancelled and stale work never enters history. Committed Cutout, Manual and
+Enhance Undo/Redo restores matte, foreground, composite and provenance together, while branch
+eviction and the existing 20-entry/96-MiB budgets release unreachable artifacts per document.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -858,6 +890,10 @@ single/batch document boundaries reject stale or cross-item work.
   editor shell shared by single and selected completed-batch documents. Its typed Cutout,
   Enhancements and Background toolbar is keyboard navigable; tool panels load into a reserved slot
   without remounting the stage or resetting document/view state.
+- Phase 28 gives that shell one bilingual Enhancements panel with benefit-labeled fine-detail and
+  colour-halo options. Apply is one atomic document transaction, Cancel/retry preserves the last
+  committed result, and localized toolbar Undo/Redo labels remain isolated per single or selected
+  batch document without exposing model, runtime, graph or fallback details.
 
 ### Env Config
 
@@ -896,6 +932,40 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-28 — Phase 28 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_28 gate passed after architect manual verification
+
+### Changes / Decision
+- Replaced the separate soft-edge and foreground-cleanup surfaces with one localized Enhancements
+  panel backed by an ordered user-outcome registry. Fine-detail and colour-halo work stays lazy and
+  implementation-neutral in public copy for both single and selected completed-batch documents.
+- Made one Apply one serialized, atomic transaction: final recomposition is the only commit point,
+  unchanged/failed/cancelled/stale work preserves the current document, and repeated foreground
+  cleanup starts from the original source instead of accumulating transforms.
+- Completed committed Cutout, Manual and Enhance Undo/Redo through the shared toolbar. Operations
+  restore matte, foreground, composite and provenance together; branch replacement and the
+  20-entry/96-MiB history budgets release unreachable artifacts without crossing document or batch
+  item ownership.
+- Hardened verification infrastructure uncovered by the final gate: real-model Phase 19/20 waits
+  now follow the automatic-first Cutout state, deferred capability detection cannot create a worker
+  after controller teardown, and the host E2E runner primes then restarts a cold Paraglide/Vite
+  graph before validating parallel bilingual browser projects.
+- Gate evidence passed the production Docker build/health, code generation, strict TypeScript,
+  all 341 Vitest tests, 265 deterministic cross-browser cases with 15 expected opt-in skips, the
+  48-case Phase-28 browser slice, the general real-model Chromium/CDN smoke, both Phase 19/20
+  real-model regressions, and the container-native HTTP smoke.
+
+### Affected Phases / Consequences
+- PHASE_29 can add Background and export transactions to the same committed history and stable
+  editor shell without recreating enhancement-specific orchestration.
+- PHASE_30 inherits isolated single/batch document histories, atomic result commits and bounded
+  artifact ownership for workflow consolidation.
+- Additive UI/type/test-infrastructure change only: no route, endpoint, persistent data, model
+  revision, analytics payload, package dependency or environment key was added.
 
 ## 2026-07-27 — Phase 27 complete
 
