@@ -57,7 +57,7 @@ describe("BackgroundFillSelector", () => {
     );
   });
 
-  it("never encodes while previewing — Save only runs onApply once, on click", async () => {
+  it("never encodes while previewing — Apply runs onApply once and Cancel restores", async () => {
     const onApply = vi
       .fn()
       .mockImplementation((fill: BackgroundFill) =>
@@ -72,23 +72,32 @@ describe("BackgroundFillSelector", () => {
       />,
     );
 
-    const saveButton = screen.getByRole<HTMLButtonElement>("button", {
-      name: "Save background",
+    const applyButton = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Apply",
     });
-    expect(saveButton.disabled).toBe(true);
+    const cancelButton = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Cancel",
+    });
+    expect(applyButton.disabled).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Ocean" }));
     fireEvent.click(screen.getByRole("button", { name: "Mint" }));
     expect(onApply).not.toHaveBeenCalled();
-    expect(saveButton.disabled).toBe(false);
+    expect(applyButton.disabled).toBe(false);
+    expect(cancelButton.disabled).toBe(false);
 
-    fireEvent.click(saveButton);
+    fireEvent.click(cancelButton);
+    expect(onApply).not.toHaveBeenCalled();
+    expect(applyButton.disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mint" }));
+    fireEvent.click(applyButton);
     expect(onApply).toHaveBeenCalledOnce();
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({ type: "gradient", kind: "linear" }),
     );
     await waitFor(() => {
-      expect(saveButton.disabled).toBe(true);
+      expect(applyButton.disabled).toBe(true);
     });
   });
 });

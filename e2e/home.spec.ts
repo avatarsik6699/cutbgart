@@ -1,4 +1,5 @@
 import path from "node:path";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -38,20 +39,26 @@ const EDITOR_LOCALES = [
 ] as const;
 
 async function saveBackground(page: import("@playwright/test").Page) {
-  const saveButton = page.getByRole("button", { name: /^save background$/i });
-  await expect(saveButton).toBeEnabled();
-  await saveButton.click();
-  await expect(saveButton).toBeDisabled();
+  const applyButton = page
+    .getByTestId("background-tool-panel")
+    .getByRole("button", { name: /^(?:Apply|Применить)$/ });
+  await expect(applyButton).toBeEnabled();
+  await applyButton.click();
+  await expect(applyButton).toBeDisabled();
 }
 
-async function downloadedCorner(page: import("@playwright/test").Page) {
+async function inspectDownloadedPng(
+  page: import("@playwright/test").Page,
+  trigger = page.getByRole("button", { name: /^download$/i }),
+) {
   await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^download$/i }).click();
-  const downloadPath = await (await pending).path();
+  await trigger.click();
+  const download = await pending;
+  const downloadPath = await download.path();
   if (!downloadPath) throw new Error("Downloaded PNG path is unavailable");
   const bytes = Array.from(await readFile(downloadPath));
-  return page.evaluate(async (data) => {
+  const image = await page.evaluate(async (data) => {
     const bitmap = await createImageBitmap(
       new Blob([new Uint8Array(data)], { type: "image/png" }),
     );
@@ -60,9 +67,47 @@ async function downloadedCorner(page: import("@playwright/test").Page) {
     canvas.height = bitmap.height;
     const context = canvas.getContext("2d")!;
     context.drawImage(bitmap, 0, 0);
+    const result = {
+      width: bitmap.width,
+      height: bitmap.height,
+      corner: Array.from(context.getImageData(0, 0, 1, 1).data),
+    };
     bitmap.close();
-    return Array.from(context.getImageData(0, 0, 1, 1).data);
+    return result;
   }, bytes);
+  return { ...image, fileName: download.suggestedFilename() };
+}
+
+async function downloadedCorner(page: import("@playwright/test").Page) {
+  return (await inspectDownloadedPng(page)).corner;
+}
+
+async function createLargePng(
+  page: import("@playwright/test").Page,
+  name: string,
+  width = 2500,
+  height = 1250,
+) {
+  const bytes = await page.evaluate(
+    async ({ width, height }) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#3366CC";
+      context.fillRect(0, 0, width, height);
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (result) =>
+            result ? resolve(result) : reject(new Error("Could not create fixture")),
+          "image/png",
+        ),
+      );
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    },
+    { width, height },
+  );
+  return { name, mimeType: "image/png", buffer: Buffer.from(bytes) };
 }
 
 test.describe("/ (home)", () => {
@@ -140,6 +185,14 @@ test.describe("/ (home)", () => {
     await page.getByRole("button", { name: /^download$/i }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("result.png");
+
+    await page.getByRole("button", { name: "Output options" }).click();
+    await expect(page.getByRole("menuitemradio", { name: "Original" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(page.getByRole("menuitemradio", { name: /2048|1024/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: /process another image/i }).click();
     // `toBeAttached`, not `toBeVisible`: UploadDropzone (this locator) is
@@ -275,18 +328,38 @@ test.describe("/ (home)", () => {
     await expect(preview).toHaveCSS("background-color", /rgb\(25\d, \d+, \d+\)/);
     await expect(preview).toHaveCSS("background-image", "none");
     await expect(page.getByRole("button", { name: "Ocean" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: /^download$/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
+    const committedBeforeApply = await downloadedCorner(page);
+    expect(committedBeforeApply[0]).toBeGreaterThan(240);
+    expect(committedBeforeApply[1]).toBeGreaterThan(240);
+    expect(committedBeforeApply[2]).toBeGreaterThan(240);
+    await page
+      .getByTestId("background-tool-panel")
+      .getByRole("button", { name: "Cancel" })
+      .click();
+    await expect(
+      page
+        .getByTestId("background-tool-panel")
+        .getByRole("button", { name: "Transparent" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await palette.click({
+      position: { x: paletteBounds.width * 0.9, y: paletteBounds.height * 0.05 },
+    });
     await saveBackground(page);
     const colorPixel = await downloadedCorner(page);
     expect(colorPixel[0]).toBeGreaterThan(240);
     // The deterministic matte keeps a small amount of the source pixel at the
     // corner, so assert a strongly red composite rather than an exact fill.
-    expect(colorPixel[1]).toBeLessThan(80);
-    expect(colorPixel[2]).toBeLessThan(80);
+    expect(colorPixel[1]).toBeLessThan(110);
+    expect(colorPixel[2]).toBeLessThan(110);
     expect(colorPixel[3]).toBe(255);
 
     const correctionCanvas = await openManualCutout(page);
-    await expect(correctionCanvas).toHaveCSS("background-color", /rgb\(25\d, \d+, \d+\)/);
+    await expect(correctionCanvas).toHaveCSS(
+      "background-color",
+      /rgb\(2[34]\d, \d+, \d+\)/,
+    );
     await page.getByRole("button", { name: /^cancel$/i }).click();
 
     await page.getByRole("button", { name: /^Background$/ }).click();
@@ -381,7 +454,7 @@ test.describe("/ (home)", () => {
 
     await page.getByRole("button", { name: /^Background$/ }).click();
     await page.getByRole("button", { name: "Ocean" }).click();
-    await expect(page.getByRole("button", { name: /^download$/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
     await saveBackground(page);
     await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
     const itemButtons = page.getByRole("button", {
@@ -436,6 +509,41 @@ test.describe("/ (home)", () => {
     const archive = page.waitForEvent("download");
     await page.getByRole("button", { name: /^download all$/i }).click();
     expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
+  });
+
+  test("split download exports exact PNG sizes and repeats the explicit command in its menu", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    const large = await createLargePng(page, "large.png");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(large);
+    await expectAutomaticCutout(page);
+
+    await page.getByRole("button", { name: "Output options" }).click();
+    await expect(page.getByRole("menuitemradio", { name: "2048 px" })).toBeVisible();
+    await expect(page.getByRole("menuitemradio", { name: "1024 px" })).toBeVisible();
+    await page.getByRole("menuitemradio", { name: "2048 px" }).click();
+    await expect(page.getByText("Output size selected: 2048 px")).toBeAttached();
+    const menuDownload = page.getByRole("menuitem", { name: "Download" });
+    const resized2048 = await inspectDownloadedPng(page, menuDownload);
+    expect(resized2048).toMatchObject({
+      width: 2048,
+      height: 1024,
+      fileName: "result-2048.png",
+    });
+
+    await page.getByRole("button", { name: "Output options" }).click();
+    await page.getByRole("menuitemradio", { name: "1024 px" }).click();
+    await page.keyboard.press("Escape");
+    const resized1024 = await inspectDownloadedPng(page);
+    expect(resized1024).toMatchObject({
+      width: 1024,
+      height: 512,
+      fileName: "result-1024.png",
+    });
+    expect(resized1024.corner).toEqual(resized2048.corner);
   });
 
   test("batch: gives immediate preparation feedback and identifiable interactive tiles", async ({

@@ -47,7 +47,7 @@
 | PHASE_26 | ✅ done | v0.26.0 | ✅ | 🤖 agent | Automatic-First Workspace |
 | PHASE_27 | ✅ done | v0.27.0 | ✅ | 🤖 agent | Unified Cutout Tool |
 | PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
-| PHASE_29 | ⏳ pending | v0.29.0 | ⬜ | — | Background & Export Tools |
+| PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
 | PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Batch Workflow Consolidation & UX Hardening |
 | PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
 | PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Whole-Project Audit & Refactor |
@@ -64,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `28` · **Phase in progress:** `—`
+**Phase completed:** `29` · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -774,6 +774,24 @@ unchanged, failed, cancelled and stale work never enters history. Committed Cuto
 Enhance Undo/Redo restores matte, foreground, composite and provenance together, while branch
 eviction and the existing 20-entry/96-MiB budgets release unreachable artifacts per document.
 
+```ts
+// src/features/download-result/model/types.ts — Phase 29
+type ExportFormat = "png";
+type ExportSize = "original" | 2048 | 1024;
+
+interface ExportSettings {
+  format: ExportFormat;
+  longestSide: ExportSize;
+}
+```
+
+Phase 29 makes Background an explicit item-local draft/apply transaction for a single document or
+selected completed batch document. Apply commits one undoable `background` operation; Cancel,
+failed/stale work and unapplied drafts preserve the committed composite used by downloads.
+Individual export settings remain session-only and item-local. PNG export is downscale-only,
+preserves aspect ratio and the committed alpha/background, runs off the main interaction path with
+cancellation/latest-request guards, and leaves bulk ZIP export at committed original size.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -932,6 +950,36 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-28 — Phase 29 complete
+
+**Type**: phase-completion
+**Author**: AI (context-update)
+**Triggered by**: PHASE_29 gate passed after architect manual verification
+
+### Changes / Decision
+- Moved transparent, colour, gradient and uploaded-image choices into one bilingual Background
+  tool. Draft previews are item-local and never enter downloads until Apply commits one atomic,
+  undoable `background` operation; Cancel restores the committed fill and preview.
+- Added a prominent split Download action with typed PNG settings for Original, 2048 and 1024
+  longest-side output. Inapplicable sizes stay hidden, resizing never upscales or distorts, and
+  individual settings stay isolated per selected batch document.
+- Kept export browser-local and committed-document-only. Resizing yields off the main interaction
+  path, rejects stale/cancelled requests, cleans object URLs, preserves alpha/composited
+  backgrounds, and reports a plain-language retry/Original fallback without exposing unavailable
+  formats.
+- Preserved original-size client ZIP behavior for Download all, including mixed per-item committed
+  backgrounds and failed items; individual size choices do not mutate bulk output.
+- Gate evidence passed the production Docker build/health, code generation, strict TypeScript,
+  architecture lint, all 354 Vitest tests (64 focused Phase-29 tests), 277 deterministic
+  cross-browser cases with 15 expected opt-in skips, the real-model Chromium/CDN smoke, and the
+  container-native HTTP smoke.
+
+### Affected Phases / Consequences
+- PHASE_30 inherits item-local Background drafts, committed-history integration, per-item export
+  settings and stable original-size ZIP behavior for batch workflow consolidation.
+- Additive UI/type change only: no route, endpoint, persistent data, model revision, analytics
+  payload, package dependency or environment key was added.
 
 ## 2026-07-28 — Phase 28 complete
 

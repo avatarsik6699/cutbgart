@@ -134,6 +134,50 @@ describe("background fill model", () => {
     expect(onResult).not.toHaveBeenCalled();
   });
 
+  it("cancels a draft and restores the committed preview without recompositing", () => {
+    const onPreview = vi.fn();
+    const onApply = vi.fn();
+    const { result } = renderHook(() =>
+      useBackgroundFill({ image, onPreview, onApply, onResult: vi.fn() }),
+    );
+    act(() => result.current.selectColor("#00FF00"));
+    expect(result.current.dirty).toBe(true);
+
+    act(() => result.current.cancel());
+
+    expect(result.current.fill).toEqual({ type: "transparent" });
+    expect(result.current.dirty).toBe(false);
+    expect(onPreview).toHaveBeenLastCalledWith({ type: "transparent" });
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it("does not let a cancelled uploaded-image preparation replace the committed fill", async () => {
+    const pending = deferred<{ width: number; height: number; close: () => void }>();
+    vi.stubGlobal("createImageBitmap", vi.fn().mockReturnValue(pending.promise));
+    const onPreview = vi.fn();
+    const { result } = renderHook(() =>
+      useBackgroundFill({
+        image,
+        onPreview,
+        onApply: vi.fn(),
+        onResult: vi.fn(),
+      }),
+    );
+    let selection!: Promise<void>;
+    act(() => {
+      selection = result.current.selectImage(
+        new File(["jpg"], "background.jpg", { type: "image/jpeg" }),
+      );
+    });
+    act(() => result.current.cancel());
+    await act(async () => {
+      pending.resolve({ width: 10, height: 10, close: vi.fn() });
+      await selection;
+    });
+    expect(result.current.fill).toEqual({ type: "transparent" });
+    expect(onPreview).toHaveBeenLastCalledWith({ type: "transparent" });
+  });
+
   it("finishes applying under React Strict Mode", async () => {
     const wrapper = ({ children }: PropsWithChildren) =>
       createElement(StrictMode, null, children);

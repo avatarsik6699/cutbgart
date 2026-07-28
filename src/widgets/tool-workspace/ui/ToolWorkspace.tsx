@@ -26,9 +26,12 @@ import {
   type MaskCanvasHandle,
   type MaskCorrectionViewportControls,
 } from "../../../features/correct-mask";
-import { DownloadResultButton } from "../../../features/download-result";
-import { BackgroundFillSelector } from "../../../features/background-replacement";
-import { DownloadAllButton } from "../../../features/download-result";
+import {
+  DEFAULT_EXPORT_SETTINGS,
+  DownloadAllButton,
+  DownloadSplitButton,
+  type ExportSettings,
+} from "../../../features/download-result";
 import { BatchGrid, BatchStatus } from "../../../features/batch-processing";
 import { QualityModeToggle } from "../../../features/quality-mode-toggle";
 import { GuidedBrushCanvas, GuidedBrushControls } from "../../../features/select-object";
@@ -57,6 +60,7 @@ import {
 import { EditorStage } from "./EditorStage";
 import { EditorToolbar } from "./EditorToolbar";
 import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
+import { BackgroundToolPanel } from "./BackgroundToolPanel";
 import { CutoutToolPanel, type CutoutIntent, type CutoutMode } from "./CutoutToolPanel";
 import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
 import { ProcessingLog } from "./ProcessingLog";
@@ -311,12 +315,8 @@ export function ToolWorkspace() {
     setCorrectionViewAnnouncement,
     previewFill,
     setPreviewFill,
-    backgroundBusy,
-    setBackgroundBusy,
     batchPreviewFills,
     setBatchPreviewFills,
-    batchBackgroundBusy,
-    setBatchBackgroundBusy,
     hydrated,
     guidedVisualContext,
     guided,
@@ -380,6 +380,9 @@ export function ToolWorkspace() {
   const [backgroundDraftByDocument, setBackgroundDraftByDocument] = useState<
     Record<string, boolean>
   >({});
+  const [exportSettingsByDocument, setExportSettingsByDocument] = useState<
+    Record<string, ExportSettings>
+  >({});
   const [cutoutModeByDocument, setCutoutModeByDocument] = useState<
     Record<string, CutoutMode>
   >({});
@@ -422,6 +425,9 @@ export function ToolWorkspace() {
   const backgroundDraftDirty = activeDocumentId
     ? Boolean(backgroundDraftByDocument[activeDocumentId])
     : false;
+  const exportSettings = activeDocumentId
+    ? (exportSettingsByDocument[activeDocumentId] ?? DEFAULT_EXPORT_SETTINGS)
+    : DEFAULT_EXPORT_SETTINGS;
   const defaultEnhancementDraft = useMemo(
     () =>
       createEnhancementDraft(enhancementRegistry, {
@@ -755,7 +761,6 @@ export function ToolWorkspace() {
   // currently being mask-corrected. Reused as-is below (no correction) and
   // combined with `MaskCorrectionSlots`' output (correction active).
   const batchActive = !displayError && batch.session.items.length > 0;
-  const batchRailBusy = Object.values(batchBackgroundBusy).some(Boolean);
   const batchHeaderNode = batchActive ? (
     <section
       className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5"
@@ -810,7 +815,6 @@ export function ToolWorkspace() {
             />
             <DownloadAllButton
               items={batch.session.items}
-              disabled={batchRailBusy}
               className="h-9 px-4 lg:min-w-52"
             />
           </div>
@@ -929,7 +933,7 @@ export function ToolWorkspace() {
             />
           )}
           {activeTool === "background" && (
-            <BackgroundFillSelector
+            <BackgroundToolPanel
               image={{
                 source: selectedBatchItem.processedImage.source,
                 backgroundFill: selectedBatchItem.processedImage.backgroundFill,
@@ -939,11 +943,6 @@ export function ToolWorkspace() {
                   ...current,
                   [selectedBatchItem.id]: fill,
                 }));
-                if (activeDocumentId)
-                  setBackgroundDraftByDocument((current) => ({
-                    ...current,
-                    [activeDocumentId]: true,
-                  }));
               }}
               onApply={(fill) =>
                 batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
@@ -962,12 +961,13 @@ export function ToolWorkspace() {
                     [activeDocumentId]: false,
                   }));
               }}
-              onBusyChange={(itemBusy) =>
-                setBatchBackgroundBusy((current) => ({
+              onDirtyChange={(dirty) => {
+                if (!activeDocumentId) return;
+                setBackgroundDraftByDocument((current) => ({
                   ...current,
-                  [selectedBatchItem.id]: itemBusy,
-                }))
-              }
+                  [activeDocumentId]: dirty,
+                }));
+              }}
             />
           )}
         </div>
@@ -1082,18 +1082,13 @@ export function ToolWorkspace() {
             />
           )}
           {activeTool === "background" && (
-            <BackgroundFillSelector
+            <BackgroundToolPanel
               image={{
                 source: state.result.source,
                 backgroundFill: state.result.backgroundFill,
               }}
               onPreview={(fill) => {
                 setPreviewFill(fill);
-                if (activeDocumentId)
-                  setBackgroundDraftByDocument((current) => ({
-                    ...current,
-                    [activeDocumentId]: true,
-                  }));
               }}
               onApply={(fill) => applyBackgroundFill(state.result, fill)}
               onResult={(updated) => {
@@ -1105,7 +1100,13 @@ export function ToolWorkspace() {
                     [activeDocumentId]: false,
                   }));
               }}
-              onBusyChange={setBackgroundBusy}
+              onDirtyChange={(dirty) => {
+                if (!activeDocumentId) return;
+                setBackgroundDraftByDocument((current) => ({
+                  ...current,
+                  [activeDocumentId]: dirty,
+                }));
+              }}
             />
           )}
         </div>
@@ -1236,11 +1237,9 @@ export function ToolWorkspace() {
     );
   }
 
-  const activeDownloadImage =
-    selectedBatchItem?.processedImage?.result ??
-    (state.status === "result" || state.status === "correcting"
-      ? state.result.result
-      : null);
+  const activeDownloadDocument =
+    selectedBatchItem?.processedImage ??
+    (state.status === "result" || state.status === "correcting" ? state.result : null);
   const editorToolbarNode = activeDocumentId ? (
     <EditorToolbar
       tools={tools}
@@ -1278,14 +1277,22 @@ export function ToolWorkspace() {
         ) : undefined
       }
       downloadSlot={
-        activeDownloadImage ? (
-          <DownloadResultButton
-            image={activeDownloadImage}
-            disabled={
-              selectedBatchItem
-                ? batchBackgroundBusy[selectedBatchItem.id]
-                : backgroundBusy
-            }
+        activeDownloadDocument ? (
+          <DownloadSplitButton
+            key={`${activeDocumentId}:${String(activeEditDocument?.document.revision ?? 0)}`}
+            image={activeDownloadDocument.result}
+            source={{
+              width: activeDownloadDocument.source.width,
+              height: activeDownloadDocument.source.height,
+            }}
+            settings={exportSettings}
+            onSettingsChange={(nextSettings) => {
+              if (!activeDocumentId) return;
+              setExportSettingsByDocument((current) => ({
+                ...current,
+                [activeDocumentId]: nextSettings,
+              }));
+            }}
           />
         ) : undefined
       }

@@ -93,6 +93,7 @@ export function useBackgroundFill({
   const mountedRef = useRef(true);
   const revisionRef = useRef(0);
   const sourceRef = useRef(image.source.blob);
+  const committedFillRef = useRef(initialSavedFill);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -103,19 +104,26 @@ export function useBackgroundFill({
   }, []);
 
   useEffect(() => {
-    if (sourceRef.current === image.source.blob) return;
-    sourceRef.current = image.source.blob;
-    revisionRef.current += 1;
     const nextSavedFill = image.backgroundFill ?? TRANSPARENT_FILL;
+    if (
+      sourceRef.current === image.source.blob &&
+      sameFill(committedFillRef.current, nextSavedFill)
+    )
+      return;
+    sourceRef.current = image.source.blob;
+    committedFillRef.current = nextSavedFill;
+    revisionRef.current += 1;
     setFill(nextSavedFill);
     setSavedFill(nextSavedFill);
     setSaving(false);
+    setPreparingImage(false);
     setError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally excludes `image.backgroundFill`/`image`: this effect must only fire on a genuinely new source image, not on the `image` reference change `save()` itself produces (which advances `savedFill` directly and would otherwise fight this effect over the same render's `fill` state).
-  }, [image.source.blob]);
+    onPreview(nextSavedFill);
+  }, [image.backgroundFill, image.source.blob, onPreview]);
 
   const preview = useCallback(
     (nextFill: BackgroundFill) => {
+      revisionRef.current += 1;
       setFill(nextFill);
       setError(null);
       onPreview(nextFill);
@@ -133,18 +141,26 @@ export function useBackgroundFill({
 
   const selectImage = useCallback(
     async (file: File) => {
+      const revision = revisionRef.current + 1;
+      revisionRef.current = revision;
       setPreparingImage(true);
       setError(null);
       try {
-        preview({ type: "image", blob: await prepareBackgroundImage(file) });
+        const blob = await prepareBackgroundImage(file);
+        if (mountedRef.current && revisionRef.current === revision) {
+          const nextFill: BackgroundFill = { type: "image", blob };
+          setFill(nextFill);
+          onPreview(nextFill);
+        }
       } catch (reason) {
-        if (mountedRef.current)
+        if (mountedRef.current && revisionRef.current === revision)
           setError(reason instanceof Error ? reason.message : String(reason));
       } finally {
-        if (mountedRef.current) setPreparingImage(false);
+        if (mountedRef.current && revisionRef.current === revision)
+          setPreparingImage(false);
       }
     },
-    [preview],
+    [onPreview],
   );
 
   const dirty = !sameFill(fill, savedFill);
@@ -158,7 +174,10 @@ export function useBackgroundFill({
     try {
       const updated = await onApply(nextFill);
       if (mountedRef.current && revisionRef.current === revision) {
-        setSavedFill(updated.backgroundFill ?? TRANSPARENT_FILL);
+        const nextSavedFill = updated.backgroundFill ?? TRANSPARENT_FILL;
+        committedFillRef.current = nextSavedFill;
+        setFill(nextSavedFill);
+        setSavedFill(nextSavedFill);
         onResult(updated);
       }
     } catch (reason) {
@@ -170,19 +189,29 @@ export function useBackgroundFill({
     }
   }, [fill, onApply, onResult]);
 
+  const cancel = useCallback(() => {
+    revisionRef.current += 1;
+    const committedFill = committedFillRef.current;
+    setFill(committedFill);
+    setSavedFill(committedFill);
+    setSaving(false);
+    setPreparingImage(false);
+    setError(null);
+    onPreview(committedFill);
+  }, [onPreview]);
+
   return {
     fill,
     dirty,
     saving,
-    // Gates download/edit-mask entry points wired via `onBusyChange` — those
-    // must stay blocked for the whole unsaved window, not just while the
-    // save request is in flight, so they never hand out a PNG that doesn't
-    // match what's on screen.
+    // Exposes the whole draft/preparation window to the owning panel. Downloads
+    // deliberately remain bound to the committed document while this is true.
     busy: saving || preparingImage || dirty,
     error,
     preview,
     selectColor,
     selectImage,
     save,
+    cancel,
   };
 }

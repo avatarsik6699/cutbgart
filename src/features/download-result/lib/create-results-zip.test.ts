@@ -32,4 +32,25 @@ describe("createUniqueResultNames", () => {
     expect(bytes.slice(dataOffset, dataOffset + png.length)).toEqual(png);
     expect(new TextDecoder().decode(bytes)).not.toContain("photo.jpg");
   });
+
+  it("keeps mixed committed backgrounds and skips failed items", async () => {
+    const first = new Uint8Array([137, 80, 78, 71, 10]);
+    const second = new Uint8Array([137, 80, 78, 71, 20]);
+    const blob = await createResultsZip([
+      {
+        originalFileName: "first.jpg",
+        processedImage: { result: new Blob([first], { type: "image/png" }) },
+      },
+      { originalFileName: "failed.jpg" },
+      {
+        originalFileName: "second.jpg",
+        processedImage: { result: new Blob([second], { type: "image/png" }) },
+      },
+    ]);
+    const text = new TextDecoder("latin1").decode(await blob.arrayBuffer());
+    expect(text).toContain("cutbg-result-1.png");
+    expect(text).toContain("cutbg-result-2.png");
+    expect(text).not.toContain("cutbg-result-3.png");
+    expect(text).not.toContain("failed.jpg");
+  });
 });
