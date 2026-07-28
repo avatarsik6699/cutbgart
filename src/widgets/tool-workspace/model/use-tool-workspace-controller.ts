@@ -145,13 +145,9 @@ export function useToolWorkspaceController() {
   const [previewFill, setPreviewFill] = useState<BackgroundFill>({
     type: "transparent",
   });
-  const [backgroundBusy, setBackgroundBusy] = useState(false);
   const [batchPreviewFills, setBatchPreviewFills] = useState<
     Record<string, BackgroundFill>
   >({});
-  const [batchBackgroundBusy, setBatchBackgroundBusy] = useState<Record<string, boolean>>(
-    {},
-  );
   const [hydrated, setHydrated] = useState(false);
   const [guidedEntry, setGuidedEntry] = useState(false);
   const [guidedVisualContext, setGuidedVisualContext] =
@@ -396,7 +392,6 @@ export function useToolWorkspaceController() {
     setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
     setPreviewFill({ type: "transparent" });
-    setBackgroundBusy(false);
     if (!result.ok) {
       setUploadError(result.error);
       return;
@@ -450,7 +445,6 @@ export function useToolWorkspaceController() {
     setExtractingMatte(false);
     setFinalizingCorrection(false);
     setPreviewFill({ type: "transparent" });
-    setBackgroundBusy(false);
     setGuidedEntry(false);
     setGuidedVisualContext(null);
     guidedTargetRef.current = null;
@@ -1275,11 +1269,11 @@ export function useToolWorkspaceController() {
   }
 
   function commitSingleBackground(updated: ProcessedImage) {
-    commitSingleResult(updated, "background", "Background");
+    commitSingleResult(updated, "background", m.editorHistoryBackground());
   }
 
   function commitBatchBackground(itemId: string, updated: ProcessedImage) {
-    commitBatchResult(itemId, updated, "background", "Background");
+    commitBatchResult(itemId, updated, "background", m.editorHistoryBackground());
   }
 
   function cancelGuided() {
@@ -1306,12 +1300,8 @@ export function useToolWorkspaceController() {
     setCorrectionViewAnnouncement,
     previewFill,
     setPreviewFill,
-    backgroundBusy,
-    setBackgroundBusy,
     batchPreviewFills,
     setBatchPreviewFills,
-    batchBackgroundBusy,
-    setBatchBackgroundBusy,
     hydrated,
     guidedEntry,
     setGuidedEntry,

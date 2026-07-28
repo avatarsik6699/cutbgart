@@ -23,6 +23,7 @@ export function BackgroundFillSelector({
   onApply,
   onResult,
   onBusyChange,
+  onDirtyChange,
 }: {
   // See `useBackgroundFill`'s `image` param doc — deliberately excludes
   // `alphaMatte` (and everything else) so switching the selected image never
@@ -32,23 +33,41 @@ export function BackgroundFillSelector({
   onApply: (fill: BackgroundFill) => Promise<ProcessedImage>;
   onResult: (image: ProcessedImage) => void;
   onBusyChange?: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const { fill, dirty, saving, busy, error, preview, selectColor, selectImage, save } =
-    useBackgroundFill({
-      image,
-      onPreview,
-      onApply,
-      onResult,
-    });
+  const {
+    fill,
+    dirty,
+    saving,
+    busy,
+    error,
+    preview,
+    selectColor,
+    selectImage,
+    save,
+    cancel,
+  } = useBackgroundFill({
+    image,
+    onPreview,
+    onApply,
+    onResult,
+  });
   const currentColor = fill.type === "color" ? fill.value : DEFAULT_COLOR;
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const busyCallbackRef = useRef(onBusyChange);
+  const dirtyCallbackRef = useRef(onDirtyChange);
   useEffect(() => {
     busyCallbackRef.current = onBusyChange;
   }, [onBusyChange]);
   useEffect(() => {
+    dirtyCallbackRef.current = onDirtyChange;
+  }, [onDirtyChange]);
+  useEffect(() => {
     busyCallbackRef.current?.(busy);
   }, [busy]);
+  useEffect(() => {
+    dirtyCallbackRef.current?.(dirty);
+  }, [dirty]);
   return (
     <fieldset
       className="flex flex-col gap-3 rounded-lg border border-border p-4"
@@ -153,7 +172,15 @@ export function BackgroundFillSelector({
           disabled={!dirty || saving}
           aria-busy={saving}
         >
-          {m.saveBackground()}
+          {m.backgroundApply()}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={cancel}
+          disabled={!dirty && !saving}
+        >
+          {m.cancel()}
         </Button>
         {(dirty || saving) && (
           <p role="status" className="text-sm text-muted-foreground">

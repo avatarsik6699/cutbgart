@@ -107,6 +107,49 @@ describe("editor history", () => {
     expect(scope.history.past.at(-1)?.label).toBe("Branch");
   });
 
+  it("keeps uploaded backgrounds reachable through undo and releases a replaced branch", () => {
+    let nextUrl = 0;
+    const revokeObjectURL = vi.fn();
+    const artifacts = new EditorArtifactStore({
+      createObjectURL: () => `blob:background-${String(++nextUrl)}`,
+      revokeObjectURL,
+    });
+    let scope = createEditDocumentScope(image("base"), { artifacts });
+    const firstBackground = new Blob(["first-background"], { type: "image/png" });
+    scope = commitProcessedImage(
+      scope,
+      {
+        ...image("first"),
+        backgroundFill: { type: "image", blob: firstBackground },
+      },
+      { kind: "background", label: "Background" },
+    );
+    const firstBackgroundId = artifacts.idOf(firstBackground);
+    expect(firstBackgroundId).not.toBeNull();
+    artifacts.getObjectUrl(firstBackgroundId!);
+
+    scope = undoEdit(scope);
+    expect(artifacts.get(firstBackgroundId!)).not.toBeNull();
+    scope = redoEdit(scope);
+    expect(resolveEditDocumentImage(scope).backgroundFill).toEqual({
+      type: "image",
+      blob: firstBackground,
+    });
+
+    scope = undoEdit(scope);
+    scope = commitProcessedImage(
+      scope,
+      {
+        ...image("branch"),
+        backgroundFill: { type: "color", value: "#ABCDEF" },
+      },
+      { kind: "background", label: "Background" },
+    );
+    expect(scope.history.future).toHaveLength(0);
+    expect(artifacts.get(firstBackgroundId!)).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:background-1");
+  });
+
   it("bounds entry count and retained unique history bytes", () => {
     let nextId = 0;
     const artifacts = new EditorArtifactStore({
