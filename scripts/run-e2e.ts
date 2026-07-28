@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { chromium } from "@playwright/test";
 import { loadEnv } from "vite";
 
-const ROOT_URL = "http://127.0.0.1:3000";
 const START_TIMEOUT_MS = 30_000;
 const DEFAULT_PROJECTS = ["chromium", "firefox", "webkit", "Mobile Safari"] as const;
 
@@ -12,6 +12,7 @@ const viteEnv = loadEnv("development", process.cwd());
 for (const [key, value] of Object.entries(viteEnv)) {
   process.env[key] ??= value;
 }
+const ROOT_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 function stopProcessTree(child: ChildProcess): void {
   if (!child.pid || child.exitCode !== null) return;
@@ -22,41 +23,93 @@ function stopProcessTree(child: ChildProcess): void {
   }
 }
 
-async function waitForServer(server: ChildProcess): Promise<void> {
+async function stopProcessTreeAndWait(child: ChildProcess): Promise<void> {
+  stopProcessTree(child);
+  if (child.exitCode !== null) return;
+  await new Promise<void>((resolve) => {
+    child.once("exit", () => resolve());
+  });
+}
+
+async function waitForRoute(server: ChildProcess, path: string): Promise<void> {
+  const url = new URL(path, ROOT_URL).toString();
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (server.exitCode !== null) {
       throw new Error(`Vite exited before becoming ready (${String(server.exitCode)})`);
     }
     try {
-      const response = await fetch(ROOT_URL, {
+      const response = await fetch(url, {
         signal: AbortSignal.timeout(1_000),
       });
-      if (response.ok) return;
+      const isReady = response.ok;
+      await response.arrayBuffer();
+      if (isReady) return;
     } catch {
-      // Vite is still starting; retry on a short deterministic interval.
+      // Vite or this SSR route is still starting; retry deterministically.
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Vite did not become ready within ${String(START_TIMEOUT_MS)}ms`);
+  throw new Error(`${url} did not become ready within ${String(START_TIMEOUT_MS)}ms`);
 }
 
-const server = spawn(
-  "pnpm",
-  [
-    "exec",
-    "vite",
-    "dev",
-    "--mode",
-    "e2e",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    "3000",
-    "--strictPort",
-  ],
-  { stdio: "inherit", detached: true },
-);
+async function waitForServer(server: ChildProcess): Promise<void> {
+  // Probe a static asset so readiness does not make the base locale the first
+  // SSR render. Locale pages are compiled deliberately in the browser below.
+  await waitForRoute(server, "/favicon.ico");
+}
+
+async function warmBrowserLocales(verify: boolean): Promise<void> {
+  const browser = await chromium.launch();
+  try {
+    for (const [path, locale] of [
+      ["/en/", "en"],
+      ["/", "ru"],
+    ] as const) {
+      const context = await browser.newContext({ serviceWorkers: "block" });
+      try {
+        const page = await context.newPage();
+        await page.goto(new URL(path, ROOT_URL).toString(), {
+          waitUntil: "domcontentloaded",
+        });
+        await page
+          .locator('[data-slot="site-header"][data-hydrated="true"]')
+          .waitFor({ state: "attached", timeout: START_TIMEOUT_MS });
+        const actualLocale = await page.locator("html").getAttribute("lang");
+        if (verify && actualLocale !== locale) {
+          throw new Error(
+            `Cold browser warm-up expected ${locale} at ${path}, received ${String(actualLocale)}`,
+          );
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+function startServer(): ChildProcess {
+  return spawn(
+    "pnpm",
+    [
+      "exec",
+      "vite",
+      "dev",
+      "--mode",
+      "e2e",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "3000",
+      "--strictPort",
+    ],
+    { stdio: "inherit", detached: true },
+  );
+}
+
+let server = startServer();
 
 function stopServer(): void {
   stopProcessTree(server);
@@ -73,7 +126,15 @@ process.once("SIGTERM", () => {
 
 let exitCode: number;
 try {
+  // The first Vite process primes Paraglide's freshly generated SSR/client
+  // module graph. A clean second process then verifies both hydrated locales
+  // before parallel Playwright workers can observe the cold base-locale leak.
   await waitForServer(server);
+  await warmBrowserLocales(false);
+  await stopProcessTreeAndWait(server);
+  server = startServer();
+  await waitForServer(server);
+  await warmBrowserLocales(true);
   const forwardedArgs = process.argv.slice(2);
   const hasExplicitProject = forwardedArgs.some(
     (argument) => argument === "--project" || argument.startsWith("--project="),

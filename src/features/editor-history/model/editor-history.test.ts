@@ -128,4 +128,39 @@ describe("editor history", () => {
 
     disposeEditDocumentScope(scope);
   });
+
+  it("keeps baseline, current, and the newest oversized undo step safe", async () => {
+    let nextId = 0;
+    const artifacts = new EditorArtifactStore({
+      createId: () => `oversized-${String(++nextId)}`,
+      estimateBytes: (value) =>
+        value instanceof Blob ? EDIT_HISTORY_BYTE_LIMIT + 1 : value.data.byteLength,
+    });
+    let scope = createEditDocumentScope(image("base"), { artifacts });
+    const baselineComposite = scope.document.baseline.composite;
+    scope = commitProcessedImage(scope, image("first"), {
+      kind: "manual",
+      label: "First",
+    });
+    const firstComposite = scope.document.current.composite;
+    scope = commitProcessedImage(scope, image("second"), {
+      kind: "enhance",
+      label: "Newest oversized",
+    });
+    const currentComposite = scope.document.current.composite;
+
+    expect(scope.history.past).toHaveLength(1);
+    expect(scope.history.past[0]?.label).toBe("Newest oversized");
+    expect(scope.history.retainedHistoricalBytes).toBeGreaterThan(
+      EDIT_HISTORY_BYTE_LIMIT,
+    );
+    expect(scope.artifacts.get(baselineComposite)).not.toBeNull();
+    expect(scope.artifacts.get(firstComposite)).not.toBeNull();
+    expect(scope.artifacts.get(currentComposite)).not.toBeNull();
+
+    scope = undoEdit(scope);
+    expect(await resolveEditDocumentImage(scope).result.text()).toBe("first");
+    expect(scope.artifacts.get(baselineComposite)).not.toBeNull();
+    expect(scope.artifacts.get(currentComposite)).not.toBeNull();
+  });
 });

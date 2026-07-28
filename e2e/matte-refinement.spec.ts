@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   applyMagicPass,
@@ -18,26 +18,26 @@ const SAMPLE = path.join(
 
 test.beforeEach(async ({ page }) => installMockInference(page));
 
-async function automaticResult(page: import("@playwright/test").Page, locale = "/en") {
+async function automaticResult(page: Page, locale = "/en") {
   await page.goto(locale);
-  await expect(
-    page.getByLabel(locale === "/en" ? "Upload an image" : "Загрузить изображения"),
-  ).toBeEnabled();
-  await page
-    .getByLabel(locale === "/en" ? "Upload an image" : "Загрузить изображения")
-    .setInputFiles(SAMPLE);
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
+  await expect(upload).toBeEnabled();
+  await upload.setInputFiles(SAMPLE);
   await expectAutomaticCutout(page);
-  await expectComparisonForTool(page, locale === "/en" ? "Enhancements" : "Улучшения");
+  await expectComparisonForTool(page, /^(?:Enhancements|Улучшения)$/);
+  return page.getByTestId("enhancements-tool-panel");
 }
 
-test("balanced refinement is lazy, disposes automatic inference, and continues to brush/download", async ({
+test("fine-detail refinement remains lazy and serialized behind one Apply", async ({
   page,
 }) => {
-  await automaticResult(page);
-  const controls = page.getByTestId("matte-refinement-controls");
-  await expect(controls).not.toContainText(/MB|MiB|WebGPU|WASM/);
-  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
+  const panel = await automaticResult(page);
+  await panel.getByRole("checkbox", { name: /remove colour halo/i }).uncheck();
+  await expect(panel).not.toContainText(/MB|MiB|WebGPU|WASM|model|graph/i);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/No safe visible change was needed|Безопасные заметные изменения/i),
+  ).toBeVisible();
 
   const posts = await page.evaluate(
     () =>
@@ -50,48 +50,13 @@ test("balanced refinement is lazy, disposes automatic inference, and continues t
   expect(posts.findIndex((post) => post.type === "dispose")).toBeLessThan(
     posts.findIndex((post) => post.type === "refine"),
   );
-  expect(posts.find((post) => post.type === "refine")?.requestedMode).toBe("balanced");
-
-  await controls.getByRole("button", { name: /Skip and edit with brush/ }).click();
-  await expect(
-    page.getByRole("application", { name: /mask correction editor/i }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /^Cancel$/ }).click();
-  await expect(page.getByRole("button", { name: /^Download$/ })).toBeVisible();
+  expect(posts.filter((post) => post.type === "refine")).toHaveLength(1);
+  expect(posts.filter((post) => post.type === "refine-foreground")).toHaveLength(0);
 });
 
-test("maximum falls back once to balanced and preserves the result", async ({ page }) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(window, "__mockMattingMaximumFailure", {
-      configurable: true,
-      value: true,
-    }),
-  );
-  await automaticResult(page);
-  const controls = page.getByTestId("matte-refinement-controls");
-  await controls.getByRole("radio", { name: /Maximum/ }).click();
-  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByText(/Continuing once with Balanced/)).toBeVisible();
-  await expect(page.getByRole("slider", { name: /before\/after/i })).toBeVisible({
-    timeout: 15_000,
-  });
-});
-
-test("balanced failure uses the localized deterministic fallback", async ({ page }) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(window, "__mockMattingBalancedFailure", {
-      configurable: true,
-      value: true,
-    }),
-  );
-  await automaticResult(page, "/");
-  const controls = page.getByTestId("matte-refinement-controls");
-  await controls.getByRole("button", { name: /^Уточнить края$/ }).click();
-  await expect(controls.getByText(/Текущая маска.*сохранены/)).toBeVisible();
-  await expect(page.getByRole("slider", { name: /до и после/i })).toBeVisible();
-});
-
-test("balanced WebGPU execution failure retries once on WASM", async ({ page }) => {
+test("capability recommendation stays internal while maximum falls back safely", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "gpu", {
       configurable: true,
@@ -99,50 +64,89 @@ test("balanced WebGPU execution failure retries once on WASM", async ({ page }) 
         requestAdapter: () => Promise.resolve({ features: new Set(["shader-f16"]) }),
       },
     });
-    Object.defineProperty(window, "__mockMattingBalancedWebGpuFailure", {
+    Object.defineProperty(window, "__mockMattingMaximumFailure", {
       configurable: true,
       value: true,
     });
   });
-  await automaticResult(page);
-  const controls = page.getByTestId("matte-refinement-controls");
-  await controls.getByRole("radio", { name: /Balanced/ }).click();
-  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByText(/compatible option/i)).toBeVisible();
-  await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
+  const panel = await automaticResult(page);
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
+  await expect(panel).not.toContainText(/Maximum|Balanced|WASM|WebGPU|fallback/i);
+
+  const refine = await page.evaluate(() =>
+    (
+      window as unknown as {
+        __mockInferencePosts: Array<{ type: string; requestedMode?: string }>;
+      }
+    ).__mockInferencePosts.find((post) => post.type === "refine"),
+  );
+  expect(refine?.requestedMode).toBe("maximum");
 });
 
-test("an accepted guided result can enter refinement before the exact brush", async ({
+test("deterministic fine-detail no-op can continue to the selected halo operation", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(window, "__mockMattingBalancedFailure", {
+      configurable: true,
+      value: true,
+    }),
+  );
+  const panel = await automaticResult(page, "/");
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
+  const posts = await page.evaluate(
+    () =>
+      (window as unknown as { __mockInferencePosts: Array<{ type: string }> })
+        .__mockInferencePosts,
+  );
+  expect(posts.map(({ type }) => type)).toContain("refine");
+  expect(posts.map(({ type }) => type)).toContain("refine-foreground");
+});
+
+test("an applied Magic result can enter the same Enhancements transaction", async ({
   page,
 }) => {
   await page.goto("/en");
-  const upload = page.getByLabel("Upload an image");
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
   await expectAutomaticCutout(page);
   await applyMagicPass(page);
-  await page.getByRole("button", { name: "Enhancements" }).click();
-  const controls = page.getByTestId("matte-refinement-controls");
-  await expect(controls).toBeVisible();
-  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
+  await page.getByRole("button", { name: /^(?:Enhancements|Улучшения)$/ }).click();
+  const panel = page.getByTestId("enhancements-tool-panel");
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/Enhancements applied|Улучшения применены/i),
+  ).toBeVisible();
 });
 
-test("a settled batch refines only the selected completed item", async ({ page }) => {
+test("a settled batch runs fine-detail work only for the selected item", async ({
+  page,
+}) => {
   await page.goto("/en");
-  const upload = page.getByLabel("Upload an image");
+  const upload = page.getByLabel(/Upload an image|Загрузить изображения/);
   await expect(upload).toBeEnabled();
   await upload.setInputFiles([SAMPLE, SAMPLE]);
-  await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
+  await expect(page.getByTestId("scheduler-summary")).toContainText(/2 done|готово 2/);
   await page
-    .getByRole("button", { name: /select sample\.jpg for review/i })
+    .getByRole("button", {
+      name: /select sample\.jpg for review|выбрать sample\.jpg для просмотра/i,
+    })
     .first()
     .click();
-  await page.getByRole("button", { name: "Enhancements" }).click();
-  const controls = page.getByTestId("matte-refinement-controls");
-  await expect(controls.getByRole("button", { name: /^Refine edges$/ })).toBeEnabled();
-  await controls.getByRole("button", { name: /^Refine edges$/ }).click();
-  await expect(controls.getByRole("button", { name: /Refine again/ })).toBeVisible();
+  await page.getByRole("button", { name: /^(?:Enhancements|Улучшения)$/ }).click();
+  const panel = page.getByTestId("enhancements-tool-panel");
+  await panel.getByRole("checkbox", { name: /remove colour halo/i }).uncheck();
+  await panel.getByRole("button", { name: /^(?:Apply|Применить)$/ }).click();
+  await expect(
+    panel.getByText(/No safe visible change was needed|Безопасные заметные изменения/i),
+  ).toBeVisible();
   const refineCount = await page.evaluate(
     () =>
       (

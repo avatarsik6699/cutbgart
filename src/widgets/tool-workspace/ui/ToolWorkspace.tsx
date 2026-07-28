@@ -32,8 +32,6 @@ import { DownloadAllButton } from "../../../features/download-result";
 import { BatchGrid, BatchStatus } from "../../../features/batch-processing";
 import { QualityModeToggle } from "../../../features/quality-mode-toggle";
 import { GuidedBrushCanvas, GuidedBrushControls } from "../../../features/select-object";
-import { MatteRefinementControls } from "../../../features/refine-matte";
-import { ForegroundRefinementControls } from "../../../features/refine-foreground";
 import {
   ChoosePhotoButton,
   UploadDropzone,
@@ -43,11 +41,14 @@ import {
 import { Button } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
 import { clearModelCache } from "@/features/model-storage";
+import { describeGuidedState, describeState } from "../lib/describe-state";
 import {
-  describeGuidedState,
-  describeRefinementState,
-  describeState,
-} from "../lib/describe-state";
+  createEnhancementDraft,
+  createEnhancementOperationRegistry,
+  updateEnhancementDraft,
+  type EnhancementDraft,
+  type EnhancementOperationId,
+} from "../model/enhancement-operation-registry";
 import { useToolWorkspaceController } from "../model/use-tool-workspace-controller";
 import {
   createEditorToolRegistry,
@@ -57,6 +58,7 @@ import { EditorStage } from "./EditorStage";
 import { EditorToolbar } from "./EditorToolbar";
 import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
 import { CutoutToolPanel, type CutoutIntent, type CutoutMode } from "./CutoutToolPanel";
+import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
 import { ProcessingLog } from "./ProcessingLog";
 
 const LazyToolPanelSlot = lazy(async () => {
@@ -319,10 +321,8 @@ export function ToolWorkspace() {
     guidedVisualContext,
     guided,
     guidedViewSession,
-    refinement,
-    foregroundRefinement,
-    refinementMode,
-    setRefinementMode,
+    enhancementState,
+    enhancementProgress,
     qualityMode,
     setQualityMode,
     state,
@@ -347,10 +347,10 @@ export function ToolWorkspace() {
     handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
-    startSingleRefinement,
-    startBatchRefinement,
-    startSingleForegroundRefinement,
-    startBatchForegroundRefinement,
+    applySingleEnhancements,
+    applyBatchEnhancements,
+    cancelEnhancements,
+    retryEnhancements,
     handleRetry,
     handleEditMask,
     handleBatchEditMask,
@@ -368,6 +368,7 @@ export function ToolWorkspace() {
 
   const busy = state.status === "model-loading" || state.status === "processing";
   const tools = useMemo(() => createEditorToolRegistry(), []);
+  const enhancementRegistry = useMemo(() => createEnhancementOperationRegistry(), []);
   const activeDocumentId =
     activeEditDocument?.document.id ??
     selectedBatchItem?.id ??
@@ -386,6 +387,9 @@ export function ToolWorkspace() {
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
   const [manualPreviewKey, setManualPreviewKey] = useState(0);
   const [manualDraftDirty, setManualDraftDirty] = useState(false);
+  const [enhancementDraftByDocument, setEnhancementDraftByDocument] = useState<
+    Record<string, EnhancementDraft>
+  >({});
   const [pendingTool, setPendingTool] = useState<EditorToolId | null>(null);
   const [pendingBatchItem, setPendingBatchItem] = useState<string | null>(null);
   const [pendingBatchClear, setPendingBatchClear] = useState(false);
@@ -418,10 +422,28 @@ export function ToolWorkspace() {
   const backgroundDraftDirty = activeDocumentId
     ? Boolean(backgroundDraftByDocument[activeDocumentId])
     : false;
+  const defaultEnhancementDraft = useMemo(
+    () =>
+      createEnhancementDraft(enhancementRegistry, {
+        inferencePath: deviceCapabilities?.inferencePath ?? null,
+      }),
+    [deviceCapabilities?.inferencePath, enhancementRegistry],
+  );
+  const enhancementDraft = activeDocumentId
+    ? (enhancementDraftByDocument[activeDocumentId] ?? defaultEnhancementDraft)
+    : defaultEnhancementDraft;
+  const activeEnhancementStatus =
+    enhancementState.documentId === activeDocumentId ? enhancementState.status : "idle";
+  const visibleEnhancementDraft: EnhancementDraft = {
+    ...enhancementDraft,
+    status: activeEnhancementStatus,
+  };
   const activeDraftDirty =
     activeTool === "cutout"
       ? guidedDraftDirty || manualDraftDirty
-      : activeTool === "background" && backgroundDraftDirty;
+      : activeTool === "enhance"
+        ? enhancementDraft.dirty || activeEnhancementStatus !== "idle"
+        : activeTool === "background" && backgroundDraftDirty;
 
   useEffect(() => {
     if (
@@ -544,24 +566,57 @@ export function ToolWorkspace() {
     handleReset();
   }
 
-  function enterSingleManualFromEnhancements() {
+  function updateEnhancementOperation(
+    operationId: EnhancementOperationId,
+    selected: boolean,
+  ) {
     if (!activeDocumentId) return;
-    setToolByDocument((current) => ({ ...current, [activeDocumentId]: "cutout" }));
-    setCutoutModeByDocument((current) => ({
+    setEnhancementDraftByDocument((current) => ({
       ...current,
-      [activeDocumentId]: "manual",
+      [activeDocumentId]: updateEnhancementDraft(
+        current[activeDocumentId] ?? defaultEnhancementDraft,
+        operationId,
+        selected,
+      ),
     }));
-    handleEditMask();
   }
 
-  function enterBatchManualFromEnhancements() {
+  function cancelEnhancementDraft() {
+    cancelEnhancements();
     if (!activeDocumentId) return;
-    setToolByDocument((current) => ({ ...current, [activeDocumentId]: "cutout" }));
-    setCutoutModeByDocument((current) => ({
+    setEnhancementDraftByDocument((current) => ({
       ...current,
-      [activeDocumentId]: "manual",
+      [activeDocumentId]: defaultEnhancementDraft,
     }));
-    handleBatchEditMask();
+  }
+
+  function markEnhancementDraftApplied() {
+    if (!activeDocumentId) return;
+    setEnhancementDraftByDocument((current) => ({
+      ...current,
+      [activeDocumentId]: { ...enhancementDraft, dirty: false },
+    }));
+  }
+
+  function applySingleEnhancementDraft() {
+    if (!activeDocumentId || state.status !== "result") return;
+    markEnhancementDraftApplied();
+    applySingleEnhancements(
+      state.result,
+      enhancementDraft.selectedOperationIds,
+      enhancementRegistry[0]?.historyLabel ?? m.editorToolEnhance(),
+    );
+  }
+
+  function applyBatchEnhancementDraft() {
+    if (!activeDocumentId || !selectedBatchItem?.processedImage) return;
+    markEnhancementDraftApplied();
+    applyBatchEnhancements(
+      selectedBatchItem.id,
+      selectedBatchItem.processedImage,
+      enhancementDraft.selectedOperationIds,
+      enhancementRegistry[0]?.historyLabel ?? m.editorToolEnhance(),
+    );
   }
 
   function discardActiveDraft() {
@@ -583,6 +638,13 @@ export function ToolWorkspace() {
       setBackgroundDraftByDocument((current) => ({
         ...current,
         [activeDocumentId]: false,
+      }));
+    }
+    if (activeDocumentId && activeTool === "enhance") {
+      cancelEnhancements();
+      setEnhancementDraftByDocument((current) => ({
+        ...current,
+        [activeDocumentId]: defaultEnhancementDraft,
       }));
     }
     setManualDraftDirty(false);
@@ -844,47 +906,27 @@ export function ToolWorkspace() {
             />
           )}
           {activeTool === "enhance" && (
-            <>
-              <MatteRefinementControls
-                mode={refinementMode}
-                path={deviceCapabilities?.inferencePath ?? null}
-                status={refinement.state.status}
-                progress={refinement.state.progress}
-                fallbackReason={refinement.state.fallbackReason}
-                fallback={refinement.state.fallback}
-                disabled={Boolean(
-                  batch.snapshot.activeCount || batch.snapshot.queuedCount,
-                )}
-                onModeChange={setRefinementMode}
-                onStart={() =>
-                  startBatchRefinement(
-                    selectedBatchItem.id,
-                    selectedBatchItem.processedImage!,
-                  )
-                }
-                onCancel={refinement.cancel}
-                onSkip={enterBatchManualFromEnhancements}
-              />
-              <ForegroundRefinementControls
-                status={foregroundRefinement.state.status}
-                progress={foregroundRefinement.state.progress}
-                fallbackReason={foregroundRefinement.state.fallbackReason}
-                result={foregroundRefinement.state.result}
-                error={foregroundRefinement.state.error}
-                disabled={Boolean(
-                  batch.snapshot.activeCount || batch.snapshot.queuedCount,
-                )}
-                onStart={(componentCleanup) =>
-                  startBatchForegroundRefinement(
-                    selectedBatchItem.id,
-                    selectedBatchItem.processedImage!,
-                    componentCleanup,
-                  )
-                }
-                onCancel={foregroundRefinement.cancel}
-                onSkip={enterBatchManualFromEnhancements}
-              />
-            </>
+            <EnhancementsToolPanel
+              registry={enhancementRegistry}
+              draft={visibleEnhancementDraft}
+              progress={enhancementProgress}
+              activeOperationId={enhancementState.activeOperationId}
+              outcome={
+                enhancementState.documentId === activeDocumentId
+                  ? enhancementState.outcome
+                  : null
+              }
+              errorCode={
+                enhancementState.documentId === activeDocumentId
+                  ? enhancementState.errorCode
+                  : null
+              }
+              disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
+              onOperationChange={updateEnhancementOperation}
+              onApply={applyBatchEnhancementDraft}
+              onCancel={cancelEnhancementDraft}
+              onRetry={retryEnhancements}
+            />
           )}
           {activeTool === "background" && (
             <BackgroundFillSelector
@@ -1018,32 +1060,26 @@ export function ToolWorkspace() {
             />
           )}
           {activeTool === "enhance" && (
-            <>
-              <MatteRefinementControls
-                mode={refinementMode}
-                path={deviceCapabilities?.inferencePath ?? null}
-                status={refinement.state.status}
-                progress={refinement.state.progress}
-                fallbackReason={refinement.state.fallbackReason}
-                fallback={refinement.state.fallback}
-                onModeChange={setRefinementMode}
-                onStart={() => startSingleRefinement(state.result)}
-                onCancel={refinement.cancel}
-                onSkip={enterSingleManualFromEnhancements}
-              />
-              <ForegroundRefinementControls
-                status={foregroundRefinement.state.status}
-                progress={foregroundRefinement.state.progress}
-                fallbackReason={foregroundRefinement.state.fallbackReason}
-                result={foregroundRefinement.state.result}
-                error={foregroundRefinement.state.error}
-                onStart={(componentCleanup) =>
-                  startSingleForegroundRefinement(state.result, componentCleanup)
-                }
-                onCancel={foregroundRefinement.cancel}
-                onSkip={enterSingleManualFromEnhancements}
-              />
-            </>
+            <EnhancementsToolPanel
+              registry={enhancementRegistry}
+              draft={visibleEnhancementDraft}
+              progress={enhancementProgress}
+              activeOperationId={enhancementState.activeOperationId}
+              outcome={
+                enhancementState.documentId === activeDocumentId
+                  ? enhancementState.outcome
+                  : null
+              }
+              errorCode={
+                enhancementState.documentId === activeDocumentId
+                  ? enhancementState.errorCode
+                  : null
+              }
+              onOperationChange={updateEnhancementOperation}
+              onApply={applySingleEnhancementDraft}
+              onCancel={cancelEnhancementDraft}
+              onRetry={retryEnhancements}
+            />
           )}
           {activeTool === "background" && (
             <BackgroundFillSelector
@@ -1309,22 +1345,23 @@ export function ToolWorkspace() {
       className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""} ${guided.state.session ? "tool-workspace-guided" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">
-        {foregroundRefinement.state.status !== "idle" &&
-        foregroundRefinement.state.status !== "result"
-          ? m.foregroundRefinementProgress({
-              progress: String(Math.round(foregroundRefinement.state.progress ?? 0)),
+        {enhancementState.status === "applying"
+          ? m.enhancementsProgress({
+              operation:
+                enhancementRegistry.find(
+                  ({ id }) => id === enhancementState.activeOperationId,
+                )?.label ?? m.enhancementsTitle(),
+              progress: String(Math.round(enhancementProgress ?? 0)),
             })
-          : refinement.state.status !== "idle" && refinement.state.status !== "result"
-            ? describeRefinementState(refinement.state.status, refinement.state.progress)
-            : guided.state.session
-              ? describeGuidedState(guided.state.status, guided.state.progress)
-              : batch.session.items.length
-                ? m.batchCompleteAnnouncement({
-                    done: batch.snapshot.completedCount,
-                    total: batch.snapshot.totalCount,
-                    failed: batch.snapshot.failedCount,
-                  })
-                : describeState(state, uploadError)}
+          : guided.state.session
+            ? describeGuidedState(guided.state.status, guided.state.progress)
+            : batch.session.items.length
+              ? m.batchCompleteAnnouncement({
+                  done: batch.snapshot.completedCount,
+                  total: batch.snapshot.totalCount,
+                  failed: batch.snapshot.failedCount,
+                })
+              : describeState(state, uploadError)}
         {state.status === "correcting" && correctionViewAnnouncement
           ? `. ${correctionViewAnnouncement}.`
           : ""}

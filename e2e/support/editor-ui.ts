@@ -1,12 +1,15 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-export async function expectAutomaticCutout(page: Page): Promise<Locator> {
+export async function expectAutomaticCutout(
+  page: Page,
+  { timeout = 15_000 }: { timeout?: number } = {},
+): Promise<Locator> {
   const stage = page.getByTestId("editor-stage");
   const panel = page.getByTestId("cutout-tool-panel");
-  await expect(stage).toBeVisible({ timeout: 15_000 });
-  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await expect(stage).toBeVisible({ timeout });
+  await expect(panel).toBeVisible({ timeout });
   await expect(page.getByTestId("guided-brush-selection")).toBeVisible({
-    timeout: 15_000,
+    timeout,
   });
   return panel;
 }
