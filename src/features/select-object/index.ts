@@ -1,7 +1,3 @@
-/** @deprecated Phase-17 compatibility UI; production uses `GuidedBrushCanvas`. */
-export { ObjectSelectionCanvas } from "./ui/ObjectSelectionCanvas";
-/** @deprecated Phase-17 compatibility UI; production uses `GuidedBrushControls`. */
-export { ObjectSelectionControls } from "./ui/ObjectSelectionControls";
 export { GuidedBrushCanvas } from "./ui/GuidedBrushCanvas";
 export { GuidedBrushControls } from "./ui/GuidedBrushControls";
 export {

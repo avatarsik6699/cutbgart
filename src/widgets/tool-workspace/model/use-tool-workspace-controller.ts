@@ -466,6 +466,13 @@ export function useToolWorkspaceController() {
     const session = guided.state.session;
     const target = guidedTargetRef.current;
     if (!session || !target || !guided.canApply) return false;
+    const expectedDocumentRevision =
+      target.kind === "single"
+        ? (singleDocumentRef.current?.document.revision ?? target.documentRevision)
+        : target.kind === "batch"
+          ? (selectedBatchItem?.editDocument?.document.revision ??
+            target.documentRevision)
+          : null;
     const isBaseBackedEmptyReset =
       session.baseMatte !== null &&
       session.strokes.length === 0 &&
@@ -523,7 +530,7 @@ export function useToolWorkspaceController() {
                 result,
                 "cutout",
                 m.editorHistoryCutout(),
-                target.documentRevision,
+                expectedDocumentRevision ?? target.documentRevision,
                 target.workerOwnerId,
               )
             : target.kind === "single"
@@ -531,7 +538,7 @@ export function useToolWorkspaceController() {
                   result,
                   "cutout",
                   m.editorHistoryCutout(),
-                  target.documentRevision,
+                  expectedDocumentRevision ?? target.documentRevision,
                 )
               : commitSingleResult(result, "cutout", m.editorHistoryCutout());
         if (!committed) {
@@ -548,13 +555,13 @@ export function useToolWorkspaceController() {
           guidedTargetRef.current = {
             ...target,
             image: result,
-            documentRevision: target.documentRevision + 1,
+            documentRevision: (expectedDocumentRevision ?? target.documentRevision) + 1,
           };
         } else if (target.kind === "single") {
           guidedTargetRef.current = {
             ...target,
             image: result,
-            documentRevision: target.documentRevision + 1,
+            documentRevision: (expectedDocumentRevision ?? target.documentRevision) + 1,
           };
         }
         retryCorrectionRef.current = null;
@@ -1019,6 +1026,25 @@ export function useToolWorkspaceController() {
       if (state.status === "result") handleEditMask();
     };
     setCorrectionError(null);
+    if (image.alphaMatte) {
+      let scope = singleDocumentRef.current;
+      if (!scope) {
+        scope = createEditDocumentScope(image, {
+          inferencePath: deviceCapabilities?.inferencePath ?? null,
+        });
+        publishSingleDocument(scope);
+      }
+      setExtractingMatte(false);
+      setOriginalMatte(image.alphaMatte);
+      retryCorrectionRef.current = null;
+      refinementTargetRef.current = {
+        kind: "single",
+        image,
+        documentRevision: scope.document.revision,
+      };
+      enterCorrecting();
+      return;
+    }
     setExtractingMatte(true);
     void extractMatte(image)
       .then((matte) => {
@@ -1056,7 +1082,6 @@ export function useToolWorkspaceController() {
     const image = selectedBatchItem.processedImage;
     const runId = correctionRunRef.current + 1;
     correctionRunRef.current = runId;
-    setExtractingMatte(true);
     refinementTargetRef.current = {
       kind: "batch",
       itemId: selectedBatchItem.id,
@@ -1064,6 +1089,12 @@ export function useToolWorkspaceController() {
       documentRevision: selectedBatchItem.editDocument.document.revision,
       workerOwnerId: selectedBatchItem.editDocument.workerOwnerId,
     };
+    if (image.alphaMatte) {
+      setExtractingMatte(false);
+      setOriginalMatte(image.alphaMatte);
+      return;
+    }
+    setExtractingMatte(true);
     void batch
       .extractMatte(image)
       .then((matte) => {
@@ -1242,6 +1273,18 @@ export function useToolWorkspaceController() {
     publishSingleDocument(next);
     replaceResult(image);
     setPreviewFill(image.backgroundFill ?? { type: "transparent" });
+    if (guidedTargetRef.current?.kind === "single") {
+      guidedTargetRef.current = {
+        ...guidedTargetRef.current,
+        image,
+        documentRevision: next.document.revision,
+      };
+      setGuidedVisualContext({
+        entryKind: "processed",
+        resultColorSource: image.foreground ?? image.source.blob,
+      });
+      guided.start(image.source, image.alphaMatte ?? null);
+    }
   }
 
   function applyBatchHistory(direction: "undo" | "redo") {
@@ -1256,6 +1299,21 @@ export function useToolWorkspaceController() {
       ...current,
       [item.id]: image.backgroundFill ?? { type: "transparent" },
     }));
+    if (
+      guidedTargetRef.current?.kind === "batch" &&
+      guidedTargetRef.current.itemId === item.id
+    ) {
+      guidedTargetRef.current = {
+        ...guidedTargetRef.current,
+        image,
+        documentRevision: next.document.revision,
+      };
+      setGuidedVisualContext({
+        entryKind: "processed",
+        resultColorSource: image.foreground ?? image.source.blob,
+      });
+      guided.start(image.source, image.alphaMatte ?? null);
+    }
   }
 
   function handleUndoDocument() {

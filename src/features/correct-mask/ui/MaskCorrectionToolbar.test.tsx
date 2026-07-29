@@ -15,18 +15,6 @@ function renderToolbar(
     onModeChange: vi.fn(),
     brushSize: 24,
     onBrushSizeChange: vi.fn(),
-    canUndo: false,
-    canRedo: false,
-    onUndo: vi.fn(),
-    onRedo: vi.fn(),
-    onClear: vi.fn(),
-    zoomPercent: 100,
-    canZoomIn: true,
-    canZoomOut: false,
-    canPan: false,
-    onZoomIn: vi.fn(),
-    onZoomOut: vi.fn(),
-    onResetView: vi.fn(),
     ...overrides,
   };
   render(<MaskCorrectionToolbar {...props} />);
@@ -68,61 +56,16 @@ describe("MaskCorrectionToolbar", () => {
 
     const size = screen.getByLabelText("Brush size");
     expect(size).toHaveProperty("max", "75");
-    expect(size.getAttribute("aria-valuetext")).toBe("150 px diameter");
-    expect(screen.getByText("150 px")).toBeDefined();
+    expect(size.getAttribute("aria-valuetext")).toBe("100%");
+    expect(screen.queryByText(/150 px/i)).toBeNull();
   });
 
-  it("disables undo/redo buttons when there's no history, and enables them otherwise", () => {
-    renderToolbar({ canUndo: false, canRedo: true });
+  it("keeps draft history controls out of the visible rail", () => {
+    renderToolbar();
 
-    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Redo" })).toHaveProperty(
-      "disabled",
-      false,
-    );
-  });
-
-  it("calls onUndo/onRedo when clicked", () => {
-    const props = renderToolbar({ canUndo: true, canRedo: true });
-
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear draft" }));
-
-    expect(props.onUndo).toHaveBeenCalledTimes(1);
-    expect(props.onRedo).toHaveBeenCalledTimes(1);
-    expect(props.onClear).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByRole("button", { name: "Undo" }).getAttribute("aria-keyshortcuts"),
-    ).toBe("Control+Z Meta+Z");
-    expect(
-      screen.getByRole("button", { name: "Redo" }).getAttribute("aria-keyshortcuts"),
-    ).toContain("Control+Y");
-  });
-
-  it("calls zoom controls and exposes the current zoom level", () => {
-    const props = renderToolbar({
-      zoomPercent: 125,
-      canZoomOut: true,
-    });
-
-    expect(screen.getByText("125%")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
-    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reset view" }));
-
-    expect(props.onZoomIn).toHaveBeenCalledWith();
-    expect(props.onZoomOut).toHaveBeenCalledWith();
-    expect(props.onResetView).toHaveBeenCalledTimes(1);
-  });
-
-  it("enables reset when the view is panned even at 100% zoom", () => {
-    renderToolbar({ zoomPercent: 100, canPan: true });
-
-    expect(screen.getByRole("button", { name: "Reset view" })).toHaveProperty(
-      "disabled",
-      false,
-    );
-    expect(screen.getByLabelText("Zoom 100%, panned")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Redo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear draft" })).toBeNull();
+    expect(screen.getByTestId("manual-cutout-status-slot")).toBeDefined();
   });
 });

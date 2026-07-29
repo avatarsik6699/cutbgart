@@ -48,12 +48,11 @@
 | PHASE_27 | ✅ done | v0.27.0 | ✅ | 🤖 agent | Unified Cutout Tool |
 | PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
-| PHASE_30 | ⏳ pending | v0.30.0 | ⬜ | — | Design System & Redesign (Pencil) |
-| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Redesign & Legacy Consolidation Implementation |
-| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
-| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Whole-Project Audit & Refactor |
-| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Accessibility, Device & Product Validation |
-| PHASE_35 | ⏳ pending | v0.35.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
+| PHASE_30 | 🔄 in-progress | v0.30.0 | ⬜ | 🤖 agent | Design System & Redesign — architect review iteration |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
+| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -65,7 +64,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `29` · **Phase in progress:** `—`
+**Phase completed:** `29` · **Phase in progress:** `30`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -951,6 +950,138 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-29 — Phase-30 persistent-preview and header-utility polish approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: the third Phase-30 architect review found overlapping processing-mode badges,
+page chrome blended into the engineering grid, duplicate draft controls, divergent transparency
+grids, ambiguous busy cursors and visible preview remount flicker.
+
+### Changes / Decision
+- `SPEC.md` v1.24 §5.3 supersedes the affected presentation details of the preceding review:
+  return-to-upload moves to the toolbar's left edge, diagnostics moves to a stable header portal,
+  and the brush returns to a thin dashed outer footprint with a solid core.
+- The empty home state becomes a border-light icon-led command deck. Cutout removes visible
+  draft-history controls but retains tool-local keyboard history; view controls become collapsible
+  and disclose their shortcuts.
+- Comparison, Magic and Manual keep persistent per-document preview ownership and share one
+  checkerboard token. Busy model work overlays the image with Skeleton feedback instead of mixing a
+  native wait cursor with the brush.
+- No route, server API, persistent store, env var, new dependency, analytics payload, model
+  contract or Studio capability is added.
+
+### Affected Phases / Consequences
+- PHASE_30 — eight new Architect Review Notes contain the implementation and deterministic
+  verification scope before `T19`–`T21`.
+- PHASE_31–34 — unaffected; they consume the final Phase-30 surface and do not prescribe these
+  presentation details.
+
+## 2026-07-29 — Phase-30 unified-toolbar and horizontal-filmstrip IA delta approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: the second Phase-30 architect review found the separate workspace top bar
+space-heavy, the desktop left filmstrip hard to scan, the Cutout view controls insufficiently
+observable, and several rail/cursor treatments visually unstable.
+
+### Changes / Decision
+- `SPEC.md` v1.23 §5.3 supersedes only the presentation details of the earlier Phase-30 IA entry:
+  one toolbar replaces the top bar, batch navigation is a horizontal top filmstrip at all
+  breakpoints, per-item actions move into item menus, and Download all joins the toolbar Download
+  menu.
+- Cutout adds explicit Fullscreen with an in-page fallback and returns to a restrained solid
+  outer/core cursor. The stable stage, right tool rail, document/history ownership, diagnostics
+  overlay, automatic-first state machine and privacy/runtime contracts remain unchanged.
+- No route, server API, persistent store, env var, dependency, analytics payload, model contract or
+  Studio capability is added.
+
+### Affected Phases / Consequences
+- PHASE_30 — the new architect-review notes carry the complete implementation and verification
+  scope before `T19`–`T21`.
+- PHASE_31–34 — unaffected; they consume the final Phase-30 workspace without prescribing its
+  topbar or filmstrip orientation.
+
+## 2026-07-29 — Phase-30 same-route editor and batch-filmstrip IA delta approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect review of the Phase-30 local implementation found the background/loading
+treatment visually ineffective, image-stage cropping and breakpoint overflow, primary debug-shaped
+logs, an oversized reset action, and a batch overview that displaced the selected editor.
+
+### Changes / Decision
+- `SPEC.md` v1.22 §5.3 keeps the automatic-first state/document contracts but makes marketing
+  content empty-state-only on the same localized URL, introduces compact workspace chrome, a stable
+  contain-fit stage with a desktop right tool rail and Cutout canvas controls, overlay diagnostics,
+  Skeleton-first loading, and a vertical-desktop/horizontal-narrow batch filmstrip.
+- No route, server API, persistent store, env var, analytics payload, model contract, or Studio
+  capability is added. Single and selected batch documents continue to share the same editor,
+  history, draft, export and cleanup contracts.
+
+### Affected Phases / Consequences
+- PHASE_30 — contract updated surgically; the approved delta is implemented through its Architect
+  Review Notes before `T19`–`T21`.
+- PHASE_31–34 — no contract rewrite required; each already consumes the final Phase-30 redesigned
+  workspace and remains pending after it.
+
+## 2026-07-29 — External design tooling abandoned; Phase 30 merges with former Phase 31, downstream phases renumbered back
+
+**Type**: spec-change
+**Author**: AI (docs update, architect-directed)
+**Triggered by**: the architect tried Claude Design (claude.ai/design) as the Phase-30 design tool
+after the earlier Pencil attempt (2026-07-28 entry below) and also rejected its visual output. They
+decided to stop trying external design tools entirely and instead iterate the design system directly
+in the codebase, building on what already ships rather than an exported mockup.
+
+### Changes / Decision
+- Both rejected design-tool attempts are fully reverted: `docs/design-pencil-archive-2026-07-28/`
+  (the archived Pencil `.pen` source, exports, and superseded `DESIGN_SYSTEM.md`) and
+  `docs/design/BRIEF.md` (the Claude Design functional brief, never approved) are deleted. Nothing
+  from either attempt is retained as repository evidence.
+- The uncommitted Pencil→Claude Design tooling swap (a prior session's in-progress edit to
+  `docs/PHASE_30.md`/`SPEC.md`/`STACK.md`/`STATE.md` that was never committed) is discarded outright
+  rather than carried forward or reworked — the whole external-tool approach is what's being dropped,
+  not just which tool.
+- PHASE_30 "Design System & Redesign" is redefined: no external design tool, and it now allows
+  `src/` changes directly (previously design-only, with a separate PHASE_31 doing implementation).
+  The architect's specific scope directive: upgrade `shadcn/ui` to its current version and maximize
+  use of its stock components; keep the existing color palette/typography, formalized as documented
+  Tailwind `@theme` tokens; add `Skeleton`-based loading states; rework the home-page layout —
+  specifically relocate `features/model-storage`'s `ModelStorageManager`, which currently floats as
+  a disconnected `<aside>` below `ToolWorkspace` on `HomePage.tsx`, into a better-integrated spot
+  (e.g. a `site-header` icon+tooltip trigger); add a subtle, low-opacity, gradually-fading
+  engineering-grid background pattern; and land on a visual language appropriate for 2026.
+- Former PHASE_31 "Redesign & Legacy Consolidation Implementation" is removed as a separate phase —
+  its full scope (per-item ownership audit, dirty-draft guards, batch concurrency/cleanup, legacy UI
+  removal, accessibility/TTI/LCP/INP regression gate, full E2E) folds into the merged PHASE_30, since
+  both passes touch the same components and the architect wants one iterative pass, not a
+  design-record handoff followed by a separate implementation phase.
+- Former PHASE_32–35 (Guided Help & Onboarding; Whole-Project Audit & Refactor; Accessibility,
+  Device & Product Validation; Final Legal, Consent & Release Readiness) shift back to PHASE_31–34
+  — the same numbering these phases had before the 2026-07-28 insertion, since the insertion added
+  net one phase (two new phases replaced by one merged phase). Metadata, tags, dependencies, and
+  cross-references were repaired; no scope content changed for these four phases beyond the
+  renumbering.
+- `SPEC.md` v1.21 (§1.3 target/scope table, §5 design-reference blockquote, §5.2/§5.3/§5.4 phase
+  cross-references, §6 stack table — the Pencil/Claude-Design "Design tooling" row is removed
+  entirely, §7.1/§7.4/§7.7 renumbered validation references, §8 phase table — rows 30 and former 31
+  merged into one, rows 32–35 renumbered to 31–34, §9, §10 — the Pencil per-session precondition
+  question is removed) and `docs/STACK.md` (stack table row removed; "Design tooling" section
+  rewritten to "Design system (Phase 30)" describing the in-repo approach) were updated. All
+  `docs/legal/*.md` forward references to PHASE_31–35 were renumbered to match.
+
+### Affected Phases / Consequences
+- PHASE_30 — redefined in place (`docs/PHASE_30.md` rewritten, not file-renamed); now permits `src/`
+  changes and absorbs former PHASE_31's full scope.
+- PHASE_31 (was 32), PHASE_32 (was 33), PHASE_33 (was 34), PHASE_34 (was 35) — file-renamed via
+  `git mv` and internally renumbered; no scope content changed.
+- PHASE_01–29 remain completed historical contracts, unaffected.
+- `docs/STATE.md` § Current Contract remains at Phase 29 until PHASE_30 is implemented, gated, and
+  closed.
+- Earlier Project Log entries remain immutable historical records; any "PHASE_30"/"PHASE_31"/etc.
+  phase numbers they mention refer to the numbering that was current on their own date, not today's.
 
 ## 2026-07-28 — Design-driven redesign inserted as Phase 30–31; downstream phases renumbered
 

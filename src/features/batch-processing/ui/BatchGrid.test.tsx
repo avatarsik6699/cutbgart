@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { m } from "@/paraglide/messages";
 
@@ -13,6 +20,13 @@ const snapshot: BatchSchedulerSnapshot = {
   completedCount: 0,
   failedCount: 0,
   totalCount: 1,
+};
+
+const actions = {
+  snapshot,
+  onDownload: vi.fn(),
+  onRetry: vi.fn(),
+  onRemove: vi.fn(),
 };
 
 function makeItem(overrides: Partial<BatchItem> = {}): BatchItem {
@@ -38,6 +52,25 @@ function makeItem(overrides: Partial<BatchItem> = {}): BatchItem {
   };
 }
 
+function makeResultItem(overrides: Partial<BatchItem> = {}): BatchItem {
+  const source = {
+    blob: new Blob(["image"], { type: "image/jpeg" }),
+    width: 1200,
+    height: 800,
+    format: "image/jpeg" as const,
+  };
+  return makeItem({
+    source,
+    status: "result",
+    processedImage: {
+      source,
+      result: new Blob(["result"], { type: "image/png" }),
+      qualityMode: "fast",
+    },
+    ...overrides,
+  });
+}
+
 const createObjectURL = vi.fn(() => "blob:batch-thumbnail");
 const revokeObjectURL = vi.fn();
 
@@ -57,22 +90,29 @@ afterEach(() => {
 });
 
 describe("BatchGrid", () => {
-  it("shows a thumbnail, useful metadata, and an explicit selection affordance", async () => {
+  it("renders a fixed filmstrip tile with a contain-fit thumbnail", async () => {
     const onSelect = vi.fn();
     render(
       <BatchGrid
         items={[makeItem({ status: "result" })]}
         selectedItemId={null}
         onSelect={onSelect}
-        onRetry={vi.fn()}
+        {...actions}
       />,
     );
 
+    expect(screen.getByTestId("batch-filmstrip")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("batch-item-thumbnail")).toBeTruthy());
-    expect(screen.getByText(`1200 × 800 · ${m.processingModeFast()}`)).toBeTruthy();
-    expect(screen.getByText(m.batchSelect())).toBeTruthy();
+    expect(screen.getByTestId("batch-item-thumbnail").className).toContain(
+      "object-contain",
+    );
+    expect(screen.getByText("marketplace-chair.jpg")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /marketplace-chair\.jpg/i }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /select marketplace-chair\.jpg/i,
+      }),
+    );
     expect(onSelect).toHaveBeenCalledWith("item-1", expect.any(HTMLButtonElement));
   });
 
@@ -82,12 +122,88 @@ describe("BatchGrid", () => {
         items={[makeItem({ status: "result" })]}
         selectedItemId="item-1"
         onSelect={vi.fn()}
-        onRetry={vi.fn()}
+        {...actions}
       />,
     );
 
     expect(screen.getByRole("button", { pressed: true })).toBeTruthy();
-    expect(screen.getByText(m.batchSelected())).toBeTruthy();
+  });
+
+  it("keeps selection and item actions as sibling buttons", async () => {
+    const onDownload = vi.fn();
+    const onRetry = vi.fn();
+    const onRemove = vi.fn();
+    const { container } = render(
+      <BatchGrid
+        items={[makeResultItem()]}
+        selectedItemId="item-1"
+        snapshot={{ ...snapshot, queuedCount: 0, completedCount: 1 }}
+        onSelect={vi.fn()}
+        onDownload={onDownload}
+        onRetry={onRetry}
+        onRemove={onRemove}
+      />,
+    );
+
+    const card = container.querySelector("article");
+    expect(card?.querySelectorAll(":scope > button")).toHaveLength(2);
+    const trigger = screen.getByTestId("batch-item-actions");
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /download png/i }));
+    expect(onDownload).toHaveBeenCalledWith(expect.objectContaining({ id: "item-1" }));
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /reprocess/i }));
+    expect(onRetry).toHaveBeenCalledWith("item-1", trigger);
+
+    fireEvent.click(trigger);
+    const menu = await screen.findByRole("menu");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /remove/i }));
+    expect(onRemove).toHaveBeenCalledWith("item-1", trigger);
+  });
+
+  it("offers Retry and Remove for a failed item", async () => {
+    const onRetry = vi.fn();
+    render(
+      <BatchGrid
+        items={[makeItem({ status: "error", error: "failed" })]}
+        selectedItemId={null}
+        snapshot={{ ...snapshot, queuedCount: 0, failedCount: 1 }}
+        onSelect={vi.fn()}
+        onDownload={vi.fn()}
+        onRetry={onRetry}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByTestId("batch-item-actions");
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /try again/i }));
+    expect(onRetry).toHaveBeenCalledWith("item-1", trigger);
+  });
+
+  it("opens an item menu from the keyboard and restores trigger focus", async () => {
+    render(
+      <BatchGrid
+        items={[makeResultItem()]}
+        selectedItemId="item-1"
+        snapshot={{ ...snapshot, queuedCount: 0, completedCount: 1 }}
+        onSelect={vi.fn()}
+        onDownload={vi.fn()}
+        onRetry={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByTestId("batch-item-actions");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const firstItem = await screen.findByRole("menuitem", {
+      name: /download png/i,
+    });
+    expect(document.activeElement).toBe(firstItem);
+    fireEvent.keyDown(firstItem, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it("disables review while queued and explains the live queue state", () => {
@@ -106,7 +222,7 @@ describe("BatchGrid", () => {
         ]}
         selectedItemId={null}
         onSelect={onSelect}
-        onRetry={vi.fn()}
+        {...actions}
       />,
     );
 
@@ -117,12 +233,12 @@ describe("BatchGrid", () => {
     expect(
       screen.getByText(m.batchWaiting({ position: 1, elapsed: "1.2s" })),
     ).toBeTruthy();
-    expect(screen.getByText(m.batchReviewWhenReady())).toBeTruthy();
+    expect(screen.getByTestId("batch-item-skeleton")).toBeTruthy();
     fireEvent.click(tile);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("shows truthful elapsed processing time with an indeterminate indicator", () => {
+  it("shows truthful elapsed processing time over a stage-shaped skeleton", () => {
     render(
       <BatchGrid
         items={[
@@ -138,13 +254,12 @@ describe("BatchGrid", () => {
         ]}
         selectedItemId={null}
         onSelect={vi.fn()}
-        onRetry={vi.fn()}
+        {...actions}
       />,
     );
 
     expect(screen.getByText(m.batchRemoving({ elapsed: "3.2s" }))).toBeTruthy();
-    const progress = screen.getByTestId("item-stage-progress");
-    expect(progress.getAttribute("value")).toBeNull();
+    expect(screen.getByTestId("batch-item-skeleton")).toBeTruthy();
   });
 
   it("renders scheduler metadata separately from the image gallery", () => {
@@ -160,5 +275,8 @@ describe("BatchGrid", () => {
         total: 1,
       }),
     );
+    expect(screen.getByText("Total 1")).toBeDefined();
+    expect(screen.getByText("Queued 1")).toBeDefined();
+    expect(screen.getByTestId("batch-status-bar")).toBeDefined();
   });
 });

@@ -3,7 +3,16 @@ import { chromium } from "@playwright/test";
 import { loadEnv } from "vite";
 
 const START_TIMEOUT_MS = 30_000;
-const DEFAULT_PROJECTS = ["chromium", "firefox", "webkit", "Mobile Safari"] as const;
+const DEFAULT_PROJECTS = [
+  { name: "chromium" },
+  // Persistent Magic/Manual layers intentionally retain full-resolution
+  // alpha buffers. Running several software-rendered browser pages in
+  // parallel makes Firefox/WebKit contend for the same host memory and turns
+  // deterministic canvas assertions into scheduler timeouts.
+  { name: "firefox", workers: 1 },
+  { name: "webkit", workers: 1 },
+  { name: "Mobile Safari", workers: 1 },
+] as const;
 
 // Vite reads `.env*` itself, while the Playwright config runs in a separate
 // Node process. Mirror Vite's public client env into that process so test
@@ -146,7 +155,11 @@ try {
   // each project remain fully parallel according to playwright.config.ts.
   const runs = hasExplicitProject
     ? [forwardedArgs]
-    : DEFAULT_PROJECTS.map((project) => [...forwardedArgs, `--project=${project}`]);
+    : DEFAULT_PROJECTS.map((project) => [
+        ...forwardedArgs,
+        `--project=${project.name}`,
+        ...("workers" in project ? [`--workers=${String(project.workers)}`] : []),
+      ]);
 
   exitCode = 0;
   for (const args of runs) {

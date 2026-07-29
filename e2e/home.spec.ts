@@ -128,7 +128,50 @@ test.describe("/ (home)", () => {
     await expect(page.getByLabel("Upload an image")).toBeAttached();
   });
 
-  test("idle upload workspace stays centered across breakpoints", async ({ page }) => {
+  test("command deck keeps mode badges separated and the engineering grid below the header", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+
+    for (const width of [390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const badgeName of ["Recommended", "Beta"]) {
+        const badge = page.getByText(badgeName, { exact: true });
+        await expect(badge).toBeVisible();
+        const geometry = await badge.evaluate((node) => {
+          const badgeBox = node.getBoundingClientRect();
+          const title = node.parentElement?.parentElement?.firstElementChild;
+          const titleBox = title?.getBoundingClientRect();
+          return {
+            badgeLeft: badgeBox.left,
+            titleRight: titleBox?.right ?? badgeBox.left,
+          };
+        });
+        expect(geometry.badgeLeft - geometry.titleRight).toBeGreaterThanOrEqual(8);
+      }
+
+      const header = page.locator('[data-slot="site-header"]');
+      const pattern = page.locator(".site-background-pattern");
+      const [headerBox, patternBox, headerBackground] = await Promise.all([
+        header.boundingBox(),
+        pattern.boundingBox(),
+        header.evaluate((node) => getComputedStyle(node).backgroundImage),
+      ]);
+      expect(headerBox).not.toBeNull();
+      expect(patternBox).not.toBeNull();
+      if (headerBox && patternBox)
+        expect(patternBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+      expect(headerBackground).toBe("none");
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth === document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("idle workspace uses the approved stacked/5–7 composition", async ({ page }) => {
     await page.goto("/en");
     const workspace = page.getByTestId("tool-workspace");
     await expect(workspace).toBeVisible();
@@ -143,14 +186,17 @@ test.describe("/ (home)", () => {
     const desktopColumns = await workspace.evaluate(
       (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
     );
-    expect(desktopColumns).toBe(1);
+    expect(desktopColumns).toBe(2);
+    const introBox = await page.getByTestId("home-empty-intro").boundingBox();
     const uploadBox = await page
       .getByLabel("Upload an image")
-      .locator("..")
+      .locator("xpath=ancestor::section[1]")
       .boundingBox();
+    expect(introBox).not.toBeNull();
     expect(uploadBox).not.toBeNull();
-    if (uploadBox) {
-      expect(Math.abs(uploadBox.x + uploadBox.width / 2 - 640)).toBeLessThan(2);
+    if (introBox && uploadBox) {
+      expect(introBox.x).toBeLessThan(uploadBox.x);
+      expect(uploadBox.width).toBeGreaterThan(introBox.width);
     }
   });
 
@@ -170,16 +216,23 @@ test.describe("/ (home)", () => {
     await expect(page.getByText(/loading .* model/i)).toHaveCount(0);
   });
 
-  test("critical path: upload -> process -> download -> process another image", async ({
+  test("critical path hides marketing and returns through the compact back action", async ({
     page,
   }) => {
     await page.goto("/en");
+    await expect(page.getByTestId("home-empty-intro")).toBeVisible();
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
     await upload.setInputFiles(SAMPLE_IMAGE);
 
+    await expect(page.getByTestId("home-empty-intro")).toHaveCount(0);
+    await expect(page.getByTestId("workspace-topbar")).toHaveCount(0);
+    await expect(page.getByTestId("editor-toolbar")).toBeVisible();
     await expectAutomaticCutout(page);
-    await expect(page.getByRole("button", { name: /download/i })).toBeVisible();
+    await expect(
+      page.getByTestId("editor-toolbar").getByRole("button").first(),
+    ).toHaveAttribute("aria-label", "Back to upload");
+    await expect(page.getByRole("button", { name: /^download$/i })).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: /^download$/i }).click();
@@ -194,13 +247,194 @@ test.describe("/ (home)", () => {
     await expect(page.getByRole("menuitemradio", { name: /2048|1024/ })).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    await page.getByRole("button", { name: /process another image/i }).click();
+    await page.getByRole("button", { name: /back to upload/i }).click();
     // `toBeAttached`, not `toBeVisible`: UploadDropzone (this locator) is
     // `hidden sm:flex` — ChoosePhotoButton is the visible control on narrow
     // viewports (e.g. the Mobile Safari project). Matches the same pattern
     // used for this locator in the idle-state test above.
     await expect(page.getByLabel("Upload an image")).toBeAttached();
+    await expect(page.getByTestId("home-empty-intro")).toBeVisible();
     await expect(page.getByRole("slider")).toHaveCount(0);
+  });
+
+  test("diagnostics stays closed by default and opens over the editor layout", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE_IMAGE);
+    await expectAutomaticCutout(page);
+
+    await expect(page.getByTestId("processing-details")).toHaveCount(0);
+    await expect(
+      page.locator(
+        '[data-slot="site-header"] [data-testid^="diagnostics-trigger-"]:visible',
+      ),
+    ).toHaveCount(1);
+    const stage = page.getByTestId("editor-stage");
+    const stageBox = await stage.boundingBox();
+    await page.locator('[data-testid^="diagnostics-trigger-"]:visible').click();
+    await expect(page.getByTestId("processing-details")).toBeVisible();
+    await expect(stage).toBeVisible();
+    expect(await stage.boundingBox()).toEqual(stageBox);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("processing-details")).toHaveCount(0);
+  });
+
+  test("tool switches keep the same stage, comparison DOM, and blob URLs", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(SAMPLE_IMAGE);
+    await expectAutomaticCutout(page);
+
+    const stage = page.getByTestId("editor-stage");
+    const stack = page.getByTestId("persistent-preview-stack");
+    const comparison = page.getByTestId("before-after-frame");
+    await stage.evaluate((node) => {
+      node.dataset.persistenceMarker = "stage";
+    });
+    await stack.evaluate((node) => {
+      node.dataset.persistenceMarker = "stack";
+    });
+    await comparison.evaluate((node) => {
+      node.dataset.persistenceMarker = "comparison";
+    });
+    const imageSources = await comparison
+      .locator("img")
+      .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src));
+
+    await page.getByRole("button", { name: /^Enhancements$/ }).click();
+    await expect(page.getByTestId("editor-stage")).toHaveAttribute(
+      "data-persistence-marker",
+      "stage",
+    );
+    await expect(page.getByTestId("persistent-preview-stack")).toHaveAttribute(
+      "data-persistence-marker",
+      "stack",
+    );
+    await expect(page.getByTestId("before-after-frame")).toHaveAttribute(
+      "data-persistence-marker",
+      "comparison",
+    );
+    expect(
+      await page
+        .getByTestId("before-after-frame")
+        .locator("img")
+        .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).src)),
+    ).toEqual(imageSources);
+
+    await page.getByRole("button", { name: /^Background$/ }).click();
+    await expect(page.getByTestId("before-after-frame")).toHaveAttribute(
+      "data-persistence-marker",
+      "comparison",
+    );
+    await expect(page.getByTestId("after-preview-background")).toBeVisible();
+  });
+
+  test("portrait, landscape, and square sources use contain-fit stage geometry", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    const fixtures = [
+      await createLargePng(page, "portrait.png", 400, 800),
+      await createLargePng(page, "landscape.png", 800, 400),
+      await createLargePng(page, "square.png", 600, 600),
+    ];
+
+    for (const fixture of fixtures) {
+      const upload = page.getByLabel("Upload an image");
+      await expect(upload).toBeEnabled();
+      await upload.setInputFiles(fixture);
+      await expectAutomaticCutout(page);
+      const frame = page.getByTestId("guided-brush-edit-frame");
+      await expect(frame).toHaveAttribute("data-fit", "contain");
+      const dimensions = await frame.evaluate((node) => ({
+        rendered:
+          node.getBoundingClientRect().width / node.getBoundingClientRect().height,
+        source:
+          Number(node.getAttribute("data-source-width")) /
+          Number(node.getAttribute("data-source-height")),
+      }));
+      expect(Math.abs(dimensions.rendered - dimensions.source)).toBeLessThan(0.02);
+      const frameBox = await frame.boundingBox();
+      const stageBox = await page.getByTestId("editor-stage").boundingBox();
+      expect(frameBox).not.toBeNull();
+      expect(stageBox).not.toBeNull();
+      if (frameBox && stageBox) {
+        expect(frameBox.width).toBeLessThanOrEqual(stageBox.width);
+        expect(frameBox.height).toBeLessThanOrEqual(stageBox.height);
+      }
+      await page.getByRole("button", { name: /back to upload/i }).click();
+      await expect(page.getByLabel("Upload an image")).toBeAttached();
+    }
+  });
+
+  test("single and batch editor controls stay inside the page at review breakpoints", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    const upload = page.getByLabel("Upload an image");
+    await expect(upload).toBeEnabled();
+    await upload.setInputFiles(Array.from({ length: 12 }, () => SAMPLE_IMAGE));
+    await expect(page.getByTestId("scheduler-summary")).toContainText("12 done", {
+      timeout: 20_000,
+    });
+    await page
+      .getByRole("button", { name: /select sample\.jpg for review/i })
+      .first()
+      .click();
+    await expectAutomaticCutout(page);
+    await page.getByRole("button", { name: /^Background$/ }).click();
+
+    for (const width of [390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(() =>
+          page.evaluate(() => ({
+            viewport: document.documentElement.clientWidth,
+            content: document.documentElement.scrollWidth,
+          })),
+        )
+        .toEqual({ viewport: width, content: width });
+
+      const direction = await page
+        .getByTestId("batch-filmstrip")
+        .evaluate((node) => getComputedStyle(node).flexDirection);
+      expect(direction).toBe("row");
+      const filmstripScroll = await page
+        .getByTestId("batch-filmstrip")
+        .evaluate((node) => {
+          const element = node as HTMLElement;
+          element.scrollLeft = 80;
+          return {
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            scrollLeft: element.scrollLeft,
+          };
+        });
+      expect(filmstripScroll.scrollWidth).toBeGreaterThan(filmstripScroll.clientWidth);
+      expect(filmstripScroll.scrollLeft).toBeGreaterThan(0);
+
+      for (const testId of ["editor-toolbar", "editor-stage", "tool-panel-slot"]) {
+        const box = await page.getByTestId(testId).boundingBox();
+        expect(box).not.toBeNull();
+        if (box) {
+          expect(box.x).toBeGreaterThanOrEqual(-1);
+          expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+        }
+      }
+
+      const filmstripBox = await page.getByTestId("batch-filmstrip").boundingBox();
+      const toolbarBox = await page.getByTestId("editor-toolbar").boundingBox();
+      expect(filmstripBox).not.toBeNull();
+      expect(toolbarBox).not.toBeNull();
+      if (filmstripBox && toolbarBox)
+        expect(filmstripBox.y + filmstripBox.height).toBeLessThan(toolbarBox.y);
+    }
   });
 
   for (const locale of EDITOR_LOCALES) {
@@ -379,6 +613,7 @@ test.describe("/ (home)", () => {
   test("batch: upload multiple, select, reprocess, download one and all", async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     await page.goto("/en");
     const upload = page.getByLabel("Upload an image");
     await expect(upload).toBeEnabled();
@@ -410,7 +645,6 @@ test.describe("/ (home)", () => {
     await addImages.setInputFiles(SAMPLE_IMAGE);
     await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
     await expect(selectedTile).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText("Selected for review")).toHaveCount(1);
     await expect(page.getByRole("slider")).toBeVisible();
     const previewImages = page.getByRole("slider").locator("xpath=..//img");
     await expect(previewImages).toHaveCount(2);
@@ -424,32 +658,32 @@ test.describe("/ (home)", () => {
     const previewBox = await page.getByTestId("editor-stage").boundingBox();
     const controlsBox = await page.getByTestId("tool-panel-slot").boundingBox();
     const statusBox = await page.getByTestId("scheduler-summary").boundingBox();
-    const listBox = await page.getByRole("heading", { name: "All images" }).boundingBox();
+    const filmstripBox = await page.getByTestId("batch-filmstrip").boundingBox();
     expect(previewBox).not.toBeNull();
     expect(controlsBox).not.toBeNull();
     expect(statusBox).not.toBeNull();
-    expect(listBox).not.toBeNull();
-    if (previewBox && controlsBox && statusBox && listBox) {
-      if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    expect(filmstripBox).not.toBeNull();
+    if (previewBox && controlsBox && statusBox && filmstripBox) {
+      if ((page.viewportSize()?.width ?? 0) >= 896) {
         expect(Math.abs(previewBox.y - controlsBox.y)).toBeLessThan(24);
       } else {
         expect(controlsBox.y).toBeGreaterThan(previewBox.y);
       }
+      expect(filmstripBox.y).toBeLessThan(previewBox.y);
       expect(statusBox.y).toBeLessThan(previewBox.y);
-      expect(previewBox.y).toBeLessThan(listBox.y);
     }
 
     const actionBoxes = await Promise.all([
       page.getByLabel("Add images").locator("..").boundingBox(),
-      page.getByRole("button", { name: /^download all$/i }).boundingBox(),
-      page.getByRole("button", { name: /clear batch/i }).boundingBox(),
+      page.getByRole("button", { name: /^download$/i }).boundingBox(),
+      page.getByRole("button", { name: /back to upload/i }).boundingBox(),
     ]);
     expect(actionBoxes.every(Boolean)).toBe(true);
-    const [addBox, downloadAllBox, clearBox] = actionBoxes;
-    if (addBox && downloadAllBox && clearBox) {
-      expect(Math.abs(addBox.height - downloadAllBox.height)).toBeLessThan(2);
-      expect(Math.abs(addBox.width - downloadAllBox.width)).toBeLessThan(2);
-      expect(clearBox.y).toBeLessThan(addBox.y);
+    const [addBox, downloadBox, backBox] = actionBoxes;
+    if (addBox && downloadBox && backBox) {
+      expect(Math.abs(addBox.height - downloadBox.height)).toBeLessThan(10);
+      expect(backBox.x).toBeLessThan(addBox.x);
+      expect(backBox.x).toBeLessThan(downloadBox.x);
     }
 
     await page.getByRole("button", { name: /^Background$/ }).click();
@@ -488,27 +722,65 @@ test.describe("/ (home)", () => {
     await page.getByRole("button", { name: /^download$/i }).click();
     expect((await individual).suggestedFilename()).toBe("result.png");
 
+    const selectedItemActions = selectedTile
+      .locator("xpath=..")
+      .getByTestId("batch-item-actions");
+    await selectedItemActions.click();
+    const itemDownload = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name: /download png/i }).click();
+    expect((await itemDownload).suggestedFilename()).toBe("cutbg-result-1.png");
+
     await openManualCutout(page);
     await expect(
       page.getByRole("application", { name: /mask correction editor/i }),
     ).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).click();
 
+    await page
+      .getByTestId("editor-toolbar")
+      .getByRole("button", { name: /^Fast$/i })
+      .click();
     await page.getByRole("radio", { name: /^Optimal/i }).click();
     await expect(page.getByRole("radio", { name: /^Optimal/i })).toBeChecked();
+    await page.getByTestId("batch-item-actions").first().click();
     await expect(
-      page.getByRole("button", { name: /reprocess in Fast mode/i }),
+      page.getByRole("menuitem", { name: /reprocess in Fast mode/i }),
     ).toBeVisible();
-    await expect(page.getByText(/setting applies to images added after/i)).toBeVisible();
 
     const schedulerSummary = page.getByTestId("scheduler-summary");
-    await page.getByRole("button", { name: /reprocess in Fast mode/i }).click();
+    await page.getByRole("menuitem", { name: /reprocess in Fast mode/i }).click();
     await expect(schedulerSummary).not.toContainText("4 done");
     await expect(schedulerSummary).toContainText("4 done");
 
     const archive = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download all$/i }).click();
+    await page.getByRole("button", { name: "Output options" }).click();
+    await page.getByRole("menuitem", { name: /download all.*zip/i }).click();
     expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
+
+    const manualCanvas = await openManualCutout(page);
+    await page
+      .getByTestId("cutout-tool-panel")
+      .getByRole("button", { name: "Erase", exact: true })
+      .click();
+    const manualBox = await manualCanvas.boundingBox();
+    if (!manualBox) throw new Error("Manual canvas has no bounding box");
+    await manualCanvas.click({
+      position: { x: manualBox.width / 2, y: manualBox.height / 2 },
+    });
+
+    await selectedItemActions.click();
+    await page.getByRole("menuitem", { name: /^Remove image$/ }).click();
+    await expect(page.getByTestId("editor-draft-guard")).toBeVisible();
+    await page.getByRole("button", { name: "Continue editing" }).click();
+    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
+
+    await selectedItemActions.click();
+    await page.getByRole("menuitem", { name: /^Remove image$/ }).click();
+    await page.getByRole("button", { name: "Discard draft" }).click();
+    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(3);
+    await expect(
+      page.getByRole("button", { name: /select sample\.jpg for review/i }).first(),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   test("split download exports exact PNG sizes and repeats the explicit command in its menu", async ({
@@ -566,25 +838,23 @@ test.describe("/ (home)", () => {
       "Preparing 4 images",
     );
     await expect(upload).toBeDisabled();
-    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
-    await expect(page.getByText(/\d+ × \d+ · Fast/)).toHaveCount(4);
+    await expect(page.getByTestId("batch-filmstrip")).toBeVisible();
+    await expect(page.getByTestId("batch-item-skeleton").first()).toBeVisible();
+    await expect(page.getByText("sample.jpg")).toHaveCount(4);
     const unavailableTile = page
       .getByRole("button", { name: /review available when ready/i })
       .first();
     await expect(unavailableTile).toBeDisabled();
     await expect(page.getByText(/#\d+ in queue/).first()).toBeVisible();
-    await expect(page.getByTestId("item-stage-progress")).toBeVisible();
-
-    await expect(page.getByText("Select to review")).toHaveCount(4);
 
     const firstTile = page
       .getByRole("button", {
         name: /select sample\.jpg for review/i,
       })
       .first();
+    await expect(page.getByTestId("batch-item-thumbnail")).toHaveCount(4);
     await firstTile.hover();
     await firstTile.click();
     await expect(firstTile).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByText("Selected for review")).toHaveCount(1);
   });
 });

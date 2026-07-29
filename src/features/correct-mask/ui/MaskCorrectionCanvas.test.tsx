@@ -113,6 +113,21 @@ function liveAlphaAt(x: number, y: number): number {
 }
 
 describe("MaskCorrectionCanvas", () => {
+  it("uses a thin dashed SVG footprint with a restrained solid core", async () => {
+    renderCanvas({ mode: "erase" });
+    await waitUntilReady();
+
+    const cursor = screen.getByTestId("mask-brush-cursor");
+    expect(screen.getByTestId("mask-correction-viewport").className).toContain(
+      "transparency-grid",
+    );
+    const footprint = cursor.querySelector("circle");
+    expect(footprint?.getAttribute("stroke-dasharray")).toBe("3 2");
+    expect(footprint?.getAttribute("stroke-width")).toBe("1");
+    expect(cursor.style.boxShadow).toBe("");
+    expect(cursor.querySelectorAll("circle")).toHaveLength(2);
+  });
+
   it("keeps the selected background visible behind the editable matte", async () => {
     const { canvas } = renderCanvas({
       backgroundFill: { type: "color", value: "#123456" },

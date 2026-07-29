@@ -23,6 +23,19 @@ afterEach(() => {
 });
 
 describe("BeforeAfterSlider", () => {
+  it.each([
+    [400, 800, "400 / 800"],
+    [800, 400, "800 / 400"],
+    [600, 600, "600 / 600"],
+  ])("uses contain geometry for a %sx%s source", (width, height, aspectRatio) => {
+    render(<BeforeAfterSlider before={{ ...before, width, height }} after={after} />);
+
+    const frame = screen.getByTestId("before-after-frame");
+    expect(frame.style.aspectRatio).toBe(aspectRatio);
+    expect(frame.getAttribute("data-fit")).toBe("contain");
+    expect(screen.getAllByRole("img")[0]?.className).toContain("object-contain");
+  });
+
   it("renders the before image and an accessible slider handle at the midpoint", () => {
     render(<BeforeAfterSlider before={before} after={after} />);
 
@@ -63,14 +76,14 @@ describe("BeforeAfterSlider", () => {
     const background = screen.getByTestId("after-preview-background");
     expect(background.style.backgroundColor).toBe("rgb(18, 52, 86)");
     expect(background.style.backgroundImage).toBe("none");
-    expect(background.className).not.toContain("repeating-conic-gradient");
+    expect(background.className).not.toContain("transparency-grid");
   });
 
   it("shows the checkerboard only for a transparent fill", () => {
     render(<BeforeAfterSlider before={before} after={after} />);
 
     expect(screen.getByTestId("after-preview-background").className).toContain(
-      "repeating-conic-gradient",
+      "transparency-grid",
     );
   });
 

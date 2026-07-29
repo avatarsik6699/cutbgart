@@ -151,6 +151,8 @@ export interface MaskCorrectionCanvasProps {
   /** Fires once per whole gesture (pointerdown → drag → pointerup), not per point. */
   onStrokeCommitted: (patch: MaskPatch) => void;
   stageTargetRef?: RefObject<HTMLCanvasElement | null>;
+  interactionMode?: "brush" | "hand";
+  interactionEnabled?: boolean;
 }
 
 /**
@@ -183,6 +185,8 @@ export function MaskCorrectionCanvas({
   onPanBySourcePixels,
   onStrokeCommitted,
   stageTargetRef,
+  interactionMode = "brush",
+  interactionEnabled = true,
 }: MaskCorrectionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const setCanvasRef = useCallback(
@@ -193,7 +197,7 @@ export function MaskCorrectionCanvas({
     [stageTargetRef],
   );
   const viewportRef = useRef<HTMLDivElement>(null);
-  const cursorRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<SVGSVGElement>(null);
   const [pointerInside, setPointerInside] = useState(false);
   const [spacePanning, setSpacePanning] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -541,6 +545,7 @@ export function MaskCorrectionCanvas({
   }
 
   useEffect(() => {
+    if (!interactionEnabled) return;
     const editor = viewportRef.current;
     if (!editor) return;
 
@@ -594,10 +599,9 @@ export function MaskCorrectionCanvas({
     cursor.style.top = `${String(clientY - geometry.viewportRect.top)}px`;
     cursor.style.width = `${String(cssDiameter)}px`;
     cursor.style.height = `${String(cssDiameter)}px`;
-    // The hardness-flat zone (always-full-strength core) vs. the softer
-    // falloff ring is shown as a lighter fill inset from the outer edge.
-    const softInset = (1 - Math.min(Math.max(brushHardness, 0), 1)) * 50;
-    cursor.style.setProperty("--mask-cursor-inset", `${String(softInset)}%`);
+    // Keep one restrained inner core consistent with the semantic Magic
+    // cursor while the outer ring remains the exact paint footprint.
+    cursor.style.setProperty("--mask-cursor-inset", "33.333%");
   }
 
   function stampAndRepaint(point: { x: number; y: number }): void {
@@ -636,7 +640,11 @@ export function MaskCorrectionCanvas({
       role="application"
       aria-label={m.maskEditor()}
       tabIndex={0}
-      className="relative overflow-hidden rounded-xl bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="transparency-grid relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      data-testid="mask-correction-viewport"
+      data-zoom={Math.round(viewport.zoom * 100)}
+      data-offset-x={viewport.offsetX}
+      data-offset-y={viewport.offsetY}
     >
       <canvas
         ref={setCanvasRef}
@@ -645,8 +653,14 @@ export function MaskCorrectionCanvas({
         className="block w-full touch-none"
         style={{
           ...backgroundStyle,
-          cursor: spacePanning || panning ? "grab" : "none",
-          transform: `scale(${String(viewport.zoom)}) translate(${String(
+          cursor: panning
+            ? "grabbing"
+            : interactionMode === "hand" || spacePanning
+              ? "grab"
+              : "none",
+          width: `${String(viewport.zoom * 100)}%`,
+          maxWidth: "none",
+          transform: `translate(${String(
             (-viewport.offsetX / sourceImage.width) * 100,
           )}%, ${String((-viewport.offsetY / sourceImage.height) * 100)}%)`,
           transformOrigin: "top left",
@@ -660,7 +674,8 @@ export function MaskCorrectionCanvas({
         }}
         onPointerDown={(event) => {
           if (!rgbaRef.current) return;
-          const handGesture = spacePanningRef.current || event.button === 1;
+          const handGesture =
+            interactionMode === "hand" || spacePanningRef.current || event.button === 1;
           if (!handGesture && event.button !== 0) return;
           event.preventDefault();
           viewportRef.current?.focus();
@@ -691,7 +706,8 @@ export function MaskCorrectionCanvas({
         }}
         onPointerMove={(event) => {
           const geometry = currentGeometry();
-          updateCursor(event.clientX, event.clientY, geometry);
+          if (interactionMode === "brush")
+            updateCursor(event.clientX, event.clientY, geometry);
           if (isPanningRef.current) {
             const previous = lastPanClientPointRef.current;
             if (!previous || !geometry) return;
@@ -735,25 +751,37 @@ export function MaskCorrectionCanvas({
           if (event.button === 1) event.preventDefault();
         }}
       />
-      <div
+      <svg
         ref={cursorRef}
         data-testid="mask-brush-cursor"
         aria-hidden="true"
-        className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full transition-opacity"
+        viewBox="0 0 100 100"
+        className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 overflow-visible transition-opacity"
         style={{
-          opacity: brushCursorVisible ? 1 : 0,
-          border: `1.5px solid rgba(${MODE_CURSOR_COLOR[mode]}, 0.95)`,
-          boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.4)",
+          opacity: brushCursorVisible && interactionMode === "brush" ? 1 : 0,
         }}
       >
-        <div
-          className="absolute rounded-full"
-          style={{
-            inset: "var(--mask-cursor-inset, 0%)",
-            background: `rgba(${MODE_CURSOR_COLOR[mode]}, 0.25)`,
-          }}
+        <circle
+          cx="50"
+          cy="50"
+          r="49"
+          fill={`rgba(${MODE_CURSOR_COLOR[mode]}, 0.08)`}
+          stroke={`rgba(${MODE_CURSOR_COLOR[mode]}, 0.98)`}
+          strokeWidth="1"
+          strokeDasharray="3 2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
         />
-      </div>
+        <circle
+          cx="50"
+          cy="50"
+          r="16.5"
+          fill={`rgba(${MODE_CURSOR_COLOR[mode]}, 0.36)`}
+          stroke={`rgba(${MODE_CURSOR_COLOR[mode]}, 0.98)`}
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
     </div>
   );
 }

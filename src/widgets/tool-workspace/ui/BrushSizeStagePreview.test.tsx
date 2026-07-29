@@ -46,6 +46,12 @@ describe("BrushSizeStagePreview", () => {
     expect(preview.getAttribute("data-visible")).toBe("true");
     expect(Number(preview.getAttribute("data-viewport-diameter"))).toBe(40);
     expect(preview.className).toMatch(/place-items-center/);
+    expect(
+      screen
+        .getByTestId("brush-size-stage-preview-ring")
+        .querySelector("circle")
+        ?.getAttribute("stroke-dasharray"),
+    ).toBe("3 2");
     await act(async () => {
       vi.advanceTimersByTime(700);
       await Promise.resolve();

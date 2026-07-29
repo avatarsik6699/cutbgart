@@ -83,7 +83,7 @@ test.describe("Phase 22 security and privacy", () => {
     expect(analyticsPayload).not.toContain(sample.subarray(0, 16).toString("base64"));
     expect(analyticsPayload).not.toMatch(/sha256|exif|mask|pixel/i);
 
-    await page.getByRole("button", { name: /process another image/i }).click();
+    await page.getByRole("button", { name: /back to upload/i }).click();
     const batchUpload = page.getByLabel("Upload an image");
     await batchUpload.setInputFiles([
       { name: privateName, mimeType: "image/jpeg", buffer: sample },
@@ -123,8 +123,8 @@ test.describe("Phase 22 security and privacy", () => {
       );
     });
 
-    const manager = page.getByTestId("model-storage-manager");
-    await manager.locator("summary").click();
+    await page.getByTestId("model-storage-trigger").click();
+    await expect(page.getByTestId("model-storage-manager")).toBeVisible();
     await expect(page.getByTestId("model-storage-usage")).toContainText(
       /MB across 1 downloaded file/i,
     );

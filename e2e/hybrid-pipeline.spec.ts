@@ -313,8 +313,10 @@ test("Cancel and retry keep the last committed document until one atomic Apply s
   await expect(
     panel.getByRole("button", { name: /Applying…|Применение…/i }),
   ).toBeDisabled();
-  await expect(panel.getByRole("button", { name: /^(?:Cancel|Отмена)$/ })).toBeEnabled();
-  await panel.getByRole("button", { name: /^(?:Cancel|Отмена)$/ }).click();
+  await expect(
+    panel.getByRole("button", { name: /^(?:Stop|Остановить)$/ }),
+  ).toBeEnabled();
+  await panel.getByRole("button", { name: /^(?:Stop|Остановить)$/ }).click();
   await expect(
     panel.getByText(/current result was kept|текущий результат сохранён/i),
   ).toBeVisible();

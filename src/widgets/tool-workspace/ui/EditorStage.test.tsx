@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup } from "@testing-library/react";
 
@@ -34,5 +34,27 @@ describe("EditorStage", () => {
 
     expect(screen.getByTestId("editor-stage-placeholder")).toBeDefined();
     expect(screen.getByTestId("editor-stage").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("uses an inline expanded fallback and exits it with Escape", () => {
+    render(
+      <EditorStage
+        documentId="doc-1"
+        overlaySlot={({ expanded, toggleFullscreen }) => (
+          <button type="button" onClick={toggleFullscreen}>
+            {expanded ? "Exit expanded" : "Enter expanded"}
+          </button>
+        )}
+      >
+        image
+      </EditorStage>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Enter expanded" }));
+    expect(screen.getByTestId("editor-stage").dataset.expanded).toBe("true");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId("editor-stage").dataset.expanded).toBe("false");
   });
 });

@@ -40,7 +40,7 @@ test("IS-Net q8 and fp32 each process with the explicitly selected mode", async 
   await expect(upload).toBeEnabled();
   await upload.setInputFiles(SAMPLE);
   await expectAutomaticCutout(page);
-  await page.getByRole("button", { name: /Process another image/ }).click();
+  await page.getByRole("button", { name: /Back to upload/ }).click();
   const precise = page.getByRole("radio", { name: /^Optimal/ });
   await expect(precise).toBeEnabled();
   await precise.click();

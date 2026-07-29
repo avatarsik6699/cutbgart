@@ -267,12 +267,134 @@ describe("useBatchProcessing", () => {
     expect(result.current.session.items[0]?.editDocument).toBe(firstScope);
     expect(result.current.session.items[1]?.editDocument).toBe(secondScope);
 
-    act(() => result.current.removeItem(first.id));
-    expect(firstScope.artifacts.stats().artifactCount).toBe(0);
-    expect(secondScope.artifacts.stats().artifactCount).toBeGreaterThan(0);
+    act(() => result.current.removeItem(second.id));
+    expect(secondScope.artifacts.stats().artifactCount).toBe(0);
+    expect(firstScope.artifacts.stats().artifactCount).toBeGreaterThan(0);
     expect(result.current.session.items).toHaveLength(1);
+    expect(result.current.session.selectedItemId).toBe(first.id);
 
     act(() => result.current.reset());
-    expect(secondScope.artifacts.stats().artifactCount).toBe(0);
+    expect(firstScope.artifacts.stats().artifactCount).toBe(0);
+  });
+
+  it("releases every scope with no leaks across many-item add/remove/retry churn", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+
+    let processedSoFar = 0;
+    const processNext = async (label: string) => {
+      const expectedCount = processedSoFar + 1;
+      await waitFor(() =>
+        expect(
+          worker.posted.filter((message) => message.type === "process"),
+        ).toHaveLength(expectedCount),
+      );
+      const request = worker.posted.filter((message) => message.type === "process")[
+        expectedCount - 1
+      ]!;
+      act(() =>
+        worker.emit({
+          type: "process-result",
+          requestId: request.requestId,
+          result: new Blob([label]),
+          matte: { width: 1, height: 1, data: new Uint8ClampedArray([1]) },
+          durationMs: 1,
+        }),
+      );
+      processedSoFar = expectedCount;
+    };
+
+    // Wave 1: eight independent items.
+    const waveOne = Array.from({ length: 8 }, (_, index) => ({
+      fileName: `wave1-${String(index)}.jpg`,
+      source: { ...source, blob: new Blob([`wave1-${String(index)}`]) },
+    }));
+    act(() => result.current.enqueue(waveOne));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        dtype: "mock",
+      }),
+    );
+    for (let index = 0; index < 8; index += 1)
+      await processNext(`wave1-r-${String(index)}`);
+    await waitFor(() => expect(result.current.snapshot.completedCount).toBe(8));
+
+    const ids = result.current.session.items.map((item) => item.id);
+    const originalScopes = new Map(
+      result.current.session.items.map((item) => [item.id, item.editDocument!]),
+    );
+    for (const scope of originalScopes.values())
+      expect(scope.artifacts.stats().artifactCount).toBeGreaterThan(0);
+
+    // Churn 1: remove a spread-out subset of items.
+    const removedIds = [ids[0]!, ids[3]!, ids[6]!];
+    for (const id of removedIds) act(() => result.current.removeItem(id));
+    expect(result.current.session.items).toHaveLength(5);
+    for (const id of removedIds)
+      expect(originalScopes.get(id)!.artifacts.stats().artifactCount).toBe(0);
+
+    // Churn 2: retry two of the surviving items, replacing their scopes.
+    const retriedIds = [ids[1]!, ids[4]!];
+    for (const id of retriedIds) {
+      act(() => result.current.retryItem(id));
+      await processNext(`retry-${id}`);
+    }
+    await waitFor(() =>
+      retriedIds.every(
+        (id) =>
+          result.current.session.items.find((item) => item.id === id)?.status ===
+          "result",
+      ),
+    );
+    for (const id of retriedIds) {
+      const oldScope = originalScopes.get(id)!;
+      const newScope = result.current.session.items.find(
+        (item) => item.id === id,
+      )!.editDocument!;
+      expect(newScope).not.toBe(oldScope);
+      expect(oldScope.artifacts.stats().artifactCount).toBe(0);
+      expect(newScope.artifacts.stats().artifactCount).toBeGreaterThan(0);
+    }
+
+    // Churn 3: enqueue a second wave, reusing freed capacity.
+    const waveTwo = Array.from({ length: 3 }, (_, index) => ({
+      fileName: `wave2-${String(index)}.jpg`,
+      source: { ...source, blob: new Blob([`wave2-${String(index)}`]) },
+    }));
+    act(() => result.current.enqueue(waveTwo));
+    const waveTwoIds = result.current.session.items.slice(-3).map((item) => item.id);
+    for (let index = 0; index < 3; index += 1)
+      await processNext(`wave2-r-${String(index)}`);
+    await waitFor(() =>
+      waveTwoIds.every(
+        (id) =>
+          result.current.session.items.find((item) => item.id === id)?.status ===
+          "result",
+      ),
+    );
+
+    const stillOwned = result.current.session.items
+      .map((item) => item.editDocument)
+      .filter((scope): scope is NonNullable<typeof scope> => Boolean(scope));
+    expect(stillOwned.length).toBe(result.current.session.items.length);
+    for (const scope of stillOwned)
+      expect(scope.artifacts.stats().artifactCount).toBeGreaterThan(0);
+
+    // Final reset must dispose every remaining scope, however many churn cycles occurred.
+    act(() => result.current.reset());
+    for (const scope of stillOwned) expect(scope.artifacts.stats().artifactCount).toBe(0);
+    expect(result.current.session.items).toHaveLength(0);
   });
 });

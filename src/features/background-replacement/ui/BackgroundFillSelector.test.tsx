@@ -34,8 +34,17 @@ describe("BackgroundFillSelector", () => {
       expect(screen.getByRole("button", { name })).toBeDefined();
     }
     expect(screen.getAllByTestId("fill-swatch")).toHaveLength(8);
+    expect(screen.getAllByTestId("fill-swatch")[0]?.className).toContain(
+      "transparency-grid",
+    );
     expect(screen.getByLabelText("Background color")).toBeDefined();
     expect(screen.getByLabelText("Custom background image")).toBeDefined();
+    expect(screen.getByRole("group", { name: "Background" }).className).toContain(
+      "overflow-hidden",
+    );
+    expect(screen.getByLabelText("Custom background image").className).toContain(
+      "min-w-0",
+    );
   });
 
   it("keeps the inline picker open while previewing continuous changes", () => {

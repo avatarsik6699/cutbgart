@@ -115,7 +115,14 @@ export function BeforeAfterSlider({
   return (
     <div
       ref={containerRef}
-      className="relative aspect-square w-full max-w-xl touch-none overflow-hidden rounded-xl bg-muted select-none"
+      data-testid="before-after-frame"
+      data-fit="contain"
+      className="editor-image-frame relative touch-none overflow-hidden rounded-xl bg-muted select-none"
+      style={{
+        aspectRatio: `${String(before.width)} / ${String(before.height)}`,
+        width: `min(100cqw, calc(100cqh * ${String(before.width / before.height)}))`,
+        height: `min(100cqh, calc(100cqw / ${String(before.width / before.height)}))`,
+      }}
       onPointerDown={(event) => {
         draggingRef.current = true;
         updatePositionFromClientX(event.clientX);
@@ -129,9 +136,7 @@ export function BeforeAfterSlider({
         // did nothing at all.
         <div
           className={`absolute inset-0 overflow-hidden ${
-            backgroundFill.type === "transparent"
-              ? "bg-[length:16px_16px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
-              : ""
+            backgroundFill.type === "transparent" ? "transparency-grid" : ""
           }`}
           data-testid="after-preview-background"
           style={{

@@ -567,11 +567,27 @@ export function useBatchProcessing({
     queueRef.current = queueRef.current.filter((queuedId) => queuedId !== id);
     activeRef.current.delete(id);
     workRef.current.delete(id);
-    setSession((current) => ({
-      ...current,
-      selectedItemId: current.selectedItemId === id ? null : current.selectedItemId,
-      items: current.items.filter((item) => item.id !== id),
-    }));
+    setSession((current) => {
+      const removedIndex = current.items.findIndex((item) => item.id === id);
+      const items = current.items.filter((item) => item.id !== id);
+      const fallback =
+        current.selectedItemId === id
+          ? (items
+              .slice(Math.max(0, removedIndex))
+              .find((item) => item.status === "result") ??
+            items
+              .slice(0, Math.max(0, removedIndex))
+              .reverse()
+              .find((item) => item.status === "result") ??
+            null)
+          : null;
+      return {
+        ...current,
+        selectedItemId:
+          current.selectedItemId === id ? (fallback?.id ?? null) : current.selectedItemId,
+        items,
+      };
+    });
   }, []);
   const reset = useCallback(() => {
     activeRef.current.clear();

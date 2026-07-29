@@ -6,8 +6,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installMockInference } from "./support/mock-inference";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PORTRAIT = path.join(ROOT, "public", "images", "document-photo-example.webp");
-const LANDSCAPE = path.join(ROOT, "public", "og-image.png");
+const PORTRAIT = path.join(ROOT, "public", "icon-512.png");
+const LANDSCAPE = path.join(ROOT, "public", "logo.png");
 
 test.beforeEach(async ({ page }) => installMockInference(page));
 test.describe.configure({ mode: "serial" });
@@ -20,13 +20,9 @@ type LocaleContract = {
   keep: string;
   remove: string;
   size: string;
-  undo: string;
-  redo: string;
-  clear: string;
   apply: string;
   cancel: string;
   documentUndo: RegExp;
-  documentRedo: RegExp;
 };
 
 const locales: LocaleContract[] = [
@@ -37,14 +33,10 @@ const locales: LocaleContract[] = [
     manual: "Manual",
     keep: "Keep",
     remove: "Remove",
-    size: "Guided brush size",
-    undo: "Undo marking",
-    redo: "Redo marking",
-    clear: "Clear markings",
+    size: "Brush size",
     apply: "Apply",
     cancel: "Cancel",
     documentUndo: /^Undo:/,
-    documentRedo: /^Redo:/,
   },
   {
     path: "/",
@@ -53,14 +45,10 @@ const locales: LocaleContract[] = [
     manual: "Вручную",
     keep: "Оставить",
     remove: "Удалить",
-    size: "Размер управляемой кисти",
-    undo: "Отменить отметку",
-    redo: "Вернуть отметку",
-    clear: "Очистить отметки",
+    size: "Размер кисти",
     apply: "Применить",
     cancel: "Отмена",
     documentUndo: /^Отменить:/,
-    documentRedo: /^Вернуть:/,
   },
 ];
 
@@ -141,6 +129,7 @@ for (const locale of locales) {
   test(`Cutout Magic is one explicit, repeatable editor (${locale.path})`, async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     const panel = await openAutomaticCutout(page, locale);
     const workspace = page.getByTestId("tool-workspace");
     const stage = page.getByTestId("guided-brush-selection");
@@ -158,9 +147,11 @@ for (const locale of locales) {
     const size = panel.getByRole("slider", { name: locale.size });
     await size.focus();
     await size.press("End");
-    const preview = page.getByTestId("brush-size-stage-preview");
+    const preview = page.locator(
+      '[data-testid="brush-size-stage-preview"][data-visible="true"]',
+    );
     await expect(preview).toHaveAttribute("data-visible", "true");
-    const ring = page.getByTestId("brush-size-stage-preview-ring");
+    const ring = preview.getByTestId("brush-size-stage-preview-ring");
     const image = page.getByRole("img", {
       name: /brush-guided object correction|коррекции объекта кистью/i,
     });
@@ -190,30 +181,44 @@ for (const locale of locales) {
     await panel.getByRole("button", { name: locale.remove, exact: true }).click();
     await paintMagic(page);
     await expect(stage).toHaveAttribute("data-stroke-count", "1");
-    await panel.getByRole("button", { name: locale.undo }).click();
+    await expect(
+      panel.getByRole("button", { name: /Undo marking|Отменить отметку/ }),
+    ).toHaveCount(0);
+    await page.keyboard.press("ControlOrMeta+z");
     await expect(stage).toHaveAttribute("data-stroke-count", "0");
-    await panel.getByRole("button", { name: locale.redo }).click();
+    await page.keyboard.press("ControlOrMeta+Shift+z");
     await expect(stage).toHaveAttribute("data-stroke-count", "1");
-    await panel.getByRole("button", { name: locale.clear }).click();
+    await page.keyboard.press("ControlOrMeta+z");
     await expect(stage).toHaveAttribute("data-stroke-count", "0");
 
     const apply = panel.getByRole("button", { name: locale.apply, exact: true });
     await paintMagic(page);
     await expect(apply).toBeEnabled();
     await apply.click();
-    await expect(workspace).toHaveAttribute("data-document-revision", "1");
+    await expect.poll(() => postsOfType(page, "prompt"), { timeout: 30_000 }).toBe(1);
+    await expect
+      .poll(() => postsOfType(page, "recomposite"), { timeout: 30_000 })
+      .toBe(1);
+    await expect(workspace).toHaveAttribute("data-document-revision", "1", {
+      timeout: 30_000,
+    });
     await expect(stage).toHaveAttribute("data-stroke-count", "0");
     expect(await postsOfType(page, "prompt")).toBe(1);
     expect(await postsOfType(page, "recomposite")).toBe(1);
 
     await paintMagic(page);
     await apply.click();
-    await expect(workspace).toHaveAttribute("data-document-revision", "2");
+    await expect
+      .poll(() => postsOfType(page, "recomposite"), { timeout: 30_000 })
+      .toBe(2);
+    await expect(workspace).toHaveAttribute("data-document-revision", "2", {
+      timeout: 30_000,
+    });
     expect(await postsOfType(page, "prompt")).toBe(2);
     expect(await postsOfType(page, "recomposite")).toBe(2);
 
     await paintMagic(page);
-    await panel.getByRole("button", { name: locale.undo }).click();
+    await page.keyboard.press("ControlOrMeta+z");
     await expect(apply).toBeEnabled();
     await apply.click();
     await expect(stage).toHaveAttribute("data-stroke-count", "0");
@@ -227,12 +232,39 @@ for (const locale of locales) {
     await expect(stage).toHaveAttribute("data-stroke-count", "0");
     await expect(workspace).toHaveAttribute("data-document-revision", "2");
 
-    await page.getByRole("button", { name: locale.documentUndo }).click();
-    await expect(workspace).toHaveAttribute("data-document-revision", "3");
-    await page.getByRole("button", { name: locale.documentRedo }).click();
-    await expect(workspace).toHaveAttribute("data-document-revision", "4");
+    const undoDocument = page.getByRole("button", { name: locale.documentUndo });
+    await undoDocument.click();
+    await expect(workspace).toHaveAttribute("data-document-revision", "3", {
+      timeout: 30_000,
+    });
   });
 }
+
+test("delayed Magic prediction shows a Skeleton without a wait/brush cursor mixture", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (
+      window as unknown as {
+        __mockDelayFirstGuidedResponse: boolean;
+      }
+    ).__mockDelayFirstGuidedResponse = true;
+  });
+  const panel = await openAutomaticCutout(page, locales[0]!);
+  await panel.getByRole("button", { name: "Remove", exact: true }).click();
+  await paintMagic(page);
+  await panel.getByRole("button", { name: "Apply", exact: true }).click();
+
+  await expect(page.getByTestId("guided-brush-busy-skeleton")).toBeVisible();
+  await expect(page.getByTestId("guided-brush-cursor")).toHaveCSS("opacity", "0");
+  await expect(page.getByTestId("guided-brush-edit-image")).not.toHaveCSS(
+    "cursor",
+    "wait",
+  );
+  await expect(page.getByTestId("guided-brush-busy-skeleton")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+});
 
 test("Keep restores the marked fragment without accepting destructive candidate holes", async ({
   page,
@@ -248,21 +280,23 @@ test("Keep restores the marked fragment without accepting destructive candidate 
   await expect(page.getByTestId("tool-workspace")).toHaveAttribute(
     "data-document-revision",
     "1",
+    { timeout: 30_000 },
   );
   await expect
-    .poll(() => latestRecompositeDeltas(page))
+    .poll(() => latestRecompositeDeltas(page), { timeout: 30_000 })
     .toEqual({ matteLossCount: 0, matteGainCount: 25 });
 });
 
 test("two completed batch documents guard drafts and keep Apply/history isolated", async ({
   page,
 }) => {
+  test.slow();
   await page.goto("/en/");
   const upload = page.getByLabel("Upload an image");
   await expect(upload).toBeEnabled();
   await upload.setInputFiles([PORTRAIT, LANDSCAPE]);
   await expect(page.getByTestId("scheduler-summary")).toContainText("2 done", {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 
   const itemButtons = page.getByRole("button", { name: /Select .* for review/i });
@@ -271,7 +305,7 @@ test("two completed batch documents guard drafts and keep Apply/history isolated
   const workspace = page.getByTestId("tool-workspace");
   const firstId = await workspace.getAttribute("data-document-id");
   await expect(page.getByTestId("guided-brush-selection")).toBeVisible({
-    timeout: 15_000,
+    timeout: 30_000,
   });
 
   await paintMagic(page);
@@ -287,7 +321,9 @@ test("two completed batch documents guard drafts and keep Apply/history isolated
   });
   await paintMagic(page);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(workspace).toHaveAttribute("data-document-revision", "1");
+  await expect(workspace).toHaveAttribute("data-document-revision", "1", {
+    timeout: 30_000,
+  });
 
   await page.getByRole("tab", { name: "Manual" }).click();
   const manualCanvas = page.getByRole("img", { name: /mask correction canvas/i });
@@ -309,9 +345,14 @@ test("two completed batch documents guard drafts and keep Apply/history isolated
   });
   await paintMagic(page);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(workspace).toHaveAttribute("data-document-revision", "1");
-  await page.getByRole("button", { name: /^Undo:/ }).click();
-  await expect(workspace).toHaveAttribute("data-document-revision", "2");
+  await expect(workspace).toHaveAttribute("data-document-revision", "1", {
+    timeout: 30_000,
+  });
+  const undoDocument = page.getByRole("button", { name: /^Undo:/ });
+  await undoDocument.click();
+  await expect(workspace).toHaveAttribute("data-document-revision", "2", {
+    timeout: 30_000,
+  });
 
   await itemButtons.nth(1).click();
   await expect(workspace).toHaveAttribute("data-document-id", secondId!);

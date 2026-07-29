@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { HeaderUtilityPortalProvider } from "@/shared/ui/header-utility-portal";
 import { ToolWorkspace } from "./ToolWorkspace";
 
 interface PostedMessage {
@@ -176,6 +177,21 @@ describe("ToolWorkspace", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(3);
   });
 
+  it("keeps the diagnostics trigger in the stable header portal while idle", () => {
+    const target = document.createElement("span");
+    target.dataset.testid = "workspace-header-utilities";
+    document.body.append(target);
+    render(
+      <HeaderUtilityPortalProvider target={target}>
+        <ToolWorkspace />
+      </HeaderUtilityPortalProvider>,
+    );
+
+    expect(screen.getByTestId("diagnostics-trigger-desktop")).toBeDefined();
+    expect(target.contains(screen.getByTestId("diagnostics-trigger-desktop"))).toBe(true);
+    target.remove();
+  });
+
   it("shows a validation error for an unsupported file without starting the model pipeline", async () => {
     render(<ToolWorkspace />);
 
@@ -327,12 +343,19 @@ describe("ToolWorkspace", () => {
     render(<ToolWorkspace />);
     await completeAutomaticWorkspace();
     const stage = screen.getByTestId("editor-stage");
+    const previewStack = screen.getByTestId("persistent-preview-stack");
+    const comparison = screen.getByTestId("before-after-frame");
+    const objectUrlSpy = vi.spyOn(URL, "createObjectURL");
+    const objectUrlCalls = objectUrlSpy.mock.calls.length;
     const slider = screen.getByRole("slider");
     fireEvent.keyDown(slider, { key: "ArrowRight" });
     expect(slider.getAttribute("aria-valuenow")).toBe("55");
 
     fireEvent.click(screen.getByRole("button", { name: /^Enhancements$/ }));
     expect(screen.getByTestId("editor-stage")).toBe(stage);
+    expect(screen.getByTestId("persistent-preview-stack")).toBe(previewStack);
+    expect(screen.getByTestId("before-after-frame")).toBe(comparison);
+    expect(objectUrlSpy.mock.calls.length).toBe(objectUrlCalls);
     expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("55");
     expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
       "enhance",
@@ -340,6 +363,9 @@ describe("ToolWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Background$/ }));
     expect(screen.getByTestId("editor-stage")).toBe(stage);
+    expect(screen.getByTestId("persistent-preview-stack")).toBe(previewStack);
+    expect(screen.getByTestId("before-after-frame")).toBe(comparison);
+    expect(objectUrlSpy.mock.calls.length).toBe(objectUrlCalls);
     expect(screen.getByTestId("tool-panel-slot").getAttribute("data-active-tool")).toBe(
       "background",
     );
@@ -368,11 +394,11 @@ describe("ToolWorkspace", () => {
     );
   });
 
-  it("guards an unsaved Cutout draft before starting another image", async () => {
+  it("guards an unsaved Cutout draft before returning to upload", async () => {
     render(<ToolWorkspace />);
     await enterMagicDraft();
 
-    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
+    fireEvent.click(screen.getByRole("button", { name: /back to upload/i }));
 
     expect(screen.getByTestId("editor-draft-guard")).toBeDefined();
     expect(screen.queryByLabelText("Upload an image")).toBeNull();
@@ -381,7 +407,7 @@ describe("ToolWorkspace", () => {
     expect(screen.queryByTestId("editor-draft-guard")).toBeNull();
     expect(screen.getByTestId("cutout-tool-panel")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: /process another image/i }));
+    fireEvent.click(screen.getByRole("button", { name: /back to upload/i }));
     fireEvent.click(screen.getByRole("button", { name: /discard draft/i }));
 
     await waitFor(() => expect(screen.getByLabelText("Upload an image")).toBeDefined());

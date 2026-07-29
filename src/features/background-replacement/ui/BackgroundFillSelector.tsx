@@ -70,7 +70,7 @@ export function BackgroundFillSelector({
   }, [dirty]);
   return (
     <fieldset
-      className="flex flex-col gap-3 rounded-lg border border-border p-4"
+      className="flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-lg border border-border p-4"
       aria-busy={saving}
     >
       <legend className="px-1 text-sm font-medium">{m.background()}</legend>
@@ -84,7 +84,7 @@ export function BackgroundFillSelector({
           <span
             aria-hidden="true"
             data-testid="fill-swatch"
-            className="size-4 rounded-full border border-border bg-[length:6px_6px] bg-[image:repeating-conic-gradient(var(--color-border)_0%_25%,transparent_0%_50%)]"
+            className="transparency-grid size-4 rounded-full border border-border"
           />
           {m.transparent()}
         </Button>
@@ -151,7 +151,7 @@ export function BackgroundFillSelector({
           </Button>
         </div>
       )}
-      <label className="flex cursor-pointer flex-col gap-1 text-sm font-medium">
+      <label className="flex min-w-0 max-w-full cursor-pointer flex-col gap-1 text-sm font-medium">
         {m.customImage()}
         <input
           aria-label={m.customBackgroundImage()}
@@ -162,10 +162,10 @@ export function BackgroundFillSelector({
             if (file) void selectImage(file);
             event.target.value = "";
           }}
-          className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2"
+          className="block w-full min-w-0 max-w-full overflow-hidden text-ellipsis text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2"
         />
       </label>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Button
           type="button"
           onClick={() => void save()}

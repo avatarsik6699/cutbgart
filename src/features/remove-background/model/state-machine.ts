@@ -104,6 +104,9 @@ export function removeBackgroundReducer(
         : state;
 
     case "correcting":
+      if (action.type === "REPLACE_RESULT") {
+        return { status: "correcting", result: action.result };
+      }
       return action.type === "EXIT_CORRECTING"
         ? { status: "result", result: action.result }
         : state;

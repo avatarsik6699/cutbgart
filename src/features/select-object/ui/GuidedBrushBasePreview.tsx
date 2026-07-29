@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { m } from "@/paraglide/messages";
+import { Skeleton } from "@/shared/ui";
 import type { AlphaMatte, SourceImage } from "../../../entities/processed-image";
 import { GuidedBrushImageFrame } from "./GuidedBrushImageFrame";
 
@@ -30,6 +31,9 @@ interface Props {
   onPointerLeave: PointerEventHandler<HTMLCanvasElement>;
   onKeyDown: KeyboardEventHandler<HTMLCanvasElement>;
   surfaceRef: RefObject<HTMLCanvasElement | null>;
+  interactionMode: "brush" | "hand";
+  spacePanning: boolean;
+  panning: boolean;
 }
 
 export function GuidedBrushBasePreview({
@@ -48,6 +52,9 @@ export function GuidedBrushBasePreview({
   onPointerLeave,
   onKeyDown,
   surfaceRef,
+  interactionMode,
+  spacePanning,
+  panning,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
   const sourceImageRef = useRef<HTMLImageElement>(null);
@@ -172,11 +179,36 @@ export function GuidedBrushBasePreview({
         onPointerCancel={onPointerCancel}
         onPointerLeave={onPointerLeave}
         onKeyDown={onKeyDown}
-        className={`absolute inset-0 size-full touch-none select-none focus-visible:outline-2 focus-visible:outline-primary ${
-          interactionReady && !busy ? "cursor-none" : "cursor-wait"
-        }`}
+        className="absolute inset-0 size-full touch-none select-none focus-visible:outline-2 focus-visible:outline-primary"
+        style={{
+          cursor: busy
+            ? "default"
+            : panning
+              ? "grabbing"
+              : interactionMode === "hand" || spacePanning
+                ? "grab"
+                : interactionReady
+                  ? "none"
+                  : "default",
+        }}
       />
       {children}
+      {busy && (
+        <div
+          className="absolute inset-0 z-20 grid place-items-center overflow-hidden rounded-xl bg-background/55 p-5 backdrop-blur-[2px]"
+          role="status"
+          aria-live="polite"
+          data-testid="guided-brush-busy-skeleton"
+        >
+          <div className="w-full max-w-64 space-y-3 rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
+            <Skeleton className="h-3 w-2/3 motion-reduce:animate-none" />
+            <Skeleton className="h-3 w-full motion-reduce:animate-none" />
+            <p className="pt-1 text-center text-xs font-medium text-muted-foreground">
+              {m.cutoutPreparingOverlay()}
+            </p>
+          </div>
+        </div>
+      )}
     </GuidedBrushImageFrame>
   );
 }

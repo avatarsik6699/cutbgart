@@ -1,4 +1,4 @@
-# PHASE 32 — Guided Help & Onboarding
+# PHASE 32 — Whole-Project Audit & Refactor
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | Phase | `32` |
-| Title | Guided Help & Onboarding |
+| Title | Whole-Project Audit & Refactor |
 | Status | `⏳ pending` |
 | Tag | `v0.32.0` |
 | Depends on | PHASE_31 gate passing |
@@ -16,19 +16,11 @@
 
 ## Phase Goal
 
-Research how short animated demonstrations and contextual onboarding can clarify the redesigned
-workflow, then ship a small, replayable, accessible help system. Guidance must explain the real
-current controls for both single and selected-batch workflows without blocking the automatic first
-result, bloating the initial bundle, or becoming the only source of required information
-(SPEC.md §5.2–§5.4, §7.1, §7.7–§8).
-
-## Design References
-
-- [remove.bg Magic Brush help](https://www.remove.bg/uk/help/a/how-to-use-magic-brush) — reference
-  for compact visual instruction tied to a tool, not a pixel-identical implementation.
-- [WCAG 2.2: Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)
-  and [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) —
-  reduced-motion and user-control acceptance criteria.
+Audit the complete application after the editor and help contracts stabilize, then perform small,
+evidence-backed refactors that reduce duplication, rendering/resource waste, and architectural
+drift without changing product behavior. The phase must prove improvements through repeatable
+single/batch measurements and full regressions; it is not authorization for a rewrite, speculative
+abstraction, or Studio scope (SPEC.md §5.2, §6, §7.1, §7.4, §7.7–§9).
 
 ---
 
@@ -36,54 +28,63 @@ result, bloating the initial bundle, or becoming the only source of required inf
 
 ### Other
 
-- [ ] `T1` Inventory every point where users may need help: one/many upload and modes, first result,
-  Cutout Magic/Manual, brush size/zoom, Enhancements, Background, undo/redo, individual download,
-  ZIP, dirty-draft switching, and recoverable errors. Rank by observed confusion and define one
-  measurable learning goal per retained item; do not create a tour for self-explanatory controls —
+- [ ] `T1` Create `docs/audits/PHASE_32_BASELINE.md` with reproducible representative scenarios:
+  cold home/startup; single automatic → every tool → undo/redo/export/reset; multiple upload with
+  item switching, edits, removal and ZIP; help and the existing privacy-route path; classified
+  inference failure. Future Phase-33 legal/consent UI is not assumed. Record device/browser/build,
+  fixtures, exact commands, run count, and measurement caveats —
   _Depends on:_ —
-- [ ] `T2` Research and record the delivery decision in `docs/research/GUIDED_HELP.md`: authored
-  video/animated WebP/AVIF, CSS/canvas, and a code animation runtime are compared for file size,
-  transparency, crispness, localization, reduced motion, pause/replay, CSP, cacheability,
-  maintainability, and creation workflow. Include a representative prototype and measured build/
-  network/decode cost before selecting a format or dependency — _Depends on:_ `T1`
-- [ ] `T3` Define a repeatable content pipeline: capture/source ownership, safe fixture images,
-  crop/dimensions, duration/looping, compression, poster/static alternative, RU/EN text/transcript,
-  naming/versioning, review checklist, and how a designer or agent updates an instruction without
-  editing orchestration code — _Depends on:_ `T2`
+- [ ] `T2` Measure before changes: route/initial/lazy chunk sizes, LCP/INP/long tasks, time-to-result,
+  input/brush response, React commit counts/durations for hot interactions, main-thread vs worker
+  work, live workers/listeners/timers/object URLs, and heap/resource trend over repeated single and
+  batch churn. Do not present headless values as universal device claims — _Depends on:_ `T1`
+- [ ] `T3` Inventory duplication/dead code and ownership: FSD/public APIs, same-layer imports,
+  workspace/controller/store overlap, single-vs-batch branches, repeated canvas/coordinate/export/
+  error/i18n logic, oversized components/hooks, legacy protocols still imported, and lazy-boundary
+  violations. Prove call sites before marking code dead — _Depends on:_ `T1`
+- [ ] `T4` Audit React correctness/performance using current official guidance: render purity,
+  component identity/keys, derived state, unnecessary Effects, dependency loops, subscriptions and
+  cleanup under development StrictMode, unstable context/props, external-store selectors, and
+  Profiler evidence. Do not add `memo`, `useMemo`, or `useCallback` globally without a measured hot
+  path and stable semantic dependency contract — _Depends on:_ `T2`, `T3`
+- [ ] `T5` Audit resource lifecycle: inference/matting workers and pipelines, tensors/ImageBitmaps/
+  OffscreenCanvas, typed arrays, Blob/Object URLs, uploaded backgrounds, edit-history artifacts,
+  help media, timers/observers/listeners, Cache Storage ownership, abort/stale-run paths, item
+  deletion/reset/unmount, and error/fallback branches — _Depends on:_ `T2`, `T3`
+- [ ] `T6` Create a prioritized findings ledger with symptom/evidence, owner layer, risk, expected
+  improvement, proposed smallest fix, characterization test, measurement, and decision
+  (`fix/defer/reject`). Architect approves the bounded fix set before source refactoring; deferred
+  findings name a future phase rather than expanding this one silently — _Depends on:_ `T2`–`T5`
 
 ### Frontend
 
-- [ ] `F1` Add `features/guided-help` with a typed, versioned registry keyed by user task and
-  context (`single` or `batch-selected`). Definitions reference lazy instruction assets, localized
-  title/body/accessible description, eligibility, placement, and completion/dismiss rules; no
-  editor business logic is duplicated in help definitions — _Depends on:_ `T2`, `T3`
-- [ ] `F2` Add unobtrusive contextual help cards/popovers for only the retained high-risk
-  interactions and a persistent toolbar/site Help entry that reopens the complete task list.
-  First-use guidance never interrupts upload, processing, or download and never uses a forced
-  modal carousel — _Depends on:_ `F1`
-- [ ] `F3` Produce the approved small instruction set for upload/modes, Magic vs Manual and brush
-  size, Enhancements, Background/download, and batch item switching/ZIP. Each demonstration must
-  match the implemented UI and have localized text plus a static poster/step alternative —
-  _Depends on:_ `F1`, `F2`
-- [ ] `F4` Persist only versioned viewed/dismissed task IDs in `helpState`; allow dismiss, replay,
-  and reset. A content-version bump reopens only materially changed guidance. Never store image,
-  filename, action coordinates, or a behavioral profile — _Depends on:_ `F1`
-- [ ] `F5` Honor `prefers-reduced-motion`, never flash, expose pause/replay for continuing motion,
-  make every trigger/control keyboard and screen-reader operable, preserve focus, and ensure the
-  static/text path completes the same learning goal — _Depends on:_ `F2`, `F3`
-- [ ] `F6` Lazy-load help code/assets only after editor intent or explicit Help activation. Record
-  and enforce the asset/initial-bundle budgets selected by `T2`; failed asset loading falls back to
-  static/text guidance without affecting editing — _Depends on:_ `F1`–`F5`
-- [ ] `F7` Add unit/component tests for eligibility, version migration, dismiss/replay/reset,
-  single/batch context, missing-asset fallback, localization, focus, and reduced motion. Add
-  bilingual cross-browser Playwright coverage proving guidance never blocks the core flow and
-  accurately targets the visible controls — _Depends on:_ `F1`–`F6`
+- [ ] `F1` Add characterization tests around every approved high-risk finding before changing
+  behavior-owning code, including single/batch equivalence and failure/resource cleanup where
+  applicable — _Depends on:_ `T6`
+- [ ] `F2` Consolidate only proven duplicate business/state/geometry/export/error logic into the
+  correct FSD owner and remove only proven-dead adapters/callsites. Preserve public contracts,
+  localization, accessibility, model results, and lazy loading — _Depends on:_ `F1`
+- [ ] `F3` Fix approved React findings: eliminate render-phase side effects and effect feedback
+  loops, add missing cleanup, narrow subscriptions/selectors, stabilize ownership/identity where
+  measured, and split hot visual updates away from React state when already required by the canvas
+  contract — _Depends on:_ `F1`, `T4`
+- [ ] `F4` Fix approved lifecycle findings with explicit disposal/abort/reachability ownership and
+  tests for success, cancel, stale, error, reset, item deletion, branch eviction, and unmount —
+  _Depends on:_ `F1`, `T5`
+- [ ] `F5` Fix approved initial-bundle/main-thread/interaction findings through existing lazy
+  boundaries, worker paths, bounded work, or smaller dependency surface. Do not trade correctness
+  or meaningful caching for a synthetic benchmark — _Depends on:_ `F1`, `T2`
+- [ ] `F6` Repeat the exact baseline suite after each refactor wave, record before/after/error bars
+  and regressions in `docs/audits/PHASE_32_RESULTS.md`, and revert/rework changes that lack benefit
+  or violate a budget. Add full cross-browser/localized Playwright coverage for changed flows —
+  _Depends on:_ `F2`–`F5`
 
 ### Infra
 
-- [ ] `I1` Add a runtime/package only if `T2` demonstrates a net advantage over native assets/CSS.
-  Pin and document any dependency/license in `docs/STACK.md`; keep instruction assets self-hosted,
-  immutable, and absent from the initial critical path — _Depends on:_ `T2`, `F7`
+- [ ] `I1` Run architecture/type/unit/full host-only E2E and applicable real-model gates. Update
+  `docs/STACK.md` only for repeatable profiling commands or an evidence-justified dependency; do
+  not add always-on production profiling, user telemetry, Docker/CI Playwright, or a package merely
+  to automate one inspection — _Depends on:_ `F6`
 
 ---
 
@@ -92,32 +93,21 @@ result, bloating the initial bundle, or becoming the only source of required inf
 ### Create / modify
 
 ~~~
-docs/research/GUIDED_HELP.md
-src/features/guided-help/model/types.ts
-src/features/guided-help/model/help-registry.ts
-src/features/guided-help/model/use-guided-help.ts
-src/features/guided-help/model/*.test.ts
-src/features/guided-help/ui/ContextualHelp.tsx
-src/features/guided-help/ui/HelpCenter.tsx
-src/features/guided-help/ui/*.test.tsx
-src/features/guided-help/index.ts
-src/widgets/tool-workspace/ui/EditorToolbar.tsx
-src/widgets/tool-workspace/ui/ToolWorkspace.tsx
-src/shared/ui/site-header/
-public/help/
-messages/ru.json
-messages/en.json
-e2e/guided-help.spec.ts
+docs/audits/PHASE_32_BASELINE.md
+docs/audits/PHASE_32_FINDINGS.md
+docs/audits/PHASE_32_RESULTS.md
 docs/STACK.md
+src/ (only files explicitly approved in PHASE_32_FINDINGS.md)
+e2e/ (characterization/regression specs for approved findings)
 docs/PHASE_32.md
 ~~~
 
 ### Do NOT touch
 
-- Editor processing, model, matte, compositing, history, or export semantics
-- Add product analytics for tutorial views/completion or store interaction-level behavior
-- Add a third-party hosted media/tracking embed, forced tour, autoplay audio, or image upload
-- Studio layers/transforms/effects, accounts, backend persistence, or future metadata collection
+- Product behavior, model/quality algorithms or pins without a separate evidence/spec decision
+- Add Studio features, new metadata/analytics, accounts, storage, API, advertising, or payments
+- Mass rewrite/renaming, blanket memoization, package churn, or deletion without callsite evidence
+- Weaken accessibility, localization, single/batch parity, privacy, or test coverage for metrics
 
 ---
 
@@ -125,17 +115,7 @@ docs/PHASE_32.md
 
 ### New persistent data (tables / collections / files)
 
-```text
-localStorage.helpState = {
-  schemaVersion: 1,
-  contentVersion: string,
-  viewedTaskIds: string[],
-  dismissedTaskIds: string[]
-}
-```
-
-Only bounded allow-listed task IDs are accepted. Invalid/old state is discarded safely. No server
-storage, identifier, timestamp trail, source image, filename, or action telemetry is added.
+Repository audit/baseline/results documentation only. No runtime persistence is added.
 
 ### New API endpoints / RPC methods / events
 
@@ -143,19 +123,8 @@ None.
 
 ### New types / models / shared interfaces
 
-```ts
-type HelpContext = "single" | "batch-selected";
-
-interface GuidedHelpDefinition {
-  id: string;
-  contentVersion: string;
-  contexts: readonly HelpContext[];
-  asset: { animated: string; poster: string };
-  title: string;
-  body: string;
-  accessibleDescription: string;
-}
-```
+None by default. Any internal extraction listed in the approved findings ledger must preserve the
+existing external contracts and be documented in Phase-32 Implementation Notes if non-obvious.
 
 ### New env vars
 
@@ -165,19 +134,25 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 32`; standard commands plus:
+Run `/phase-gate 32` with the complete `docs/STACK.md` gate and the exact repeatable profiling
+commands frozen in `PHASE_32_BASELINE.md`. At minimum:
 
 ```bash
-pnpm vitest run src/features/guided-help src/widgets/tool-workspace
-pnpm e2e e2e/guided-help.spec.ts e2e/home.spec.ts
 pnpm build
-pnpm tsc --noEmit
+pnpm vitest run
 pnpm exec steiger ./src
+pnpm e2e
+pnpm e2e:real-model
+pnpm e2e:phase-21-real
+pnpm e2e:phase-19-real
+pnpm e2e:phase-20-real
+pnpm tsc --noEmit
 ```
 
-Fail if onboarding blocks the first result, assets enter the initial critical path, motion cannot
-be reduced/paused where required, static/text alternatives are missing, content shows stale
-controls, help state captures behavior/image data, or single and selected-batch guidance diverge.
+Fail if source changes lack a finding/baseline/characterization test, behavior or single/batch
+parity drifts, React StrictMode reveals repeated side effects/unclean subscriptions, repeated churn
+shows unbounded retained resources, initial/lazy boundaries regress, or claimed improvements cannot
+be reproduced with the recorded method.
 
 ---
 
@@ -192,7 +167,7 @@ None
 ## Atomic Commit Message
 
 ```text
-feat(phase-32): add contextual help and onboarding
+refactor(phase-32): harden architecture and runtime performance
 ```
 
 ## Post-Phase Checklist

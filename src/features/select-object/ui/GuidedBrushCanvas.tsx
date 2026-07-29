@@ -44,8 +44,10 @@ interface Props {
   baseMatteRevision: number | string | null;
   entryKind: "direct" | "processed";
   applying?: boolean;
+  active?: boolean;
   mode: GuidedBrushMode;
   viewportControls: GuidedBrushViewportControls;
+  interactionMode?: "brush" | "hand";
   surfaceTargetRef?: RefObject<HTMLCanvasElement | null>;
   promptCounts?: {
     total: number | null;
@@ -71,8 +73,10 @@ export function GuidedBrushCanvas({
   session,
   status,
   applying = false,
+  active = true,
   mode,
   viewportControls,
+  interactionMode = "brush",
   onUndo,
   onRedo,
   ...props
@@ -96,10 +100,18 @@ export function GuidedBrushCanvas({
     status === "loading-model" ||
     status === "encoding-image" ||
     status === "predicting";
-  const interactionReady = status !== "loading-model" && status !== "encoding-image";
+  const interactionReady =
+    active && status !== "loading-model" && status !== "encoding-image";
   const processedBase = props.entryKind === "processed" && session.hasBaseMatte;
 
   useEffect(() => {
+    if (active && interactionMode === "brush" && !busy) return;
+    if (cursorRef.current) cursorRef.current.style.opacity = "0";
+    if (coreCursorRef.current) coreCursorRef.current.style.opacity = "0";
+  }, [active, busy, interactionMode]);
+
+  useEffect(() => {
+    if (!active) return;
     const onShortcut = (event: globalThis.KeyboardEvent) => {
       if (busy || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
       const target = event.target;
@@ -123,7 +135,7 @@ export function GuidedBrushCanvas({
     };
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
-  }, [busy, onRedo, onUndo, session.history.length, session.redo.length]);
+  }, [active, busy, onRedo, onUndo, session.history.length, session.redo.length]);
 
   const cacheInteractionRect = (surface: HTMLCanvasElement) => {
     interactionRectRef.current = surface.getBoundingClientRect();
@@ -144,7 +156,7 @@ export function GuidedBrushCanvas({
     for (const circle of [cursor, coreCursor]) {
       circle.setAttribute("cx", String(point.x * session.source.width));
       circle.setAttribute("cy", String(point.y * session.source.height));
-      circle.style.opacity = visible ? "1" : "0";
+      circle.style.opacity = visible && !busy ? "1" : "0";
     }
   };
   const paintDraft = () => {
@@ -175,7 +187,8 @@ export function GuidedBrushCanvas({
     interactionRectRef.current = null;
   };
   const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    const handGesture = spacePanningRef.current || event.button === 1;
+    const handGesture =
+      interactionMode === "hand" || spacePanningRef.current || event.button === 1;
     if (handGesture) {
       event.preventDefault();
       panningRef.current = true;
@@ -197,7 +210,7 @@ export function GuidedBrushCanvas({
     const point = pointFor(event.clientX, event.clientY);
     draftRef.current = [point];
     paintDraft();
-    moveCursor(point);
+    if (interactionMode === "brush") moveCursor(point);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -216,7 +229,7 @@ export function GuidedBrushCanvas({
     }
     ensureInteractionRect(event.currentTarget);
     const point = pointFor(event.clientX, event.clientY);
-    moveCursor(point);
+    if (interactionMode === "brush") moveCursor(point);
     if (!draftRef.current.length) return;
     appendDraftPoint(point);
   };
@@ -256,6 +269,7 @@ export function GuidedBrushCanvas({
   };
 
   useEffect(() => {
+    if (!active) return;
     const editor = viewportRef.current;
     if (!editor) return;
     const releaseHand = () => {
@@ -332,7 +346,7 @@ export function GuidedBrushCanvas({
       window.removeEventListener("blur", releaseHand);
       editor.removeEventListener("wheel", handleWheel);
     };
-  }, [session.source.height, session.source.width, surfaceRef, viewportControls]);
+  }, [active, session.source.height, session.source.width, surfaceRef, viewportControls]);
 
   const renderStroke = (stroke: {
     id: string;
@@ -411,6 +425,7 @@ export function GuidedBrushCanvas({
       data-prompt-keep-count={props.promptCounts?.keep ?? undefined}
       data-prompt-remove-count={props.promptCounts?.remove ?? undefined}
       data-zoom={viewportControls.zoomPercent}
+      data-interaction-mode={interactionMode}
     >
       <div
         className="grid size-full place-items-center"
@@ -430,11 +445,15 @@ export function GuidedBrushCanvas({
           showProcessedBase={processedBase}
           busy={busy}
           interactionReady={interactionReady}
+          interactionMode={interactionMode}
+          spacePanning={spacePanning}
+          panning={panning}
           surfaceRef={surfaceRef}
           onPointerDown={onPointerDown}
           onPointerEnter={(event) => {
             cacheInteractionRect(event.currentTarget);
-            moveCursor(pointFor(event.clientX, event.clientY));
+            if (interactionMode === "brush")
+              moveCursor(pointFor(event.clientX, event.clientY));
           }}
           onPointerMove={onPointerMove}
           onPointerUp={finishGesture}
@@ -485,7 +504,9 @@ export function GuidedBrushCanvas({
               fill={mode === "keep" ? "#16a34a" : "#e11d48"}
               fillOpacity="0.14"
               stroke={mode === "keep" ? "#166534" : "#9f1239"}
-              strokeWidth={Math.max(1, session.source.width / 500)}
+              strokeWidth="1"
+              strokeDasharray="3 2"
+              strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
               style={{ opacity: 0 }}
             />
@@ -498,16 +519,16 @@ export function GuidedBrushCanvas({
               fill={mode === "keep" ? "#16a34a" : "#e11d48"}
               fillOpacity="0.52"
               stroke={mode === "keep" ? "#166534" : "#9f1239"}
-              strokeWidth={Math.max(1, session.source.width / 500)}
+              strokeWidth="1"
               vectorEffect="non-scaling-stroke"
               style={{ opacity: 0 }}
             />
           </svg>
-          {(busy || spacePanning || panning) && (
+          {(spacePanning || panning) && (
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-0"
-              data-testid={busy ? "guided-brush-busy-overlay" : "guided-brush-pan-state"}
+              data-testid="guided-brush-pan-state"
             />
           )}
         </GuidedBrushBasePreview>

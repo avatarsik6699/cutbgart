@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.20` |
-| Date | `2026-07-28` |
+| Document Version | `v1.24` |
+| Date | `2026-07-29` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
@@ -80,17 +80,16 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Background replacement: solid color, gradient (linear/radial), or user-uploaded background image composited in place of transparency for the downloaded PNG; the uploaded background image stays client-side only, consistent with §1.1's privacy invariant (Phase 11) | |
 | Production security and verifiable supply chain: threat model, browser/CDN/model integrity, hardened containers/CI, SBOM/attestation, vulnerability disclosure, and cache lifecycle (Phase 22) | |
 | Reversible operations: immutable releases, candidate/post-deploy smoke, rollback, SLI/SLOs, alerts, bounded backups/restore drills, incident runbooks, and deterministic critical-path CI (Phase 23) | |
-| Legal and data-governance readiness: Phase 24 records the interim jurisdiction/data inventory and conservative operating controls; Phase 35 refreshes that evidence against the finished product, then implements approved transparency, consent/storage controls, footer disclosures, and legal pages; no new server-side or non-essential metadata collection begins before the final gate | |
-| Automatic-first editor: upload starts the selected automatic processing mode immediately; the stable result workspace exposes Cutout, Enhancements, and Background as switchable tools plus a toolbar download action (Phases 25–29; visually redesigned and hardened in Phases 30–31) | |
+| Legal and data-governance readiness: Phase 24 records the interim jurisdiction/data inventory and conservative operating controls; Phase 34 refreshes that evidence against the finished product, then implements approved transparency, consent/storage controls, footer disclosures, and legal pages; no new server-side or non-essential metadata collection begins before the final gate | |
+| Automatic-first editor: upload starts the selected automatic processing mode immediately; the stable result workspace exposes Cutout, Enhancements, and Background as switchable tools plus a toolbar download action (Phases 25–29; visually redesigned and hardened in Phase 30) | |
 | Unified Cutout tool: `Magic` semantic correction and `Manual` exact alpha correction share one visual stage, user-facing brush language, bounded draft history, and app-level committed undo/redo (Phase 27) | |
 | User-facing result enhancements: soft-alpha refinement and edge-colour cleanup are the first operations grouped under `Улучшения` / `Enhancements`; the name is intentionally implementation-neutral so later local model-based or deterministic finishing operations can join without exposing their technology (Phase 28) | |
 | Download menu with output-size selection and an extensible client-only export contract; PNG is the only format shipped in this cycle (Phase 29) | Rich product-card composition (layers, object transforms, shadows, perspective, templates, text) — separate Studio product track after the focused background workflow is stable (§9) |
-| Design system & redesign: a Pencil-authored (`docs/design/index.pen`) design system — color/type/spacing/motion tokens and a redesigned visual language for the existing screens/flows — replaces the ad hoc Phase-25–29 remove.bg reference; explicitly allowed to propose bounded UX/IA deltas against §5.3 where design exploration finds a materially better flow, but never Studio-scope capability (layers/transforms/templates, §9). Design-only: no `src/` change (Phase 30) | |
-| Redesign & legacy consolidation implementation: the approved Phase-30 design system and any approved IA deltas are implemented across `shared/ui`, the editor workspace, and public pages in the same pass that removes superseded legacy controls and hardens the single/selected-batch contract from Phases 25–29 (Phase 31) | |
-| Batch-first feature parity: every editor capability introduced in Phases 25–29 works for a single upload and for the selected completed item from a multiple upload in the same phase; Phase 31 consolidates and stress-tests that shared contract (alongside the redesign) rather than adding delayed parity | |
-| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 32) | |
-| Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable (Phase 33) | |
-| Pre-legal product validation: manual WCAG 2.2 AA/assistive-technology audit, representative physical-device matrix, browser-support policy, usability sessions, bilingual editorial QA, visual/performance evidence, and a truthful accessibility statement (Phase 34); final release readiness remains conditional on Phase 35 | |
+| Design system formalization & redesign: an in-repo, iterative pass — no external design tool — that upgrades `shadcn/ui` to its current version, maximizes use of its stock components, formalizes the existing color palette and typography into documented Tailwind `@theme` tokens, adds `Skeleton`-based loading states, reworks the home-page layout (including relocating the floating "uploaded models storage" utility), and adds a subtle background grid pattern; implemented and hardens the single/selected-batch contract from Phases 25–29 in the same pass that removes superseded legacy controls. Explicitly allowed to propose bounded UX/IA deltas against §5.3 where the iteration finds a materially better flow, but never Studio-scope capability (layers/transforms/templates, §9) (Phase 30) | |
+| Batch-first feature parity: every editor capability introduced in Phases 25–29 works for a single upload and for the selected completed item from a multiple upload in the same phase; Phase 30 consolidates and stress-tests that shared contract (alongside the redesign) rather than adding delayed parity | |
+| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 31) | |
+| Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable (Phase 32) | |
+| Pre-legal product validation: manual WCAG 2.2 AA/assistive-technology audit, representative physical-device matrix, browser-support policy, usability sessions, bilingual editorial QA, visual/performance evidence, and a truthful accessibility statement (Phase 33); final release readiness remains conditional on Phase 34 | |
 
 ---
 
@@ -220,8 +219,8 @@ is a direct consequence of the "inference is client-side only, no accounts" inva
 
 localStorage:
   qualityMode: "fast" | "max"     # existing functional preference
-  helpState                       # Phase 32: versioned viewed/dismissed guidance preferences
-  privacyChoices                 # Phase 35 only if required by the Phase-24 legal matrix
+  helpState                       # Phase 31: versioned viewed/dismissed guidance preferences
+  privacyChoices                 # Phase 34 only if required by the Phase-24 legal matrix
 
 In-memory session state (Phase 19):
   mattingRefinementMode: "balanced" | "maximum"  # never persisted; capability-aware initial value
@@ -251,10 +250,10 @@ download mechanism — no server involvement, no temporary server-side storage.
 The application must not expand the existing metadata/analytics footprint merely because future
 storage is anticipated. Any new server-side, recipient-bearing or non-essential metadata field,
 purpose, recipient, retention period, or storage location requires the Phase-24 inventory and
-legal-basis review plus the Phase-35 transparency/choice controls before collection is enabled. The
-single interim exception is Phase 32's explicitly bounded local-only functional `helpState`
+legal-basis review plus the Phase-34 transparency/choice controls before collection is enabled. The
+single interim exception is Phase 31's explicitly bounded local-only functional `helpState`
 contract: no identifier, timestamp, image/action data, server recipient or analytics linkage, with
-final inventory/notice review in Phase 35. The authoritative inventory must distinguish browser-
+final inventory/notice review in Phase 34. The authoritative inventory must distinguish browser-
 local functional state, model caches, ordinary server/CDN logs, analytics payloads, consent
 evidence, and future server-side metadata instead of describing all of them loosely as “cookies”.
 
@@ -302,11 +301,16 @@ the same rule: the background file never leaves the device either.
 
 > No Figma source exists. The original sections were derived from the architect's written brief; the
 > Phase-25–29 target additionally used the architect-provided remove.bg screenshot dated 2026-07-24
-> as a hierarchy/interaction reference, not as a pixel-identical design or repository asset. Phase 30
-> replaces that ad hoc reference with a Pencil-authored design system and screen set
-> (`docs/design/index.pen`, summarized in `docs/design/DESIGN_SYSTEM.md`) as the canonical
-> visual/interaction source for every screen below; Phase 31 implements it and any approved
-> structural delta is folded back into §5.3 via `/spec-sync` before implementation.
+> as a hierarchy/interaction reference, not as a pixel-identical design or repository asset. Two
+> external-design-tool attempts (Pencil/pen.dev, then Claude Design) were tried and rejected by the
+> architect before Phase 30 was redefined — see `docs/STATE.md` § Project Log, 2026-07-29. Phase 30
+> instead formalizes and iterates the design system directly in the codebase: no design tool, no
+> exported mockups. It upgrades `shadcn/ui` and leans on its stock components, keeps the existing
+> color palette and typography (formalized as documented Tailwind `@theme` tokens), and reworks
+> layout/loading/background treatment on top of what already ships. The resulting tokens and
+> component conventions are documented in `docs/design/DESIGN_SYSTEM.md` as the canonical
+> visual/interaction source for every screen below; any approved structural delta is folded back
+> into §5.3 via `/spec-sync` in the same phase.
 
 ### 5.1 Pages (MVP)
 
@@ -318,10 +322,10 @@ the same rule: the background file never leaves the device either.
 | `/udalit-fon-s-logotipa` | Logo scenario | Desired · `ru` base locale |
 | `/udalit-fon-dlya-avatarki` | Avatar/social profile photo scenario | Desired · `ru` base locale |
 | `/about` | About the project, tech, author link | Does not block launch · `ru` base locale |
-| `/privacy` | Privacy notice fulfilling §7.2's "image never leaves your device" claim and the approved Phase-24 data inventory: purposes, categories, legal bases, recipients/processors, storage locations, retention, rights, and contact | Existing Phase-12 route; substantively revised in Phase 35 · `ru` base locale |
-| `/terms` | Plain-language Terms of Use for the free, anonymous service, including acceptable use, intellectual-property/user-content responsibility, service availability, and owner-approved limitations with explicit residual-risk disclosure where qualified review is absent | Conditional content approved in Phase 24; implemented in Phase 35 · `ru` base locale |
-| `/cookies` | Cookie and browser-storage notice using the real inventory—not a generic template—including necessary localStorage/Cache Storage, analytics behavior, retention, and how to change any non-essential choice | Conditional content approved in Phase 24; implemented in Phase 35 · `ru` base locale |
-| `/accessibility` | Truthful accessibility statement with evaluated scope, tested technologies, known limitations, owned contact, effective date, and review cadence | Phase 34 · `ru` base locale |
+| `/privacy` | Privacy notice fulfilling §7.2's "image never leaves your device" claim and the approved Phase-24 data inventory: purposes, categories, legal bases, recipients/processors, storage locations, retention, rights, and contact | Existing Phase-12 route; substantively revised in Phase 34 · `ru` base locale |
+| `/terms` | Plain-language Terms of Use for the free, anonymous service, including acceptable use, intellectual-property/user-content responsibility, service availability, and owner-approved limitations with explicit residual-risk disclosure where qualified review is absent | Conditional content approved in Phase 24; implemented in Phase 34 · `ru` base locale |
+| `/cookies` | Cookie and browser-storage notice using the real inventory—not a generic template—including necessary localStorage/Cache Storage, analytics behavior, retention, and how to change any non-essential choice | Conditional content approved in Phase 24; implemented in Phase 34 · `ru` base locale |
+| `/accessibility` | Truthful accessibility statement with evaluated scope, tested technologies, known limitations, owned contact, effective date, and review cadence | Phase 33 · `ru` base locale |
 | `/en/...` | English counterpart of every row above, same path suffix under the `/en` prefix (e.g. `/en/about`, `/en/privacy`) | Required (Phase 12, §5.5) |
 | `/dev/model-lab` | Internal, `noindex` browser model-comparison lab; enabled only when `VITE_ENABLE_MODEL_LAB=true`, otherwise renders an unavailable state and never loads candidate weights | Phase 15 evaluation-only · not localized · excluded from sitemap |
 
@@ -343,7 +347,7 @@ any existing page's upload surface (`features/upload-image`) is what enters batc
 page. No dedicated `/batch` URL.
 
 Phase 24 may require an additional operator/legal-notice or separate-consent route after the
-operator identity, jurisdiction, target markets, and data purposes are known. Phase 35 implements
+operator identity, jurisdiction, target markets, and data purposes are known. Phase 34 implements
 the approved bilingual route manifest. A paid-service public offer is **not** presumed necessary
 for this free/no-payment product; it is added only if later review identifies a real contractual
 need or the product model changes.
@@ -366,13 +370,13 @@ need or the product model changes.
 | `features/background-replacement` | `features` | Transparent/color/gradient/uploaded-image `BackgroundFill`; Phase 29 gives it a tool-local live draft whose Apply commits one document operation and whose Cancel restores the committed fill |
 | `entities/edit-document` | `entities` | (Phase 25) Browser-memory identity and immutable artifact references for one editable result: source/baseline, current subject matte and foreground, background, composite, processing provenance, and revision. Contains pure model contracts only; orchestration remains in features/widgets. |
 | `features/editor-history` | `features` | (Phase 25) Bounded commit/undo/redo ledger over `EditDocument` artifacts with explicit reachability and cleanup. Owns committed document history only; Cutout/Manual markings that have not been applied remain tool-local drafts. |
-| `features/guided-help` | `features` | (Phase 32) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
-| `features/privacy-choices` | `features` | (Phase 35, if required by the Phase-24 decision matrix) Inventory-driven privacy/storage choices, consent evidence and withdrawal; it must block non-essential integrations until the applicable choice exists and must not claim that all browser storage is a cookie |
+| `features/guided-help` | `features` | (Phase 31) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
+| `features/privacy-choices` | `features` | (Phase 34, if required by the Phase-24 decision matrix) Inventory-driven privacy/storage choices, consent evidence and withdrawal; it must block non-essential integrations until the applicable choice exists and must not claim that all browser storage is a cookie |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
 | `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box; also `site-header`, `site-footer`, `site-shell` (Phase 12) — presentational sitewide chrome, no business logic |
-| `widgets/tool-workspace` | `widgets` | (Phase 12; reorganized in Phases 25–29, restyled/hardened in Phase 31) Composes the shared upload/processing/editor experience. The Phase-25 controller split removes domain orchestration from the 1,500-line visual component; Phase 26 adds a stable stage, icon+label tool toolbar, tool panel slot, document undo/redo, and download slot; Phase 31 applies the Phase-30 design system without reintroducing domain orchestration. It coordinates features only through public APIs and does not become a second domain store. |
-| `pages/privacy`, `pages/terms`, `pages/cookies` | `pages` | (Phase 35) Approved bilingual legal/transparency content composed with `site-shell`; no policy decisions or consent business logic in page components |
-| `pages/accessibility` | `pages` | (Phase 34) Bilingual evidence-based accessibility statement; no unsupported compliance claim or product logic |
+| `widgets/tool-workspace` | `widgets` | (Phase 12; reorganized in Phases 25–29, restyled/hardened in Phase 30) Composes the shared upload/processing/editor experience. The Phase-25 controller split removes domain orchestration from the 1,500-line visual component; Phase 26 adds a stable stage, icon+label tool toolbar, tool panel slot, document undo/redo, and download slot; Phase 30 applies the formalized design system without reintroducing domain orchestration. It coordinates features only through public APIs and does not become a second domain store. |
+| `pages/privacy`, `pages/terms`, `pages/cookies` | `pages` | (Phase 34) Approved bilingual legal/transparency content composed with `site-shell`; no policy decisions or consent business logic in page components |
+| `pages/accessibility` | `pages` | (Phase 33) Bilingual evidence-based accessibility statement; no unsupported compliance claim or product logic |
 
 Routing note: `routes/*.tsx` (TanStack Router file-based routing) stays a thin `loader` + head-meta +
 render shell; all composition and business logic lives in `pages/*`, per §5.5 of the architect's
@@ -488,13 +492,12 @@ parallel (bounded concurrency, §7.1), summarized in a grid overview; selecting 
 that item's own `result`⇄`correcting` states exactly as described above. `error` on one `BatchItem`
 does not block or cancel the others (§7.3).
 
-#### Target public workflow (Phases 25–29 baseline; visual/IA redesign in Phases 30–31)
+#### Target public workflow (Phases 25–29 baseline; approved visual/IA redesign in Phase 30)
 
-> This subsection is the Phase 25–29 information-architecture baseline. Phase 30 uses it as the
-> interaction starting point for a Pencil-authored visual redesign and may propose bounded, evidenced
-> structural deltas (never Studio scope, §9); any approved delta is folded back into this subsection
-> via `/spec-sync` before Phase 31 implements it. Until that sync happens, the contract below remains
-> authoritative.
+> Phase 30 keeps the automatic-first state machine and focused-product boundary, but the architect
+> approved a bounded presentation/interaction delta on 2026-07-29: the home page is marketing-led
+> only while empty; processing and editing use a clean application workspace on the same localized
+> URL. No editor route, persistent session store, Studio surface, or server contract is added.
 
 The state machine above remains the internal inference/lifecycle contract. It must no longer dictate
 the information architecture of the public UI. The public single-image journey becomes:
@@ -505,17 +508,28 @@ empty → automatic-processing → editor ⇄ tool-draft
  reset          error          recoverable tool error
 ```
 
-- **empty** — one prominent drag/drop/click/paste surface and the automatic processing-mode
-  selector are visible together. There is no direct guided/manual entry choice. A valid upload
-  immediately begins the selected automatic mode; no extra "start processing" step is introduced.
-- **automatic-processing** — keep a stable stage footprint and show plain-language progress.
-  Model IDs, dtypes, graph sizes, raw runtime paths, prompt limits, diagnostics, and internal state
-  names are absent from the primary UI. A compact accessible details disclosure may expose
-  troubleshooting information without competing with the task.
-- **editor** — the processed result stays in one stable visual stage. An icon+text toolbar switches
-  between `Cutout`, `Enhancements`, and `Background` without replacing or vertically displacing the stage.
-  Document undo/redo and Download live at the toolbar level. Tool panels use a reserved responsive
-  slot beside/below the stage so switching tools causes minimal layout shift.
+- **empty** — the home page presents the brand/value proposition beside one border-light command
+  deck: a compact icon-led automatic-mode selector and prominent drag/drop/click/paste target
+  without a second enclosing card. The engineering pattern begins below an opaque site header;
+  restrained ambient motion is decorative, CSS-only and fully disabled by
+  `prefers-reduced-motion`. There is no duplicate upload surface or direct guided/manual entry
+  choice. A valid upload immediately begins the selected automatic mode; no extra "start
+  processing" step is introduced.
+- **automatic-processing** — marketing/benefit content leaves the visual flow as soon as a valid
+  upload is accepted, while the URL remains unchanged. A stable editor-stage and panel-shaped
+  `Skeleton` footprint shows plain-language progress without spinner-shaped primary UI. Model IDs,
+  dtypes, graph sizes, raw runtime paths, prompt limits, diagnostics, and internal state names are
+  absent from the primary UI; an explicit diagnostics trigger may open them in an overlay.
+- **editor** — one compact workspace toolbar begins with return-to-upload, then owns tool
+  selection, document undo/redo, batch-wide utilities and Download; there is no separate editor
+  header or top bar consuming vertical space. Diagnostics is a stable site-header utility beside
+  model storage and opens the same closed-by-default Sheet/Drawer without lifting workspace data
+  ownership into the page shell. The processed result stays in one stable, aspect-preserving visual
+  stage; source content uses `contain`, never crops, and does not change outer geometry between
+  portrait, landscape, result, Magic and Manual states. Comparison, Magic and Manual are persistent
+  layers for the active document: switching tools changes visibility/readiness, not blob-URL or
+  canvas ownership. The selected tool panel is a fixed desktop rail to the right of the stage and
+  an adaptive below-stage surface on narrower viewports.
 - **tool-draft** — one selected tool owns bounded, uncommitted controls/markings. Applying commits
   one labeled document operation; cancelling discards only the draft. Switching tools with a dirty
   draft must ask to apply/discard or preserve it explicitly—never silently lose or apply work.
@@ -549,14 +563,21 @@ Tool contracts:
   behind a disabled action. With an automatic/current base, `Apply` restores that base
   deterministically without calling SlimSAM; a direct no-base session still requires green
   `Keep` intent. This is a required regression contract, not merely button enablement.
-- Brush mark undo/redo/clear are compact icon buttons with accessible names, keyboard shortcuts,
-  focus-visible tooltips, and disabled-state explanations where needed. They operate on the active
-  draft. Toolbar-level undo/redo operates only on committed `EditOperation`s, avoiding an ambiguous
-  history stack.
+- Brush-mark undo/redo remains tool-local and keyboard-accessible for the active draft, but it has
+  no duplicate visible icon row in the rail; `Cancel` clears the whole current draft. Toolbar-level
+  undo/redo operates only on committed `EditOperation`s, avoiding an ambiguous history stack.
 - The brush-size slider shows an ephemeral circle centered over the actual image stage. Its
   displayed diameter is computed through the current source-to-viewport transform, including zoom,
   and therefore matches the real paint footprint. It updates while the slider moves and fades
   shortly after interaction stops; the rail swatch is not the authoritative preview.
+- Cutout `Magic` and `Manual` share one collapsible canvas-view overlay in the lower-right of the
+  stage: Hand/Pan, Zoom out, current percentage, Zoom in, Fit/Reset, and Fullscreen. Tooltips expose
+  the actual keyboard gestures; `H`/`B`, Space-drag, `Ctrl/Cmd +/-`, `Ctrl/Cmd 0`, `F` and `Escape`
+  do not fire from text/form-editing targets. Hand uses `grab`/`grabbing`; view, interaction mode
+  and collapsed state stay isolated per single or selected batch document. Fullscreen uses the
+  browser API when available and a bounded in-page expanded-stage fallback otherwise. Brush
+  cursors and their size preview use a one-screen-pixel dashed outer footprint with a restrained
+  solid inner core and no heavy halo.
 - **Enhancements** (`Улучшения`) — one user-facing panel groups optional finishing operations that
   improve the cutout result, whether they use a local model or a deterministic algorithm. The first
   operations are `Improve fine details` (soft alpha for hair/fur/translucency) and `Remove colour
@@ -569,18 +590,27 @@ Tool contracts:
 - **Download** — a prominent toolbar button performs the current/default download, with an adjacent
   menu for output settings. Phase 29 offers `Original`, `2048 px`, and `1024 px` longest-side
   choices only when they downscale (never upscale), ships PNG only, and reserves a typed format slot
-  for later WebP/JPEG. No disabled or fake format choices are shown.
+  for later WebP/JPEG. In batch mode the same menu also exposes Download all as a client-generated
+  ZIP; when completed items exist but none is selected, the primary action downloads that ZIP. No
+  disabled or fake format choices are shown.
 
 `BeforeAfterSlider` may remain as a comparison affordance, but it is not a substitute for the stable
-editor stage and must not force every tool into separate duplicate previews.
+editor stage and must not force every tool into separate duplicate previews. All transparent image
+surfaces use one design-system checkerboard token; processing over an existing image uses a stable
+in-stage Skeleton overlay rather than a native wait cursor or spinner/brush mixture.
 
-The public workflow is upload-count invariant. Uploading multiple valid files enters the existing
-batch overview, and selecting any completed item opens the **same** stage, toolbar, tool registry,
-draft semantics, history, help, and per-item export contract described above. Every tool or export
-capability added in Phases 25–29 must ship for both a single document and the selected batch
-document in that phase. Phase 31 is a consolidation, churn, and regression gate—not the first point
-at which batch users receive the redesigned capabilities. Item histories, drafts, zoom, background,
-and export settings remain isolated; batch processing and ZIP failures remain isolated too.
+The public workflow is upload-count invariant. Multiple valid files add one compact, horizontally
+scrollable filmstrip above the toolbar at every viewport width, with a nearby visual count summary
+for total, ready, active, queued and failed items. Selecting a completed item opens the **same**
+stage, toolbar, tool registry, right-side panel, canvas-view controls, draft semantics, history,
+help, and per-item export contract described above. Each filmstrip item owns a sibling action menu
+for its applicable Download, Retry/Reprocess and Remove commands; destructive actions on the active
+dirty document use the same draft guard as tool/item switching. Batch-wide Add and processing mode
+remain in the toolbar, Download all is folded into the toolbar Download menu, and return-to-upload
+replaces a duplicate Clear action. Technical scheduling detail belongs in diagnostics, not a
+second editor header. Every capability added in Phases 25–29 remains available for single and
+selected batch documents. Item histories, drafts, zoom/interaction mode, background and export
+settings remain isolated; batch processing, cleanup and ZIP failures remain isolated too.
 
 ### 5.4 Accessibility & Mobile
 
@@ -613,19 +643,20 @@ and export settings remain isolated; batch processing and ZIP failures remain is
   than a fade animation.
 - A dirty tool draft cannot be lost on tool switch, reset, batch-item switch, or new upload without
   an accessible apply/discard decision.
-- Phase-32 animated instructions are contextual, dismissible, replayable from Help, and never the
+- Phase-31 animated instructions are contextual, dismissible, replayable from Help, and never the
   only source of task-critical information. They expose pause/replay controls when movement
   continues, provide localized text/static alternatives, avoid flashing, and honor
   `prefers-reduced-motion`; onboarding never blocks the automatic first result.
-- Phase 34 applies WCAG-EM to a representative RU/EN sample and evaluates WCAG 2.2 AA with
+- Phase 33 applies WCAG-EM to a representative RU/EN sample and evaluates WCAG 2.2 AA with
   keyboard, 200%/400% zoom/reflow, forced colors, reduced motion, NVDA and VoiceOver evidence.
   Automated scanners support but never replace manual and assistive-technology verification.
 - Canvas editing must expose an operable non-pointer path or an equivalent workflow for the same
   user goal. The published accessibility statement names tested technologies and known limits
   instead of claiming support for every browser, device, or disability.
-- Phase 30's design system (color tokens, typography scale, motion) is evaluated for WCAG AA
-  contrast and `prefers-reduced-motion` compliance before approval; Phase 31 must not regress any
-  keyboard, focus, `aria-live`, or non-color-alone contract already required elsewhere in this
+- Phase 30's formalized design system (color tokens, typography scale, motion) is evaluated for
+  WCAG AA contrast and `prefers-reduced-motion` compliance before it ships, including the new
+  background grid pattern; it must not regress any keyboard, focus, `aria-live`, or non-color-alone
+  contract already required elsewhere in this
   section while applying the new visual language.
 
 ### 5.5 Internationalization (Phase 12)
@@ -678,7 +709,6 @@ be fully bilingual, not translated as an afterthought.
 | CDN / model weight storage | VPS disk + Nginx behind Cloudflare Cache | `cdn.cutbg.art` is proxied by Cloudflare. Model `.onnx` files and ONNX Runtime WASM binaries are synchronized to a host directory from a pinned manifest, mounted read-only into Nginx, and served with CORS, byte-range support, and `Cache-Control: public, max-age=31536000, immutable`. Hugging Face Hub + the upstream ONNX Runtime CDN remain the automatic runtime fallback; R2 is not required. |
 | VPS | hip-hosting, 1-2 vCPU / 1-2 GB RAM | Server only does SSR of a light page shell (no inference); Umami+Postgres is the component most likely to grow with traffic; scale by upgrading the same provider's tier — no architecture migration needed since the whole stack is Docker Compose |
 | CI/CD | GitHub Actions | Phase 22 adds least-privilege permissions, SHA-pinned third-party actions, scans, SBOM and artifact attestation. Phase 23 adds deterministic mocked critical-path Chromium checks on pull requests, immutable digest deployment, candidate/post-deploy smoke and verified rollback. Full cross-browser/WebGPU/real-model suites remain host-only. Model binaries are synchronized and verified separately, not committed or baked into the app image. |
-| Design tooling | pen.dev VS Code extension + Pencil MCP, authoring `docs/design/index.pen` | Phase 30 only, human-in-the-loop design authoring — not a runtime/build dependency and never in the production bundle. Pencil MCP tools operate on the `.pen` file currently open in the editor, not an arbitrary path; the architect must have it open in VS Code for any Pencil MCP call to succeed, which makes this an operational precondition rather than something a headless/CI agent can drive. Not registered in the repo's `.mcp.json` (personal tooling); see `docs/STACK.md`. |
 
 Production delivery follows these contracts from Phases 22–23:
 
@@ -778,8 +808,8 @@ their loading placeholder keeps the same slot dimensions.
 Phase 30's design system stays within the existing performance budget: token, typography, icon, and
 motion choices are evaluated for their CSS payload, font-loading, and animation cost before approval,
 and any new dependency (icon set, animation library) needs the same evidence bar as the rest of this
-document. Phase 31 re-measures TTI/LCP/INP (§1.2) after applying the redesign; a regression is
-release-blocking for Phase 31 itself, not deferred to Phase 33.
+document. Phase 30 re-measures TTI/LCP/INP (§1.2) after applying the redesign; a regression is
+release-blocking for Phase 30 itself, not deferred to Phase 32.
 
 Editor history is bounded by both entry count and estimated retained bytes. Full image artifacts
 remain outside changing React props/state and are referenced immutably; brush history continues to
@@ -787,7 +817,7 @@ use dirty patches/strokes. Reset, source replacement, batch-item deletion, histo
 unmount release every artifact no longer reachable from the current document or undo/redo stacks.
 Future layers do not relax the one-heavy-inference-stage-at-a-time rule.
 
-Phase 33 is an evidence-driven audit, not permission for a speculative rewrite or blanket
+Phase 32 is an evidence-driven audit, not permission for a speculative rewrite or blanket
 memoization. It establishes reproducible baselines for bundle/startup, React commits and
 interaction latency, long tasks, worker/main-thread utilization, heap/resource growth, and
 single/batch churn; profiles representative flows before editing; removes duplication and
@@ -796,7 +826,7 @@ after each change. React development `StrictMode` lifecycle checks, Profiler tra
 performance/heap evidence, existing Web Vitals, and explicit Blob/Object URL/worker/tensor cleanup
 tests are complementary evidence. No performance claim is accepted from code inspection alone.
 
-Phase 34 repeats the representative flows on the documented physical-device/browser sample and
+Phase 33 repeats the representative flows on the documented physical-device/browser sample and
 freezes an evidence-based support/degradation matrix. A P0/P1 freeze, crash, leak, task blocker or
 budget regression is release-blocking; missing hardware remains explicitly unverified rather than
 being converted into a universal compatibility claim.
@@ -850,8 +880,8 @@ being converted into a universal compatibility claim.
   audit without it only through an explicit, dated acceptance of the identified residual risks.
   Such acceptance must remain visible in the Phase-24 records, must not be described as legal
   review, and does not permit a claim of universal legal compliance.
-- Phase 35 first refreshes the Phase-24 inventory, applicability, processor, retention, metadata,
-  route and implementation decisions against the finished Phase-34 product and current deployed
+- Phase 34 first refreshes the Phase-24 inventory, applicability, processor, retention, metadata,
+  route and implementation decisions against the finished Phase-33 product and current deployed
   provider configuration. Stale drafts or matrices are not implementation authority. It then
   implements only the re-approved matrix and versioned texts. Where non-essential consent is
   required, `Accept`, `Reject`, and granular settings are equally understandable; non-essential
@@ -892,7 +922,7 @@ being converted into a universal compatibility claim.
 ### 7.4 Cross-Browser and Runtime Validation
 
 Compatibility claims are limited to environments actually exercised. During ordinary development,
-configured browser projects and the available host remain the fast regression gate; Phase 34 adds
+configured browser projects and the available host remain the fast regression gate; Phase 33 adds
 a focused product-validation sample rather than a permanent broad device lab.
 
 | Environment | Inference/runtime path | Required evidence |
@@ -902,11 +932,11 @@ a focused product-validation sample rather than a permanent broad device lab.
 | Configured WebKit project | Deterministic WASM/fallback branches | User-flow, canvas interaction, state recovery, and download E2E; this is browser-engine coverage, not a claim that physical Safari/iOS hardware was tested |
 | Available development host | Its real detected WebGPU or WASM path | Serialized real-model smoke, capability report, classified failures, and measured timing for inference changes |
 | Synthetic weak/OOM conditions | Injected capability, allocation, and worker failures | Deterministic fallback, cancellation, resource-disposal, and UI-responsiveness tests |
-| Phase-34 physical sample | iPhone/Safari, Android/Chrome including one constrained device, macOS/Safari, Windows Chromium/integrated graphics, and a no-WebGPU path | Exact hardware/OS/browser evidence for core single/batch/edit/download journeys, accessibility and performance; cloud devices may supplement but not replace both mobile physical checks |
+| Phase-33 physical sample | iPhone/Safari, Android/Chrome including one constrained device, macOS/Safari, Windows Chromium/integrated graphics, and a no-WebGPU path | Exact hardware/OS/browser evidence for core single/batch/edit/download journeys, accessibility and performance; cloud devices may supplement but not replace both mobile physical checks |
 
 Every phase that changes inference must pass the configured cross-browser E2E suite, its
 available-host real-model smoke, focused capability/fallback tests, and the applicable quality,
-latency, and memory thresholds. Phase 34 freezes the current Baseline-informed supported/fallback/
+latency, and memory thresholds. Phase 33 freezes the current Baseline-informed supported/fallback/
 unsupported browser policy and fixes P0/P1 physical-device findings. Missing hardware is recorded
 as unverified; it is neither silently ignored nor represented as supported.
 
@@ -958,7 +988,7 @@ classification and controls (§7.2).
 
 Phase 23 adds no unapproved browser telemetry: it uses synthetic, deployment and aggregate
 infrastructure evidence first. Any new event, field or identifier requires the Phase-24 field-level
-review and Phase-35 transparency/choice implementation.
+review and Phase-34 transparency/choice implementation.
 
 Phase 23 must also publish a step-by-step operator metrics guide that maps every approved
 metric, SLI/SLO, alert, release check and recovery signal to its viewing location, storage and
@@ -991,16 +1021,16 @@ data or source URLs.
 | E2E (redesigned workspace) | Every existing single/batch/tool/export/undo-redo journey from Phases 25–29 continues to pass unchanged under the Phase-30 design system; any approved IA delta gets updated flow coverage; no superseded legacy control remains reachable | Playwright |
 | E2E (guided help/onboarding) | First-run and contextual help never block automatic processing; animated and reduced-motion/static variants explain the actual current controls; dismiss/replay/version reset, keyboard/focus/pause behavior, localization, and single/batch contexts remain correct | Playwright + accessibility checks |
 | E2E (privacy/legal surfaces) | Approved footer links/routes exist in both locales; storage/analytics behavior matches the published inventory; where consent is required, reject is first-layer/easy, non-essential integrations are blocked before choice, choices can be changed, and core editing works after refusal | Playwright + request/storage inspection |
-| Performance/lifecycle audit | Repeatable single/batch scenarios record bundle/startup/Web Vitals, React commits, interaction latency/long tasks, worker/main-thread work, heap/resource growth, and cleanup under item/tool/upload churn before and after Phase-33 changes | Build stats + React Profiler + browser traces/heap + Vitest/Playwright |
+| Performance/lifecycle audit | Repeatable single/batch scenarios record bundle/startup/Web Vitals, React commits, interaction latency/long tasks, worker/main-thread work, heap/resource growth, and cleanup under item/tool/upload churn before and after Phase-32 changes | Build stats + React Profiler + browser traces/heap + Vitest/Playwright |
 | E2E (matting refinement) | Before any refiner fetch, choose capability-recommended or explicit `balanced`/`maximum`; verify q8/fp32 graph selection, no eager/concurrent dual load, fp32 → q8 → deterministic fallback, warm cache/session reuse, hard trimap constraints, and continuation through correction/background/download | Playwright + focused worker/hook tests |
 | Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
 | Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
 | Supply-chain/security | Header policy, model/WASM manifest integrity, corrupt/partial cache recovery, dependency/license/container scans, SBOM/attestation verification, metadata-free export and positive/negative no-image-egress tests | Repository security gate + Vitest/Playwright + disposable container |
 | Release/rollback | Candidate and external smoke, digest deployment, concurrency lock, forced post-deploy failure, automatic/manual rollback, redaction, alert delivery, backup restore | Disposable Docker deployment + GitHub workflow/script integration tests |
 | CI critical path | Deterministic mocked Chromium: upload one/many → process → switch/edit → undo/redo → download | Playwright on pull requests from Phase 23; no real model/WebGPU dependency |
-| Accessibility/manual | WCAG-EM sample, keyboard/zoom/forced-colors/reduced-motion, NVDA and VoiceOver, truthful statement and owned limitations | Manual evidence + automated regression support (Phase 34) |
-| Physical-device/product | Core RU/EN single/batch journeys, support/degradation matrix, constrained-device performance, moderated task sessions and editorial QA | Documented physical sample and consented research (Phase 34) |
-| Visual regression | Representative deterministic RU/EN desktop/mobile structures; excludes nondeterministic model pixels/animation frames | Reviewed Playwright screenshots in the CI browser from Phase 34 |
+| Accessibility/manual | WCAG-EM sample, keyboard/zoom/forced-colors/reduced-motion, NVDA and VoiceOver, truthful statement and owned limitations | Manual evidence + automated regression support (Phase 33) |
+| Physical-device/product | Core RU/EN single/batch journeys, support/degradation matrix, constrained-device performance, moderated task sessions and editorial QA | Documented physical sample and consented research (Phase 33) |
+| Visual regression | Representative deterministic RU/EN desktop/mobile structures; excludes nondeterministic model pixels/animation frames | Reviewed Playwright screenshots in the CI browser from Phase 33 |
 
 Priority: critical-path E2E, available-host real-model smoke, and the configured cross-browser
 matrix outrank unit coverage percentage. Device-specific user reports are converted into focused
@@ -1017,8 +1047,8 @@ regressions after reproduction rather than anticipated through an unavailable ha
 - **Annually or after a material architecture/market/data change:** threat-model, legal/data-flow,
   accessibility and supported-browser review.
 
-Phase 23 freezes exact owners, targets and cadence from measured scale; Phase 34 validates the
-finished functional product, and Phase 35 closes the refreshed legal/data contract before final
+Phase 23 freezes exact owners, targets and cadence from measured scale; Phase 33 validates the
+finished functional product, and Phase 34 closes the refreshed legal/data contract before final
 readiness claims. Kubernetes, multi-region redundancy, user session replay, a physical device lab,
 or a paid APM is not required without evidence that the current single-VPS product needs it.
 
@@ -1057,12 +1087,11 @@ or a paid APM is not required without evidence that the current single-VPS produ
 | `27` | Unified Cutout Tool | Merge semantic and exact correction into one predictable editing tool and remove the candidate/debug-shaped interaction | `Cutout` with `Magic`/`Manual` for single and selected batch documents; keep/remove or restore/erase controls; automatic intent-best result; no Current Result/candidate navigation/Continue/quota copy; Apply/Cancel/repeated-pass contract; icon draft history; viewport-accurate transient brush preview; zoom/pan and bilingual cross-browser E2E |
 | `28` | Enhancements Tool & Committed History | Group optional result-finishing operations under a clear, extensible user concept and make applied changes safely reversible | One `Улучшения` / `Enhancements` panel whose first actions improve fine details and remove colour halo; implementation-neutral registry for later local model/algorithm operations; no model/provider/size/skip-to-brush copy; one serialized `enhance` commit; Cutout/Manual/Enhancements toolbar undo/redo for single and selected batch documents; artifact cleanup verification |
 | `29` | Background & Export Tools | Finish the result toolbar with focused background editing and a scalable download contract | Background draft/apply/undo and sized PNG export for single and selected batch documents; primary Download + settings menu; Original/2048/1024 downscale-only PNG; item-local settings and bulk-ZIP compatibility; extensible `ExportSettings` without fake future formats; client-only privacy guarantees |
-| `30` | Design System & Redesign (Pencil) | Author an approved design system and redesigned key screens/flows in Pencil before touching any implementation code, replacing the ad hoc remove.bg reference with a durable, reviewable design record | Design-tooling readiness (`docs/design/index.pen` open in the pen.dev editor, Pencil MCP evidence); current-UI pain-point inventory; redesigned color/typography/spacing/motion/elevation tokens (WCAG AA contrast checked); redesigned component visual language and key screens/states (empty/upload, automatic-processing, editor stage with Cutout/Enhancements/Background, batch grid, errors, mobile/desktop breakpoints); any proposed UX/IA delta documented against SPEC.md §5.3 with rationale (no Studio scope, §9); exported reference evidence and a dated architect-approved `docs/design/DESIGN_SYSTEM.md`; zero `src/` changes |
-| `31` | Redesign & Legacy Consolidation Implementation | Implement the approved Phase-30 design system and any approved IA deltas across the app in the same pass that removes superseded legacy UI and hardens the Phase-25–29 single/selected-batch contract, rather than doing visual and structural cleanup in two separate passes over the same components | New Tailwind `@theme` tokens and restyled `shared/ui`/`site-header`/`site-footer`/`site-shell`/`widgets/tool-workspace`; implemented approved IA deltas (if any); removed superseded public UI/copy from the pre-redesign candidate/technical-panel era; validated one `EditDocument`/history per item and existing Cutout/Enhancements/Background/export parity; bulk ZIP; safe dirty-draft item switching; re-verified TTI/LCP/INP (§1.2) and WCAG AA contrast/motion; accessibility, localization, memory/lifecycle, layout-shift, and full single/batch regression gate |
-| `32` | Guided Help & Onboarding | Research, produce, and integrate useful animated/contextual instructions without slowing or blocking the core task | Interaction inventory and user-risk hypotheses; asset-format/build-vs-library decision with size/accessibility/localization criteria; a small production asset pipeline; versioned `features/guided-help`; contextual first-use cards and compact tool demos matching the Phase-31 redesigned UI; dismiss/replay from Help; reduced-motion static alternative; single/batch context, bilingual, cross-browser, performance, and E2E validation |
-| `33` | Whole-Project Audit & Refactor | Reduce verified architectural duplication and UI/runtime cost after the redesigned feature contracts stabilize, without a rewrite or behavior drift | Baseline inventory; dead/duplicate code and FSD/public-API audit; React StrictMode/Profiler rerender/effect review; worker/canvas/blob/object-URL/tensor/cache lifecycle and batch-churn memory audit; bundle/lazy-load and long-task/INP profiling; prioritized findings ledger; small reversible refactors with characterization tests; before/after evidence and full gates |
-| `34` | Accessibility, Device & Product Validation | Validate the functionally complete, redesigned focused editor with people, assistive technology and representative hardware before the final legal phase | WCAG-EM/WCAG 2.2 AA audit; keyboard/zoom/forced-colors/reduced-motion; NVDA/VoiceOver; iPhone/Android/macOS/Windows/no-WebGPU sample; supported-browser/degradation policy; constrained-device performance; visual regression baselined against the Phase-31 redesigned UI; RU/EN usability/editorial review; accessibility statement; evidence-linked pre-legal readiness report and P0/P1 closure |
-| `35` | Final Legal, Consent & Release Readiness | Re-audit the finished product and implement the approved transparency and choice contract without dark patterns or false compliance claims | Refreshed final-product data flow, storage/request evidence, applicability/processor/retention/metadata matrices and drafts; explicit re-approval; versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, SSR/SEO, E2E, and final release-readiness sign-off |
+| `30` | Design System & Redesign | Formalize and iterate the design system directly in the codebase — no external design tool, after two rejected attempts (Pencil, then Claude Design) — implementing it across the app in the same pass that removes superseded legacy UI and hardens the Phase-25–29 single/selected-batch contract, rather than doing visual and structural cleanup in two separate passes over the same components | Current-UI pain-point inventory; `shadcn/ui` upgraded to its current version with maximum use of its stock components; the existing color palette and typography formalized as documented Tailwind `@theme` tokens (WCAG AA contrast checked); `Skeleton`-based loading states; reworked home-page layout, including relocating the floating "uploaded models storage" utility out of the main flow; a subtle, low-opacity, fading engineering-grid background pattern (`prefers-reduced-motion` safe); any proposed UX/IA delta documented against SPEC.md §5.3 with rationale (no Studio scope, §9); restyled `shared/ui`/`site-header`/`site-footer`/`site-shell`/`widgets/tool-workspace`; removed superseded public UI/copy from the pre-redesign candidate/technical-panel era; validated one `EditDocument`/history per item and existing Cutout/Enhancements/Background/export parity; bulk ZIP; safe dirty-draft item switching; re-verified TTI/LCP/INP (§1.2) and WCAG AA contrast/motion; accessibility, localization, memory/lifecycle, layout-shift, and full single/batch regression gate; a dated `docs/design/DESIGN_SYSTEM.md` record |
+| `31` | Guided Help & Onboarding | Research, produce, and integrate useful animated/contextual instructions without slowing or blocking the core task | Interaction inventory and user-risk hypotheses; asset-format/build-vs-library decision with size/accessibility/localization criteria; a small production asset pipeline; versioned `features/guided-help`; contextual first-use cards and compact tool demos matching the Phase-30 redesigned UI; dismiss/replay from Help; reduced-motion static alternative; single/batch context, bilingual, cross-browser, performance, and E2E validation |
+| `32` | Whole-Project Audit & Refactor | Reduce verified architectural duplication and UI/runtime cost after the redesigned feature contracts stabilize, without a rewrite or behavior drift | Baseline inventory; dead/duplicate code and FSD/public-API audit; React StrictMode/Profiler rerender/effect review; worker/canvas/blob/object-URL/tensor/cache lifecycle and batch-churn memory audit; bundle/lazy-load and long-task/INP profiling; prioritized findings ledger; small reversible refactors with characterization tests; before/after evidence and full gates |
+| `33` | Accessibility, Device & Product Validation | Validate the functionally complete, redesigned focused editor with people, assistive technology and representative hardware before the final legal phase | WCAG-EM/WCAG 2.2 AA audit; keyboard/zoom/forced-colors/reduced-motion; NVDA/VoiceOver; iPhone/Android/macOS/Windows/no-WebGPU sample; supported-browser/degradation policy; constrained-device performance; visual regression baselined against the Phase-30 redesigned UI; RU/EN usability/editorial review; accessibility statement; evidence-linked pre-legal readiness report and P0/P1 closure |
+| `34` | Final Legal, Consent & Release Readiness | Re-audit the finished product and implement the approved transparency and choice contract without dark patterns or false compliance claims | Refreshed final-product data flow, storage/request evidence, applicability/processor/retention/metadata matrices and drafts; explicit re-approval; versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, SSR/SEO, E2E, and final release-readiness sign-off |
 
 ---
 
@@ -1083,7 +1112,7 @@ legacy compatibility source, while reused internal worker/session contracts rema
 phases may evaluate third-party pretrained models but do not authorize domain-specific
 training/fine-tuning or any server-side inference.
 
-**Focused-product boundary after Phase 35:**
+**Focused-product boundary after Phase 34:**
 
 `cutbg.art` remains a fast background-removal and background-finishing product. Layers, free object
 movement, shadows, perspective, text, templates, and marketplace-card composition are not added to
@@ -1137,14 +1166,13 @@ code is written.
 - “Future metadata” is not yet a defined data category. Before implementation, the owner must name
   each proposed field and product purpose; image pixels, mattes, filenames, prompt coordinates, and
   image-derived embeddings remain prohibited from storage/analytics regardless.
-- Before Phase 34, the owner must secure access to the minimum physical-device/assistive-technology
+- Before Phase 33, the owner must secure access to the minimum physical-device/assistive-technology
   sample and representative consented research participants. Unavailable environments remain
   explicitly unverified; they cannot be replaced by unsupported compatibility claims.
-- Before Phase 35 implementation, the owner must refresh the Phase-24 operator, jurisdiction,
+- Before Phase 34 implementation, the owner must refresh the Phase-24 operator, jurisdiction,
   market, processor, storage-location and retention facts against the finished product and either
   obtain qualified review or record a new dated residual-risk acceptance for the final texts.
-- Before Phase 30, the owner must have `docs/design/index.pen` open in the pen.dev VS Code editor
-  for the duration of the design work — Pencil MCP tools read/write the currently open tab, not an
-  arbitrary path, so this is a per-session precondition rather than a one-time setup step. Any
-  proposed UX/IA delta from Phase-30 design exploration is a candidate change, not an approved one,
-  until the owner signs off in `docs/design/DESIGN_SYSTEM.md` and it is synced into SPEC.md §5.3.
+- Phase 30 has no external-design-tool precondition: it iterates directly in the codebase against
+  the existing implementation. Any proposed UX/IA delta from that iteration is a candidate change,
+  not an approved one, until the owner signs off in `docs/design/DESIGN_SYSTEM.md` and it is synced
+  into SPEC.md §5.3.

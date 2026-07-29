@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 
 import type { BrushMode, MaskPatch } from "../../../entities/processed-image";
 import type { MaskCanvasHandle } from "../ui/MaskCorrectionCanvas";
@@ -155,10 +161,24 @@ export interface MaskCorrectionViewportControls {
 
 export function useMaskCorrectionViewport(
   imageSize: MaskCorrectionImageSize,
+  scopeKey = "default",
 ): MaskCorrectionViewportControls {
   const imageWidth = imageSize.width;
   const imageHeight = imageSize.height;
-  const [viewport, setViewport] = useState<MaskCorrectionViewport>(DEFAULT_VIEWPORT);
+  const [viewportByScope, setViewportByScope] = useState<
+    Record<string, MaskCorrectionViewport>
+  >({});
+  const viewport = viewportByScope[scopeKey] ?? DEFAULT_VIEWPORT;
+  const setViewport = useCallback(
+    (update: SetStateAction<MaskCorrectionViewport>) => {
+      setViewportByScope((current) => {
+        const currentViewport = current[scopeKey] ?? DEFAULT_VIEWPORT;
+        const next = typeof update === "function" ? update(currentViewport) : update;
+        return { ...current, [scopeKey]: next };
+      });
+    },
+    [scopeKey],
+  );
   const safeViewport = clampViewport(viewport, {
     width: imageWidth,
     height: imageHeight,
@@ -177,7 +197,7 @@ export function useMaskCorrectionViewport(
         );
       });
     },
-    [imageWidth, imageHeight],
+    [imageWidth, imageHeight, setViewport],
   );
 
   const zoomOut = useCallback(
@@ -193,7 +213,7 @@ export function useMaskCorrectionViewport(
         );
       });
     },
-    [imageWidth, imageHeight],
+    [imageWidth, imageHeight, setViewport],
   );
 
   const zoomByWheel = useCallback(
@@ -210,12 +230,12 @@ export function useMaskCorrectionViewport(
         );
       });
     },
-    [imageWidth, imageHeight],
+    [imageWidth, imageHeight, setViewport],
   );
 
   const resetView = useCallback(() => {
     setViewport(DEFAULT_VIEWPORT);
-  }, []);
+  }, [setViewport]);
 
   const panView = useCallback(
     (deltaX: number, deltaY: number, speed: "normal" | "fast" = "normal") => {
@@ -235,7 +255,7 @@ export function useMaskCorrectionViewport(
         );
       });
     },
-    [imageWidth, imageHeight],
+    [imageWidth, imageHeight, setViewport],
   );
 
   const panBySourcePixels = useCallback(
@@ -251,7 +271,7 @@ export function useMaskCorrectionViewport(
         ),
       );
     },
-    [imageWidth, imageHeight],
+    [imageWidth, imageHeight, setViewport],
   );
 
   const zoomPercent = Math.round(safeViewport.zoom * 100);
@@ -285,6 +305,7 @@ export function useMaskCorrection(
   canvas: RefObject<MaskCanvasHandle | null>,
   imageSize: MaskCorrectionImageSize,
   sharedViewport?: MaskCorrectionViewportControls,
+  keyboardEnabled = true,
 ): UseMaskCorrectionResult {
   const [mode, setMode] = useState<BrushMode>("add");
   const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_RADIUS);
@@ -328,8 +349,15 @@ export function useMaskCorrection(
   }, [canvas]);
 
   useEffect(() => {
+    if (!keyboardEnabled) return;
     function handleHistoryShortcut(event: KeyboardEvent): void {
       if (event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, select, [contenteditable]")
+      )
+        return;
 
       const key = event.key.toLowerCase();
       const accelerator = event.ctrlKey || event.metaKey;
@@ -351,7 +379,7 @@ export function useMaskCorrection(
     return () => {
       window.removeEventListener("keydown", handleHistoryShortcut);
     };
-  }, [redo, redoStack.length, undo, undoStack.length]);
+  }, [keyboardEnabled, redo, redoStack.length, undo, undoStack.length]);
 
   return {
     mode,

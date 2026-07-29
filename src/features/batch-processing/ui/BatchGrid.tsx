@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Menu } from "@base-ui/react/menu";
+import { Download, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { m } from "@/paraglide/messages";
+import { Button, Skeleton } from "@/shared/ui";
 
 import type {
   BatchItem,
@@ -8,31 +11,11 @@ import type {
   ModelLoadProgress,
 } from "../model/types";
 
-function pathLabel(path: BatchSchedulerSnapshot["inferencePath"]) {
-  return path === "webgpu" ? "WebGPU" : "WASM";
-}
-
 function progressText(progress: ModelLoadProgress): string {
   if (progress.status === "ready") return m.batchReady();
   return progress.percent === null
     ? m.preparing()
     : `${m.preparing()} ${progress.percent.toFixed(0)}%`;
-}
-
-function diagnosticProgressText(progress: ModelLoadProgress): string {
-  if (progress.status === "checking-cache") return m.batchCheckingCache();
-  if (progress.status === "building-session") return m.batchBuildingSession();
-  if (progress.status === "ready")
-    return progress.fromCache ? m.batchModelCached() : m.batchModelReady();
-  const loaded = (progress.loadedBytes / 1_048_576).toFixed(1);
-  const total = progress.totalBytes
-    ? ` / ${(progress.totalBytes / 1_048_576).toFixed(1)} MiB`
-    : " MiB";
-  return m.batchDownloadingModel({
-    loaded,
-    total,
-    percent: progress.percent === null ? "" : ` · ${progress.percent.toFixed(1)}%`,
-  });
 }
 
 function statusLabel(status: BatchItemStatus): string {
@@ -47,11 +30,9 @@ function statusLabel(status: BatchItemStatus): string {
 
 const STATUS_STYLES: Record<BatchItemStatus, string> = {
   queued: "bg-background/90 text-muted-foreground",
-  "model-loading":
-    "bg-amber-100/95 text-amber-900 dark:bg-amber-950/90 dark:text-amber-200",
-  processing: "bg-blue-100/95 text-blue-900 dark:bg-blue-950/90 dark:text-blue-200",
-  result:
-    "bg-emerald-100/95 text-emerald-900 dark:bg-emerald-950/90 dark:text-emerald-200",
+  "model-loading": "bg-warning/95 text-warning-foreground dark:bg-warning/90",
+  processing: "bg-info/95 text-info-foreground dark:bg-info/90",
+  result: "bg-success/95 text-success-foreground dark:bg-success/90",
   error: "bg-destructive/90 text-destructive-foreground",
 };
 
@@ -66,16 +47,20 @@ function SourceThumbnail({ item }: { item: BatchItem }) {
   }, [item.source.blob]);
 
   return (
-    <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-      {sourceUrl ? (
+    <div className="relative aspect-square overflow-hidden bg-muted/50">
+      {sourceUrl && (item.status === "result" || item.status === "error") ? (
         <img
           src={sourceUrl}
           alt=""
-          className="size-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+          className="size-full object-contain p-1"
           data-testid="batch-item-thumbnail"
         />
       ) : (
-        <div className="size-full animate-pulse bg-muted" aria-hidden="true" />
+        <Skeleton
+          className="size-full rounded-none motion-reduce:animate-none"
+          aria-hidden="true"
+          data-testid="batch-item-skeleton"
+        />
       )}
       <span
         className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[0.6875rem] font-medium shadow-sm ${STATUS_STYLES[item.status]}`}
@@ -97,28 +82,53 @@ function itemStatusText(item: BatchItem): string {
   return statusLabel(item.status);
 }
 
+function qualityModeLabel(item: BatchItem): string {
+  if (item.qualityMode === "max" || item.qualityMode === "isnet-fp32")
+    return m.processingModePrecise();
+  if (item.qualityMode === "ben2-fp16") return m.processingModeBen2();
+  return m.processingModeFast();
+}
+
 export function BatchGrid({
   items,
   selectedItemId,
+  snapshot,
+  modelLoad,
   onSelect,
+  onDownload,
   onRetry,
+  onRemove,
 }: {
   items: BatchItem[];
   selectedItemId: string | null;
+  snapshot: BatchSchedulerSnapshot;
+  modelLoad?: ModelLoadProgress;
   onSelect: (id: string, trigger: HTMLButtonElement) => void;
-  onRetry: (id: string) => void;
+  onDownload: (item: BatchItem) => void;
+  onRetry: (id: string, trigger: HTMLButtonElement) => void;
+  onRemove: (id: string, trigger: HTMLButtonElement) => void;
 }) {
+  const itemMenuTriggers = useRef<Record<string, HTMLButtonElement | null>>({});
   const queuedIds = items
     .filter((item) => item.status === "queued")
     .map((item) => item.id);
 
   return (
-    <section className="flex flex-col gap-4" aria-label={m.batchProcessing()}>
-      <div>
-        <h3 className="text-sm font-semibold">{m.batchImagesHeading()}</h3>
-        <p className="mt-1 text-xs text-muted-foreground">{m.batchImagesHint()}</p>
+    <section
+      className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/95 p-3 shadow-sm"
+      aria-label={m.batchProcessing()}
+      data-testid="batch-overview"
+    >
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <h3 className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {m.batchImagesHeading()}
+        </h3>
+        <BatchStatus snapshot={snapshot} modelLoad={modelLoad} />
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+      <div
+        className="flex min-w-0 gap-2 overflow-x-auto pb-2 [overscroll-behavior-inline:contain]"
+        data-testid="batch-filmstrip"
+      >
         {items.map((item) => {
           const selectable = item.status === "result";
           const selected = selectable && selectedItemId === item.id;
@@ -131,7 +141,7 @@ export function BatchGrid({
           return (
             <article
               key={item.id}
-              className={`group overflow-hidden rounded-xl border bg-card text-card-foreground transition-[border-color,box-shadow] duration-200 ${
+              className={`group relative w-32 shrink-0 overflow-hidden rounded-xl border bg-card text-card-foreground transition-[border-color,box-shadow] duration-200 ${
                 selectable
                   ? "hover:border-foreground/30 hover:shadow-sm"
                   : "border-border"
@@ -150,52 +160,97 @@ export function BatchGrid({
                 className="block w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-wait"
               >
                 <SourceThumbnail item={item} />
-                <span className="block p-3">
+                <span className="block p-2">
                   <span
                     className="block truncate text-sm font-medium"
                     title={item.originalFileName}
                   >
                     {item.originalFileName}
                   </span>
-                  <span className="mt-1 block truncate text-xs text-muted-foreground">
-                    {item.source.width} × {item.source.height} ·{" "}
-                    {item.qualityMode === "max" || item.qualityMode === "isnet-fp32"
-                      ? m.processingModePrecise()
-                      : item.qualityMode === "ben2-fp16"
-                        ? m.processingModeBen2()
-                        : m.processingModeFast()}
-                  </span>
                   <span
-                    className="mt-2 block text-xs text-muted-foreground"
+                    className="mt-1 block truncate text-[0.6875rem] text-muted-foreground"
                     data-testid="item-progress"
                   >
                     {detail}
                   </span>
-                  {(item.status === "model-loading" || item.status === "processing") && (
-                    <progress
-                      aria-hidden="true"
-                      data-testid="item-stage-progress"
-                      className="mt-2 h-1 w-full"
-                    />
-                  )}
-                  <span className="mt-2 block text-xs font-medium text-foreground/70 transition-colors group-hover:text-foreground">
-                    {selectable
-                      ? selected
-                        ? m.batchSelected()
-                        : m.batchSelect()
-                      : m.batchReviewWhenReady()}
-                  </span>
                 </span>
               </button>
-              {item.status === "error" && (
-                <button
-                  type="button"
-                  className="mx-3 mb-3 text-xs font-medium underline underline-offset-2"
-                  onClick={() => onRetry(item.id)}
+              <Menu.Root>
+                <Menu.Trigger
+                  render={
+                    <Button
+                      ref={(node) => {
+                        itemMenuTriggers.current[item.id] = node;
+                      }}
+                      type="button"
+                      variant="secondary"
+                      size="icon-sm"
+                      className="absolute right-2 top-2 z-20 border border-background/70 shadow-sm"
+                      aria-label={m.batchItemActions({
+                        name: item.originalFileName,
+                      })}
+                      data-testid="batch-item-actions"
+                    />
+                  }
                 >
-                  {m.tryAgain()}
-                </button>
-              )}
+                  <MoreHorizontal aria-hidden="true" />
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Positioner
+                    side="bottom"
+                    align="end"
+                    sideOffset={6}
+                    className="z-50"
+                  >
+                    <Menu.Popup className="min-w-56 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+                      {item.status === "result" && item.processedImage && (
+                        <>
+                          <Menu.Item
+                            onClick={() => onDownload(item)}
+                            className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+                          >
+                            <Download aria-hidden="true" />
+                            {m.downloadPng()}
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() => {
+                              const trigger = itemMenuTriggers.current[item.id];
+                              if (trigger) onRetry(item.id, trigger);
+                            }}
+                            className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+                          >
+                            <RefreshCw aria-hidden="true" />
+                            {m.reprocessMode({ mode: qualityModeLabel(item) })}
+                          </Menu.Item>
+                        </>
+                      )}
+                      {item.status === "error" && (
+                        <Menu.Item
+                          onClick={() => {
+                            const trigger = itemMenuTriggers.current[item.id];
+                            if (trigger) onRetry(item.id, trigger);
+                          }}
+                          className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+                        >
+                          <RefreshCw aria-hidden="true" />
+                          {m.tryAgain()}
+                        </Menu.Item>
+                      )}
+                      <div role="separator" className="my-1 h-px bg-border" />
+                      <Menu.Item
+                        onClick={() => {
+                          const trigger = itemMenuTriggers.current[item.id];
+                          if (trigger) onRemove(item.id, trigger);
+                        }}
+                        className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm text-destructive outline-none data-highlighted:bg-destructive/10"
+                      >
+                        <Trash2 aria-hidden="true" />
+                        {m.removeImage()}
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
             </article>
           );
         })}
@@ -212,8 +267,8 @@ export function BatchStatus({
   modelLoad?: ModelLoadProgress;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" data-testid="scheduler-summary">
+    <div className="flex min-w-0 flex-1 flex-col gap-2" data-testid="batch-status">
+      <p className="sr-only" data-testid="scheduler-summary">
         {m.batchSummary({
           active: snapshot.activeCount,
           limit: snapshot.concurrencyLimit,
@@ -223,24 +278,72 @@ export function BatchStatus({
           total: snapshot.totalCount,
         })}
       </p>
+      <div className="flex min-w-0 flex-wrap justify-end gap-1.5 text-xs">
+        <span className="rounded-full bg-muted px-2 py-1 font-medium">
+          {m.batchTotalCount({ count: snapshot.totalCount })}
+        </span>
+        <span className="rounded-full bg-success px-2 py-1 font-medium text-success-foreground">
+          {m.batchReadyCount({ count: snapshot.completedCount })}
+        </span>
+        <span className="rounded-full bg-info px-2 py-1 font-medium text-info-foreground">
+          {m.batchActiveCount({ count: snapshot.activeCount })}
+        </span>
+        <span className="rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">
+          {m.batchQueuedCount({ count: snapshot.queuedCount })}
+        </span>
+        <span className="rounded-full bg-destructive/10 px-2 py-1 font-medium text-destructive">
+          {m.batchFailedCount({ count: snapshot.failedCount })}
+        </span>
+      </div>
+      <div
+        className="ml-auto flex h-1.5 w-full max-w-xl overflow-hidden rounded-full bg-muted"
+        aria-hidden="true"
+        data-testid="batch-status-bar"
+      >
+        {snapshot.completedCount > 0 && (
+          <span
+            className="bg-success"
+            style={{
+              width: `${String(
+                (snapshot.completedCount / Math.max(1, snapshot.totalCount)) * 100,
+              )}%`,
+            }}
+          />
+        )}
+        {snapshot.activeCount > 0 && (
+          <span
+            className="bg-info"
+            style={{
+              width: `${String(
+                (snapshot.activeCount / Math.max(1, snapshot.totalCount)) * 100,
+              )}%`,
+            }}
+          />
+        )}
+        {snapshot.failedCount > 0 && (
+          <span
+            className="bg-destructive"
+            style={{
+              width: `${String(
+                (snapshot.failedCount / Math.max(1, snapshot.totalCount)) * 100,
+              )}%`,
+            }}
+          />
+        )}
+      </div>
       {modelLoad && (
         <div
-          className="rounded-xl border bg-background/70 p-3 text-sm"
+          className="rounded-xl border bg-background/70 p-2 text-xs"
           data-testid="shared-model-progress"
+          role="progressbar"
+          aria-valuenow={modelLoad.percent ?? undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
         >
-          <p className="font-medium">{m.batchSharedModel()}</p>
-          <p className="text-muted-foreground">{progressText(modelLoad)}</p>
-          {modelLoad.percent !== null && modelLoad.status !== "ready" && (
-            <progress className="mt-2 w-full" max={100} value={modelLoad.percent} />
+          <p className="font-medium">{progressText(modelLoad)}</p>
+          {modelLoad.status !== "ready" && (
+            <Skeleton className="mt-2 h-1.5 w-full rounded-full" aria-hidden="true" />
           )}
-          <details className="mt-2 text-xs text-muted-foreground">
-            <summary className="cursor-pointer underline underline-offset-2">
-              {m.details()}
-            </summary>
-            <p className="mt-2 font-mono">
-              {pathLabel(snapshot.inferencePath)} · {diagnosticProgressText(modelLoad)}
-            </p>
-          </details>
         </div>
       )}
     </div>

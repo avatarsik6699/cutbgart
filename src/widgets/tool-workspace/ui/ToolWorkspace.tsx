@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -9,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import type {
   AlphaMatte,
@@ -28,12 +26,14 @@ import {
 } from "../../../features/correct-mask";
 import {
   DEFAULT_EXPORT_SETTINGS,
-  DownloadAllButton,
   DownloadSplitButton,
   type ExportSettings,
 } from "../../../features/download-result";
-import { BatchGrid, BatchStatus } from "../../../features/batch-processing";
-import { QualityModeToggle } from "../../../features/quality-mode-toggle";
+import { BatchGrid, type BatchItem } from "../../../features/batch-processing";
+import {
+  QualityModePopover,
+  QualityModeToggle,
+} from "../../../features/quality-mode-toggle";
 import { GuidedBrushCanvas, GuidedBrushControls } from "../../../features/select-object";
 import {
   ChoosePhotoButton,
@@ -41,7 +41,8 @@ import {
   UploadPreparationNotice,
   type UploadValidationError,
 } from "../../../features/upload-image";
-import { Button } from "@/shared/ui";
+import { Button, Skeleton } from "@/shared/ui";
+import { useHeaderUtilityPortalTarget } from "@/shared/ui/header-utility-portal-context";
 import { m } from "@/paraglide/messages";
 import { clearModelCache } from "@/features/model-storage";
 import { describeGuidedState, describeState } from "../lib/describe-state";
@@ -58,38 +59,60 @@ import {
   type EditorToolId,
 } from "../model/editor-tool-registry";
 import { EditorStage } from "./EditorStage";
+import type { EditorStageFullscreenControls } from "./EditorStage";
 import { EditorToolbar } from "./EditorToolbar";
 import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
 import { BackgroundToolPanel } from "./BackgroundToolPanel";
 import { CutoutToolPanel, type CutoutIntent, type CutoutMode } from "./CutoutToolPanel";
 import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
-import { ProcessingLog } from "./ProcessingLog";
-
-const LazyToolPanelSlot = lazy(async () => {
-  const module = await import("./ToolPanelSlot");
-  return { default: module.ToolPanelSlot };
-});
-
-function ToolPanelSlot(props: import("./ToolPanelSlot").ToolPanelSlotProps) {
-  return (
-    <Suspense
-      fallback={
-        <div
-          aria-busy="true"
-          className="editor-tool-panel min-h-[20rem] animate-pulse rounded-2xl border bg-muted/25 motion-reduce:animate-none sm:min-h-[28rem]"
-          data-testid="tool-panel-placeholder"
-        />
-      }
-    >
-      <LazyToolPanelSlot {...props} />
-    </Suspense>
-  );
-}
+import { CanvasViewControls, type CanvasInteractionMode } from "./CanvasViewControls";
+import { DiagnosticsSheet } from "./DiagnosticsSheet";
+import { ToolPanelSlot } from "./ToolPanelSlot";
 
 function modeLabel(mode: QualityMode): string {
   if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
   if (mode === "ben2-fp16") return m.processingModeBen2();
   return m.processingModeFast();
+}
+
+function PersistentPreviewLayers({
+  activeLayer,
+  comparison,
+  magic,
+  manual,
+}: {
+  activeLayer: "comparison" | "magic" | "manual";
+  comparison: ReactNode;
+  magic?: ReactNode;
+  manual?: ReactNode;
+}) {
+  return (
+    <div
+      className="relative size-full"
+      data-testid="persistent-preview-stack"
+      data-active-layer={activeLayer}
+    >
+      {(
+        [
+          ["comparison", comparison],
+          ["magic", magic],
+          ["manual", manual],
+        ] as const
+      ).map(([name, layer]) =>
+        layer ? (
+          <div
+            key={name}
+            className="persistent-preview-layer absolute inset-0 grid size-full place-items-center"
+            data-preview-layer={name}
+            data-active={activeLayer === name}
+            aria-hidden={activeLayer !== name}
+          >
+            {layer}
+          </div>
+        ) : null,
+      )}
+    </div>
+  );
 }
 
 interface MaskCorrectionSlotsProps {
@@ -104,6 +127,9 @@ interface MaskCorrectionSlotsProps {
   previewInteractionKey: number;
   onViewAnnouncementChange: (announcement: string) => void;
   onDirtyChange: (dirty: boolean) => void;
+  interactionMode: CanvasInteractionMode;
+  interactionEnabled: boolean;
+  draftResetKey: number;
   children: (slots: { surface: ReactNode; rail: ReactNode }) => ReactNode;
 }
 
@@ -129,6 +155,9 @@ function MaskCorrectionSlots({
   previewInteractionKey,
   onViewAnnouncementChange,
   onDirtyChange,
+  interactionMode,
+  interactionEnabled,
+  draftResetKey,
   children,
 }: MaskCorrectionSlotsProps) {
   const canvasHandleRef = useRef<MaskCanvasHandle>(null);
@@ -138,16 +167,9 @@ function MaskCorrectionSlots({
     brushSize,
     setBrushSize,
     canUndo,
-    canRedo,
     commitStroke,
-    undo,
-    redo,
     viewport,
-    zoomPercent,
     zoomAnnouncement,
-    canZoomIn,
-    canZoomOut,
-    canPan,
     zoomIn,
     zoomOut,
     zoomByWheel,
@@ -163,7 +185,16 @@ function MaskCorrectionSlots({
       height: sourceImage.height,
     },
     viewportControls,
+    interactionEnabled,
   );
+  const initialDraftResetKeyRef = useRef(draftResetKey);
+
+  useEffect(() => {
+    if (draftResetKey === initialDraftResetKeyRef.current) return;
+    initialDraftResetKeyRef.current = draftResetKey;
+    const timeout = window.setTimeout(clearDraft, 0);
+    return () => window.clearTimeout(timeout);
+  }, [clearDraft, draftResetKey]);
 
   useEffect(() => {
     onViewAnnouncementChange(zoomAnnouncement);
@@ -177,8 +208,16 @@ function MaskCorrectionSlots({
     return () => onDirtyChange(false);
   }, [canUndo, onDirtyChange]);
 
+  const ratio = sourceImage.width / sourceImage.height;
   const surface = (
-    <div className="relative">
+    <div
+      className="editor-image-frame relative"
+      style={{
+        aspectRatio: `${String(sourceImage.width)} / ${String(sourceImage.height)}`,
+        width: `min(100cqw, calc(100cqh * ${String(ratio)}))`,
+        height: `min(100cqh, calc(100cqw / ${String(ratio)}))`,
+      }}
+    >
       <MaskCorrectionCanvas
         ref={canvasHandleRef}
         sourceImage={sourceImage}
@@ -197,6 +236,8 @@ function MaskCorrectionSlots({
         onPanBySourcePixels={panBySourcePixels}
         onStrokeCommitted={commitStroke}
         stageTargetRef={surfaceTargetRef}
+        interactionMode={interactionMode}
+        interactionEnabled={interactionEnabled}
       />
       <BrushSizeStagePreview
         sourceDiameter={brushSize * 2}
@@ -204,12 +245,13 @@ function MaskCorrectionSlots({
         targetRef={surfaceTargetRef}
         interactionKey={previewInteractionKey}
         tone={mode === "erase" ? "erase" : "restore"}
+        coreRatio={1 / 3}
       />
     </div>
   );
 
   const rail = (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full flex-col gap-4">
       <MaskCorrectionToolbar
         mode={mode}
         onModeChange={setMode}
@@ -218,36 +260,25 @@ function MaskCorrectionSlots({
           setBrushSize(size);
           onBrushSizeInteraction();
         }}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={undo}
-        onRedo={redo}
-        onClear={clearDraft}
-        zoomPercent={zoomPercent}
-        canZoomIn={canZoomIn}
-        canZoomOut={canZoomOut}
-        canPan={canPan}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onResetView={resetView}
       />
-      <Button
-        type="button"
-        disabled={doneDisabled || !canUndo}
-        onClick={() => {
-          const matte = canvasHandleRef.current?.extractMatte();
-          if (matte)
-            void onDone(matte).then((committed) => {
-              if (committed) commitDraft();
-            });
-        }}
-        className="self-start"
-      >
-        {doneDisabled ? m.cutoutApplying() : m.cutoutApply()}
-      </Button>
-      <Button type="button" variant="outline" onClick={clearDraft} className="self-start">
-        {m.cancel()}
-      </Button>
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-2">
+        <Button
+          type="button"
+          disabled={doneDisabled || !canUndo}
+          onClick={() => {
+            const matte = canvasHandleRef.current?.extractMatte();
+            if (matte)
+              void onDone(matte).then((committed) => {
+                if (committed) commitDraft();
+              });
+          }}
+        >
+          {doneDisabled ? m.cutoutApplying() : m.cutoutApply()}
+        </Button>
+        <Button type="button" variant="outline" onClick={clearDraft}>
+          {m.cancel()}
+        </Button>
+      </div>
     </div>
   );
 
@@ -302,7 +333,12 @@ function CorrectionErrorAlert({ error, onRetry, onReset }: CorrectionErrorAlertP
  * (preview surface left, control rail right) via CSS grid-template-areas —
  * not just DOM order — so both constraints hold at once.
  */
-export function ToolWorkspace() {
+export function ToolWorkspace({
+  emptyIntroSlot,
+}: {
+  emptyIntroSlot?: ReactNode;
+} = {}) {
+  const headerUtilityTarget = useHeaderUtilityPortalTarget();
   const {
     uploadError,
     preparingFileCount,
@@ -386,15 +422,24 @@ export function ToolWorkspace() {
   const [cutoutModeByDocument, setCutoutModeByDocument] = useState<
     Record<string, CutoutMode>
   >({});
+  const [interactionModeByDocument, setInteractionModeByDocument] = useState<
+    Record<string, CanvasInteractionMode>
+  >({});
+  const [viewControlsCollapsedByDocument, setViewControlsCollapsedByDocument] = useState<
+    Record<string, boolean>
+  >({});
   const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
   const [manualPreviewKey, setManualPreviewKey] = useState(0);
+  const [manualDraftResetKey, setManualDraftResetKey] = useState(0);
   const [manualDraftDirty, setManualDraftDirty] = useState(false);
   const [enhancementDraftByDocument, setEnhancementDraftByDocument] = useState<
     Record<string, EnhancementDraft>
   >({});
   const [pendingTool, setPendingTool] = useState<EditorToolId | null>(null);
   const [pendingBatchItem, setPendingBatchItem] = useState<string | null>(null);
+  const [pendingBatchReprocess, setPendingBatchReprocess] = useState<string | null>(null);
+  const [pendingBatchRemove, setPendingBatchRemove] = useState<string | null>(null);
   const [pendingBatchClear, setPendingBatchClear] = useState(false);
   const [pendingReset, setPendingReset] = useState(false);
   const pendingToolTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -409,10 +454,16 @@ export function ToolWorkspace() {
     (state.status === "result" || state.status === "correcting"
       ? state.result.source
       : null);
-  const cutoutViewport = useMaskCorrectionViewport({
-    width: activeSource?.width ?? 1,
-    height: activeSource?.height ?? 1,
-  });
+  const cutoutViewport = useMaskCorrectionViewport(
+    {
+      width: activeSource?.width ?? 1,
+      height: activeSource?.height ?? 1,
+    },
+    activeDocumentId ?? "no-document",
+  );
+  const interactionMode = activeDocumentId
+    ? (interactionModeByDocument[activeDocumentId] ?? "brush")
+    : "brush";
   const magicSurfaceRef = useRef<HTMLCanvasElement>(null);
   const manualSurfaceRef = useRef<HTMLCanvasElement>(null);
   const initializedMagicDocumentRef = useRef<string | null>(null);
@@ -525,13 +576,7 @@ export function ToolWorkspace() {
 
   function activateTool(tool: EditorToolId) {
     if (!activeDocumentId) return;
-    if (tool !== "cutout" && originalMatte) {
-      initializedManualDocumentRef.current = null;
-      handleCancelCorrection();
-    }
     setToolByDocument((current) => ({ ...current, [activeDocumentId]: tool }));
-    const definition = tools.find(({ id }) => id === tool);
-    if (definition) void definition.loadPanel();
   }
 
   function requestTool(tool: EditorToolId, trigger: HTMLButtonElement) {
@@ -552,6 +597,57 @@ export function ToolWorkspace() {
       return;
     }
     handleSelectBatchItem(id);
+  }
+
+  function prepareActiveBatchMutation(id: string) {
+    if (id !== batch.session.selectedItemId) return;
+    if (guided.state.session) cancelGuided();
+    if (originalMatte) handleCancelCorrection();
+    initializedMagicDocumentRef.current = null;
+    initializedManualDocumentRef.current = null;
+    setManualDraftDirty(false);
+  }
+
+  function executeBatchReprocess(id: string) {
+    prepareActiveBatchMutation(id);
+    void releaseRefinementBeforeHeavyWork().then(() => batch.retryItem(id));
+  }
+
+  function requestBatchReprocess(id: string, trigger: HTMLButtonElement) {
+    if (id === batch.session.selectedItemId && activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingBatchReprocess(id);
+      return;
+    }
+    executeBatchReprocess(id);
+  }
+
+  function executeBatchRemove(id: string) {
+    prepareActiveBatchMutation(id);
+    batch.removeItem(id);
+  }
+
+  function requestBatchRemove(id: string, trigger: HTMLButtonElement) {
+    if (id === batch.session.selectedItemId && activeDraftDirty) {
+      pendingToolTriggerRef.current = trigger;
+      setPendingBatchRemove(id);
+      return;
+    }
+    executeBatchRemove(id);
+  }
+
+  function downloadBatchItem(item: BatchItem) {
+    if (!item.processedImage || item.processedImage.backgroundPending) return;
+    const completedIndex = batch.session.items
+      .filter((candidate) => candidate.processedImage)
+      .findIndex((candidate) => candidate.id === item.id);
+    const url = URL.createObjectURL(item.processedImage.result);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cutbg-result-${String(Math.max(0, completedIndex) + 1)}.png`;
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function requestBatchClear(trigger: HTMLButtonElement) {
@@ -605,7 +701,8 @@ export function ToolWorkspace() {
   }
 
   function applySingleEnhancementDraft() {
-    if (!activeDocumentId || state.status !== "result") return;
+    if (!activeDocumentId || (state.status !== "result" && state.status !== "correcting"))
+      return;
     markEnhancementDraftApplied();
     applySingleEnhancements(
       state.result,
@@ -625,7 +722,7 @@ export function ToolWorkspace() {
     );
   }
 
-  function discardActiveDraft() {
+  function clearActiveDraftState() {
     if (guided.state.session) cancelGuided();
     if (originalMatte) handleCancelCorrection();
     if (activeDocumentId && backgroundDraftDirty) {
@@ -653,13 +750,36 @@ export function ToolWorkspace() {
         [activeDocumentId]: defaultEnhancementDraft,
       }));
     }
+    if (manualDraftDirty) setManualDraftResetKey((current) => current + 1);
     setManualDraftDirty(false);
+  }
+
+  function discardActiveDraft() {
+    if (pendingTool) {
+      const nextTool = pendingTool;
+      activateTool(nextTool);
+      setManualDraftDirty(false);
+      setPendingTool(null);
+      setPendingBatchItem(null);
+      setPendingBatchReprocess(null);
+      setPendingBatchRemove(null);
+      setPendingBatchClear(false);
+      setPendingReset(false);
+      requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
+      window.setTimeout(clearActiveDraftState, 100);
+      return;
+    }
+    clearActiveDraftState();
     if (pendingTool) activateTool(pendingTool);
     else if (pendingBatchItem) handleSelectBatchItem(pendingBatchItem);
+    else if (pendingBatchReprocess) executeBatchReprocess(pendingBatchReprocess);
+    else if (pendingBatchRemove) executeBatchRemove(pendingBatchRemove);
     else if (pendingBatchClear) handleClearBatch();
     else if (pendingReset) handleReset();
     setPendingTool(null);
     setPendingBatchItem(null);
+    setPendingBatchReprocess(null);
+    setPendingBatchRemove(null);
     setPendingBatchClear(false);
     setPendingReset(false);
     requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
@@ -681,6 +801,49 @@ export function ToolWorkspace() {
   let surfaceNode: ReactNode = null;
   let railNode: ReactNode = null;
 
+  const canvasViewControls = activeDocumentId
+    ? ({ expanded, toggleFullscreen }: EditorStageFullscreenControls) => (
+        <CanvasViewControls
+          interactionMode={interactionMode}
+          onInteractionModeChange={(mode) =>
+            setInteractionModeByDocument((current) => ({
+              ...current,
+              [activeDocumentId]: mode,
+            }))
+          }
+          zoomPercent={cutoutViewport.zoomPercent}
+          canZoomIn={cutoutViewport.canZoomIn}
+          canZoomOut={cutoutViewport.canZoomOut}
+          canPan={cutoutViewport.canPan}
+          onZoomIn={cutoutViewport.zoomIn}
+          onZoomOut={() => {
+            cutoutViewport.zoomOut();
+            if (cutoutViewport.zoomPercent <= 125)
+              setInteractionModeByDocument((current) => ({
+                ...current,
+                [activeDocumentId]: "brush",
+              }));
+          }}
+          onResetView={() => {
+            cutoutViewport.resetView();
+            setInteractionModeByDocument((current) => ({
+              ...current,
+              [activeDocumentId]: "brush",
+            }));
+          }}
+          expanded={expanded}
+          onToggleFullscreen={toggleFullscreen}
+          collapsed={Boolean(viewControlsCollapsedByDocument[activeDocumentId])}
+          onCollapsedChange={(collapsed) =>
+            setViewControlsCollapsedByDocument((current) => ({
+              ...current,
+              [activeDocumentId]: collapsed,
+            }))
+          }
+        />
+      )
+    : undefined;
+
   const guidedCanvas =
     guided.state.session && guidedViewSession && guidedVisualContext ? (
       <div className="relative size-full">
@@ -691,8 +854,10 @@ export function ToolWorkspace() {
           baseMatteRevision={guided.state.baseMatteRevision}
           entryKind={guidedVisualContext.entryKind}
           applying={finalizingCorrection}
+          active={activeTool === "cutout" && cutoutMode === "magic"}
           mode={magicIntent}
           viewportControls={cutoutViewport}
+          interactionMode={interactionMode}
           surfaceTargetRef={magicSurfaceRef}
           promptCounts={{
             total: guided.state.lastPromptCount,
@@ -725,9 +890,6 @@ export function ToolWorkspace() {
         canApply={guided.canApply}
         onBrushRadiusChange={guided.setBrushRadius}
         onBrushSizeInteraction={() => setMagicPreviewKey((current) => current + 1)}
-        onUndo={guided.undo}
-        onRedo={guided.redo}
-        onClear={guided.clear}
         onApply={() => void handleApplyGuided()}
         onCancel={guided.cancelDraft}
       />
@@ -739,12 +901,29 @@ export function ToolWorkspace() {
 
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
     surfaceNode = guidedCanvas ?? (
-      <div className="flex flex-col gap-3">
+      <section className="command-deck relative isolate flex min-h-[30rem] flex-col justify-center gap-5 overflow-hidden px-1 py-5 sm:px-3 sm:py-7">
+        <span
+          aria-hidden="true"
+          className="command-deck-ambient command-deck-ambient-primary"
+        />
+        <span
+          aria-hidden="true"
+          className="command-deck-ambient command-deck-ambient-secondary"
+        />
+        <QualityModeToggle
+          qualityMode={qualityMode}
+          onQualityModeChange={setQualityMode}
+          recommendedMode={
+            deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
+          }
+          disabled={!hydrated}
+        />
         <UploadDropzone
           onUpload={handleUpload}
           onUploads={handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
+          className="command-deck-dropzone border border-border/80 bg-background/50 shadow-[0_18px_70px_-55px_var(--foreground)] backdrop-blur-sm"
         />
         <ChoosePhotoButton
           onUpload={handleUpload}
@@ -753,7 +932,7 @@ export function ToolWorkspace() {
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <UploadPreparationNotice fileCount={preparingFileCount} />
-      </div>
+      </section>
     );
   }
 
@@ -761,130 +940,88 @@ export function ToolWorkspace() {
   // currently being mask-corrected. Reused as-is below (no correction) and
   // combined with `MaskCorrectionSlots`' output (correction active).
   const batchActive = !displayError && batch.session.items.length > 0;
-  const batchHeaderNode = batchActive ? (
-    <section
-      className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5"
-      aria-labelledby="batch-workspace-title"
-      data-testid="batch-header"
-    >
-      <div className="flex flex-col gap-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 id="batch-workspace-title" className="text-base font-semibold">
-              {m.batchWorkspaceTitle()}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{m.batchWorkspaceHint()}</p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={(event) => requestBatchClear(event.currentTarget)}
-            className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 aria-hidden="true" />
-            <span className="hidden sm:inline">{m.clearBatch()}</span>
-            <span className="sr-only sm:hidden">{m.clearBatch()}</span>
-          </Button>
-        </div>
-        <BatchStatus
-          snapshot={batch.snapshot}
-          modelLoad={batch.session.modelLoads[batchModelKey]}
-        />
-        <div className="flex flex-col gap-4 border-t pt-4 lg:flex-row lg:items-center lg:justify-between">
-          <QualityModeToggle
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-            recommendedMode={
-              deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
-            }
-            disabled={!hydrated}
-          />
-          <div
-            className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto [&>*]:h-9"
-            aria-label={m.batchActionsAria()}
-          >
-            <ChoosePhotoButton
-              onUpload={handleUpload}
-              onUploads={handleUploads}
-              onPreparationChange={setPreparingFileCount}
-              disabled={!hydrated || preparingFileCount > 0}
-              batchMode
-              label={m.addImages()}
-              className="px-4 sm:flex lg:min-w-52"
-            />
-            <DownloadAllButton
-              items={batch.session.items}
-              className="h-9 px-4 lg:min-w-52"
-            />
-          </div>
-        </div>
-        {selectedBatchItem?.processedImage && (
-          <p className="text-xs text-muted-foreground">
-            {m.batchQualityHint({
-              mode: modeLabel(selectedBatchItem.qualityMode),
-            })}
-          </p>
-        )}
-      </div>
-      <UploadPreparationNotice fileCount={preparingFileCount} />
-    </section>
+  const batchActionsNode = batchActive ? (
+    <>
+      <QualityModePopover
+        qualityMode={qualityMode}
+        onQualityModeChange={setQualityMode}
+        recommendedMode={
+          deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
+        }
+        disabled={!hydrated}
+      />
+      <ChoosePhotoButton
+        onUpload={handleUpload}
+        onUploads={handleUploads}
+        onPreparationChange={setPreparingFileCount}
+        disabled={!hydrated || preparingFileCount > 0}
+        batchMode
+        label={m.addImages()}
+        className="h-8 w-auto px-3 py-0 sm:flex"
+      />
+    </>
   ) : null;
   const batchListNode = batchActive ? (
     <BatchGrid
       items={batch.session.items}
       selectedItemId={batch.session.selectedItemId}
+      snapshot={batch.snapshot}
+      modelLoad={batch.session.modelLoads[batchModelKey]}
       onSelect={requestBatchItem}
-      onRetry={batch.retryItem}
+      onDownload={downloadBatchItem}
+      onRetry={requestBatchReprocess}
+      onRemove={requestBatchRemove}
     />
   ) : null;
   const batchSurfaceBase = batchActive ? (
-    <section className="flex flex-col gap-4" aria-labelledby="batch-editor-title">
-      <div>
-        <h3 id="batch-editor-title" className="text-sm font-semibold">
-          {m.batchEditorTitle()}
-        </h3>
-        {selectedBatchItem && (
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {selectedBatchItem.originalFileName}
-          </p>
-        )}
-      </div>
+    <section
+      className="flex size-full min-w-0 flex-col"
+      aria-label={m.batchEditorTitle()}
+    >
       {selectedBatchItem?.processedImage && !originalMatte && (
         <div
-          className="flex flex-col gap-4"
+          className="size-full"
           aria-label={m.batchSelectedAria({ name: selectedBatchItem.originalFileName })}
         >
-          {activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas ? (
-            guidedCanvas
-          ) : (
-            <BeforeAfterSlider
-              before={selectedBatchItem.processedImage.source}
-              after={
-                selectedBatchItem.processedImage.cutout ??
-                selectedBatchItem.processedImage.result
-              }
-              backgroundFill={
-                batchPreviewFills[selectedBatchItem.id] ??
-                selectedBatchItem.processedImage.backgroundFill
-              }
-              position={
-                activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-              }
-              onPositionChange={(position) => {
-                if (!activeDocumentId) return;
-                setViewPositionByDocument((current) => ({
-                  ...current,
-                  [activeDocumentId]: position,
-                }));
-              }}
-            />
-          )}
+          <PersistentPreviewLayers
+            activeLayer={
+              activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas
+                ? "magic"
+                : "comparison"
+            }
+            magic={guidedCanvas}
+            comparison={
+              <BeforeAfterSlider
+                before={selectedBatchItem.processedImage.source}
+                after={
+                  selectedBatchItem.processedImage.cutout ??
+                  selectedBatchItem.processedImage.result
+                }
+                backgroundFill={
+                  batchPreviewFills[selectedBatchItem.id] ??
+                  selectedBatchItem.processedImage.backgroundFill
+                }
+                position={
+                  activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+                }
+                onPositionChange={(position) => {
+                  if (!activeDocumentId) return;
+                  setViewPositionByDocument((current) => ({
+                    ...current,
+                    [activeDocumentId]: position,
+                  }));
+                }}
+              />
+            }
+          />
         </div>
       )}
-      {!selectedBatchItem && (
-        <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          {m.batchEditorEmpty()}
+      {!selectedBatchItem?.processedImage && (
+        <div className="grid size-full place-items-center rounded-xl border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          <div className="max-w-xs">
+            <Skeleton className="mx-auto mb-4 h-36 w-48 rounded-xl" aria-hidden="true" />
+            <p>{m.batchEditorEmpty()}</p>
+          </div>
         </div>
       )}
     </section>
@@ -895,7 +1032,7 @@ export function ToolWorkspace() {
       toolId={activeTool}
       label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
     >
-      {selectedBatchItem?.processedImage && !originalMatte ? (
+      {selectedBatchItem?.processedImage ? (
         <div className="flex flex-col gap-4" data-testid="batch-controls">
           {activeTool === "cutout" && (
             <CutoutToolPanel
@@ -977,8 +1114,12 @@ export function ToolWorkspace() {
     </ToolPanelSlot>
   ) : null;
 
+  const batchPersistentMatte =
+    batchActive && selectedBatchItem?.processedImage
+      ? (originalMatte ?? selectedBatchItem.processedImage.alphaMatte)
+      : null;
   const batchCorrecting =
-    batchActive && selectedBatchItem?.processedImage && originalMatte;
+    batchActive && selectedBatchItem?.processedImage && batchPersistentMatte;
 
   if (batchActive && !batchCorrecting) {
     surfaceNode = batchSurfaceBase;
@@ -987,60 +1128,77 @@ export function ToolWorkspace() {
 
   if (!displayError && state.status === "model-loading") {
     surfaceNode = (
-      <div className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">
+      <EditorStage documentId="single-loading" loading>
+        <p
+          className="rounded-full border bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+          role="progressbar"
+          aria-valuenow={Math.round(state.progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          data-testid="model-loading-skeleton"
+        >
           {m.loadingModel({
             mode: modeLabel(state.qualityMode),
             progress: state.progress.toFixed(0),
           })}
         </p>
-        <div
-          role="progressbar"
-          aria-valuenow={Math.round(state.progress)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="h-2 w-full overflow-hidden rounded-full bg-muted"
-        >
-          <div
-            className="h-full bg-primary transition-[width]"
-            style={{ width: `${String(Math.round(state.progress))}%` }}
-          />
-        </div>
-      </div>
+      </EditorStage>
+    );
+    railNode = (
+      <Skeleton
+        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-2xl border"
+        data-testid="processing-panel-skeleton"
+      />
     );
   }
 
   if (!displayError && (state.status === "ready" || state.status === "processing")) {
     surfaceNode = (
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">
+      <EditorStage documentId="single-processing" loading>
+        <p
+          className="rounded-full border bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+          data-testid="processing-stage-skeleton"
+        >
           {state.status === "processing" ? m.removingBackground() : m.preparing()}
         </p>
-      </div>
+      </EditorStage>
+    );
+    railNode = (
+      <Skeleton
+        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-2xl border"
+        data-testid="processing-panel-skeleton"
+      />
     );
   }
 
-  if (!displayError && state.status === "result") {
-    surfaceNode =
-      activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas ? (
-        guidedCanvas
-      ) : (
-        <BeforeAfterSlider
-          before={state.result.source}
-          after={state.result.cutout ?? state.result.result}
-          backgroundFill={previewFill}
-          position={
-            activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-          }
-          onPositionChange={(position) => {
-            if (!activeDocumentId) return;
-            setViewPositionByDocument((current) => ({
-              ...current,
-              [activeDocumentId]: position,
-            }));
-          }}
-        />
-      );
+  if (!displayError && (state.status === "result" || state.status === "correcting")) {
+    surfaceNode = (
+      <PersistentPreviewLayers
+        activeLayer={
+          activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas
+            ? "magic"
+            : "comparison"
+        }
+        magic={guidedCanvas}
+        comparison={
+          <BeforeAfterSlider
+            before={state.result.source}
+            after={state.result.cutout ?? state.result.result}
+            backgroundFill={previewFill}
+            position={
+              activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
+            }
+            onPositionChange={(position) => {
+              if (!activeDocumentId) return;
+              setViewPositionByDocument((current) => ({
+                ...current,
+                [activeDocumentId]: position,
+              }));
+            }}
+          />
+        }
+      />
+    );
     railNode = (
       <ToolPanelSlot
         toolId={activeTool}
@@ -1128,11 +1286,21 @@ export function ToolWorkspace() {
   // top-level correction error) belongs alongside it.
   let correctionGridBody: ReactNode = null;
 
-  if (!displayError && state.status === "correcting" && originalMatte) {
+  const singlePersistentMatte =
+    state.status === "result" || state.status === "correcting"
+      ? (originalMatte ?? state.result.alphaMatte)
+      : null;
+
+  if (
+    !displayError &&
+    (state.status === "result" || state.status === "correcting") &&
+    singlePersistentMatte
+  ) {
     correctionGridBody = (
       <MaskCorrectionSlots
+        key={activeDocumentId ?? "single-document"}
         sourceImage={state.result.source}
-        originalMatte={originalMatte}
+        originalMatte={singlePersistentMatte}
         backgroundFill={state.result.backgroundFill}
         onDone={handleDoneCorrecting}
         doneDisabled={finalizingCorrection}
@@ -1142,55 +1310,85 @@ export function ToolWorkspace() {
         previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
         onDirtyChange={handleManualDirtyChange}
+        interactionMode={interactionMode}
+        interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
+        draftResetKey={manualDraftResetKey}
       >
         {({ surface, rail }) => (
           <>
             <div className="[grid-area:surface]">
-              <EditorStage documentId={activeDocumentId ?? "single-correction"}>
-                <div className="relative size-full">
-                  <div
-                    className={cutoutMode === "magic" ? "size-full" : "hidden"}
-                    aria-hidden={cutoutMode !== "magic"}
-                  >
-                    {guidedCanvas}
-                  </div>
-                  <div
-                    className={cutoutMode === "manual" ? "size-full" : "hidden"}
-                    aria-hidden={cutoutMode !== "manual"}
-                  >
-                    {surface}
-                  </div>
-                </div>
+              <EditorStage
+                documentId={activeDocumentId ?? "single-correction"}
+                overlaySlot={canvasViewControls}
+              >
+                <PersistentPreviewLayers
+                  activeLayer={
+                    activeTool === "cutout" &&
+                    ((cutoutMode === "magic" && guidedCanvas) || cutoutMode === "manual")
+                      ? cutoutMode
+                      : "comparison"
+                  }
+                  magic={guidedCanvas}
+                  manual={surface}
+                  comparison={
+                    <BeforeAfterSlider
+                      before={state.result.source}
+                      after={state.result.cutout ?? state.result.result}
+                      backgroundFill={previewFill}
+                      position={
+                        activeDocumentId
+                          ? (viewPositionByDocument[activeDocumentId] ?? 50)
+                          : 50
+                      }
+                      onPositionChange={(position) => {
+                        if (!activeDocumentId) return;
+                        setViewPositionByDocument((current) => ({
+                          ...current,
+                          [activeDocumentId]: position,
+                        }));
+                      }}
+                    />
+                  }
+                />
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
-              <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
-                <div className="flex flex-col gap-4">
-                  {correctionError && (
-                    <CorrectionErrorAlert
-                      error={correctionError}
-                      onRetry={handleRetry}
-                      onReset={handleReset}
+              {activeTool === "cutout" ? (
+                <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
+                  <div className="flex h-full flex-col gap-4">
+                    {correctionError && (
+                      <CorrectionErrorAlert
+                        error={correctionError}
+                        onRetry={handleRetry}
+                        onReset={handleReset}
+                      />
+                    )}
+                    <CutoutToolPanel
+                      mode={cutoutMode}
+                      onModeChange={selectCutoutMode}
+                      magicControls={magicControls}
+                      manualControls={rail}
                     />
-                  )}
-                  <CutoutToolPanel
-                    mode={cutoutMode}
-                    onModeChange={selectCutoutMode}
-                    magicControls={magicControls}
-                    manualControls={rail}
-                  />
-                </div>
-              </ToolPanelSlot>
+                  </div>
+                </ToolPanelSlot>
+              ) : (
+                railNode
+              )}
             </div>
           </>
         )}
       </MaskCorrectionSlots>
     );
-  } else if (batchCorrecting && selectedBatchItem?.processedImage && originalMatte) {
+  } else if (
+    batchCorrecting &&
+    selectedBatchItem?.processedImage &&
+    batchPersistentMatte
+  ) {
     correctionGridBody = (
       <MaskCorrectionSlots
+        key={activeDocumentId ?? selectedBatchItem.id}
         sourceImage={selectedBatchItem.processedImage.source}
-        originalMatte={originalMatte}
+        originalMatte={batchPersistentMatte}
         backgroundFill={selectedBatchItem.processedImage.backgroundFill}
         onDone={handleBatchDoneCorrecting}
         doneDisabled={finalizingCorrection}
@@ -1200,36 +1398,67 @@ export function ToolWorkspace() {
         previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
         onDirtyChange={handleManualDirtyChange}
+        interactionMode={interactionMode}
+        interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
+        draftResetKey={manualDraftResetKey}
       >
         {({ surface, rail }) => (
           <>
             <div className="[grid-area:surface]">
-              <EditorStage documentId={activeDocumentId ?? "batch-correction"}>
-                <div className="relative size-full">
-                  <div
-                    className={cutoutMode === "magic" ? "size-full" : "hidden"}
-                    aria-hidden={cutoutMode !== "magic"}
-                  >
-                    {guidedCanvas}
-                  </div>
-                  <div
-                    className={cutoutMode === "manual" ? "size-full" : "hidden"}
-                    aria-hidden={cutoutMode !== "manual"}
-                  >
-                    {surface}
-                  </div>
-                </div>
+              <EditorStage
+                documentId={activeDocumentId ?? "batch-correction"}
+                overlaySlot={canvasViewControls}
+              >
+                <PersistentPreviewLayers
+                  activeLayer={
+                    activeTool === "cutout" &&
+                    ((cutoutMode === "magic" && guidedCanvas) || cutoutMode === "manual")
+                      ? cutoutMode
+                      : "comparison"
+                  }
+                  magic={guidedCanvas}
+                  manual={surface}
+                  comparison={
+                    <BeforeAfterSlider
+                      before={selectedBatchItem.processedImage!.source}
+                      after={
+                        selectedBatchItem.processedImage!.cutout ??
+                        selectedBatchItem.processedImage!.result
+                      }
+                      backgroundFill={
+                        batchPreviewFills[selectedBatchItem.id] ??
+                        selectedBatchItem.processedImage!.backgroundFill
+                      }
+                      position={
+                        activeDocumentId
+                          ? (viewPositionByDocument[activeDocumentId] ?? 50)
+                          : 50
+                      }
+                      onPositionChange={(position) => {
+                        if (!activeDocumentId) return;
+                        setViewPositionByDocument((current) => ({
+                          ...current,
+                          [activeDocumentId]: position,
+                        }));
+                      }}
+                    />
+                  }
+                />
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
-              <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
-                <CutoutToolPanel
-                  mode={cutoutMode}
-                  onModeChange={selectCutoutMode}
-                  magicControls={magicControls}
-                  manualControls={rail}
-                />
-              </ToolPanelSlot>
+              {activeTool === "cutout" ? (
+                <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
+                  <CutoutToolPanel
+                    mode={cutoutMode}
+                    onModeChange={selectCutoutMode}
+                    magicControls={magicControls}
+                    manualControls={rail}
+                  />
+                </ToolPanelSlot>
+              ) : (
+                batchRailBase
+              )}
             </div>
           </>
         )}
@@ -1240,72 +1469,26 @@ export function ToolWorkspace() {
   const activeDownloadDocument =
     selectedBatchItem?.processedImage ??
     (state.status === "result" || state.status === "correcting" ? state.result : null);
-  const editorToolbarNode = activeDocumentId ? (
-    <EditorToolbar
-      tools={tools}
-      activeTool={activeTool}
-      onToolChange={requestTool}
-      canUndo={!activeDraftDirty && historySelectors.canUndo}
-      canRedo={!activeDraftDirty && historySelectors.canRedo}
-      undoLabel={historySelectors.undoLabel}
-      redoLabel={historySelectors.redoLabel}
-      onUndo={handleUndoDocument}
-      onRedo={handleRedoDocument}
-      documentActionSlot={
-        batchActive && selectedBatchItem?.processedImage ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void releaseRefinementBeforeHeavyWork().then(() =>
-                batch.retryItem(selectedBatchItem.id),
-              );
-            }}
-          >
-            {m.reprocessMode({
-              mode: modeLabel(selectedBatchItem.qualityMode),
-            })}
-          </Button>
-        ) : !batchActive ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={(event) => requestReset(event.currentTarget)}
-          >
-            {m.processAnother()}
-          </Button>
-        ) : undefined
-      }
-      downloadSlot={
-        activeDownloadDocument ? (
-          <DownloadSplitButton
-            key={`${activeDocumentId}:${String(activeEditDocument?.document.revision ?? 0)}`}
-            image={activeDownloadDocument.result}
-            source={{
-              width: activeDownloadDocument.source.width,
-              height: activeDownloadDocument.source.height,
-            }}
-            settings={exportSettings}
-            onSettingsChange={(nextSettings) => {
-              if (!activeDocumentId) return;
-              setExportSettingsByDocument((current) => ({
-                ...current,
-                [activeDocumentId]: nextSettings,
-              }));
-            }}
-          />
-        ) : undefined
-      }
-    />
-  ) : null;
   const stagedSurfaceNode =
     activeDocumentId && surfaceNode && !correctionGridBody ? (
-      <EditorStage documentId={activeDocumentId}>{surfaceNode}</EditorStage>
+      <EditorStage
+        documentId={activeDocumentId}
+        overlaySlot={
+          activeTool === "cutout" && guidedCanvas ? canvasViewControls : undefined
+        }
+      >
+        {surfaceNode}
+      </EditorStage>
     ) : (
       surfaceNode
     );
   const draftGuardOpen = Boolean(
-    pendingTool || pendingBatchItem || pendingBatchClear || pendingReset,
+    pendingTool ||
+    pendingBatchItem ||
+    pendingBatchReprocess ||
+    pendingBatchRemove ||
+    pendingBatchClear ||
+    pendingReset,
   );
   const draftGuardNode = draftGuardOpen ? (
     <div
@@ -1328,6 +1511,8 @@ export function ToolWorkspace() {
           onClick={() => {
             setPendingTool(null);
             setPendingBatchItem(null);
+            setPendingBatchReprocess(null);
+            setPendingBatchRemove(null);
             setPendingBatchClear(false);
             setPendingReset(false);
             requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
@@ -1335,145 +1520,190 @@ export function ToolWorkspace() {
         >
           {m.editorDraftContinue()}
         </Button>
-        <Button type="button" variant="destructive" onClick={discardActiveDraft}>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={() => window.setTimeout(discardActiveDraft, 50)}
+        >
           {m.editorDraftDiscard()}
         </Button>
       </div>
     </div>
   ) : null;
+  const showEmptyComposition =
+    state.status === "idle" && !batchActive && !guided.state.session;
+  const diagnostics = {
+    logs,
+    runInfo,
+    lightweightMode,
+    fallbackUsed: ben2FallbackNotice,
+    modelLoadBytes,
+  };
+  const editorToolbarNode = !showEmptyComposition ? (
+    <EditorToolbar
+      tools={activeDocumentId ? tools : []}
+      activeTool={activeDocumentId ? activeTool : null}
+      onToolChange={activeDocumentId ? requestTool : undefined}
+      canUndo={!activeDraftDirty && historySelectors.canUndo}
+      canRedo={!activeDraftDirty && historySelectors.canRedo}
+      undoLabel={historySelectors.undoLabel}
+      redoLabel={historySelectors.redoLabel}
+      onUndo={() => window.setTimeout(handleUndoDocument, 50)}
+      onRedo={() => window.setTimeout(handleRedoDocument, 50)}
+      workspaceActionsSlot={batchActionsNode}
+      downloadSlot={
+        (activeDownloadDocument && activeDocumentId) ||
+        (batchActive && batch.snapshot.completedCount > 0) ? (
+          <DownloadSplitButton
+            key={`${activeDocumentId ?? "batch"}:${String(activeEditDocument?.document.revision ?? 0)}`}
+            image={activeDownloadDocument?.result}
+            source={
+              activeDownloadDocument
+                ? {
+                    width: activeDownloadDocument.source.width,
+                    height: activeDownloadDocument.source.height,
+                  }
+                : undefined
+            }
+            settings={exportSettings}
+            onSettingsChange={
+              activeDocumentId
+                ? (nextSettings) => {
+                    setExportSettingsByDocument((current) => ({
+                      ...current,
+                      [activeDocumentId]: nextSettings,
+                    }));
+                  }
+                : undefined
+            }
+            batchItems={batchActive ? batch.session.items : undefined}
+          />
+        ) : undefined
+      }
+      onBack={(trigger) =>
+        batchActive ? requestBatchClear(trigger) : requestReset(trigger)
+      }
+    />
+  ) : null;
 
   return (
-    <div
-      data-testid="tool-workspace"
-      data-document-id={activeEditDocument?.document.id}
-      data-document-revision={activeEditDocument?.document.revision}
-      data-document-worker-owner={activeEditDocument?.workerOwnerId}
-      data-document-artifact-count={activeEditDocument?.artifacts.stats().artifactCount}
-      className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""} ${guided.state.session ? "tool-workspace-guided" : ""}`}
-    >
-      <div aria-live="polite" role="status" className="sr-only">
-        {enhancementState.status === "applying"
-          ? m.enhancementsProgress({
-              operation:
-                enhancementRegistry.find(
-                  ({ id }) => id === enhancementState.activeOperationId,
-                )?.label ?? m.enhancementsTitle(),
-              progress: String(Math.round(enhancementProgress ?? 0)),
-            })
-          : guided.state.session
-            ? describeGuidedState(guided.state.status, guided.state.progress)
-            : batch.session.items.length
-              ? m.batchCompleteAnnouncement({
-                  done: batch.snapshot.completedCount,
-                  total: batch.snapshot.totalCount,
-                  failed: batch.snapshot.failedCount,
-                })
-              : describeState(state, uploadError)}
-        {state.status === "correcting" && correctionViewAnnouncement
-          ? `. ${correctionViewAnnouncement}.`
-          : ""}
-      </div>
-
-      {!batchActive && !guided.state.session && (
-        <div className="[grid-area:toggle]">
-          <QualityModeToggle
-            qualityMode={qualityMode}
-            onQualityModeChange={setQualityMode}
-            recommendedMode={
-              deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
-            }
-            disabled={!hydrated || state.status !== "idle"}
-          />
+    <>
+      {headerUtilityTarget &&
+        createPortal(<DiagnosticsSheet {...diagnostics} />, headerUtilityTarget)}
+      <div
+        data-testid="tool-workspace"
+        data-document-id={activeEditDocument?.document.id}
+        data-document-revision={activeEditDocument?.document.revision}
+        data-document-worker-owner={activeEditDocument?.workerOwnerId}
+        data-document-artifact-count={activeEditDocument?.artifacts.stats().artifactCount}
+        className={`tool-workspace-grid ${state.status === "idle" && !batchActive ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""} ${guided.state.session ? "tool-workspace-guided" : ""}`}
+      >
+        <div aria-live="polite" role="status" className="sr-only">
+          {enhancementState.status === "applying"
+            ? m.enhancementsProgress({
+                operation:
+                  enhancementRegistry.find(
+                    ({ id }) => id === enhancementState.activeOperationId,
+                  )?.label ?? m.enhancementsTitle(),
+                progress: String(Math.round(enhancementProgress ?? 0)),
+              })
+            : guided.state.session
+              ? describeGuidedState(guided.state.status, guided.state.progress)
+              : batch.session.items.length
+                ? m.batchCompleteAnnouncement({
+                    done: batch.snapshot.completedCount,
+                    total: batch.snapshot.totalCount,
+                    failed: batch.snapshot.failedCount,
+                  })
+                : describeState(state, uploadError)}
+          {state.status === "correcting" && correctionViewAnnouncement
+            ? `. ${correctionViewAnnouncement}.`
+            : ""}
         </div>
-      )}
 
-      {ben2FallbackNotice && !displayError && (
-        <p
-          role="status"
-          className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 [grid-area:notice]"
-        >
-          {m.processingFallbackNotice()}
-        </p>
-      )}
+        {showEmptyComposition && emptyIntroSlot && (
+          <div className="[grid-area:intro]" data-testid="home-empty-intro">
+            {emptyIntroSlot}
+          </div>
+        )}
 
-      {displayError && (
-        <div
-          role="alert"
-          className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive [grid-area:error]"
-        >
-          <p>{verifiedAssetError ? m.modelAssetRecovery() : displayError.message}</p>
-          {verifiedAssetError ? (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={handleRetry}>
+        {ben2FallbackNotice && !displayError && (
+          <p
+            role="status"
+            className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 [grid-area:notice]"
+          >
+            {m.processingFallbackNotice()}
+          </p>
+        )}
+
+        {displayError && (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive [grid-area:error]"
+          >
+            <p>{verifiedAssetError ? m.modelAssetRecovery() : displayError.message}</p>
+            {verifiedAssetError ? (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={handleRetry}>
+                  {m.tryAgain()}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void clearModelCache().then(retry)}
+                >
+                  {m.modelAssetResetAndRetry()}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setQualityMode("isnet-q8");
+                    retryInLightweightMode();
+                  }}
+                >
+                  {m.modelAssetUseLighter()}
+                </Button>
+              </div>
+            ) : displayError.action === "retry" ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRetry}
+                className="self-start"
+              >
                 {m.tryAgain()}
               </Button>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void clearModelCache().then(retry)}
+                onClick={handleReset}
+                className="self-start"
               >
-                {m.modelAssetResetAndRetry()}
+                {m.reset()}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setQualityMode("isnet-q8");
-                  retryInLightweightMode();
-                }}
-              >
-                {m.modelAssetUseLighter()}
-              </Button>
-            </div>
-          ) : displayError.action === "retry" ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleRetry}
-              className="self-start"
-            >
-              {m.tryAgain()}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              className="self-start"
-            >
-              {m.reset()}
-            </Button>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {batchHeaderNode && (
-        <div className="[grid-area:batch-header]">{batchHeaderNode}</div>
-      )}
-      {editorToolbarNode && (
-        <div className="[grid-area:toolbar]">{editorToolbarNode}</div>
-      )}
-      {draftGuardNode}
-      {batchListNode && <div className="[grid-area:batch]">{batchListNode}</div>}
+        {editorToolbarNode && (
+          <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
+            {editorToolbarNode}
+          </div>
+        )}
+        {draftGuardNode}
+        {batchListNode && <div className="[grid-area:batch]">{batchListNode}</div>}
 
-      {correctionGridBody ?? (
-        <>
-          {stagedSurfaceNode && (
-            <div className="[grid-area:surface]">{stagedSurfaceNode}</div>
-          )}
-          {railNode && <div className="[grid-area:rail]">{railNode}</div>}
-        </>
-      )}
-
-      <div className="[grid-area:log]">
-        <ProcessingLog
-          logs={logs}
-          runInfo={runInfo}
-          lightweightMode={lightweightMode}
-          fallbackUsed={ben2FallbackNotice}
-          modelLoadBytes={modelLoadBytes}
-        />
+        {correctionGridBody ?? (
+          <>
+            {stagedSurfaceNode && (
+              <div className="[grid-area:surface]">{stagedSurfaceNode}</div>
+            )}
+            {railNode && <div className="[grid-area:rail]">{railNode}</div>}
+          </>
+        )}
       </div>
-    </div>
+    </>
   );
 }

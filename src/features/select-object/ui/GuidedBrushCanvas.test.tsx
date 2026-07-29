@@ -73,6 +73,33 @@ afterEach(() => {
 });
 
 describe("GuidedBrushCanvas", () => {
+  it("renders a thin dashed footprint and solid core cursor", () => {
+    render(<GuidedBrushCanvas {...props} />);
+
+    expect(screen.getByTestId("guided-brush-edit-frame").className).toContain(
+      "transparency-grid",
+    );
+    expect(
+      screen.getByTestId("guided-brush-cursor").getAttribute("stroke-dasharray"),
+    ).toBe("3 2");
+    expect(screen.getByTestId("guided-brush-cursor").getAttribute("stroke-width")).toBe(
+      "1",
+    );
+    expect(
+      screen.getByTestId("guided-brush-core-cursor").getAttribute("stroke-dasharray"),
+    ).toBeNull();
+  });
+
+  it("uses a stable Skeleton overlay and no wait cursor while Magic is busy", () => {
+    render(<GuidedBrushCanvas {...props} status="predicting" />);
+
+    expect(screen.getByTestId("guided-brush-busy-skeleton")).toBeDefined();
+    expect(screen.getByTestId("guided-brush-edit-image").className).not.toContain(
+      "cursor-wait",
+    );
+    expect(screen.getByTestId("guided-brush-cursor").style.opacity).toBe("0");
+  });
+
   it("recreates its blob URL across a StrictMode ref cleanup", () => {
     const created: string[] = [];
     vi.spyOn(URL, "createObjectURL").mockImplementation(() => {

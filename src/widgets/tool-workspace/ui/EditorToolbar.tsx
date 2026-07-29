@@ -1,36 +1,38 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
-import { Redo2, Undo2 } from "lucide-react";
+import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
 import type { EditorToolDefinition, EditorToolId } from "../model/editor-tool-registry";
 
 export interface EditorToolbarProps {
-  tools: readonly EditorToolDefinition[];
-  activeTool: EditorToolId;
-  onToolChange: (tool: EditorToolId, trigger: HTMLButtonElement) => void;
-  canUndo: boolean;
-  canRedo: boolean;
+  tools?: readonly EditorToolDefinition[];
+  activeTool?: EditorToolId | null;
+  onToolChange?: (tool: EditorToolId, trigger: HTMLButtonElement) => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   undoLabel?: string | null;
   redoLabel?: string | null;
-  onUndo: () => void;
-  onRedo: () => void;
-  documentActionSlot?: ReactNode;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  workspaceActionsSlot?: ReactNode;
   downloadSlot?: ReactNode;
+  onBack?: (trigger: HTMLButtonElement) => void;
 }
 
 export function EditorToolbar({
-  tools,
-  activeTool,
+  tools = [],
+  activeTool = null,
   onToolChange,
-  canUndo,
-  canRedo,
+  canUndo = false,
+  canRedo = false,
   undoLabel,
   redoLabel,
-  onUndo,
-  onRedo,
-  documentActionSlot,
+  onUndo = () => undefined,
+  onRedo = () => undefined,
+  workspaceActionsSlot,
   downloadSlot,
+  onBack,
 }: EditorToolbarProps) {
   const toolRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -65,73 +67,90 @@ export function EditorToolbar({
       className="editor-toolbar flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border bg-card p-2 shadow-sm"
       data-testid="editor-toolbar"
     >
-      <div className="flex shrink-0 items-center gap-1">
-        {tools.map((tool, index) => {
-          const Icon = tool.icon;
-          const selected = tool.id === activeTool;
-          return (
-            <Button
-              key={tool.id}
-              ref={(node) => {
-                toolRefs.current[index] = node;
-              }}
-              type="button"
-              variant={selected ? "secondary" : "ghost"}
-              aria-pressed={selected}
-              tabIndex={selected ? 0 : -1}
-              onClick={(event) => onToolChange(tool.id, event.currentTarget)}
-              className="h-10 gap-2 px-3"
-              data-tool-id={tool.id}
+      {onBack && (
+        <>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={m.workspaceBack()}
+                  onClick={(event) => onBack(event.currentTarget)}
+                />
+              }
             >
-              <Icon className="size-4" aria-hidden="true" />
-              <span>{tool.label}</span>
-            </Button>
-          );
-        })}
+              <ArrowLeft aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent>{m.workspaceBack()}</TooltipContent>
+          </Tooltip>
+          <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
+        </>
+      )}
+      {activeTool && onToolChange && (
+        <div className="flex shrink-0 items-center gap-1">
+          {tools.map((tool, index) => {
+            const Icon = tool.icon;
+            const selected = tool.id === activeTool;
+            return (
+              <Button
+                key={tool.id}
+                ref={(node) => {
+                  toolRefs.current[index] = node;
+                }}
+                type="button"
+                variant={selected ? "secondary" : "ghost"}
+                aria-pressed={selected}
+                tabIndex={selected ? 0 : -1}
+                onClick={(event) => onToolChange(tool.id, event.currentTarget)}
+                className="h-10 gap-2 px-3"
+                data-tool-id={tool.id}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                <span>{tool.label}</span>
+              </Button>
+            );
+          })}
+        </div>
+      )}
+      {activeTool && (
+        <>
+          <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onUndo}
+            disabled={!canUndo}
+            aria-label={undoLabel ?? m.editorUndo()}
+            title={undoLabel ?? m.editorUndo()}
+          >
+            <Undo2 aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRedo}
+            disabled={!canRedo}
+            aria-label={redoLabel ?? m.editorRedo()}
+            title={redoLabel ?? m.editorRedo()}
+          >
+            <Redo2 aria-hidden="true" />
+          </Button>
+        </>
+      )}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {workspaceActionsSlot}
+        {downloadSlot && <div data-testid="editor-download-slot">{downloadSlot}</div>}
       </div>
-      <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onUndo}
-        disabled={!canUndo}
-        aria-label={undoLabel ?? m.editorUndo()}
-        title={undoLabel ?? m.editorUndo()}
-      >
-        <Undo2 aria-hidden="true" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onRedo}
-        disabled={!canRedo}
-        aria-label={redoLabel ?? m.editorRedo()}
-        title={redoLabel ?? m.editorRedo()}
-      >
-        <Redo2 aria-hidden="true" />
-      </Button>
-      {documentActionSlot && (
-        <>
-          <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
-          <div className="shrink-0" data-testid="editor-document-action-slot">
-            {documentActionSlot}
-          </div>
-        </>
-      )}
-      {downloadSlot && (
-        <>
-          <span className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
-          <div className="ml-auto shrink-0" data-testid="editor-download-slot">
-            {downloadSlot}
-          </div>
-        </>
-      )}
       <p className="sr-only" aria-live="polite" data-testid="active-tool-announcement">
-        {m.editorActiveTool({
-          tool: tools.find(({ id }) => id === activeTool)?.label ?? "",
-        })}
+        {activeTool
+          ? m.editorActiveTool({
+              tool: tools.find(({ id }) => id === activeTool)?.label ?? "",
+            })
+          : ""}
       </p>
     </div>
   );

@@ -43,15 +43,10 @@ export function EnhancementsToolPanel({
   return (
     <section
       className="flex flex-col gap-4"
-      aria-labelledby="enhancements-title"
+      aria-label={m.enhancementsTitle()}
       data-testid="enhancements-tool-panel"
     >
-      <div>
-        <h2 id="enhancements-title" className="text-base font-semibold">
-          {m.enhancementsTitle()}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{m.enhancementsHint()}</p>
-      </div>
+      <p className="text-sm text-muted-foreground">{m.enhancementsHint()}</p>
 
       <fieldset className="space-y-2" disabled={busy || disabled}>
         <legend className="sr-only">{m.enhancementsOptionsLabel()}</legend>
@@ -146,9 +141,11 @@ export function EnhancementsToolPanel({
           >
             {busy ? m.enhancementsApplying() : m.enhancementsApply()}
           </Button>
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {m.cancel()}
-          </Button>
+          {busy && (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              {m.enhancementsStop()}
+            </Button>
+          )}
         </div>
       )}
     </section>

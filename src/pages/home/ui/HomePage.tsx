@@ -2,7 +2,7 @@ import { Rocket, LockKeyhole, HandCoins } from "lucide-react";
 import { m } from "@/paraglide/messages";
 import { SiteShell } from "@/shared/ui";
 import { ToolWorkspace } from "@/widgets/tool-workspace";
-import { ModelStorageManager } from "@/features/model-storage";
+import { ModelStorageTrigger } from "@/features/model-storage";
 
 const FEATURES = [
   { icon: LockKeyhole, title: m.heroFeatureClientTitle, body: m.heroFeatureClientBody },
@@ -12,41 +12,43 @@ const FEATURES = [
 
 export function HomePage() {
   return (
-    <SiteShell>
+    <SiteShell headerUtilitySlot={<ModelStorageTrigger />}>
       <main
         data-testid="home-page"
-        className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-10 sm:px-8 sm:py-14"
+        className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12"
       >
-        <header className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center">
-          <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
-            {m.trustBadge()}
-          </span>
-          <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
-            {m.heroHeadline()}
-          </h1>
-          <p className="max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-            {m.heroSubheadline()}
-          </p>
-        </header>
-
-        <section className="mx-auto grid max-w-4xl gap-5 border-y py-5 sm:grid-cols-3 sm:gap-0 sm:divide-x">
-          {FEATURES.map(({ icon: Icon, title, body }) => (
-            <div key={title()} className="flex gap-3 sm:px-5">
-              <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-              <div>
-                <h2 className="text-sm font-medium">{title()}</h2>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {body()}
+        <ToolWorkspace
+          emptyIntroSlot={
+            <section className="flex h-full flex-col justify-center gap-7 py-4">
+              <header className="flex flex-col items-start gap-5 text-left">
+                <span className="rounded-full border border-primary/20 bg-background/75 px-3 py-1 text-xs font-medium text-primary shadow-sm backdrop-blur">
+                  {m.trustBadge()}
+                </span>
+                <h1 className="max-w-xl text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
+                  {m.heroHeadline()}
+                </h1>
+                <p className="max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+                  {m.heroSubheadline()}
                 </p>
+              </header>
+              <div className="grid gap-4">
+                {FEATURES.map(({ icon: Icon, title, body }) => (
+                  <div key={title()} className="flex max-w-xl gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl border bg-card/80 shadow-sm">
+                      <Icon className="size-4 text-primary" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-medium">{title()}</h2>
+                      <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                        {body()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          ))}
-        </section>
-
-        <ToolWorkspace />
-        <aside className="mx-auto w-full max-w-4xl" aria-label={m.modelStorageTitle()}>
-          <ModelStorageManager />
-        </aside>
+            </section>
+          }
+        />
       </main>
     </SiteShell>
   );

@@ -8,8 +8,7 @@ describe("editor tool registry", () => {
 
     expect(registry.map(({ id }) => id)).toEqual(["cutout", "enhance", "background"]);
     expect(registry.map(({ order }) => order)).toEqual([10, 20, 30]);
-    expect(
-      registry.every(({ label, icon, loadPanel }) => label && icon && loadPanel),
-    ).toBe(true);
+    expect(registry.every(({ label, icon }) => label && icon)).toBe(true);
+    expect(registry.every((definition) => !("loadPanel" in definition))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { Redo2, RotateCcw, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { CircleMinus, CirclePlus } from "lucide-react";
 
 import type { BrushMode } from "../../../entities/processed-image";
 import { m } from "@/paraglide/messages";
@@ -12,18 +12,6 @@ export interface MaskCorrectionToolbarProps {
   onModeChange: (mode: BrushMode) => void;
   brushSize: number;
   onBrushSizeChange: (size: number) => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  onClear: () => void;
-  zoomPercent: number;
-  canZoomIn: boolean;
-  canZoomOut: boolean;
-  canPan: boolean;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onResetView: () => void;
 }
 
 /**
@@ -36,18 +24,6 @@ export function MaskCorrectionToolbar({
   onModeChange,
   brushSize,
   onBrushSizeChange,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  onClear,
-  zoomPercent,
-  canZoomIn,
-  canZoomOut,
-  canPan,
-  onZoomIn,
-  onZoomOut,
-  onResetView,
 }: MaskCorrectionToolbarProps) {
   const modes: { value: BrushMode; label: string; description: string }[] = [
     {
@@ -64,10 +40,13 @@ export function MaskCorrectionToolbar({
   const activeModeDescription = modes.find(
     (option) => option.value === mode,
   )?.description;
+  const brushPercent = Math.round(
+    ((brushSize - MIN_BRUSH_RADIUS) / (MAX_BRUSH_RADIUS - MIN_BRUSH_RADIUS)) * 100,
+  );
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-      <div role="group" aria-label={m.brushMode()} className="flex gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div role="group" aria-label={m.brushMode()} className="grid grid-cols-2 gap-2">
         {modes.map((option) => (
           <Button
             key={option.value}
@@ -75,29 +54,36 @@ export function MaskCorrectionToolbar({
             variant={mode === option.value ? "default" : "outline"}
             aria-pressed={mode === option.value}
             title={option.description}
+            className={`h-20 flex-col gap-1.5 ${
+              mode === option.value
+                ? option.value === "add"
+                  ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                  : "bg-rose-700 text-white hover:bg-rose-800"
+                : option.value === "add"
+                  ? "border-emerald-700 text-emerald-800 dark:text-emerald-300"
+                  : "border-rose-700 text-rose-800 dark:text-rose-300"
+            }`}
             onClick={() => {
               onModeChange(option.value);
             }}
           >
+            {option.value === "add" ? (
+              <CirclePlus className="size-6" aria-hidden="true" />
+            ) : (
+              <CircleMinus className="size-6" aria-hidden="true" />
+            )}
             {option.label}
           </Button>
         ))}
       </div>
-      {activeModeDescription && (
-        <p className="text-xs text-muted-foreground">{activeModeDescription}</p>
-      )}
+      <p className="min-h-10 text-xs text-muted-foreground">{activeModeDescription}</p>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="flex justify-between gap-3">
-          <span>{m.brushSize()}</span>
-          <span className="tabular-nums text-muted-foreground">
-            {String(brushSize * 2)} px
-          </span>
-        </span>
+        <span>{m.brushSize()}</span>
         <input
           type="range"
           aria-label={m.brushSize()}
-          aria-valuetext={`${String(brushSize * 2)} px diameter`}
+          aria-valuetext={`${String(brushPercent)}%`}
           min={MIN_BRUSH_RADIUS}
           max={MAX_BRUSH_RADIUS}
           value={brushSize}
@@ -107,93 +93,8 @@ export function MaskCorrectionToolbar({
         />
       </label>
 
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.undo()}
-          aria-keyshortcuts="Control+Z Meta+Z"
-          title={`${m.undo()} (Ctrl/Cmd+Z)`}
-          disabled={!canUndo}
-          onClick={onUndo}
-        >
-          <Undo2 aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.redo()}
-          aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
-          title={`${m.redo()} (Ctrl/Cmd+Shift+Z or Ctrl+Y)`}
-          disabled={!canRedo}
-          onClick={onRedo}
-        >
-          <Redo2 aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.cutoutClearDraft()}
-          title={m.cutoutClearDraft()}
-          disabled={!canUndo}
-          onClick={onClear}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </div>
-
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label={m.viewControls()}
-      >
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.zoomOut()}
-          title={m.zoomOut()}
-          disabled={!canZoomOut}
-          onClick={() => {
-            onZoomOut();
-          }}
-        >
-          <ZoomOut aria-hidden="true" />
-        </Button>
-        <span
-          className="min-w-16 rounded-md border border-border bg-muted/40 px-2 py-1 text-center text-sm tabular-nums"
-          aria-label={`Zoom ${String(zoomPercent)}%${canPan ? ", panned" : ""}`}
-        >
-          {zoomPercent}%
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.zoomIn()}
-          title={m.zoomIn()}
-          disabled={!canZoomIn}
-          onClick={() => {
-            onZoomIn();
-          }}
-        >
-          <ZoomIn aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={m.resetView()}
-          title={m.resetView()}
-          disabled={zoomPercent === 100 && !canPan}
-          onClick={onResetView}
-        >
-          <RotateCcw aria-hidden="true" />
-        </Button>
-      </div>
+      <div className="min-h-10" data-testid="manual-cutout-status-slot" />
+      <div className="flex-1" aria-hidden="true" />
     </div>
   );
 }

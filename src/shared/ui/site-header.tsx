@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 
@@ -42,7 +43,18 @@ function LanguageSwitcher() {
   );
 }
 
-function SiteHeader({ className }: { className?: string }) {
+function SiteHeader({
+  className,
+  utilitySlot,
+  workspaceUtilityRef,
+}: {
+  className?: string;
+  /** Page-supplied utility trigger (e.g. model storage) rendered before the
+   * language switcher. `shared/ui` stays feature-agnostic — the caller
+   * (`pages/*`) composes whatever feature-level content belongs here. */
+  utilitySlot?: ReactNode;
+  workspaceUtilityRef?: (node: HTMLSpanElement | null) => void;
+}) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -54,13 +66,19 @@ function SiteHeader({ className }: { className?: string }) {
     <header
       data-slot="site-header"
       data-hydrated={hydrated}
-      className={cn("border-b border-border", className)}
+      className={cn(
+        "border-b border-border bg-background/95 shadow-[0_1px_0_color-mix(in_oklch,var(--border)_70%,transparent)] backdrop-blur-md",
+        className,
+      )}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 sm:px-8">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-4 sm:px-8">
         <Link to="/" aria-label={m.brandName()} className="shrink-0">
           <img src="/logo.png" alt={m.brandName()} className="h-8 w-auto sm:h-9" />
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-4 text-sm sm:gap-6">
+        <nav
+          aria-label="Main"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm sm:gap-x-6"
+        >
           <Link
             to="/"
             className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
@@ -82,6 +100,12 @@ function SiteHeader({ className }: { className?: string }) {
             <MessageCircle className="size-4" aria-hidden="true" />
             {m.navFeedback()}
           </a>
+          {utilitySlot}
+          <span
+            ref={workspaceUtilityRef}
+            className="grid min-h-9 min-w-9 shrink-0 place-items-center"
+            data-testid="workspace-header-utilities"
+          />
           <LanguageSwitcher />
         </nav>
       </div>

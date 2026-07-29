@@ -20,12 +20,14 @@ export function GuidedBrushImageFrame({
   return (
     <div
       ref={frameRef}
-      className="relative max-w-full overflow-hidden rounded-xl border bg-[conic-gradient(#e2e8f0_25%,#fff_0_50%,#e2e8f0_0_75%,#fff_0)] [background-size:20px_20px] dark:bg-[conic-gradient(#334155_25%,#0f172a_0_50%,#334155_0_75%,#0f172a_0)]"
+      className="transparency-grid editor-image-frame relative overflow-hidden rounded-xl border"
       style={{
         aspectRatio: `${String(width)} / ${String(height)}`,
-        width: `min(100%, calc(60vh * ${String(ratio)}), 40rem)`,
+        width: `min(100cqw, calc(100cqh * ${String(ratio)}))`,
+        height: `min(100cqh, calc(100cqw / ${String(ratio)}))`,
       }}
       data-testid={testId}
+      data-fit="contain"
       data-source-width={width}
       data-source-height={height}
     >

@@ -5,9 +5,43 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Design tokens (Phase 30 `T3`, docs/design/DESIGN_SYSTEM.md §2).
+ *
+ * - Color: unchanged from Phase 03/12 — the `:root`/`.dark` OKLCH values below
+ *   remain the approved palette; only newly-approved colors get added here.
+ *   `T16` added `warning`/`info`/`success` (+ `-foreground`) semantic pairs,
+ *   formalizing raw `amber`/`blue`/`emerald` Tailwind classes already used ad
+ *   hoc for batch-item status and notice banners (docs/design/DESIGN_SYSTEM.md
+ *   §4e) — same swatches, zero visual change, referenced via Tailwind's own
+ *   `--color-amber-*`/`--color-blue-*`/`--color-emerald-*` theme variables.
+ * - Typography: the brand font (`--font-sans`/`--font-heading`, Geist
+ *   Variable) is the formalized token. Sizing intentionally reuses Tailwind's
+ *   stock `--text-*` scale rather than a parallel named scale, so there is one
+ *   source of truth for type sizes.
+ * - Spacing: Tailwind's own `--spacing` base unit (0.25rem) is the token;
+ *   `--spacing-stage`/`--spacing-stage-lg` below are the one named exception,
+ *   replacing a magic number (`20rem`/`28rem`) that was previously repeated
+ *   verbatim across `EditorStage`, `ToolPanelSlot`, and `ToolWorkspace`'s
+ *   Suspense placeholder.
+ * - Radius: `--radius-sm`..`--radius-4xl` (below) were already formalized.
+ * - Elevation: `shadow-sm` (raised surfaces: toolbar, batch header, tool
+ *   panels) and `shadow-lg` (overlays: popover/menu) are Tailwind's stock
+ *   `--shadow-*` scale, used directly and consistently — no override needed.
+ *   `Card` additionally uses `ring-1 ring-foreground/10` for a hairline edge;
+ *   that is a deliberate second, lighter treatment for static content
+ *   containers, not an inconsistency to fix.
+ * - Motion: transitions use Tailwind's stock `ease-in-out` curve and its
+ *   numeric duration scale (150ms implicit default for micro-interactions,
+ *   `duration-200` for content transitions like thumbnail hover/progress
+ *   width) — Tailwind v4 has no themeable named-duration namespace, so this
+ *   convention is documented rather than aliased.
+ */
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
+  --spacing-stage: 20rem;
+  --spacing-stage-lg: 28rem;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -25,6 +59,12 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -64,6 +104,12 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --warning: var(--color-amber-100);
+  --warning-foreground: var(--color-amber-900);
+  --info: var(--color-blue-100);
+  --info-foreground: var(--color-blue-900);
+  --success: var(--color-emerald-100);
+  --success-foreground: var(--color-emerald-900);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -99,6 +145,12 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --warning: var(--color-amber-950);
+  --warning-foreground: var(--color-amber-200);
+  --info: var(--color-blue-950);
+  --info-foreground: var(--color-blue-200);
+  --success: var(--color-emerald-950);
+  --success-foreground: var(--color-emerald-200);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -129,117 +181,243 @@
   }
 }
 
-/* widgets/tool-workspace (Phase 12): single column on mobile/tablet with the
-   pre-Phase-12 top-to-bottom stacking order preserved; two columns from `lg`
-   up — preview surface left, control rail right — with the toggle/info/
-   notice/error rows and the processing-log accordion spanning both columns. */
+/* `site-shell` background pattern (Phase 30 `T4` + architect review): a static
+   engineering grid with minor 32px and major 160px lines, fading from the
+   first viewport into the page background. Purely
+   decorative (`aria-hidden`, `pointer-events-none` on the element itself) and
+   has no transition/animation, so there is nothing for
+   `prefers-reduced-motion: reduce` to disable — verified by inspection, not a
+   media-query override. The line color is `--foreground` mixed at a low,
+   fixed percentage via `color-mix` (same technique already used by the
+   `secondary` button hover state below), so it auto-adapts to both themes
+   without a separate `.dark` override. At a 3%/6% mix — further thinned by the
+   fade mask away from the focal point — the maximum possible shift to
+   background luminance is far too small to move any existing text/background
+   pair (all ≥4.34:1, see docs/design/DESIGN_SYSTEM.md §2) below WCAG AA. */
 @layer components {
-  .tool-workspace-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "toggle"
-      "info"
-      "notice"
-      "error"
-      "batch-header"
-      "toolbar"
-      "guard"
-      "surface"
-      "rail"
-      "batch"
-      "log";
-    gap: 1.5rem;
+  .transparency-grid {
+    --transparency-grid-cell: 8px;
+    --transparency-grid-light: color-mix(
+      in oklch,
+      var(--background) 90%,
+      var(--foreground)
+    );
+    --transparency-grid-dark: color-mix(
+      in oklch,
+      var(--background) 78%,
+      var(--foreground)
+    );
+    background-color: var(--transparency-grid-light);
+    background-image: conic-gradient(
+      var(--transparency-grid-dark) 25%,
+      var(--transparency-grid-light) 0 50%,
+      var(--transparency-grid-dark) 0 75%,
+      var(--transparency-grid-light) 0
+    );
+    background-position: 0 0;
+    background-size: calc(var(--transparency-grid-cell) * 2)
+      calc(var(--transparency-grid-cell) * 2);
   }
 
-  @media (min-width: 64rem) {
-    .tool-workspace-grid {
-      grid-template-columns: 3fr 2fr;
-      grid-template-areas:
-        "toggle toggle"
-        "info info"
-        "notice notice"
-        "error error"
-        "batch-header batch-header"
-        "toolbar toolbar"
-        "guard guard"
-        "surface rail"
-        "batch batch"
-        "log log";
+  .persistent-preview-layer {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 160ms ease,
+      visibility 0s linear 160ms;
+  }
+
+  .persistent-preview-layer[data-active="true"] {
+    z-index: 1;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+      opacity 160ms ease,
+      visibility 0s linear 0s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .persistent-preview-layer {
+      transition: none;
     }
   }
 
-  .tool-workspace-idle {
+  .command-deck-ambient {
+    position: absolute;
+    z-index: -1;
+    width: 18rem;
+    height: 18rem;
+    border-radius: 9999px;
+    filter: blur(72px);
+    opacity: 0.14;
+    animation: command-deck-drift 16s ease-in-out infinite alternate;
+  }
+
+  .command-deck-ambient-primary {
+    top: 5%;
+    right: 8%;
+    background: var(--primary);
+  }
+
+  .command-deck-ambient-secondary {
+    bottom: -15%;
+    left: 12%;
+    background: var(--chart-2);
+    animation-delay: -8s;
+  }
+
+  .command-deck-dropzone::before {
+    content: "";
+    position: absolute;
+    inset: 0.45rem;
+    border: 1px solid color-mix(in oklch, var(--primary) 22%, transparent);
+    border-radius: calc(var(--radius-xl) - 0.2rem);
+    pointer-events: none;
+    animation: command-deck-breathe 3.8s ease-in-out infinite;
+  }
+
+  @keyframes command-deck-drift {
+    from {
+      transform: translate3d(-5%, -3%, 0) scale(0.94);
+    }
+    to {
+      transform: translate3d(8%, 6%, 0) scale(1.08);
+    }
+  }
+
+  @keyframes command-deck-breathe {
+    0%,
+    100% {
+      opacity: 0.24;
+      transform: scale(0.995);
+    }
+    50% {
+      opacity: 0.58;
+      transform: scale(1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .command-deck-ambient,
+    .command-deck-dropzone::before {
+      animation: none;
+    }
+  }
+
+  .site-background-pattern {
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklch, var(--foreground) 3%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklch, var(--foreground) 3%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to right,
+        color-mix(in oklch, var(--foreground) 6%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklch, var(--foreground) 6%, transparent) 1px,
+        transparent 1px
+      );
+    background-size:
+      32px 32px,
+      32px 32px,
+      160px 160px,
+      160px 160px;
+    -webkit-mask-image:
+      radial-gradient(ellipse 78vw 62dvh at 55% 4dvh, black 0%, transparent 72%),
+      linear-gradient(to bottom, black 0, black 30dvh, transparent 62dvh);
+    mask-image:
+      radial-gradient(ellipse 78vw 62dvh at 55% 4dvh, black 0%, transparent 72%),
+      linear-gradient(to bottom, black 0, black 30dvh, transparent 62dvh);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+}
+
+/* Phase-30 review workspace: same-URL empty composition, one workspace
+   toolbar, a stable editor rail, and a full-width horizontal batch overview. */
+@layer components {
+  .tool-workspace-grid {
+    display: grid;
+    min-width: 0;
     grid-template-columns: 1fr;
     grid-template-areas:
-      "toggle"
-      "info"
       "notice"
       "error"
+      "batch"
+      "toolbar"
       "guard"
       "surface"
-      "batch"
-      "log";
+      "rail";
+    gap: 1rem;
+  }
+
+  .tool-workspace-grid > * {
+    min-width: 0;
+  }
+
+  .tool-workspace-idle {
+    grid-template-areas:
+      "intro"
+      "surface"
+      "notice"
+      "error";
+    align-items: stretch;
   }
 
   .tool-workspace-batch {
     grid-template-areas:
-      "info"
       "notice"
       "error"
-      "batch-header"
+      "batch"
       "toolbar"
       "guard"
       "surface"
-      "rail"
-      "batch"
-      "log";
+      "rail";
   }
 
-  .tool-workspace-guided {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "toggle"
-      "info"
-      "notice"
-      "error"
-      "batch-header"
-      "toolbar"
-      "guard"
-      "surface"
-      "rail"
-      "batch"
-      "log";
-  }
-
-  .tool-workspace-guided > * {
-    min-width: 0;
-  }
-
-  @media (min-width: 64rem) {
-    .tool-workspace-batch {
+  @media (min-width: 56rem) {
+    .tool-workspace-grid {
+      grid-template-columns: minmax(0, 1fr) 22rem;
       grid-template-areas:
-        "info info"
         "notice notice"
         "error error"
-        "batch-header batch-header"
+        "batch batch"
         "toolbar toolbar"
         "guard guard"
-        "surface rail"
-        "batch batch"
-        "log log";
+        "surface rail";
+      align-items: start;
     }
-  }
 
-  .tool-workspace-idle > [style*="surface"],
-  .tool-workspace-idle > .\[grid-area\:surface\] {
-    width: 100%;
-    max-width: 48rem;
-    margin-inline: auto;
-  }
+    .tool-workspace-idle {
+      grid-template-columns: 5fr 7fr;
+      grid-template-areas:
+        "intro surface"
+        "notice notice"
+        "error error";
+      gap: clamp(2rem, 5vw, 5rem);
+    }
 
-  .tool-workspace-idle > .\[grid-area\:toggle\] {
-    justify-self: center;
+    .tool-workspace-batch {
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      grid-template-areas:
+        "notice notice"
+        "error error"
+        "batch batch"
+        "toolbar toolbar"
+        "guard guard"
+        "surface rail";
+    }
   }
 
   .editor-stage,
@@ -248,8 +426,27 @@
     min-width: 0;
   }
 
+  .editor-stage:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: var(--background);
+    padding: 1rem;
+  }
+
+  .editor-stage:fullscreen::backdrop {
+    background: var(--background);
+  }
+
   .editor-stage > div {
     min-height: inherit;
+  }
+
+  .editor-image-frame {
+    max-width: 100%;
+    max-height: 100%;
   }
 
   .editor-toolbar {

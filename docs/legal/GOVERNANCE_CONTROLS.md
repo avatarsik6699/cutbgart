@@ -65,9 +65,9 @@ No purpose authorizes image/image-derived telemetry or named user profiling.
 | Store | Ceiling | Enforcement / verification |
 |---|---|---|
 | Browser editor memory/Blob URLs | Current editing session and reachable history only | Existing lifecycle tests; reset/replacement/unmount cleanup |
-| `qualityMode` | Until user change/clear | Phase-35 storage controls expose deletion |
+| `qualityMode` | Until user change/clear | Phase-34 storage controls expose deletion |
 | Model Cache Storage | Until release cleanup, corruption/quota eviction, or user clear | Existing release-named service-worker lifecycle and storage manager |
-| Privacy choice | 180 days or policy/category version change | Phase-35 expiry parser and tests |
+| Privacy choice | 180 days or policy/category version change | Phase-34 expiry parser and tests |
 | Nginx/container logs | Three rotated 10 MiB files per container | Docker log driver; quarterly verify no body/query expansion |
 | Umami events/sessions | 90 days | **Missing control:** add tested scheduled deletion and evidence before Phase 24 closes or analytics resumes |
 | Uptime monitor history | 90 days | Verify/configure in dashboard/database and quarterly evidence |

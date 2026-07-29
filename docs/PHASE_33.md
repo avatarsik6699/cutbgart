@@ -1,4 +1,4 @@
-# PHASE 33 — Whole-Project Audit & Refactor
+# PHASE 33 — Accessibility, Device & Product Validation
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | Phase | `33` |
-| Title | Whole-Project Audit & Refactor |
+| Title | Accessibility, Device & Product Validation |
 | Status | `⏳ pending` |
 | Tag | `v0.33.0` |
 | Depends on | PHASE_32 gate passing |
@@ -16,75 +16,89 @@
 
 ## Phase Goal
 
-Audit the complete application after the editor and help contracts stabilize, then perform small,
-evidence-backed refactors that reduce duplication, rendering/resource waste, and architectural
-drift without changing product behavior. The phase must prove improvements through repeatable
-single/batch measurements and full regressions; it is not authorization for a rewrite, speculative
-abstraction, or Studio scope (SPEC.md §5.2, §6, §7.1, §7.4, §7.7–§9).
+Validate the functionally complete focused background editor as a product, not only as a passing
+test suite. This is the final product/accessibility/device gate before Phase 33 refreshes and
+implements the legal/data contract; it does not pre-implement or claim approval of those surfaces.
+This phase combines a manual WCAG 2.2 AA audit, assistive-technology and physical-device evidence,
+RU/EN editorial review, focused usability sessions, visual/performance regression coverage, and a
+public accessibility statement. It fixes product-blocking findings while keeping the product
+boundary focused on background removal and related editing (SPEC.md §5, §7–§9).
+
+## Research References
+
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/)
+- [W3C Evaluating Web Accessibility Overview](https://www.w3.org/WAI/test-evaluate/)
+- [W3C WCAG-EM 1.0](https://www.w3.org/TR/WCAG-EM/)
+- [web.dev Baseline](https://web.dev/baseline)
+- [Core Web Vitals](https://web.dev/articles/vitals)
+- [Nielsen Norman Group — Usability Testing 101](https://www.nngroup.com/articles/usability-testing-101/)
 
 ---
 
 ## Scope
 
-### Other
+### Accessibility
 
-- [ ] `T1` Create `docs/audits/PHASE_33_BASELINE.md` with reproducible representative scenarios:
-  cold home/startup; single automatic → every tool → undo/redo/export/reset; multiple upload with
-  item switching, edits, removal and ZIP; help and the existing privacy-route path; classified
-  inference failure. Future Phase-34 legal/consent UI is not assumed. Record device/browser/build,
-  fixtures, exact commands, run count, and measurement caveats —
+- [ ] `A1` Freeze representative pages, locales, breakpoints and states—including upload,
+  processing, failure, single/batch editing, Cutout Magic/Manual, Enhancements, Background,
+  Download, dialogs, onboarding, Help, the existing privacy route and other current controls—and
+  audit them with WCAG-EM against WCAG 2.2 AA. Future Phase-33 legal/privacy-choice controls are
+  out of this sample. Automated results are supporting evidence, not the audit conclusion —
   _Depends on:_ —
-- [ ] `T2` Measure before changes: route/initial/lazy chunk sizes, LCP/INP/long tasks, time-to-result,
-  input/brush response, React commit counts/durations for hot interactions, main-thread vs worker
-  work, live workers/listeners/timers/object URLs, and heap/resource trend over repeated single and
-  batch churn. Do not present headless values as universal device claims — _Depends on:_ `T1`
-- [ ] `T3` Inventory duplication/dead code and ownership: FSD/public APIs, same-layer imports,
-  workspace/controller/store overlap, single-vs-batch branches, repeated canvas/coordinate/export/
-  error/i18n logic, oversized components/hooks, legacy protocols still imported, and lazy-boundary
-  violations. Prove call sites before marking code dead — _Depends on:_ `T1`
-- [ ] `T4` Audit React correctness/performance using current official guidance: render purity,
-  component identity/keys, derived state, unnecessary Effects, dependency loops, subscriptions and
-  cleanup under development StrictMode, unstable context/props, external-store selectors, and
-  Profiler evidence. Do not add `memo`, `useMemo`, or `useCallback` globally without a measured hot
-  path and stable semantic dependency contract — _Depends on:_ `T2`, `T3`
-- [ ] `T5` Audit resource lifecycle: inference/matting workers and pipelines, tensors/ImageBitmaps/
-  OffscreenCanvas, typed arrays, Blob/Object URLs, uploaded backgrounds, edit-history artifacts,
-  help media, timers/observers/listeners, Cache Storage ownership, abort/stale-run paths, item
-  deletion/reset/unmount, and error/fallback branches — _Depends on:_ `T2`, `T3`
-- [ ] `T6` Create a prioritized findings ledger with symptom/evidence, owner layer, risk, expected
-  improvement, proposed smallest fix, characterization test, measurement, and decision
-  (`fix/defer/reject`). Architect approves the bounded fix set before source refactoring; deferred
-  findings name a future phase rather than expanding this one silently — _Depends on:_ `T2`–`T5`
+- [ ] `A2` Manually verify full keyboard and visible focus, focus order/restoration, pointer
+  alternatives, zoom/reflow at 200% and 400%, text spacing, contrast, forced colors, reduced
+  motion, announcements and error recovery. Canvas editing must have an operable non-pointer
+  path or a documented equivalent workflow — _Depends on:_ `A1`
+- [ ] `A3` Test at minimum NVDA with current supported Windows browser and VoiceOver with Safari;
+  include browser/AT versions and limitations. Validate names, roles, states, live regions,
+  dialogs, tool selection, batch status, history and download without relying on icon, color or
+  canvas pixels alone — _Depends on:_ `A1`
+- [ ] `A4` Remediate all reproducible P0/P1 accessibility findings and add regression coverage.
+  P2/P3 findings need owner, rationale and target phase/date; unverifiable claims are removed —
+  _Depends on:_ `A2`, `A3`
+- [ ] `A5` Publish localized `/accessibility` and `/en/accessibility` pages with evaluated scope,
+  standard/target, tested technologies, known limitations, owned contact, effective date and
+  review cadence. Do not claim universal compliance — _Depends on:_ `A4`
 
-### Frontend
+### Device, browser and performance validation
 
-- [ ] `F1` Add characterization tests around every approved high-risk finding before changing
-  behavior-owning code, including single/batch equivalence and failure/resource cleanup where
-  applicable — _Depends on:_ `T6`
-- [ ] `F2` Consolidate only proven duplicate business/state/geometry/export/error logic into the
-  correct FSD owner and remove only proven-dead adapters/callsites. Preserve public contracts,
-  localization, accessibility, model results, and lazy loading — _Depends on:_ `F1`
-- [ ] `F3` Fix approved React findings: eliminate render-phase side effects and effect feedback
-  loops, add missing cleanup, narrow subscriptions/selectors, stabilize ownership/identity where
-  measured, and split hot visual updates away from React state when already required by the canvas
-  contract — _Depends on:_ `F1`, `T4`
-- [ ] `F4` Fix approved lifecycle findings with explicit disposal/abort/reachability ownership and
-  tests for success, cancel, stale, error, reset, item deletion, branch eviction, and unmount —
-  _Depends on:_ `F1`, `T5`
-- [ ] `F5` Fix approved initial-bundle/main-thread/interaction findings through existing lazy
-  boundaries, worker paths, bounded work, or smaller dependency surface. Do not trade correctness
-  or meaningful caching for a synthetic benchmark — _Depends on:_ `F1`, `T2`
-- [ ] `F6` Repeat the exact baseline suite after each refactor wave, record before/after/error bars
-  and regressions in `docs/audits/PHASE_33_RESULTS.md`, and revert/rework changes that lack benefit
-  or violate a budget. Add full cross-browser/localized Playwright coverage for changed flows —
-  _Depends on:_ `F2`–`F5`
+- [ ] `D1` Freeze a supported-browser policy and degradation matrix using current Baseline evidence:
+  full support, supported fallback, and unsupported. Cover WebGPU absent/denied, low memory,
+  storage quota, offline/interrupted CDN, touch/pointer differences and reduced motion —
+  _Depends on:_ `A1`
+- [ ] `D2` Run the core single and batch journeys on a small physical-device matrix: iPhone/Safari,
+  Android/Chrome including one constrained device, macOS/Safari, Windows Chromium on integrated
+  graphics, and a no-WebGPU path. Record exact hardware/OS/browser, outcome, thermal/memory notes
+  and gaps; a cloud device may supplement but not replace both mobile physical checks —
+  _Depends on:_ `D1`
+- [ ] `D3` Re-run measured Core Web Vitals, interaction latency, long tasks, memory growth and batch
+  limits on representative devices after Phase 32. Fix P0/P1 freezes, crashes, leaks or budget
+  regressions; document evidence-based supported limits rather than promising every device —
+  _Depends on:_ `D2`
+- [ ] `D4` Add stable screenshot/visual-regression coverage for representative RU/EN desktop/mobile
+  states in the deterministic CI browser. Review intentional baselines; exclude nondeterministic
+  model pixels and animation frames rather than masking structural regressions — _Depends on:_
+  `A1`, `D1`
 
-### Infra
+### Product and content validation
 
-- [ ] `I1` Run architecture/type/unit/full host-only E2E and applicable real-model gates. Update
-  `docs/STACK.md` only for repeatable profiling commands or an evidence-justified dependency; do
-  not add always-on production profiling, user telemetry, Docker/CI Playwright, or a package merely
-  to automate one inspection — _Depends on:_ `F6`
+- [ ] `P1` Run moderated task-based sessions with representative novice users for: first
+  single-image result, fixing an edge, replacing background, downloading, processing several
+  images, recovering from an error, and finding privacy/help controls. Obtain consent, use
+  synthetic/user-owned images, collect no production telemetry, and record observations without
+  unnecessary personal data — _Depends on:_ `A1`
+- [ ] `P2` Prioritize findings by severity/frequency. Fix all reproducible task blockers and
+  misleading labels/instructions; unresolved findings require owner, rationale and target. Do not
+  expand into a general design suite to address a focused-editor finding — _Depends on:_ `P1`
+- [ ] `P3` Perform native-speaker RU/EN editorial QA across primary UI, errors, onboarding,
+  accessibility and the existing privacy surface: terminology, tone, pluralization, truncation and
+  semantic parity. Final legal pages and translations are refreshed and reviewed in Phase 33 —
+  _Depends on:_ `P2`
+- [ ] `P4` Produce a pre-legal product-readiness report linking audit evidence, supported matrix,
+  performance results, known limitations and remaining risk. Functional readiness cannot be marked
+  PASS with an unresolved P0/P1 accessibility, device, privacy, security or core-task finding, and
+  final release readiness remains explicitly conditional on the Phase-33 gate — _Depends on:_ `A5`,
+  `D2`–`D4`, `P2`, `P3`
 
 ---
 
@@ -93,21 +107,25 @@ abstraction, or Studio scope (SPEC.md §5.2, §6, §7.1, §7.4, §7.7–§9).
 ### Create / modify
 
 ~~~
-docs/audits/PHASE_33_BASELINE.md
-docs/audits/PHASE_33_FINDINGS.md
-docs/audits/PHASE_33_RESULTS.md
+docs/audits/PHASE_33_ACCESSIBILITY.md
+docs/audits/PHASE_33_DEVICES.md
+docs/audits/PHASE_33_USABILITY.md
+docs/audits/PHASE_33_CONTENT.md
+docs/audits/PHASE_33_READINESS.md
 docs/STACK.md
-src/ (only files explicitly approved in PHASE_33_FINDINGS.md)
-e2e/ (characterization/regression specs for approved findings)
+src/
+locales/
+tests/
+e2e/
 docs/PHASE_33.md
 ~~~
 
 ### Do NOT touch
 
-- Product behavior, model/quality algorithms or pins without a separate evidence/spec decision
-- Add Studio features, new metadata/analytics, accounts, storage, API, advertising, or payments
-- Mass rewrite/renaming, blanket memoization, package churn, or deletion without callsite evidence
-- Weaken accessibility, localization, single/batch parity, privacy, or test coverage for metrics
+- Add general-purpose layers, product-card design, collaboration, accounts, billing or cloud files
+- Replace manual/assistive/physical evidence with Lighthouse, axe or emulation alone
+- Use production user images, session replay, undisclosed research recording or unnecessary PII
+- Publish “fully accessible”, “all devices” or legal-compliance claims unsupported by the audit
 
 ---
 
@@ -115,16 +133,20 @@ docs/PHASE_33.md
 
 ### New persistent data (tables / collections / files)
 
-Repository audit/baseline/results documentation only. No runtime persistence is added.
+Versioned audit reports and approved deterministic screenshot baselines only. Research notes must be
+minimized/de-identified with owner-approved access, retention and deletion from Phase 24. No new
+application persistence or production telemetry.
 
 ### New API endpoints / RPC methods / events
 
-None.
+| Method | Path | Auth | Response |
+|--------|------|------|----------|
+| `GET` | `/accessibility` | public | RU accessibility statement |
+| `GET` | `/en/accessibility` | public | EN accessibility statement |
 
 ### New types / models / shared interfaces
 
-None by default. Any internal extraction listed in the approved findings ledger must preserve the
-existing external contracts and be documented in Phase-33 Implementation Notes if non-obvious.
+None.
 
 ### New env vars
 
@@ -134,25 +156,22 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 33` with the complete `docs/STACK.md` gate and the exact repeatable profiling
-commands frozen in `PHASE_33_BASELINE.md`. At minimum:
+Run `/phase-gate 33`; the complete `docs/STACK.md` gate and all Phase-33 targeted suites apply:
 
 ```bash
+pnpm lint
+pnpm typecheck
+pnpm test:unit
 pnpm build
-pnpm vitest run
-pnpm exec steiger ./src
+pnpm e2e:ci-critical
 pnpm e2e
-pnpm e2e:real-model
-pnpm e2e:phase-21-real
-pnpm e2e:phase-19-real
-pnpm e2e:phase-20-real
-pnpm tsc --noEmit
 ```
 
-Fail if source changes lack a finding/baseline/characterization test, behavior or single/batch
-parity drifts, React StrictMode reveals repeated side effects/unclean subscriptions, repeated churn
-shows unbounded retained resources, initial/lazy boundaries regress, or claimed improvements cannot
-be reproduced with the recorded method.
+Attach manual WCAG-EM, NVDA/VoiceOver, physical-device, performance, visual, usability and bilingual
+editorial evidence. Verify both accessibility routes and owned contact. Fail if a P0/P1 is open,
+mandatory evidence is emulation-only, browser/device support is overstated, research data lacks
+retention, the report cannot trace each conclusion to evidence, or it represents pre-legal
+validation as final release approval.
 
 ---
 
@@ -167,7 +186,7 @@ None
 ## Atomic Commit Message
 
 ```text
-refactor(phase-33): harden architecture and runtime performance
+feat(phase-33): validate accessibility devices and product readiness
 ```
 
 ## Post-Phase Checklist

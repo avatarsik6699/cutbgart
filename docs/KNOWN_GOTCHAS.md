@@ -11,6 +11,18 @@
 
 ## Gotcha Log
 
+### Do not pass an optional-argument viewport command directly to a React click prop
+
+- **Symptoms**: the zoom percentage changes, but the canvas stops moving or receives `NaN`
+  offsets; Hand appears enabled yet dragging has no visible effect.
+- **Root cause**: React passes its `MouseEvent` to `onClick`. A command such as
+  `zoomIn(anchor?: Point)` accepts that value as a truthy anchor and performs coordinate arithmetic
+  with missing `x`/`y` fields.
+- **Fix**: adapt command callbacks at the UI boundary (`onClick={() => zoomIn()}`) instead of
+  assigning an optional-argument command directly.
+- **Prevention**: component tests for command buttons should assert that callbacks are called with
+  no arguments unless the UI intentionally constructs the command argument.
+
 ### A semantic Keep/Remove brush must constrain the direction of candidate fusion
 
 - **Symptoms**: a green Keep pass restores the painted fragment but creates small transparent

@@ -27,6 +27,22 @@ describe("processing mode selector", () => {
     expect(onChange).toHaveBeenCalledWith("ben2-fp16");
   });
 
+  it("keeps recommendation and Beta badges in the title row", () => {
+    render(<QualityModeToggle qualityMode="isnet-q8" onQualityModeChange={vi.fn()} />);
+
+    for (const badge of [screen.getByText("Recommended"), screen.getByText("Beta")]) {
+      const titleRow = badge.parentElement?.parentElement;
+      expect(titleRow?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+      expect(titleRow?.className).toContain("gap-2");
+      expect(badge.parentElement?.className).toContain("shrink-0");
+    }
+    expect(
+      screen
+        .getAllByRole("radio")
+        .every((radio) => Boolean(radio.parentElement?.querySelector("svg"))),
+    ).toBe(true);
+  });
+
   it("opens and closes accessible maximum-quality help by click", async () => {
     render(<QualityModeToggle qualityMode="isnet-fp32" onQualityModeChange={vi.fn()} />);
 

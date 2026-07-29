@@ -5,6 +5,7 @@ import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-r
 import appCss from "../app/styles/globals.css?url";
 import { env } from "../shared/config";
 import { getLocale } from "../paraglide/runtime";
+import { TooltipProvider } from "../shared/ui";
 
 // Umami + Cloudflare Web Analytics (Phase 05, SPEC.md §7.6). Each script is
 // only added when its env var is configured — unset in local dev, so dev
@@ -66,7 +67,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <TooltipProvider>{children}</TooltipProvider>
         <Scripts />
       </body>
     </html>

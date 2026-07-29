@@ -290,8 +290,10 @@ export async function installMockInference(page: Page): Promise<void> {
             const delayFirst =
               (window as unknown as { __mockDelayFirstGuidedResponse?: boolean })
                 .__mockDelayFirstGuidedResponse && promptSequence === 1;
-            if (delayFirst) window.setTimeout(respond, 250);
-            else respond();
+            if (delayFirst) {
+              this.emit({ type: "status", revision, status: "predicting-mask" });
+              window.setTimeout(respond, 1_500);
+            } else respond();
             return;
           }
           if (message.type === "dispose") {

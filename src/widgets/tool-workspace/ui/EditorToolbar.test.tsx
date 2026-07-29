@@ -53,23 +53,20 @@ describe("EditorToolbar", () => {
     ).toBe(true);
   });
 
-  it("renders an optional document action outside the tool panels", () => {
-    const reset = vi.fn();
+  it("renders workspace utilities without an editor group and keeps Back first", () => {
+    const onBack = vi.fn();
     render(
       <EditorToolbar
-        tools={createEditorToolRegistry()}
-        activeTool="cutout"
-        onToolChange={vi.fn()}
-        canUndo={false}
-        canRedo={false}
-        onUndo={vi.fn()}
-        onRedo={vi.fn()}
-        documentActionSlot={<button onClick={reset}>Process another image</button>}
+        workspaceActionsSlot={<button type="button">Add images</button>}
+        downloadSlot={<button type="button">Download all</button>}
+        onBack={onBack}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Process another image" }));
-    expect(reset).toHaveBeenCalledOnce();
-    expect(screen.getByTestId("editor-document-action-slot")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /cutout/i })).toBeNull();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons[0]?.getAttribute("aria-label")).toBe("Back to upload");
+    fireEvent.click(buttons[0]!);
+    expect(onBack).toHaveBeenCalledWith(expect.any(HTMLButtonElement));
   });
 });

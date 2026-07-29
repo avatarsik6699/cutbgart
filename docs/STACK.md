@@ -23,7 +23,6 @@
 | Infra | Docker Compose: `nginx` + `app` (Phase 01); `umami` + `umami-db` + `uptime-kuma` added in Phase 05; maintenance-profile `model-sync` + VPS asset mount added in Phase 14. Cloudflare proxies the app and caches `cdn.cutbg.art/models/*`; R2 is not required. `docker-compose.dev.yml` adds a container-parity dev session — standalone, never merged with the production `docker-compose.yml` |
 | Package managers | pnpm |
 | CI | GitHub Actions → GitHub Container Registry → SSH deploy to VPS |
-| Design tooling | pen.dev VS Code extension + Pencil MCP, authoring `docs/design/index.pen` (Phase 30 only) | Human-in-the-loop design authoring, not a runtime/build dependency; never shipped in the app bundle. Not registered in this repo's `.mcp.json` — it's personal editor tooling, wired through the architect's own Claude Code/VS Code MCP configuration |
 
 ---
 
@@ -61,26 +60,19 @@ Docker and `docker compose` are available from this project's WSL/terminal envir
 
 ---
 
-## Design tooling (Pencil, Phase 30)
+## Design system (Phase 30)
 
-`docs/design/index.pen` is the Pencil source file for the Phase-30 design system and redesign.
-Pencil is accessed only through its MCP tools (`get_editor_state`, `get_guidelines`, `batch_design`,
-`batch_get`, `snapshot_layout`, `get_screenshot`, `get_variables`, `export_nodes`, `export_html`) —
-`.pen` files are encrypted and must never be opened with `Read`/`Grep`/`cat`.
+No external design tool is used — two prior attempts (Pencil/pen.dev, then Claude Design) produced
+visual directions the architect rejected; see `docs/STATE.md` § Project Log, 2026-07-29. Phase 30
+iterates directly in the codebase instead: upgrade `shadcn/ui` (`components.json` at repo root,
+`style: base-nova`, `baseColor: neutral`) to its current version via the `shadcn` CLI, lean on its
+stock components rather than bespoke ones, and formalize the existing color palette/typography as
+documented Tailwind `@theme` tokens in `src/app/styles/globals.css`.
 
-**Operational precondition, every session:** Pencil MCP tools operate on whichever `.pen` file is
-currently open in the pen.dev VS Code editor tab — not an arbitrary file path. Before any Pencil MCP
-call, `docs/design/index.pen` must be open in the editor, or every call fails with "a file needs to
-be open in the editor to perform this action." This makes Phase 30 a human-in-the-loop phase: a
-headless/CI agent cannot drive it without the architect (or whoever is at the keyboard) having the
-file open. Always call `get_editor_state(include_schema: true)` first in a session to load the
-current `.pen` schema before using any other Pencil tool.
-
-Design output lands as ordinary repository files, not inside the `.pen` file itself:
-`docs/design/DESIGN_SYSTEM.md` (tokens, component visual language, screens, approval record) and
-`docs/design/exports/` (screenshots/HTML evidence via `export_html`/`export_nodes`/`get_screenshot`).
-Phase 31 implements that record into `src/app/styles/globals.css` and `src/shared/ui`/
-`widgets/tool-workspace` — Pencil itself never becomes a build or runtime dependency.
+Design output still lands as ordinary repository files: `docs/design/DESIGN_SYSTEM.md` (tokens,
+component conventions, screens, approval record) and `docs/design/exports/` (before/after
+screenshots as durable evidence) — written directly by whoever implements the phase, not exported
+from a design tool.
 
 ---
 

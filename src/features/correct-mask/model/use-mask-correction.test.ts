@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MaskPatch } from "../../../entities/processed-image";
 import type { MaskCanvasHandle } from "../ui/MaskCorrectionCanvas";
-import { useMaskCorrection } from "./use-mask-correction";
+import { useMaskCorrection, useMaskCorrectionViewport } from "./use-mask-correction";
 
 function makePatch(beforeFill: number, afterFill: number): MaskPatch {
   const box = { minX: 0, maxX: 1, minY: 0, maxY: 0 };
@@ -229,6 +229,28 @@ describe("useMaskCorrection", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it("ignores history shortcuts while a form field is being edited", () => {
+    const { ref, handle } = makeCanvasRef();
+    const { result } = renderHook(() => useMaskCorrection(ref, imageSize));
+    act(() => {
+      result.current.commitStroke(makePatch(0, 255));
+    });
+    const input = document.createElement("input");
+    document.body.append(input);
+    const event = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    input.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(handle.applyPatch).not.toHaveBeenCalled();
+    input.remove();
+  });
+
   it("survives the canvas handle being unset (before decode / after unmount)", () => {
     const ref = { current: null };
     const { result } = renderHook(() => useMaskCorrection(ref, imageSize));
@@ -303,5 +325,27 @@ describe("useMaskCorrection", () => {
     expect(result.current.zoomPercent).toBe(140);
     expect(result.current.viewport.offsetX).toBeCloseTo(25.857, 2);
     expect(result.current.viewport.offsetY).toBeCloseTo(14.285, 2);
+  });
+});
+
+describe("useMaskCorrectionViewport", () => {
+  it("keeps viewport state isolated when the active document changes", () => {
+    const { result, rerender } = renderHook(
+      ({ documentId }: { documentId: string }) =>
+        useMaskCorrectionViewport(imageSize, documentId),
+      { initialProps: { documentId: "doc-a" } },
+    );
+
+    act(() => result.current.zoomIn());
+    expect(result.current.zoomPercent).toBe(125);
+
+    rerender({ documentId: "doc-b" });
+    expect(result.current.zoomPercent).toBe(100);
+    act(() => result.current.zoomIn());
+    act(() => result.current.zoomIn());
+    expect(result.current.zoomPercent).toBe(150);
+
+    rerender({ documentId: "doc-a" });
+    expect(result.current.zoomPercent).toBe(125);
   });
 });

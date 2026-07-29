@@ -15,10 +15,7 @@ export interface EditorToolDefinition {
   label: string;
   icon: ComponentType<EditorToolIconProps>;
   order: number;
-  loadPanel: () => Promise<unknown>;
 }
-
-const loadPanelSlot = () => import("../ui/ToolPanelSlot");
 
 export function createEditorToolRegistry(): readonly EditorToolDefinition[] {
   const registry = [
@@ -27,21 +24,18 @@ export function createEditorToolRegistry(): readonly EditorToolDefinition[] {
       label: m.editorToolCutout(),
       icon: Scissors,
       order: 10,
-      loadPanel: loadPanelSlot,
     },
     {
       id: "enhance",
       label: m.editorToolEnhance(),
       icon: Sparkles,
       order: 20,
-      loadPanel: loadPanelSlot,
     },
     {
       id: "background",
       label: m.editorToolBackground(),
       icon: ImageIcon,
       order: 30,
-      loadPanel: loadPanelSlot,
     },
   ] satisfies EditorToolDefinition[];
   return registry.sort((left, right) => left.order - right.order);

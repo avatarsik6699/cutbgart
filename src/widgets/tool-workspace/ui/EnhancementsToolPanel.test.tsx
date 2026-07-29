@@ -36,11 +36,34 @@ describe("EnhancementsToolPanel", () => {
     expect(screen.getByTestId("enhancements-tool-panel").textContent).not.toMatch(
       /ViTMatte|model|provider|WASM|WebGPU|graph|MiB|skip and edit/i,
     );
+    expect(screen.queryByRole("heading", { name: /enhancements/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /remove colour halo/i }));
     expect(onOperationChange).toHaveBeenCalledWith("colour-halo", false);
     fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
     expect(onApply).toHaveBeenCalledOnce();
+  });
+
+  it("offers one explicit Stop action only while an enhancement is running", () => {
+    const onCancel = vi.fn();
+    render(
+      <EnhancementsToolPanel
+        registry={registry}
+        draft={{ ...draft, status: "applying" }}
+        progress={45}
+        activeOperationId="fine-detail"
+        outcome={null}
+        errorCode={null}
+        onOperationChange={vi.fn()}
+        onApply={vi.fn()}
+        onCancel={onCancel}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it("keeps recovery user-actionable without internal fallback text", () => {

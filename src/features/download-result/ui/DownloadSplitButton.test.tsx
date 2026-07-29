@@ -107,4 +107,30 @@ describe("DownloadSplitButton", () => {
       longestSide: "original",
     });
   });
+
+  it("uses Download all as the primary action without a selected batch item", async () => {
+    const anchor = document.createElement("a");
+    const click = vi.fn();
+    anchor.click = click;
+    const createElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag) =>
+      tag === "a" ? anchor : createElement(tag),
+    );
+    render(
+      <DownloadSplitButton
+        batchItems={[
+          {
+            originalFileName: "one.png",
+            processedImage: {
+              result: new Blob(["result"], { type: "image/png" }),
+            },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download all" }));
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    expect(anchor.download).toBe("cutbg-results.zip");
+  });
 });

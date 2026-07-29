@@ -61,7 +61,7 @@ describe("GuidedBrushControls", () => {
     expect(screen.queryByText(/candidate|result \d|stroke.*limit|model/i)).toBeNull();
   });
 
-  it("uses icon-labelled history actions and reports keyboard slider changes", () => {
+  it("keeps visible history actions removed and reports slider changes", () => {
     const session = createGuidedBrushViewSession(
       appendGuidedBrushStroke(createGuidedBrushSession(source, matte), {
         id: "stroke",
@@ -75,18 +75,15 @@ describe("GuidedBrushControls", () => {
       status: "dirty",
       canApply: true,
     });
-    const slider = screen.getByRole("slider", { name: /guided brush size/i });
+    const slider = screen.getByRole("slider", { name: /brush size/i });
     fireEvent.input(slider, { target: { value: "20" } });
     expect(callbacks.onBrushRadiusChange).toHaveBeenCalledWith(20);
     expect(callbacks.onBrushSizeInteraction).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo marking" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear markings" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    expect(callbacks.onUndo).toHaveBeenCalledTimes(1);
-    expect(callbacks.onClear).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Undo marking" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear markings" })).toBeNull();
     expect(callbacks.onApply).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Undo marking" }).textContent).toBe("");
   });
 
   it("keeps the green intent requirement for a base-less draft", () => {

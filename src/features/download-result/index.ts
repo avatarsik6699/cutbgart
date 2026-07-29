@@ -1,5 +1,4 @@
 export { DownloadResultButton } from "./ui/DownloadResultButton";
-export { DownloadAllButton } from "./ui/DownloadAllButton";
 export { DownloadSplitButton } from "./ui/DownloadSplitButton";
 export {
   availableExportSizes,

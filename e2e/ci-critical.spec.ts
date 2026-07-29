@@ -19,6 +19,20 @@ async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
   const correctionPanel = page.getByTestId("tool-panel-slot");
   await correctionPanel.getByRole("button", { name: /^erase$/i }).click();
   await canvas.scrollIntoViewIfNeeded();
+  const readCenterAlpha = () =>
+    canvas.evaluate((element) => {
+      const surface = element as HTMLCanvasElement;
+      return surface
+        .getContext("2d")
+        ?.getImageData(
+          Math.floor(surface.width / 2),
+          Math.floor(surface.height / 2),
+          1,
+          1,
+        ).data[3];
+    });
+  const originalAlpha = await readCenterAlpha();
+  if (originalAlpha === undefined) throw new Error("Mask canvas has no alpha channel");
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("Mask correction canvas has no bounds");
   const point = {
@@ -45,29 +59,16 @@ async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
     button: 0,
     buttons: 0,
   });
-  await expect
-    .poll(() =>
-      canvas.evaluate((element) => {
-        const surface = element as HTMLCanvasElement;
-        return surface
-          .getContext("2d")
-          ?.getImageData(
-            Math.floor(surface.width / 2),
-            Math.floor(surface.height / 2),
-            1,
-            1,
-          ).data[3];
-      }),
-    )
-    .toBeLessThan(255);
+  await expect.poll(readCenterAlpha).toBeLessThan(originalAlpha);
 
-  const undo = correctionPanel.getByRole("button", { name: /^undo$/i });
-  const redo = correctionPanel.getByRole("button", { name: /^redo$/i });
-  await expect(undo).toBeEnabled();
-  await undo.click();
-  await expect(redo).toBeEnabled();
-  await redo.click();
-  await correctionPanel.getByRole("button", { name: /^apply$/i }).click();
+  const apply = correctionPanel.getByRole("button", { name: /^apply$/i });
+  await expect(apply).toBeEnabled();
+  await expect(correctionPanel.getByRole("button", { name: /^undo$/i })).toHaveCount(0);
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(readCenterAlpha).toBe(originalAlpha);
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect.poll(readCenterAlpha).toBeLessThan(originalAlpha);
+  await apply.click();
   await expect(workspace).toHaveAttribute(
     "data-document-revision",
     String(revisionBefore + 1),
@@ -93,7 +94,7 @@ test("mocked Chromium critical path: single and batch edit, history, switch and 
   await makeCorrectionWithUndoRedo(page);
   await expectDownload(page, /^download$/i, "result.png");
 
-  await page.getByRole("button", { name: /process another image/i }).click();
+  await page.getByRole("button", { name: /back to upload/i }).click();
   const batchUpload = page.getByLabel("Upload an image");
   await expect(batchUpload).toBeAttached();
   await batchUpload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE]);
@@ -109,5 +110,8 @@ test("mocked Chromium critical path: single and batch edit, history, switch and 
 
   await makeCorrectionWithUndoRedo(page);
   await expectDownload(page, /^download$/i, "result.png");
-  await expectDownload(page, /^download all$/i, "cutbg-results.zip");
+  await page.getByRole("button", { name: "Output options" }).click();
+  const archive = page.waitForEvent("download");
+  await page.getByRole("menuitem", { name: /download all.*zip/i }).click();
+  expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
 });

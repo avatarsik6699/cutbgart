@@ -1,5 +1,5 @@
 import { Popover } from "@base-ui/react/popover";
-import { CircleHelp, Gauge, X } from "lucide-react";
+import { Bolt, CircleHelp, Gauge, Sparkles, Target, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { m } from "@/paraglide/messages";
@@ -8,21 +8,25 @@ import type { AutomaticModelMode } from "../../../entities/processed-image";
 const PUBLIC_MODE_OPTIONS = [
   {
     id: "isnet-q8",
+    icon: Bolt,
     label: () => m.processingModeFast(),
     hint: () => m.processingModeFastHint(),
   },
   {
     id: "isnet-fp32",
+    icon: Target,
     label: () => m.processingModePrecise(),
     hint: () => m.processingModeOptimalHint(),
   },
   {
     id: "ben2-fp16",
+    icon: Sparkles,
     label: () => m.processingModeBen2(),
     hint: () => m.processingModeMaximumHint(),
   },
 ] as const satisfies ReadonlyArray<{
   id: AutomaticModelMode;
+  icon: typeof Bolt;
   label: () => string;
   hint: () => string;
 }>;
@@ -121,18 +125,20 @@ export function QualityModeToggle({
       </legend>
       <div className="grid gap-2 sm:grid-cols-3">
         {PUBLIC_MODE_OPTIONS.map((profile) => {
+          const Icon = profile.icon;
           const selected = qualityMode === profile.id;
           const recommended = profile.id === recommendedMode;
           return (
             <div
               key={profile.id}
-              className={`relative flex min-w-0 rounded-xl border transition-colors ${
+              className={`group relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] rounded-2xl border transition-[border-color,background-color,box-shadow,transform] duration-200 motion-reduce:transition-none ${
                 selected
-                  ? "border-primary bg-primary/5"
-                  : "bg-background hover:bg-muted/50"
+                  ? "border-primary/70 bg-primary/[0.055] shadow-[0_8px_30px_-22px_var(--primary)] sm:-translate-y-0.5"
+                  : "border-border/80 bg-background/55 hover:border-foreground/20 hover:bg-background/90"
               }`}
+              data-selected={selected || undefined}
             >
-              <label className="relative min-w-0 flex-1 cursor-pointer p-3 text-left text-sm">
+              <label className="relative min-w-0 cursor-pointer p-3.5 text-left text-sm">
                 <input
                   type="radio"
                   name="processing-mode"
@@ -140,27 +146,45 @@ export function QualityModeToggle({
                   checked={selected}
                   onChange={() => onQualityModeChange(profile.id)}
                   disabled={disabled}
-                  className="absolute inset-0 z-10 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
-                <span className="flex flex-wrap items-center gap-1.5 font-medium">
-                  {profile.label()}
-                  {profile.id === "ben2-fp16" && (
-                    <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-200">
-                      {m.beta()}
+                <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
+                  <span
+                    className={`grid size-8 shrink-0 place-items-center rounded-xl transition-colors ${
+                      selected
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground group-hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 font-medium">
+                      <span className="min-w-0 leading-5">{profile.label()}</span>
+                      <span
+                        className="flex shrink-0 items-center gap-1"
+                        data-testid={`processing-mode-badges-${profile.id}`}
+                      >
+                        {profile.id === "ben2-fp16" && (
+                          <span className="inline-flex rounded-full bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                            {m.beta()}
+                          </span>
+                        )}
+                        {recommended && (
+                          <span className="inline-flex rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-semibold text-primary">
+                            {m.processingModeRecommended()}
+                          </span>
+                        )}
+                      </span>
                     </span>
-                  )}
-                  {recommended && (
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-semibold text-primary">
-                      {m.processingModeRecommended()}
+                    <span className="mt-1 block text-xs leading-4 text-muted-foreground">
+                      {profile.hint()}
                     </span>
-                  )}
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {profile.hint()}
+                  </span>
                 </span>
               </label>
               {profile.id === "ben2-fp16" && (
-                <div className="self-start p-2">
+                <div className="self-start p-2.5 pl-0">
                   <MaximumQualityHelp />
                 </div>
               )}

@@ -11,11 +11,11 @@ export interface BrushSizeStagePreviewProps {
   coreRatio?: number;
 }
 
-const TONE_CLASSES = {
-  keep: "border-emerald-700 bg-emerald-500/15",
-  remove: "border-rose-700 bg-rose-500/15",
-  restore: "border-emerald-700 bg-emerald-500/15",
-  erase: "border-rose-700 bg-rose-500/15",
+const TONE_COLOR = {
+  keep: "#15803d",
+  remove: "#be123c",
+  restore: "#15803d",
+  erase: "#be123c",
 } as const;
 
 /**
@@ -50,6 +50,7 @@ export function BrushSizeStagePreview({
   }, [interactionKey, sourceDiameter, sourceWidth, targetRef]);
 
   const coreDiameter = Math.max(1, diameter * Math.min(Math.max(coreRatio, 0), 1));
+  const color = TONE_COLOR[tone];
 
   return (
     <div
@@ -59,22 +60,41 @@ export function BrushSizeStagePreview({
       data-visible={visible}
       data-viewport-diameter={diameter}
     >
-      <span
+      <svg
         data-testid="brush-size-stage-preview-ring"
-        className={`relative rounded-full border-2 border-dashed transition-[width,height,opacity] duration-150 motion-reduce:transition-none ${TONE_CLASSES[tone]}`}
+        viewBox="0 0 100 100"
+        className="relative overflow-visible transition-[width,height,opacity] duration-150 motion-reduce:transition-none"
         style={{
           width: diameter,
           height: diameter,
           opacity: visible ? 1 : 0,
         }}
       >
-        {coreRatio < 1 && (
-          <span
-            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border ${TONE_CLASSES[tone]}`}
-            style={{ width: coreDiameter, height: coreDiameter }}
+        <circle
+          cx="50"
+          cy="50"
+          r="49"
+          fill={color}
+          fillOpacity="0.08"
+          stroke={color}
+          strokeWidth="1"
+          strokeDasharray="3 2"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {coreRatio < 1 && diameter > 0 && (
+          <circle
+            cx="50"
+            cy="50"
+            r={(coreDiameter / diameter) * 50}
+            fill={color}
+            fillOpacity="0.36"
+            stroke={color}
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
           />
         )}
-      </span>
+      </svg>
     </div>
   );
 }
