@@ -224,6 +224,46 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   exercised by this harness and remain untested — named here so a future pass doesn't have to
   rediscover the gap.
 
+### F-16 — T3 deepened with `knip` (dead-code/unused-export scan): one real candidate, rest is noise
+
+- **Coverage**: ran `npx knip` (ad hoc, not added to `package.json` — matches `I1`'s "do not add a
+  package merely to automate one inspection" rule) across the whole repo. It reported 6 "unused
+  files," 2 "unused dependencies," and ~234 "unused exports"/"unused exported types."
+- **Verified false positives** (spot-checked every category, not just a sample of the biggest one):
+  - All 6 "unused files" (`public/sw.js`, `scripts/operations/exercise-capacity.mjs`,
+    `scripts/operations/validate-alerts.mjs`, `scripts/release/smoke.mjs`, `steiger.config.ts`,
+    `tests/release/server.mjs`) are real, invoked call sites — `knip` only traces JS `import`
+    graphs, so it can't see `navigator.serviceWorker.register("/sw.js")`, `docs/STACK.md`-documented
+    standalone `node scripts/...` invocations, `scripts/release/deploy.sh`/`common.sh`'s
+    `node /app/release/smoke.mjs`, or `tests/release/Dockerfile`'s reference.
+  - `@feature-sliced/steiger-plugin` ("unused devDependency") — false positive; `steiger.config.ts`
+    imports it directly (`import fsd from "@feature-sliced/steiger-plugin"`), `knip`'s default
+    config apparently doesn't scan that config file for dependency usage.
+  - The ~234 "unused exports"/"unused exported types" are overwhelmingly FSD public-API barrel
+    (`index.ts`) re-exports and TanStack Router file-based-route `Route` exports — both are
+    intentional-by-convention (`docs/FRONTEND_CONVENTIONS.md` §3: "index.ts — public API — the only
+    import surface other layers may use"; `Route` is consumed by the router's codegen, not a normal
+    import) — `knip` has no FSD/TanStack-Router-specific config here to suppress this whole class.
+  - **Conclusion**: `knip`'s default config isn't a good fit for this project's architecture without
+    real configuration investment (ignore patterns for barrel exports, router codegen, shell/Docker-
+    invoked scripts) — that investment is itself a separate, scoped deliverable, not something to
+    improvise as a one-off scan.
+- **One real, unresolved candidate**: `onnxruntime-web` ("unused dependency") — genuinely never
+  `import`ed as a JS module; only referenced in string literals building a CDN path
+  (`${appEnv.modelCdnBaseUrl}/onnxruntime-web/${appEnv.onnxRuntimeWebVersion}/` across 3 worker
+  files). Checked `pnpm-lock.yaml`: `@huggingface/transformers` transitively pins a *different*
+  `onnxruntime-web` version (`1.26.0-dev.20260416-...`) than this project's direct
+  `^1.27.0`, and `src/shared/config/env.ts`'s `onnxRuntimeWebVersion: "1.27.0"` matches the direct
+  dependency's version exactly — strong evidence this is a deliberate version-pin anchor (keeping
+  the actually-fetched-from-CDN runtime version visible/auditable in `package.json` for Phase 22's
+  `pnpm audit`/license-review gate), not dead code.
+- **Decision**: `reject` for all of the above, including `onnxruntime-web` — removing a
+  security-reviewed pinned dependency on the strength of a static import-graph tool, without being
+  able to verify on real WebGPU/WASM hardware in this environment that nothing subtle breaks, is
+  exactly the kind of package-churn risk this phase's rules forbid taking casually. If this pin is
+  genuinely obsolete, that's a decision for whoever owns the Phase 22 security gate, with the
+  evidence above as a starting point — not a same-pass removal here.
+
 ### F-09 — Worker-lifecycle duplication: 7 sites, not 6 as `FRONTEND_CONVENTIONS.md` §9 currently says
 
 - **Symptom / evidence**: `grep -rl "new Worker(" src/features` finds **7** feature-owned hooks with
