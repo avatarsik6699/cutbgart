@@ -87,8 +87,8 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Download menu with output-size selection and an extensible client-only export contract; PNG is the only format shipped in this cycle (Phase 29) | Rich product-card composition (layers, object transforms, shadows, perspective, templates, text) — separate Studio product track after the focused background workflow is stable (§9) |
 | Design system formalization & redesign: an in-repo, iterative pass — no external design tool — that upgrades `shadcn/ui` to its current version, maximizes use of its stock components, formalizes the existing color palette and typography into documented Tailwind `@theme` tokens, adds `Skeleton`-based loading states, reworks the home-page layout (including relocating the floating "uploaded models storage" utility), and adds a subtle background grid pattern; implemented and hardens the single/selected-batch contract from Phases 25–29 in the same pass that removes superseded legacy controls. Explicitly allowed to propose bounded UX/IA deltas against §5.3 where the iteration finds a materially better flow, but never Studio-scope capability (layers/transforms/templates, §9) (Phase 30) | |
 | Batch-first feature parity: every editor capability introduced in Phases 25–29 works for a single upload and for the selected completed item from a multiple upload in the same phase; Phase 30 consolidates and stress-tests that shared contract (alongside the redesign) rather than adding delayed parity | |
-| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 31) | |
-| Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable (Phase 32) | |
+| Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable, including test-suite reliability/speed and a consistent empty/error/warning/loading state pattern for interactive components (Phase 31) | |
+| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 32) | |
 | Pre-legal product validation: manual WCAG 2.2 AA/assistive-technology audit, representative physical-device matrix, browser-support policy, usability sessions, bilingual editorial QA, visual/performance evidence, and a truthful accessibility statement (Phase 33); final release readiness remains conditional on Phase 34 | |
 
 ---
@@ -219,13 +219,13 @@ is a direct consequence of the "inference is client-side only, no accounts" inva
 
 localStorage:
   qualityMode: "fast" | "max"     # existing functional preference
-  helpState                       # Phase 31: versioned viewed/dismissed guidance preferences
+  helpState                       # Phase 32: versioned viewed/dismissed guidance preferences
   privacyChoices                 # Phase 34 only if required by the Phase-24 legal matrix
 
 In-memory session state (Phase 19):
   mattingRefinementMode: "balanced" | "maximum"  # never persisted; capability-aware initial value
 
-In-memory editor state (Phases 25–29, 31):
+In-memory editor state (Phases 25–29, 32):
   EditDocument                              # one per single image / BatchItem
   EditHistory                               # bounded committed operations, never persisted
   activeTool: "cutout" | "enhance" | "background" | null
@@ -251,7 +251,7 @@ The application must not expand the existing metadata/analytics footprint merely
 storage is anticipated. Any new server-side, recipient-bearing or non-essential metadata field,
 purpose, recipient, retention period, or storage location requires the Phase-24 inventory and
 legal-basis review plus the Phase-34 transparency/choice controls before collection is enabled. The
-single interim exception is Phase 31's explicitly bounded local-only functional `helpState`
+single interim exception is Phase 32's explicitly bounded local-only functional `helpState`
 contract: no identifier, timestamp, image/action data, server recipient or analytics linkage, with
 final inventory/notice review in Phase 34. The authoritative inventory must distinguish browser-
 local functional state, model caches, ordinary server/CDN logs, analytics payloads, consent
@@ -370,7 +370,7 @@ need or the product model changes.
 | `features/background-replacement` | `features` | Transparent/color/gradient/uploaded-image `BackgroundFill`; Phase 29 gives it a tool-local live draft whose Apply commits one document operation and whose Cancel restores the committed fill |
 | `entities/edit-document` | `entities` | (Phase 25) Browser-memory identity and immutable artifact references for one editable result: source/baseline, current subject matte and foreground, background, composite, processing provenance, and revision. Contains pure model contracts only; orchestration remains in features/widgets. |
 | `features/editor-history` | `features` | (Phase 25) Bounded commit/undo/redo ledger over `EditDocument` artifacts with explicit reachability and cleanup. Owns committed document history only; Cutout/Manual markings that have not been applied remain tool-local drafts. |
-| `features/guided-help` | `features` | (Phase 31) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
+| `features/guided-help` | `features` | (Phase 32) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
 | `features/privacy-choices` | `features` | (Phase 34, if required by the Phase-24 decision matrix) Inventory-driven privacy/storage choices, consent evidence and withdrawal; it must block non-essential integrations until the applicable choice exists and must not claim that all browser storage is a cookie |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
 | `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box; also `site-header`, `site-footer`, `site-shell` (Phase 12) — presentational sitewide chrome, no business logic |
@@ -809,7 +809,7 @@ Phase 30's design system stays within the existing performance budget: token, ty
 motion choices are evaluated for their CSS payload, font-loading, and animation cost before approval,
 and any new dependency (icon set, animation library) needs the same evidence bar as the rest of this
 document. Phase 30 re-measures TTI/LCP/INP (§1.2) after applying the redesign; a regression is
-release-blocking for Phase 30 itself, not deferred to Phase 32.
+release-blocking for Phase 30 itself, not deferred to Phase 31.
 
 Editor history is bounded by both entry count and estimated retained bytes. Full image artifacts
 remain outside changing React props/state and are referenced immutably; brush history continues to
@@ -817,7 +817,7 @@ use dirty patches/strokes. Reset, source replacement, batch-item deletion, histo
 unmount release every artifact no longer reachable from the current document or undo/redo stacks.
 Future layers do not relax the one-heavy-inference-stage-at-a-time rule.
 
-Phase 32 is an evidence-driven audit, not permission for a speculative rewrite or blanket
+Phase 31 is an evidence-driven audit, not permission for a speculative rewrite or blanket
 memoization. It establishes reproducible baselines for bundle/startup, React commits and
 interaction latency, long tasks, worker/main-thread utilization, heap/resource growth, and
 single/batch churn; profiles representative flows before editing; removes duplication and
@@ -825,6 +825,16 @@ unnecessary effects/state only where ownership becomes clearer; and repeats the 
 after each change. React development `StrictMode` lifecycle checks, Profiler traces, browser
 performance/heap evidence, existing Web Vitals, and explicit Blob/Object URL/worker/tensor cleanup
 tests are complementary evidence. No performance claim is accepted from code inspection alone.
+
+Phase 31 also audits and, where approved, improves two adjacent concerns surfaced by architect
+review: test-suite reliability/speed (flaky or slow Vitest/Playwright runs, memory/concurrency
+issues, worker/parallelism configuration, and the CI-vs-local test-invocation flow) and interactive
+empty/error/warning/loading state handling (e.g. an invalid-format upload must show its error
+in-place inside the upload surface — no layout shift, no disappearing controls — and offer retry;
+multi-file upload must apply one predictable validation policy across the whole batch rather than
+silently dropping invalid files). Both follow the same evidence/characterization-test/architect-
+approval discipline as the rest of this phase — no rewrite of the test suite or a blanket new status
+component without a finding and sign-off.
 
 Phase 33 repeats the representative flows on the documented physical-device/browser sample and
 freezes an evidence-based support/degradation matrix. A P0/P1 freeze, crash, leak, task blocker or

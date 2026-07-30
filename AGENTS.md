@@ -41,6 +41,10 @@ Before writing code, running commands, or reasoning about project layout, read
 [`docs/STACK.md`](docs/STACK.md). It is the source of truth for concrete technologies, setup
 commands, test tooling, and per-module style guides.
 
+Before writing or reviewing frontend code (components, hooks, routing, storage, env access), also
+read [`docs/FRONTEND_CONVENTIONS.md`](docs/FRONTEND_CONVENTIONS.md) — the hard-requirement style
+rule set for React/TypeScript code in this repo.
+
 If a stack convention is missing from `STACK.md`, do not invent it. Ask the user, then update
 `STACK.md` so the answer is durable.
 

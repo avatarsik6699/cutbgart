@@ -49,8 +49,8 @@
 | PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
 | PHASE_30 | ✅ done | v0.30.0 | ⬜ | 🤖 agent | Design System & Redesign — T19–T21 deferred by architect decision 2026-07-30; `/phase-gate 30` not run |
-| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Guided Help & Onboarding |
-| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
 | PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
 | PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
 
@@ -950,6 +950,92 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-30 — PHASE_30 gate waived; PHASE_31 cleared to start
+
+**Type**: decision
+**Author**: architect (via AI)
+**Triggered by**: request to switch to `feat/phase-31` and begin `/impl-assist 31`, while
+`/phase-gate 30` (PHASE_31's formal dependency) had never been run
+
+### Changes / Decision
+- Architect explicitly waived a formal `/phase-gate 30` run. PHASE_30 is treated as sufficiently
+  closed (already `✅ done` with T19–T21 deferred by a prior architect decision) to unblock
+  PHASE_31 without re-running the full gate.
+- No retroactive gate run is planned; if Phase-30-owned regressions surface during PHASE_31's own
+  baseline/regression work (`T1`/`F6`), they are handled as PHASE_31 findings, not by returning to
+  reopen PHASE_30.
+
+### Affected Phases / Consequences
+- PHASE_31 — no longer blocked; `/impl-assist 31` may begin on `feat/phase-31`.
+- PHASE_30 — Phase Status row's "`/phase-gate 30` not run" caveat stands as a permanent historical
+  note, not an open blocker.
+
+## 2026-07-30 — Phase 31 scope extended: test-suite reliability and state-handling consistency
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect proposal — current unit/e2e/Playwright runs are unstable (memory,
+concurrency issues) and worth a deep speed/determinism pass now, since the coming refactor will
+touch most of the test suite anyway; and interactive components handle empty/error/warning/loading
+states inconsistently, with two concrete reported defects (invalid-format single upload hides the
+upload surface and relocates the error below the fold with layout shift; multi-file upload with one
+invalid file silently drops it instead of applying one predictable policy to the batch)
+
+### Changes / Decision
+- `docs/SPEC.md` §8 roadmap row for Phase 31 and its §7.1 elaboration now name test-suite
+  reliability/speed and empty/error/warning/loading state consistency as explicit audit dimensions,
+  governed by the same evidence/characterization-test/architect-approval discipline as the rest of
+  the phase — not a rewrite mandate.
+- `docs/PHASE_31.md` gains `T7` (test-suite reliability/speed inventory), `T8` (empty/error/warning/
+  loading state inventory, anchored on the two reported defects but scoped to all interactive
+  components), `F7` (fix approved state-handling findings: in-place non-shifting status UI, one
+  predictable multi-file validation policy), and `I2` (apply approved test-pipeline config/flake
+  fixes). `T6`'s findings-ledger dependency now includes `T7`/`T8`; `I1` now also depends on `I2`.
+- No code changed. These are still pending findings to be produced and approved during Phase 31
+  execution, not implemented fixes.
+
+### Affected Phases / Consequences
+- PHASE_31 — scope extended as above; still blocked on PHASE_30's gate passing before execution
+  starts.
+- No other phase affected.
+
+---
+
+## 2026-07-30 — Phase 31/32 swapped: audit-and-refactor now precedes guided help
+
+**Type**: spec-change
+**Author**: AI (spec-sync)
+**Triggered by**: architect requested an architecture-pattern comparison against
+`patient_tracker`'s frontend after Phase 30 closed, then decided the whole-project audit and
+refactor should run immediately rather than waiting behind Guided Help & Onboarding
+
+### Changes / Decision
+- `docs/PHASE_31.md` and `docs/PHASE_32.md` swap content: PHASE_31 is now "Whole-Project Audit &
+  Refactor" (`Depends on: PHASE_30 gate passing`); PHASE_32 is now "Guided Help & Onboarding"
+  (`Depends on: PHASE_31 gate passing`). File names/tags (`v0.31.0`/`v0.32.0`) are unchanged; only
+  the scope/title/dependency content moved. Neither phase had started, so no in-progress work or
+  gate history was affected.
+- `docs/SPEC.md` §8 roadmap table and every cross-reference (`helpState` comment, in-memory editor
+  state list, `features/guided-help` layer table row, §7.1 performance-budget references) updated
+  so "Phase 31" consistently means the audit and "Phase 32" consistently means guided help.
+- `docs/STATE.md` § Phase Status table titles swapped to match.
+- Rationale for the reorder: an architecture/duplication/hook-decomposition audit (raw-tag usage in
+  `shared/ui`-adjacent controls, god-hooks in `widgets/tool-workspace`, duplicated worker-lifecycle
+  and canvas-coordinate logic across features) is lower-risk and more valuable to run directly
+  against the freshly redesigned (Phase 30) surface than to wait behind a new feature slice that
+  would add more surface area to audit later.
+
+### Affected Phases / Consequences
+- PHASE_31 — no longer blocked on Guided Help; can start once `/phase-gate 30` is run (currently
+  outstanding — Phase 30 closed with `/phase-gate 30` not run per its Notes).
+- PHASE_32 (Guided Help) — now depends on PHASE_31's gate instead of running first; its scope is
+  otherwise unchanged and may build on any `shared/ui` primitives or hook decomposition PHASE_31
+  lands.
+- PHASE_33, PHASE_34 — unaffected; they already depend on the phase immediately before them by
+  number, not by name, and their own file content was not touched.
+
+---
 
 ## 2026-07-29 — Phase-30 persistent-preview and header-utility polish approved
 

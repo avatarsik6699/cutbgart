@@ -222,6 +222,9 @@ None — no backend test suite (no server-side API beyond SSR shells, SPEC.md §
 
 ### Frontend
 
+See [`docs/FRONTEND_CONVENTIONS.md`](FRONTEND_CONVENTIONS.md) for component/hook/module style rules
+(naming, props, routing/storage/env wrappers, worker lifecycle) — this section covers only tooling.
+
 ```bash
 pnpm tsc --noEmit          # type-check, strict mode
 pnpm vitest run            # unit + integration (Testing Library for hooks)
