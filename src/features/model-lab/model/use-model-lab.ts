@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { usePendingRequestWorker } from "@/shared/lib/use-pending-request-worker";
 import type { InferencePath, SourceImage } from "../../../entities/processed-image";
 import { createBenchmarkExport, downloadBenchmarkExport } from "./benchmark-export";
 import { EVALUATION_MODELS } from "./model-registry";
@@ -22,10 +23,6 @@ type PendingOutcome =
   | { type: "result"; response: Extract<ModelLabWorkerResponse, { type: "result" }> }
   | { type: "error"; response: Extract<ModelLabWorkerResponse, { type: "error" }> }
   | { type: "cancelled" };
-
-interface PendingRequest {
-  resolve: (outcome: PendingOutcome) => void;
-}
 
 const DEFAULT_MODEL_IDS = EVALUATION_MODELS.map(({ id }) => id);
 
@@ -85,37 +82,21 @@ async function sourceFromFile(file: File): Promise<SourceImage> {
 export function useModelLab() {
   const [state, setState] = useState<ModelLabState>(initialState);
   const [capabilities, setCapabilities] = useState<ModelLabCapabilities | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-  const pendingRef = useRef(new Map<string, PendingRequest>());
   const objectUrlsRef = useRef(new Set<string>());
   const runTokenRef = useRef(0);
-  const requestCounterRef = useRef(0);
 
   const revokeObjectUrls = useCallback(() => {
     for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     objectUrlsRef.current.clear();
   }, []);
 
-  const stopWorker = useCallback(() => {
-    workerRef.current?.terminate();
-    workerRef.current = null;
-    for (const pending of pendingRef.current.values()) {
-      pending.resolve({ type: "cancelled" });
-    }
-    pendingRef.current.clear();
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void collectCapabilities().then((value) => {
-      if (active) setCapabilities(value);
-    });
-    return () => {
-      active = false;
-      stopWorker();
-      revokeObjectUrls();
-    };
-  }, [revokeObjectUrls, stopWorker]);
+  // `resolvePendingRef` breaks the circularity between the message handler
+  // (which resolves pending requests) and the worker helper it comes from
+  // (which needs the message handler to construct). Assigned synchronously
+  // below, always populated before any worker message can actually arrive.
+  const resolvePendingRef = useRef<
+    (requestId: string, outcome: PendingOutcome) => boolean
+  >(() => false);
 
   const handleWorkerMessage = useCallback((message: ModelLabWorkerResponse) => {
     if (message.type === "progress") {
@@ -130,37 +111,43 @@ export function useModelLab() {
       }));
       return;
     }
-    const pending = pendingRef.current.get(message.requestId);
-    if (!pending) return;
-    pendingRef.current.delete(message.requestId);
-    if (message.type === "result") {
-      pending.resolve({ type: "result", response: message });
-    } else {
-      pending.resolve({ type: "error", response: message });
-    }
+    resolvePendingRef.current(
+      message.requestId,
+      message.type === "result"
+        ? { type: "result", response: message }
+        : { type: "error", response: message },
+    );
   }, []);
 
-  const getWorker = useCallback(() => {
-    let worker = workerRef.current;
-    if (!worker) {
-      worker = new Worker(new URL("../worker/model-lab.worker.ts", import.meta.url), {
-        type: "module",
-      });
-      worker.addEventListener(
-        "message",
-        (event: MessageEvent<ModelLabWorkerResponse>) => {
-          handleWorkerMessage(event.data);
-        },
-      );
-      workerRef.current = worker;
-    }
-    return worker;
-  }, [handleWorkerMessage]);
+  const worker = usePendingRequestWorker<ModelLabWorkerResponse, PendingOutcome>(
+    useCallback(
+      () =>
+        new Worker(new URL("../worker/model-lab.worker.ts", import.meta.url), {
+          type: "module",
+        }),
+      [],
+    ),
+    handleWorkerMessage,
+    useCallback(() => ({ type: "cancelled" }) as const, []),
+  );
+  resolvePendingRef.current = worker.resolvePending;
+
+  useEffect(() => {
+    let active = true;
+    void collectCapabilities().then((value) => {
+      if (active) setCapabilities(value);
+    });
+    return () => {
+      active = false;
+      worker.stopWorker();
+      revokeObjectUrls();
+    };
+  }, [revokeObjectUrls, worker]);
 
   const selectFiles = useCallback(
     async (files: File[]) => {
       runTokenRef.current += 1;
-      stopWorker();
+      worker.stopWorker();
       revokeObjectUrls();
       try {
         const images: LabImage[] = [];
@@ -190,7 +177,7 @@ export function useModelLab() {
         }));
       }
     },
-    [revokeObjectUrls, stopWorker],
+    [revokeObjectUrls, worker],
   );
 
   const setModelSelected = useCallback(
@@ -211,10 +198,10 @@ export function useModelLab() {
       modelId: EvaluationModelId,
       inferencePath: InferencePath,
     ): Promise<PendingOutcome> => {
-      const requestId = `lab-${String(++requestCounterRef.current)}`;
+      const requestId = worker.nextRequestId("lab");
       return new Promise((resolve) => {
-        pendingRef.current.set(requestId, { resolve });
-        getWorker().postMessage({
+        worker.registerPending(requestId, resolve);
+        worker.getWorker().postMessage({
           type: "process",
           requestId,
           modelId,
@@ -224,7 +211,7 @@ export function useModelLab() {
         } satisfies ModelLabWorkerRequest);
       });
     },
-    [getWorker],
+    [worker],
   );
 
   const runComparison = useCallback(async () => {
@@ -311,16 +298,16 @@ export function useModelLab() {
 
   const cancel = useCallback(() => {
     runTokenRef.current += 1;
-    stopWorker();
+    worker.stopWorker();
     setState((current) => ({ ...current, status: "cancelled", current: undefined }));
-  }, [stopWorker]);
+  }, [worker]);
 
   const reset = useCallback(() => {
     runTokenRef.current += 1;
-    stopWorker();
+    worker.stopWorker();
     revokeObjectUrls();
     setState(initialState());
-  }, [revokeObjectUrls, stopWorker]);
+  }, [revokeObjectUrls, worker]);
 
   const setPreference = useCallback((preference: BenchmarkPreference) => {
     setState((current) => ({

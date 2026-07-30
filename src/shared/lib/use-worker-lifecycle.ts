@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 interface WorkerLifecycleMessage {
   type: string;
@@ -102,13 +102,16 @@ export function useWorkerLifecycle<TMessage extends WorkerLifecycleMessage>(
     [terminate],
   );
 
-  return {
-    getWorker,
-    nextRequestId,
-    activeRequestRef,
-    setActiveRequest,
-    cancelActive,
-    release,
-    terminate,
-  };
+  return useMemo(
+    () => ({
+      getWorker,
+      nextRequestId,
+      activeRequestRef,
+      setActiveRequest,
+      cancelActive,
+      release,
+      terminate,
+    }),
+    [getWorker, nextRequestId, setActiveRequest, cancelActive, release, terminate],
+  );
 }

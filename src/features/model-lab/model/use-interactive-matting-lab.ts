@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { usePendingRequestWorker } from "@/shared/lib/use-pending-request-worker";
 import type { InferencePath } from "../../../entities/processed-image";
 import {
   createInteractiveBenchmarkExport,
@@ -74,18 +75,44 @@ function initialState(): InteractiveState {
 export function useInteractiveMattingLab() {
   const [state, setState] = useState<InteractiveState>(initialState);
   const [capabilities, setCapabilities] = useState<ModelLabCapabilities | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-  const pendingRef = useRef(new Map<string, (response: InteractiveOutcome) => void>());
   const runTokenRef = useRef(0);
-  const requestCounterRef = useRef(0);
   const objectUrlsRef = useRef(new Set<string>());
 
-  const stopWorker = useCallback(() => {
-    workerRef.current?.terminate();
-    workerRef.current = null;
-    for (const resolve of pendingRef.current.values()) resolve({ type: "cancelled" });
-    pendingRef.current.clear();
+  const resolvePendingRef = useRef<
+    (requestId: string, outcome: InteractiveOutcome) => boolean
+  >(() => false);
+
+  const handleMessage = useCallback((message: ModelLabAnyWorkerResponse) => {
+    if (message.type === "interactive-progress") {
+      setState((current) => ({
+        ...current,
+        current: {
+          caseOrdinal: current.current?.caseOrdinal ?? 0,
+          modelId: message.modelId,
+          stage: message.stage,
+          percent: message.percent,
+        },
+      }));
+      return;
+    }
+    if (message.type !== "interactive-result" && message.type !== "interactive-error") {
+      return;
+    }
+    resolvePendingRef.current(message.requestId, message);
   }, []);
+
+  const worker = usePendingRequestWorker<ModelLabAnyWorkerResponse, InteractiveOutcome>(
+    useCallback(
+      () =>
+        new Worker(new URL("../worker/model-lab.worker.ts", import.meta.url), {
+          type: "module",
+        }),
+      [],
+    ),
+    handleMessage,
+    useCallback(() => ({ type: "cancelled" }) as const, []),
+  );
+  resolvePendingRef.current = worker.resolvePending;
 
   const revokeCases = useCallback((cases: MattingCorpusCase[]) => {
     for (const item of cases) {
@@ -104,60 +131,21 @@ export function useInteractiveMattingLab() {
   useEffect(() => {
     const urls = objectUrlsRef.current;
     return () => {
-      stopWorker();
+      worker.stopWorker();
       for (const url of urls) URL.revokeObjectURL(url);
       urls.clear();
     };
-  }, [stopWorker]);
-
-  const handleMessage = useCallback((message: ModelLabAnyWorkerResponse) => {
-    if (message.type === "interactive-progress") {
-      setState((current) => ({
-        ...current,
-        current: {
-          caseOrdinal: current.current?.caseOrdinal ?? 0,
-          modelId: message.modelId,
-          stage: message.stage,
-          percent: message.percent,
-        },
-      }));
-      return;
-    }
-    if (message.type !== "interactive-result" && message.type !== "interactive-error") {
-      return;
-    }
-    const resolve = pendingRef.current.get(message.requestId);
-    if (!resolve) return;
-    pendingRef.current.delete(message.requestId);
-    resolve(message);
-  }, []);
-
-  const getWorker = useCallback(() => {
-    let worker = workerRef.current;
-    if (!worker) {
-      worker = new Worker(new URL("../worker/model-lab.worker.ts", import.meta.url), {
-        type: "module",
-      });
-      worker.addEventListener(
-        "message",
-        (event: MessageEvent<ModelLabAnyWorkerResponse>) => {
-          handleMessage(event.data);
-        },
-      );
-      workerRef.current = worker;
-    }
-    return worker;
-  }, [handleMessage]);
+  }, [worker]);
 
   const setOptedIn = useCallback(
     (optedIn: boolean) => {
       if (!optedIn) {
         runTokenRef.current += 1;
-        stopWorker();
+        worker.stopWorker();
       }
       setState((current) => ({ ...current, optedIn }));
     },
-    [stopWorker],
+    [worker],
   );
 
   const loadSyntheticCorpus = useCallback(async () => {
@@ -202,10 +190,10 @@ export function useInteractiveMattingLab() {
       modelId: InteractiveEvaluationModelId,
       inferencePath: InferencePath,
     ) => {
-      const requestId = `matting-${String(++requestCounterRef.current)}`;
+      const requestId = worker.nextRequestId("matting");
       return new Promise<InteractiveOutcome>((resolve) => {
-        pendingRef.current.set(requestId, resolve);
-        getWorker().postMessage({
+        worker.registerPending(requestId, resolve);
+        worker.getWorker().postMessage({
           type: "process-interactive",
           requestId,
           modelId,
@@ -216,7 +204,7 @@ export function useInteractiveMattingLab() {
         } satisfies ModelLabWorkerRequest);
       });
     },
-    [getWorker],
+    [worker],
   );
 
   const run = useCallback(async () => {
@@ -297,18 +285,18 @@ export function useInteractiveMattingLab() {
 
   const cancel = useCallback(() => {
     runTokenRef.current += 1;
-    stopWorker();
+    worker.stopWorker();
     setState((current) => ({ ...current, status: "cancelled", current: undefined }));
-  }, [stopWorker]);
+  }, [worker]);
 
   const reset = useCallback(() => {
     runTokenRef.current += 1;
-    stopWorker();
+    worker.stopWorker();
     revokeCases(state.cases);
     revokePreviews(state.previews);
     setState(initialState());
     setCapabilities(null);
-  }, [revokeCases, revokePreviews, state.cases, state.previews, stopWorker]);
+  }, [revokeCases, revokePreviews, state.cases, state.previews, worker]);
 
   const setDecision = useCallback((decision: InteractiveEvaluationModelId | "none") => {
     setState((current) => ({ ...current, decision }));

@@ -23,11 +23,22 @@ Findings and decisions: `PHASE_31_FINDINGS.md`.
      changing which download control is visible, `F7`'s own Reset→Try-again change).
 3. **Doc corrections**: `docs/FRONTEND_CONVENTIONS.md` §9 worker-lifecycle count (6 → 7 hooks,
    `F-09`).
-4. **`F2` — worker-lifecycle deduplication** (`F-09`, committed separately after the above):
+4. **`F2` — worker-lifecycle deduplication, part 1** (`F-09`, committed separately after the above):
    - New `src/shared/lib/use-worker-lifecycle.ts` (`useWorkerLifecycle`) + its own test suite.
    - `src/features/refine-foreground/model/use-foreground-refinement.ts` and
      `src/features/refine-matte/model/use-matte-refinement.ts` migrated to it; public API and all
-     pre-existing tests unchanged. 5 other worker-owning hooks remain unmigrated (deliberately).
+     pre-existing tests unchanged.
+5. **`F2` — worker-lifecycle deduplication, part 2** (`F-09`, same session):
+   - New `src/shared/lib/use-pending-request-worker.ts` (`usePendingRequestWorker`) — a second,
+     differently-shaped shared hook for the request-id/`Map`/`stopWorker` pattern shared by
+     `use-model-lab.ts` and `use-interactive-matting-lab.ts` (not the cancel/dispose protocol
+     `useWorkerLifecycle` covers).
+   - Both hooks migrated; public API and pre-existing tests unchanged.
+   - Self-caught bug fixed before committing (`F-14`): both new shared hooks initially returned an
+     unmemoized object every render, silently defeating downstream `useCallback` memoization —
+     wrapped both in `useMemo`.
+   - 3 hooks remain unmigrated: `useBackgroundRemoval.ts`, `use-object-selection.ts` (1026 lines, 10
+     `.terminate()` sites — the highest-risk one), `use-batch-processing.ts`.
 
 ## Before / after (`F2` extraction)
 
@@ -36,7 +47,10 @@ Findings and decisions: `PHASE_31_FINDINGS.md`.
 | `use-foreground-refinement.test.ts` | 4/4 pass | 4/4 pass (unmodified) |
 | `use-matte-refinement.test.ts` | 5/5 pass | 5/5 pass (unmodified) |
 | `use-worker-lifecycle.test.ts` | n/a (new) | 7/7 pass |
+| `use-model-lab.test.ts` | 2/2 pass | 2/2 pass (unmodified) |
+| `use-interactive-matting-lab.test.ts` | 1/1 pass | 1/1 pass (unmodified) |
 | `e2e/foreground-refinement.spec.ts` + `e2e/matte-refinement.spec.ts` (4 browsers) | not rerun | 36/36 pass |
+| `e2e/model-lab.spec.ts` (4 browsers) | not rerun | 4/4 pass (3/4 gated behind `VITE_ENABLE_MODEL_LAB` per browser, as before) |
 | `pnpm vitest run` | 368/368 | 375/375 |
 
 ## Before / after

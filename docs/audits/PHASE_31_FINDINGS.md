@@ -232,12 +232,24 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   evidence of behavior preservation — the public API (`{state, start, cancel, prepareNext,
   finishApplying, release, reset}`) is unchanged. `tsc`, `vitest` (375/375), `steiger`, and
   `e2e/foreground-refinement.spec.ts` + `e2e/matte-refinement.spec.ts` (all 4 browsers) all pass.
-  **Remaining `defer`**: the other 5 hooks (`useBackgroundRemoval.ts`, `use-model-lab.ts`,
-  `use-object-selection.ts`, `use-batch-processing.ts`, `use-interactive-matting-lab.ts`) were
-  deliberately left unmigrated this pass — `use-object-selection.ts` in particular (1026 lines, 10
-  `.terminate()` sites, worker-swap/retry semantics) is a materially different, higher-risk shape
-  that deserves its own dedicated pass with its own characterization-test read, not a rushed
-  same-session migration riding on the confidence gained from the two simple, near-identical hooks.
+  **Second extraction, same session**: `use-model-lab.ts` and `use-interactive-matting-lab.ts` (the
+  Phase-15/18 evaluation-lab pair) turned out to share a *different* but equally byte-for-byte
+  identical pattern from each other — a request-id-keyed pending-promise `Map` plus a `stopWorker`
+  that terminates and resolves every outstanding request as `{type:"cancelled"}`, with no
+  cancel/dispose messages sent to the worker at all (materially different protocol from the
+  refine-* pair, confirmed by reading `useModelLab` in full before assuming it fit
+  `useWorkerLifecycle` — it doesn't). Extracted a second shared hook,
+  `src/shared/lib/use-pending-request-worker.ts` (`usePendingRequestWorker`), and migrated both.
+  Both hooks' pre-existing tests (2 + 1) pass unmodified; `e2e/model-lab.spec.ts` (all 4 browsers)
+  passes. **Remaining `defer`**: `useBackgroundRemoval.ts`, `use-object-selection.ts`, and
+  `use-batch-processing.ts` — the three production-critical hooks — remain unmigrated.
+  `use-object-selection.ts` in particular (1026 lines, 10 `.terminate()` sites, worker-swap/retry
+  semantics) is a materially different, higher-risk shape than either pattern extracted this
+  session and deserves its own dedicated pass with its own characterization-test read, not a rushed
+  same-session extrapolation. `useBackgroundRemoval.ts`/`use-batch-processing.ts` weren't read
+  closely enough this pass to know which (if either) shared shape they'd actually fit — forcing them
+  into one of the two hooks above without first confirming byte-for-byte equivalence, the way both
+  completed extractions were verified, would repeat exactly the mistake `F-10` corrected.
 
 ### F-10 — Duplicated canvas pointer-to-pixel scale math (2 real, independent implementations)
 
@@ -262,6 +274,26 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   small, purpose-specific ones — exactly what this phase's no-speculative-abstraction rule warns
   against. No extraction made; `DisplayRect`-shaped rect params could be shared trivially but that's
   not meaningful deduplication on its own.
+
+### F-14 — Self-caught bug while building `F2`'s two shared hooks: unmemoized return object
+
+- **Symptom / evidence**: both `useWorkerLifecycle` and `usePendingRequestWorker`'s first drafts
+  returned a plain object literal (`{ getWorker, nextRequestId, ... }`) built fresh every render.
+  Every individual function inside was itself `useCallback`-memoized, but the *wrapping object* was
+  not — so every `useCallback(..., [worker])` in a migrated feature hook (`start`, `cancel`,
+  `reset`, the unmount effect) would have recreated its own callback on every render regardless of
+  whether anything the hook depends on actually changed, silently defeating the memoization this
+  extraction was supposed to preserve. Caught before committing by re-reading the two hooks against
+  `T4`'s "unstable context/props" concern, not by a failing test — none of the existing tests assert
+  referential stability across re-renders.
+- **Fix applied**: wrapped both hooks' return values in `useMemo`, keyed on their member functions.
+- **Note**: `useForegroundRefinement`/`useMatteRefinement`'s `workerFactory` parameter still has an
+  unstable *default* value (`() => new Worker(...)` re-evaluates every render when the caller omits
+  the argument, which `use-tool-workspace-controller.ts` always does) — this means `getWorker`, and
+  therefore the whole memoized `worker` object, was already unstable across renders **before this
+  extraction**, unchanged by it. Not a regression introduced this pass, but worth a future `T4`
+  finding: passing a `useCallback`-memoized factory (or defaulting via a module-level constant
+  function instead of a per-call inline arrow) would fix it for both migrated hooks at once.
 
 ### F-11 — React correctness spot-check: no new defects found in the two hottest files this session touched
 
