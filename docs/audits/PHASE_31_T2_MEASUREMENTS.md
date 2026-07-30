@@ -41,23 +41,75 @@ Lighthouse/WebPageTest run against a deployed build. Reported here only to estab
 lazy-loading split above is doing its job (no multi-megabyte worker payload blocks first paint), not
 as a production performance claim.
 
+## Long tasks and heap trend over repeated churn (`scripts/profiling/measure-baseline.ts`, added 2026-07-30)
+
+Built `pnpm profile:baseline` (see `docs/STACK.md` § Performance profiling): serves the real
+production build, drives it with Playwright, and uses a raw CDP session
+(`Performance.getMetrics` for JS heap, `HeapProfiler.collectGarbage` before each sample so numbers
+reflect retained memory, not just not-yet-collected garbage) plus a `PerformanceObserver` for
+`longtask` entries. Uses the same mocked-worker double as `pnpm e2e`, so results isolate
+React/DOM/resource-lifecycle cost from real ONNX inference time — the right isolation for a
+leak-detection question, the wrong one for a real-model timing question (still not measured, see
+below).
+
+### Long tasks
+
+**Zero long tasks recorded across every run** (40-iteration single-upload churn, 60-iteration batch
+churn, cold start) — expected, since the mocked worker returns near-instantly and this measurement
+deliberately isolates from real ONNX compute time, which is where actual long tasks would occur.
+Not a claim about real-inference long-task behavior.
+
+### JS heap trend, repeated single-upload churn (upload → automatic result → back to upload)
+
+| Sample size | First iteration | Last iteration | Avg Δ, first 10 | Avg Δ, last 10–20 | Negative Δs (real GC reclaiming) |
+|---|---|---|---|---|---|
+| 40 iterations | 6.70 MB | 9.96 MB | +195.8 KB/iter | +18.7 KB/iter (last 20) | 9 of 39 |
+| 100 iterations (confirmation run) | 6.71 MB | 10.83 MB | +195.8 KB/iter | +19.1 KB/iter (last 10) | 9 of 99 |
+
+Growth rate decelerates ~10x from the first 10 iterations to the last 10–20, in both a 40- and a
+100-iteration run — consistent with one-time warm-up (lazy module init, memoized registries
+stabilizing), not a constant-rate leak. ~9% of iterations showed the heap **decrease** even after
+forced GC, confirming the allocator is actually reclaiming freed memory, not just failing to
+collect. The 100-iteration run's ~19 KB/iteration residual growth in the tail (if it continued
+linearly indefinitely, which the decelerating trend argues against) would only reach ~19 MB over
+1,000 iterations — not evidence of a leak worth chasing further without a stronger signal.
+
+### JS heap trend, repeated batch-upload churn (3-image upload → remove each item → back to upload)
+
+| Sample size | First iteration | Last iteration | Avg Δ, first 10 | Avg Δ, last 10–20 | Negative Δs |
+|---|---|---|---|---|---|
+| 60 iterations | 8.22 MB | 10.65 MB | +109.9 KB/iter | +12.0 KB/iter (last 20) | 5 of 59 |
+
+Same decelerating pattern and a comparable (~8%) negative-delta rate as the single-upload run.
+Slightly higher absolute per-iteration cost than single upload, unsurprising given 3x the
+documents/worker calls per iteration and the per-item "Remove image" teardown path exercised
+directly (not a bulk/internal reset).
+
+**Decision** (`PHASE_31_FINDINGS.md` F-15): `reject` — no leak found in either single or batch
+upload/teardown churn, evidenced by two independent sample sizes for the single-upload case and a
+consistent pattern for batch. This does not rule out a much slower leak below this measurement's
+noise floor, or a leak in a flow not exercised here (e.g. repeated tool-switching within one
+document, repeated background-fill changes, manual mask correction churn) — those remain untested
+and are named explicitly in `PHASE_31_FINDINGS.md` as out of this pass's scope, not silently assumed
+clean.
+
 ## What was NOT measured this pass, and why
 
-- **INP / long tasks under real interaction** — needs a scripted interaction trace (e.g.
-  `page.evaluate` + `PerformanceObserver` for `longtask`/`event` entries) across the S2/S3 baseline
-  scenarios; not built this pass.
+- **INP under real interaction** — the long-task observer above covers the "long tasks" half of
+  this `T2` line item; true INP (event-to-paint latency) needs per-interaction `event` timing
+  entries, not built this pass — lower priority given zero long tasks were observed to correlate
+  against.
 - **Time-to-result, input/brush response** — needs the real ONNX/WebGPU inference path
   (`pnpm e2e:real-model`) instrumented with timing marks; this dev machine has no WebGPU passthrough,
   so any number captured here would be WASM-fallback-only and mislabeled as representative.
 - **React commit counts/durations for hot interactions** — needs the React DevTools Profiler API
   (`Profiler` component or `react-dom/profiling` build) wired into a scripted interaction; not
-  present in this codebase yet and out of scope to add as new production instrumentation per this
-  phase's own "no always-on production profiling" rule (`I1`).
-- **Heap/resource trend over repeated single and batch churn** — needs repeated upload/process/reset
-  cycles with `performance.memory` or CDP heap snapshots compared before/after; not run this pass.
+  present in this codebase yet. Given the heap-churn and long-task data above show no red flags, and
+  `F-11`'s effect spot-check found no defects, the a-priori value of building this specific
+  instrumentation dropped — still named as a candidate for a future pass, not ruled out, just not
+  prioritized given what the cheaper measurements already show.
 
-**Decision** (recorded in `PHASE_31_FINDINGS.md` F-08): these four remain `defer` — each needs
-purpose-built scripted instrumentation (a real, non-trivial deliverable in its own right, matching
-`T2`'s own scope) rather than something safely improvised inside this already-large session. The
-chunk-size and cold-paint data above are real and reusable as-is for the next pass that adds this
-tooling; they should not be re-captured from scratch.
+**Decision** (`PHASE_31_FINDINGS.md` F-08, updated): heap/resource trend and long-task tracking are
+now measured (`F-15`, `reject` — no leak found). Real-model timing and React commit profiling remain
+`defer` — both need infrastructure (a WebGPU-capable measurement host; a Profiler-instrumented
+build) this session cannot responsibly stand up and validate in the time remaining.

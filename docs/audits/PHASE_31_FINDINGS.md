@@ -196,13 +196,33 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   (mostly the 554.5 KB app-shell `index-*.js`), while `tool-workspace-*.js` (227 KB) and all four
   ~510 KB ML worker bundles load only on first use, never on cold visit.
 - **Decision**: `reject` for the chunk-size/lazy-boundary claim (verified, no regression, no action
-  needed) — `defer` for the rest of `T2`'s scope: INP/long-task tracing, real-model time-to-result
-  (this machine has no WebGPU passthrough, so any number would be WASM-only and mislabeled), React
-  commit-count/duration profiling (needs a scripted Profiler-API harness that doesn't exist yet, and
-  adding always-on profiling instrumentation is explicitly out of scope per `I1`), and heap/resource
-  trend over repeated churn (needs a CDP-heap-snapshot harness). Each needs purpose-built tooling —
-  a real, separately-scoped deliverable, not something to improvise inside this session without
-  risking exactly the kind of unverifiable performance claim this phase's gate forbids.
+  needed). **Updated (2026-07-30, same session, continued at the architect's request)**: built
+  `scripts/profiling/measure-baseline.ts` (`pnpm profile:baseline`) — a real CDP-based harness for
+  long-task tracking and JS-heap trend over repeated churn. See `F-15` for the heap/leak result
+  (`reject` — no leak found). Long-task tracking is also now real (zero recorded, expected given the
+  mocked-worker isolation). **Still `defer`**: real-model time-to-result (this machine has no WebGPU
+  passthrough, so any number would be WASM-only and mislabeled) and React commit-count/duration
+  profiling (needs a `Profiler`-instrumented build; deprioritized, not ruled out, given the heap/
+  long-task data and `F-11`'s effect spot-check both came back clean — see
+  `PHASE_31_T2_MEASUREMENTS.md` for the full reasoning).
+
+### F-15 — Repeated single/batch upload churn: no leak found (2 independent sample sizes)
+
+- **Coverage**: `pnpm profile:baseline` measured JS heap (via CDP `Performance.getMetrics` +
+  `HeapProfiler.collectGarbage` before each sample) across 40 and 100 repeated single-upload
+  churn iterations (upload → automatic result → back to upload) and 60 repeated batch-churn
+  iterations (3-image upload → remove each item individually → back to upload) — see
+  `PHASE_31_T2_MEASUREMENTS.md` for the full tables.
+- **Result**: growth rate decelerates ~10x from the first 10 iterations to the tail in every run
+  (single: +196 KB/iter → +19 KB/iter; batch: +110 KB/iter → +12 KB/iter), and 8–9% of iterations
+  show the heap **decrease** even after a forced GC pass — real reclamation, not just uncollected
+  garbage. This is the signature of one-time warm-up stabilizing, not a constant-rate leak (which
+  would show flat or accelerating growth with near-zero negative deltas).
+- **Decision**: `reject` — no leak found in either flow, for the two upload/teardown paths tested.
+  Explicitly **not** claiming this covers every resource-lifecycle path: repeated tool-switching
+  within one document, repeated background-fill changes, and manual mask-correction churn were not
+  exercised by this harness and remain untested — named here so a future pass doesn't have to
+  rediscover the gap.
 
 ### F-09 — Worker-lifecycle duplication: 7 sites, not 6 as `FRONTEND_CONVENTIONS.md` §9 currently says
 

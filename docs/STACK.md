@@ -251,6 +251,23 @@ Chromium. Write or extend the deterministic suite for every changed user-facing 
 inference, Chromium and one worker. Every other Playwright project remains host-only, and no
 Playwright suite runs in Docker.
 
+### Performance profiling (PHASE_31 T2)
+
+```bash
+pnpm profile:baseline      # builds production, then serves it and drives it with
+                            # Playwright + a raw CDP session (Performance.getMetrics,
+                            # PerformanceObserver longtask) for cold-start paint timing
+                            # and repeated single/batch upload-churn JS-heap trend
+```
+
+`scripts/profiling/measure-baseline.ts` — host-only, single-machine data points (never a universal
+device claim, SPEC.md §7.1). Uses the same mocked-worker double as `pnpm e2e`
+(`installMockInference`) so results reflect this project's own React/DOM/resource-lifecycle cost,
+not real ONNX inference time. Iteration counts are literal constants in the script (edit them
+directly for a longer/shorter run) — default is enough to see a growth-rate trend, not to make a
+final leak/no-leak call; bump to 100+ when investigating a specific suspected leak. See
+`docs/audits/PHASE_31_T2_MEASUREMENTS.md` for a captured baseline run and how to read the output.
+
 ---
 
 ## Project structure

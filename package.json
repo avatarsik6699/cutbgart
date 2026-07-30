@@ -34,6 +34,7 @@
     "release:test": "vitest run tests/release-operations.test.ts tests/operations.test.ts",
     "release:test:docker": "./scripts/release/disposable-test.sh",
     "sync-model-assets": "node scripts/sync-model-assets.ts",
+    "profile:baseline": "pnpm build && tsx scripts/profiling/measure-baseline.ts",
     "prepare": "husky"
   },
   "dependencies": {
