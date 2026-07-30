@@ -361,6 +361,33 @@ describe("MaskCorrectionCanvas", () => {
     expect(onZoomIn).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps window shortcuts working after an unrelated re-render, without re-attaching listeners every render (PHASE_31 T4)", async () => {
+    const onZoomIn = vi.fn();
+    const { rerender, props } = renderCanvas({ onZoomIn });
+    await waitUntilReady();
+
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+
+    // An unrelated prop change (brushRadius) re-renders the component but
+    // must not tear down and re-attach the window-level shortcut listeners.
+    rerender(<MaskCorrectionCanvas {...props} brushRadius={20} />);
+
+    expect(addSpy).not.toHaveBeenCalledWith("keydown", expect.anything(), true);
+    expect(removeSpy).not.toHaveBeenCalledWith("keydown", expect.anything(), true);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "+",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+  });
+
   it("supports editor keyboard shortcuts for zoom, reset, and arrow-key pan", async () => {
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();

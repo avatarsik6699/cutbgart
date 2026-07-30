@@ -356,6 +356,40 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   against. No extraction made; `DisplayRect`-shaped rect params could be shared trivially but that's
   not meaningful deduplication on its own.
 
+### F-17 — `MaskCorrectionCanvas.tsx`'s window-shortcut effect had no dependency array (`F3`, fixed)
+
+- **Symptom / evidence**: extended `T4`'s spot-check beyond the two files already checked (`F-11`)
+  to every effect-owning hook/component with 2+ `useEffect` call sites (`use-batch-processing.ts`,
+  `use-object-selection.ts`, `GuidedBrushCanvas.tsx`, `MaskCorrectionCanvas.tsx`). Found
+  `MaskCorrectionCanvas.tsx`'s keyboard/wheel-shortcut effect (was lines 547–581) had **no
+  dependency array at all** — unlike the near-identical effect in `GuidedBrushCanvas.tsx`, which
+  correctly scopes to `[active, session.source.height, session.source.width, surfaceRef,
+  viewportControls]`. Every render tore down and re-attached all four window/editor-level listeners
+  (`keydown`, `keyup`, `blur`, `wheel`), contradicting the effect's own comment ("Capture shortcuts
+  for the lifetime of the correction editor"). Not a leak (cleanup always paired correctly) but real
+  wasted churn on every unrelated re-render of the mask-correction canvas, and inconsistent with the
+  sibling component's proven-correct pattern.
+- **Owner layer**: `src/features/correct-mask/ui/MaskCorrectionCanvas.tsx`.
+- **Root cause detail**: the two handlers passed to `addEventListener`
+  (`handleKeyboardNavigation`, `handleWheel`) are plain component-scope functions redefined every
+  render (not memoized), so simply adding a dependency array listing them would not have changed
+  the re-run-every-render behavior — the real fix needed to break that coupling.
+- **Decision**: `fix` (implemented). Added `handleKeyboardNavigationRef`/`handleWheelRef`, kept
+  fresh via a small no-deps `useEffect` (runs after every render, cheap — same pattern as `F-14`'s
+  `onMessageRef` sync), and had the listener-attaching effect call through the refs with a real
+  `[interactionEnabled]` dependency array — matching `GuidedBrushCanvas.tsx`'s proven shape.
+  Everything the inline `releaseHandTool`/`handleKeyUp` closures touch (refs, `setSpacePanning`,
+  `stopPanning`) was checked and confirmed ref/setState-only — safe to keep capturing at
+  `interactionEnabled`-change time without a stale-closure risk.
+- **Characterization test**: `MaskCorrectionCanvas.test.tsx` — "keeps window shortcuts working after
+  an unrelated re-render, without re-attaching listeners every render" — asserts no
+  `addEventListener`/`removeEventListener("keydown", ..., true)` calls across an unrelated prop
+  (`brushRadius`) re-render, and that the shortcut still fires correctly afterward. Verified this
+  test fails against the pre-fix code (stashed the source change, reran — 1/25 failed with the
+  exact expected mismatch) and passes with the fix (25/25).
+- **Measurement**: `pnpm vitest run` (376/376), `tsc`, `steiger`, and `e2e/mask-correction.spec.ts`
+  (all 4 browsers) all pass.
+
 ### F-14 — Self-caught bug while building `F2`'s two shared hooks: unmemoized return object
 
 - **Symptom / evidence**: both `useWorkerLifecycle` and `usePendingRequestWorker`'s first drafts
@@ -385,10 +419,16 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   (`useEffect(() => () => {...}, [])`, line 286) correctly disposes the active document scope and
   bumps run-id refs to invalidate in-flight async work. No render-phase side effects, no
   missing-cleanup, no obvious dependency-array bug found in this subset.
-- **Decision**: `reject` for these 9 effects specifically (spot-checked, no action needed) — `defer`
-  for a full `T4` pass across the rest of the codebase (Profiler evidence, StrictMode double-invoke
-  audit, `use-object-selection.ts`'s effects not yet read this pass) — same reasoning as `F-08`: a
-  real Profiler-backed audit is a separate, sizable deliverable.
+- **Decision**: `reject` for these 9 effects specifically — no action needed.
+  **Widened, same session (2026-07-30)**: also read every `useEffect` in `use-batch-processing.ts`
+  (5), `use-object-selection.ts` (2), and `GuidedBrushCanvas.tsx` (3) — all correct (ref-guarded
+  one-shot triggers, paired `addEventListener`/`removeEventListener`, or documented intentional
+  every-render synchronization with an inline `eslint-disable` explaining why). Reading
+  `MaskCorrectionCanvas.tsx`'s 4 effects found one real defect — see `F-17` (fixed). Still `defer`:
+  a Profiler-API-backed audit (commit counts/durations, StrictMode double-invoke timing) — that
+  needs instrumentation this session didn't build (`F-08`), and the remaining effect-owning files
+  not read this pass (mostly small UI components with 1 effect each — lower risk than the ones
+  covered) — same reasoning as before: bounded, evidence-based scope, not exhaustive-or-nothing.
 
 ### F-12 — Resource lifecycle spot-check: worker termination pattern is consistent where checked
 

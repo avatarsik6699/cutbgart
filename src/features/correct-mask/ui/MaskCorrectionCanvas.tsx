@@ -544,6 +544,20 @@ export function MaskCorrectionCanvas({
     onPanBySourcePixels(deltaX * geometry.scaleX, deltaY * geometry.scaleY);
   }
 
+  // `handleKeyboardNavigation`/`handleWheel` are plain functions redefined
+  // every render (they close over per-render props/state), so the listener
+  // effect below reads them through these refs instead of listing them as
+  // effect dependencies — that would defeat the effect's own "for the
+  // lifetime of the correction editor" intent (PHASE_31 T4 finding: this
+  // effect previously had no dependency array at all, so it tore down and
+  // re-attached all four listeners on every render).
+  const handleKeyboardNavigationRef = useRef(handleKeyboardNavigation);
+  const handleWheelRef = useRef(handleWheel);
+  useEffect(function syncInteractionHandlerRefsFx() {
+    handleKeyboardNavigationRef.current = handleKeyboardNavigation;
+    handleWheelRef.current = handleWheel;
+  });
+
   useEffect(() => {
     if (!interactionEnabled) return;
     const editor = viewportRef.current;
@@ -561,24 +575,32 @@ export function MaskCorrectionCanvas({
       releaseHandTool();
     }
 
+    function handleKeyDown(event: globalThis.KeyboardEvent): void {
+      handleKeyboardNavigationRef.current(event);
+    }
+
+    function handleWheelEvent(event: globalThis.WheelEvent): void {
+      handleWheelRef.current(event);
+    }
+
     // Capture shortcuts for the lifetime of the correction editor. This is
     // how desktop-style editors keep Cmd/Ctrl +/- from escaping to browser
     // page zoom after a toolbar button has taken focus.
-    window.addEventListener("keydown", handleKeyboardNavigation, true);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
     window.addEventListener("blur", releaseHandTool);
     // React intentionally delegates wheel passively. The editor must be able
     // to prevent page scrolling, so this interaction surface owns a native
     // non-passive listener instead.
-    editor.addEventListener("wheel", handleWheel, { passive: false });
+    editor.addEventListener("wheel", handleWheelEvent, { passive: false });
 
     return () => {
-      window.removeEventListener("keydown", handleKeyboardNavigation, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", releaseHandTool);
-      editor.removeEventListener("wheel", handleWheel);
+      editor.removeEventListener("wheel", handleWheelEvent);
     };
-  });
+  }, [interactionEnabled]);
 
   function updateCursor(
     clientX: number,
