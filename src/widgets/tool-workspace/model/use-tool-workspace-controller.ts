@@ -421,13 +421,25 @@ export function useToolWorkspaceController() {
   }
 
   function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
+    const invalid = results.find(({ result }) => !result.ok);
+    if (invalid && !invalid.result.ok) {
+      // One predictable policy for the whole batch (PHASE_31 T8/F7): a single
+      // invalid file aborts the entire attempt instead of silently dropping
+      // it and enqueuing the valid ones, which left processed items behind
+      // an error screen with no way to tell what happened.
+      setUploadError(invalid.result.error);
+      return;
+    }
+    setUploadError(null);
     const valid = results.flatMap(({ fileName, result }) =>
       result.ok ? [{ fileName, source: result.image }] : [],
     );
-    const invalid = results.find(({ result }) => !result.ok);
-    setUploadError(invalid && !invalid.result.ok ? invalid.result.error : null);
     if (valid.length)
       void releaseRefinementBeforeHeavyWork().then(() => batch.enqueue(valid));
+  }
+
+  function handleDismissUploadError() {
+    setUploadError(null);
   }
 
   function handleReset() {
@@ -1400,6 +1412,7 @@ export function useToolWorkspaceController() {
     lastLogMessage,
     handleUpload,
     handleUploads,
+    handleDismissUploadError,
     handleReset,
     handleApplyGuided,
     handleGuideAutomaticResult,

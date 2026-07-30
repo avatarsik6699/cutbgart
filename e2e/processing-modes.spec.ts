@@ -22,7 +22,7 @@ test("all production modes are localized and the Optimal preference persists", a
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("qualityMode")))
     .toBe("max");
-  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
+  await page.getByRole("radio", { name: /^Maximum/ }).click();
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("qualityMode")))
     .toBe("max");
@@ -66,7 +66,7 @@ test("Maximum quality without WebGPU falls back once while preserving the upload
     Object.defineProperty(navigator, "gpu", { configurable: true, value: undefined }),
   );
   await page.goto("/en");
-  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
+  await page.getByRole("radio", { name: /^Maximum/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
   await expectAutomaticCutout(page);
@@ -82,8 +82,8 @@ test("Maximum quality OOM keeps the image and falls back once to Optimal", async
     }),
   );
   await page.goto("/en");
-  await expect(page.getByRole("radio", { name: /^Maximum quality/ })).toBeEnabled();
-  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
+  await expect(page.getByRole("radio", { name: /^Maximum/ })).toBeEnabled();
+  await page.getByRole("radio", { name: /^Maximum/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
   await expect(page.getByText(/Maximum quality could not start/)).toBeVisible();
   await expectAutomaticCutout(page);
@@ -99,8 +99,8 @@ test("reuses a loaded mode for a batch while BEN2 scheduling stays sequential", 
   page,
 }) => {
   await page.goto("/en");
-  await expect(page.getByRole("radio", { name: /^Maximum quality/ })).toBeEnabled();
-  await page.getByRole("radio", { name: /^Maximum quality/ }).click();
+  await expect(page.getByRole("radio", { name: /^Maximum/ })).toBeEnabled();
+  await page.getByRole("radio", { name: /^Maximum/ }).click();
   await page.getByLabel("Upload an image").setInputFiles([SAMPLE, SAMPLE]);
   await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
   await expect(page.getByTestId("scheduler-summary")).toContainText("0/1 active");

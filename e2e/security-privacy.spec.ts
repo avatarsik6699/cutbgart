@@ -90,8 +90,13 @@ test.describe("Phase 22 security and privacy", () => {
       { name: "second-private.jpg", mimeType: "image/jpeg", buffer: sample },
     ]);
     await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
+    // Batch upload auto-selects the first item into the editor view, so the
+    // split button shows the singular "Download" for that item — the batch
+    // ZIP export lives in its "Output options" menu instead (same pattern as
+    // `e2e/home.spec.ts`'s batch download test).
     const batchDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download all$/i }).click();
+    await page.getByRole("button", { name: "Output options" }).click();
+    await page.getByRole("menuitem", { name: /download all.*zip/i }).click();
     const zipPath = await (await batchDownload).path();
     if (!zipPath) throw new Error("Batch ZIP download path unavailable");
     const zipText = (await readFile(zipPath)).toString("latin1");
@@ -178,7 +183,9 @@ test.describe("Phase 22 security and privacy", () => {
       ),
     ).toBe(0);
 
-    await page.getByRole("button", { name: /^reset$/i }).click();
+    // PHASE_31 F7: invalid-upload errors now dismiss via the in-place
+    // "Try again" retry (`UploadErrorNotice`), not a "Reset" button.
+    await page.getByRole("button", { name: /try again/i }).click();
     await upload.setInputFiles({
       name: "malformed.jpg",
       mimeType: "image/jpeg",

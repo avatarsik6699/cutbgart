@@ -52,12 +52,18 @@ describe("processing mode selector", () => {
     });
     fireEvent.click(trigger);
 
-    await waitFor(() => expect(screen.getByText(/compatible WebGPU/i)).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText(/precise model on WebGPU/i)).toBeDefined(),
+    );
     fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
-    await waitFor(() => expect(screen.queryByText(/compatible WebGPU/i)).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByText(/precise model on WebGPU/i)).toBeNull(),
+    );
 
     fireEvent.blur(trigger);
     fireEvent.focus(trigger);
-    await waitFor(() => expect(screen.getByText(/compatible WebGPU/i)).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText(/precise model on WebGPU/i)).toBeDefined(),
+    );
   });
 });

@@ -164,6 +164,35 @@ describe("useToolWorkspaceController", () => {
     expect(scope.artifacts.stats().artifactCount).toBe(0);
   });
 
+  it("aborts a multi-file batch upload entirely when one file is invalid (PHASE_31 T8/F7)", () => {
+    const { result } = renderHook(() => useToolWorkspaceController());
+
+    act(() =>
+      result.current.handleUploads([
+        { fileName: "a.jpg", result: { ok: true, image: source("a") } },
+        {
+          fileName: "b.gif",
+          result: {
+            ok: false,
+            error: {
+              code: "unsupported-format",
+              message: 'Unsupported format "image/gif"',
+            },
+          },
+        },
+        { fileName: "c.jpg", result: { ok: true, image: source("c") } },
+      ]),
+    );
+
+    expect(result.current.uploadError).toMatchObject({ code: "unsupported-format" });
+    // No file from the batch is enqueued — the whole attempt aborts rather
+    // than silently dropping the invalid file and processing the rest.
+    expect(result.current.batch.session.items).toHaveLength(0);
+
+    act(() => result.current.handleDismissUploadError());
+    expect(result.current.uploadError).toBeNull();
+  });
+
   it("releases the previous source document before starting replacement work", async () => {
     const { result, unmount } = renderHook(() => useToolWorkspaceController());
     await completeAutomaticRun(result, source("first"));

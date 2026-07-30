@@ -298,6 +298,29 @@ function localizedUploadError(error: UploadValidationError): string {
   return m.uploadResolutionError();
 }
 
+interface UploadErrorNoticeProps {
+  error: UploadValidationError;
+  onDismiss: () => void;
+}
+
+// Renders in place inside the owning upload surface (idle dropzone or batch
+// "add images" row) instead of a separate grid area, so an invalid file
+// never hides the upload controls or shifts them down the page (PHASE_31
+// T8/F7).
+function UploadErrorNotice({ error, onDismiss }: UploadErrorNoticeProps) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+    >
+      <p>{localizedUploadError(error)}</p>
+      <Button type="button" variant="outline" onClick={onDismiss} className="self-start">
+        {m.tryAgain()}
+      </Button>
+    </div>
+  );
+}
+
 interface CorrectionErrorAlertProps {
   error: DisplayError;
   onRetry: () => void;
@@ -381,6 +404,7 @@ export function ToolWorkspace({
     historySelectors,
     handleUpload,
     handleUploads,
+    handleDismissUploadError,
     handleReset,
     handleApplyGuided,
     handleGuideAutomaticResult,
@@ -797,9 +821,13 @@ export function ToolWorkspace({
     requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
   }
 
-  const displayError: DisplayError | null = uploadError
-    ? { message: localizedUploadError(uploadError), action: "reset" }
-    : state.status === "error"
+  // Upload-validation errors (`uploadError`) are rendered in place inside the
+  // owning upload surface via `UploadErrorNotice` below (PHASE_31 T8/F7), not
+  // through this shared error slot — they never hide the idle/batch controls
+  // or move down the page. `displayError` covers only in-flight
+  // workflow/model errors, which genuinely need to preempt the surface.
+  const displayError: DisplayError | null =
+    state.status === "error"
       ? { message: state.error.message, action: state.error.action }
       : null;
   const verifiedAssetError =
@@ -950,6 +978,9 @@ export function ToolWorkspace({
           disabled={!hydrated || busy || preparingFileCount > 0}
         />
         <UploadPreparationNotice fileCount={preparingFileCount} />
+        {uploadError && (
+          <UploadErrorNotice error={uploadError} onDismiss={handleDismissUploadError} />
+        )}
       </section>
     );
   }
@@ -977,16 +1008,21 @@ export function ToolWorkspace({
     </>
   ) : null;
   const batchListNode = batchActive ? (
-    <BatchGrid
-      items={batch.session.items}
-      selectedItemId={batch.session.selectedItemId}
-      snapshot={batch.snapshot}
-      modelLoad={batch.session.modelLoads[batchModelKey]}
-      onSelect={requestBatchItem}
-      onDownload={downloadBatchItem}
-      onRetry={requestBatchReprocess}
-      onRemove={requestBatchRemove}
-    />
+    <>
+      {uploadError && (
+        <UploadErrorNotice error={uploadError} onDismiss={handleDismissUploadError} />
+      )}
+      <BatchGrid
+        items={batch.session.items}
+        selectedItemId={batch.session.selectedItemId}
+        snapshot={batch.snapshot}
+        modelLoad={batch.session.modelLoads[batchModelKey]}
+        onSelect={requestBatchItem}
+        onDownload={downloadBatchItem}
+        onRetry={requestBatchReprocess}
+        onRemove={requestBatchRemove}
+      />
+    </>
   ) : null;
   const batchSurfaceBase = batchActive ? (
     <section

@@ -204,6 +204,41 @@ describe("ToolWorkspace", () => {
     expect(MockWorker.instances).toHaveLength(0);
   });
 
+  it("keeps the upload surface visible in place next to the error, with no layout shift (PHASE_31 T8/F7)", async () => {
+    render(<ToolWorkspace />);
+
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: { files: [makeFile({ type: "image/gif" })] },
+    });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
+    // The upload dropzone/quality toggle stay mounted — the error is shown
+    // alongside them, not in place of them.
+    expect(screen.getByLabelText("Upload an image")).toBeDefined();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.getByLabelText("Upload an image")).toBeDefined();
+  });
+
+  it("aborts the whole batch when one of several files is invalid, instead of silently dropping it", async () => {
+    render(<ToolWorkspace />);
+
+    fireEvent.change(screen.getByLabelText("Upload an image"), {
+      target: {
+        files: [makeFile({ type: "image/gif" }), makeFile(), makeFile()],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
+    expect(screen.getByRole("alert").textContent).toMatch(/unsupported/i);
+    // None of the batch is enqueued — the whole attempt aborts predictably
+    // rather than processing the valid files behind the error.
+    expect(MockWorker.instances).toHaveLength(0);
+    expect(screen.queryByTestId("batch-overview")).toBeNull();
+  });
+
   it("starts automatic processing from the single upload surface", async () => {
     render(<ToolWorkspace />);
     expect(screen.queryByRole("button", { name: /guide with a brush/i })).toBeNull();

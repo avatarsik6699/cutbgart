@@ -18,9 +18,9 @@ const UNSUPPORTED_FILE = path.join(__dirname, "fixtures", "unsupported.txt");
 const EDITOR_LOCALES = [
   {
     path: "/en",
-    modes: [/^Fast/i, /^Optimal/i, /^Maximum quality/i],
+    modes: [/^Fast/i, /^Optimal/i, /^Maximum/i],
     help: /About Maximum quality/i,
-    helpBody: /compatible WebGPU/i,
+    helpBody: /precise model on WebGPU/i,
     cutout: /^Cutout$/,
     enhance: /^Enhancements$/,
     background: /^Background$/,
@@ -28,9 +28,9 @@ const EDITOR_LOCALES = [
   },
   {
     path: "/",
-    modes: [/^Быстро/i, /^Оптимально/i, /^Максимальное качество/i],
+    modes: [/^Быстро/i, /^Оптимально/i, /^Максимум/i],
     help: /О максимальном качестве/i,
-    helpBody: /совместимый WebGPU/i,
+    helpBody: /самую точную модель на WebGPU/i,
     cutout: /^Вырезание$/,
     enhance: /^Улучшения$/,
     background: /^Фон$/,
@@ -120,56 +120,36 @@ test.describe("/ (home)", () => {
     await page.goto("/en");
 
     await expect(page.getByTestId("home-page")).toBeVisible();
-    const brandLogos = page.getByRole("img", { name: "cutbg" });
-    await expect(brandLogos).toHaveCount(2);
-    await expect(brandLogos.first()).toHaveJSProperty("complete", true);
-    await expect(brandLogos.first()).toHaveJSProperty("naturalWidth", 1100);
+    // Phase 30 replaced the raster logo `<img>` with an inline SVG mark
+    // inside a header/footer `<Link aria-label="cutbg">` (`brand-logo.tsx`)
+    // — assert the accessible link, not an `<img>` role that no longer
+    // exists.
+    const brandLinks = page.getByRole("link", { name: "cutbg", exact: false });
+    await expect(brandLinks).toHaveCount(2);
+    await expect(brandLinks.first()).toBeVisible();
     await expect(page.getByTestId("processing-mode-selector")).toBeVisible();
     await expect(page.getByLabel("Upload an image")).toBeAttached();
   });
 
-  test("command deck keeps mode badges separated and the engineering grid below the header", async ({
+  test("command deck highlights Maximum quality and keeps the engineering grid below the header", async ({
     page,
   }) => {
     await page.goto("/en");
 
     for (const width of [390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const badgeName of ["Recommended", "Beta"]) {
-        const badge = page.getByText(badgeName, { exact: true });
-        await expect(badge).toBeVisible();
-        // The title+badge row wraps (flex-wrap) rather than overlapping when
-        // narrow, so the badge can legitimately sit below the title instead
-        // of to its right — assert the two boxes never intersect, not a
-        // fixed same-row horizontal gap.
-        const geometry = await badge.evaluate((node) => {
-          const badgeBox = node.getBoundingClientRect();
-          const title = node.parentElement?.parentElement?.firstElementChild;
-          const titleBox = title?.getBoundingClientRect();
-          return {
-            badge: {
-              left: badgeBox.left,
-              right: badgeBox.right,
-              top: badgeBox.top,
-              bottom: badgeBox.bottom,
-            },
-            title: titleBox
-              ? {
-                  left: titleBox.left,
-                  right: titleBox.right,
-                  top: titleBox.top,
-                  bottom: titleBox.bottom,
-                }
-              : null,
-          };
-        });
-        expect(geometry.title).not.toBeNull();
-        if (geometry.title) {
-          const separatedHorizontally = geometry.badge.left - geometry.title.right >= 8;
-          const separatedVertically = geometry.badge.top - geometry.title.bottom >= -1;
-          expect(separatedHorizontally || separatedVertically).toBe(true);
-        }
-      }
+
+      // Phase 30 replaced the "Recommended"/"Beta" text badges with a
+      // shimmer border on the Maximum-quality card (see
+      // `QualityModeToggle.test.tsx` — "shows no Beta or Recommended
+      // badges"). Assert that highlight instead of stale badge text.
+      const maximumRadio = page.getByRole("radio", { name: /Maximum/ });
+      const maximumCard = maximumRadio.locator(
+        'xpath=ancestor::*[contains(@class,"group") and contains(@class,"relative")][1]',
+      );
+      await expect(maximumCard).toHaveClass(/quality-mode-shimmer/);
+      await expect(page.getByText("Recommended", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Beta", { exact: true })).toHaveCount(0);
 
       const header = page.locator('[data-slot="site-header"]');
       const pattern = page.locator(".site-background-pattern");
@@ -235,6 +215,32 @@ test.describe("/ (home)", () => {
     await expect(page.getByRole("alert")).toContainText(/unsupported file format/i);
     // Never reaches model-loading — no progress UI should appear.
     await expect(page.getByText(/loading .* model/i)).toHaveCount(0);
+  });
+
+  test("keeps the upload surface in place on an invalid file, with a working retry (PHASE_31 T8/F7)", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    await expect(page.getByLabel("Upload an image")).toBeEnabled();
+
+    await page.getByLabel("Upload an image").setInputFiles(UNSUPPORTED_FILE);
+    await expect(page.getByRole("alert")).toContainText(/unsupported file format/i);
+
+    // The upload dropzone and quality-mode controls stay mounted next to the
+    // error instead of disappearing/being replaced — no layout shift, and
+    // the user can immediately pick another file without extra navigation.
+    // (The dropzone input itself is responsively hidden below `sm` in favor
+    // of `ChoosePhotoButton` — that's pre-existing, viewport-driven behavior
+    // unrelated to this fix, so assert DOM presence here, not visibility.)
+    await expect(page.getByLabel("Upload an image")).toBeAttached();
+    await expect(page.getByRole("radio").first()).toBeVisible();
+
+    await page.getByRole("button", { name: /try again/i }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByLabel("Upload an image")).toBeEnabled();
+
+    await page.getByLabel("Upload an image").setInputFiles(SAMPLE_IMAGE);
+    await expectAutomaticCutout(page);
   });
 
   test("critical path hides marketing and returns through the compact back action", async ({

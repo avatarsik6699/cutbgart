@@ -230,9 +230,11 @@ locale-sensitive formatting.
 Worker-heavy in a way a typical CRUD frontend isn't.)*
 
 Never hand-roll `new Worker(...)` / `postMessage` / `.terminate()` directly inside a feature's
-model hook. Six feature slices currently do this independently (`remove-background`,
-`select-object`, `refine-matte`, `refine-foreground`, `model-lab`, `batch-processing`) — tracked as
-a PHASE_31 duplication finding. The target shape is a shared `shared/lib/use-worker.ts` (or
+model hook. Seven hooks currently do this independently (`useBackgroundRemoval.ts`,
+`use-matte-refinement.ts`, `use-foreground-refinement.ts`, `use-model-lab.ts`,
+`use-object-selection.ts`, `use-batch-processing.ts`, `use-interactive-matting-lab.ts`) — tracked as
+a PHASE_31 duplication finding (`PHASE_31_FINDINGS.md` F-09; `use-object-selection.ts` alone has 10
+separate `.terminate()` call sites). The target shape is a shared `shared/lib/use-worker.ts` (or
 equivalent) owning init, typed `postMessage`/`onmessage`, abort-on-stale-run, and teardown-on-unmount
 once, with each feature supplying only its message-payload types and handler.
 

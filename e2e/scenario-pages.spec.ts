@@ -200,7 +200,11 @@ test.describe("/udalit-fon-s-foto-tovara (deep critical path)", () => {
     await expect(upload).toBeEnabled();
     await upload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE]);
     await expect(page.getByTestId("scheduler-summary")).toContainText("готово 2");
-    await expect(page.getByRole("button", { name: /^скачать всё$/i })).toBeEnabled();
+    // Batch upload auto-selects the first item into the editor view (the
+    // same "automatic-first" pattern as single upload), so the split button
+    // shows the singular per-item "Скачать" label, not "Скачать всё" — that
+    // label only appears once nothing is selected.
+    await expect(page.getByRole("button", { name: /^скачать$/i })).toBeEnabled();
   });
 });
 
