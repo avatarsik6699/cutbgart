@@ -34,7 +34,7 @@ describe("detectDeviceCapabilities", () => {
     delete window.umami;
   });
 
-  it("selects the WebGPU path and 'max' quality on a capable device with fp16 support", async () => {
+  it("selects the WebGPU path and defaults to BEN2 quality on a capable device with fp16 support", async () => {
     stubNavigator({
       gpu: { requestAdapter: () => Promise.resolve(fakeAdapter(["shader-f16"])) },
       hardwareConcurrency: 8,
@@ -43,7 +43,10 @@ describe("detectDeviceCapabilities", () => {
 
     const capabilities = await detectDeviceCapabilities();
 
-    expect(capabilities).toEqual({ inferencePath: "webgpu", defaultQualityMode: "max" });
+    expect(capabilities).toEqual({
+      inferencePath: "webgpu",
+      defaultQualityMode: "ben2-fp16",
+    });
     expect(track).not.toHaveBeenCalled();
   });
 

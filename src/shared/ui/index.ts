@@ -1,4 +1,5 @@
 export { Button, buttonVariants } from "./button";
+export { BrandLogo } from "./brand-logo";
 export { Switch } from "./switch";
 export { SiteHeader } from "./site-header";
 export { SiteFooter } from "./site-footer";

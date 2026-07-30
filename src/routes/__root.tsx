@@ -37,7 +37,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "cutbg" },
-      { name: "theme-color", content: "#2D62EB" },
+      { name: "theme-color", content: "#0A0C0E" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -62,7 +62,7 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang={getLocale()}>
+    <html lang={getLocale()} className="dark">
       <head>
         <HeadContent />
       </head>

@@ -138,16 +138,37 @@ test.describe("/ (home)", () => {
       for (const badgeName of ["Recommended", "Beta"]) {
         const badge = page.getByText(badgeName, { exact: true });
         await expect(badge).toBeVisible();
+        // The title+badge row wraps (flex-wrap) rather than overlapping when
+        // narrow, so the badge can legitimately sit below the title instead
+        // of to its right — assert the two boxes never intersect, not a
+        // fixed same-row horizontal gap.
         const geometry = await badge.evaluate((node) => {
           const badgeBox = node.getBoundingClientRect();
           const title = node.parentElement?.parentElement?.firstElementChild;
           const titleBox = title?.getBoundingClientRect();
           return {
-            badgeLeft: badgeBox.left,
-            titleRight: titleBox?.right ?? badgeBox.left,
+            badge: {
+              left: badgeBox.left,
+              right: badgeBox.right,
+              top: badgeBox.top,
+              bottom: badgeBox.bottom,
+            },
+            title: titleBox
+              ? {
+                  left: titleBox.left,
+                  right: titleBox.right,
+                  top: titleBox.top,
+                  bottom: titleBox.bottom,
+                }
+              : null,
           };
         });
-        expect(geometry.badgeLeft - geometry.titleRight).toBeGreaterThanOrEqual(8);
+        expect(geometry.title).not.toBeNull();
+        if (geometry.title) {
+          const separatedHorizontally = geometry.badge.left - geometry.title.right >= 8;
+          const separatedVertically = geometry.badge.top - geometry.title.bottom >= -1;
+          expect(separatedHorizontally || separatedVertically).toBe(true);
+        }
       }
 
       const header = page.locator('[data-slot="site-header"]');

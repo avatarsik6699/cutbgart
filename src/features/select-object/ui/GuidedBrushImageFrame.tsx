@@ -20,7 +20,7 @@ export function GuidedBrushImageFrame({
   return (
     <div
       ref={frameRef}
-      className="transparency-grid editor-image-frame relative overflow-hidden rounded-xl border"
+      className="transparency-grid editor-image-frame relative overflow-hidden rounded-xl"
       style={{
         aspectRatio: `${String(width)} / ${String(height)}`,
         width: `min(100cqw, calc(100cqh * ${String(ratio)}))`,

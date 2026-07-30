@@ -96,6 +96,9 @@ export function UploadDropzone({
         {m.uploadPrompt()}{" "}
         <span className="font-medium text-foreground">{m.uploadBrowse()}</span>
       </p>
+      <p className="font-mono text-[0.6875rem] text-muted-foreground/70 uppercase tracking-wide">
+        {m.uploadBatchHint()}
+      </p>
       <input
         type="file"
         multiple

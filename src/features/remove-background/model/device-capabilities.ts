@@ -58,7 +58,12 @@ export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
 
   return {
     inferencePath: hasUsableWebGPU ? "webgpu" : "wasm",
-    defaultQualityMode: hasUsableWebGPU && !weak ? "max" : "fast",
+    // Capable devices default straight to the beta BEN2 tier so a first-time
+    // visitor's very first result is the best one the app can produce. If
+    // BEN2 can't actually start, the existing per-run fallback
+    // (`ben2FallbackNotice`/`isWebGpuExecutionError`) drops back to `max`
+    // for that run — this default never needs its own separate safety net.
+    defaultQualityMode: hasUsableWebGPU && !weak ? "ben2-fp16" : "fast",
   };
 }
 

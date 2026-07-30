@@ -70,118 +70,131 @@ export function BackgroundFillSelector({
   }, [dirty]);
   return (
     <fieldset
-      className="flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-lg border border-border p-4"
+      className="flex h-full min-w-0 max-w-full flex-col gap-5 overflow-hidden"
       aria-busy={saving}
     >
-      <legend className="px-1 text-sm font-medium">{m.background()}</legend>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant={fill.type === "transparent" ? "default" : "outline"}
-          onClick={() => preview(TRANSPARENT_FILL)}
-          aria-pressed={fill.type === "transparent"}
-        >
-          <span
-            aria-hidden="true"
-            data-testid="fill-swatch"
-            className="transparency-grid size-4 rounded-full border border-border"
-          />
-          {m.transparent()}
-        </Button>
-        <Button
-          type="button"
-          variant={fill.type === "color" ? "default" : "outline"}
-          aria-pressed={fill.type === "color"}
-          aria-expanded={colorPickerOpen}
-          aria-controls="background-color-picker"
-          aria-label={m.backgroundColor()}
-          onClick={() => {
-            if (fill.type !== "color") selectColor(currentColor);
-            setColorPickerOpen((open) => !open);
-          }}
-        >
-          <span
-            aria-hidden="true"
-            data-testid="fill-swatch"
-            className="size-4 rounded-full border border-border"
-            style={{ backgroundColor: currentColor }}
-          />
-          {m.color()}
-        </Button>
-        {GRADIENT_PRESETS.map((preset) => (
+      <legend className="sr-only">{m.background()}</legend>
+      <div className="flex flex-col gap-2">
+        <p className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          {m.backgroundFillSectionLabel()}
+        </p>
+        <div className="flex flex-wrap gap-2">
           <Button
-            key={preset.name}
             type="button"
-            variant={
-              fill.type === "gradient" &&
-              fill.kind === preset.fill.kind &&
-              fill.stops[0].color === preset.fill.stops[0].color
-                ? "default"
-                : "outline"
-            }
-            aria-pressed={
-              fill.type === "gradient" &&
-              fill.kind === preset.fill.kind &&
-              fill.stops[0].color === preset.fill.stops[0].color
-            }
-            onClick={() => preview(preset.fill)}
+            variant={fill.type === "transparent" ? "default" : "outline"}
+            onClick={() => preview(TRANSPARENT_FILL)}
+            aria-pressed={fill.type === "transparent"}
+          >
+            <span
+              aria-hidden="true"
+              data-testid="fill-swatch"
+              className="transparency-grid size-4 rounded-full border border-border"
+            />
+            {m.transparent()}
+          </Button>
+          <Button
+            type="button"
+            variant={fill.type === "color" ? "default" : "outline"}
+            aria-pressed={fill.type === "color"}
+            aria-expanded={colorPickerOpen}
+            aria-controls="background-color-picker"
+            aria-label={m.backgroundColor()}
+            onClick={() => {
+              if (fill.type !== "color") selectColor(currentColor);
+              setColorPickerOpen((open) => !open);
+            }}
           >
             <span
               aria-hidden="true"
               data-testid="fill-swatch"
               className="size-4 rounded-full border border-border"
-              style={{
-                backgroundImage: `${preset.fill.kind === "linear" ? "linear-gradient(135deg" : "radial-gradient(circle at center"}, ${preset.fill.stops[0].color}, ${preset.fill.stops[1].color})`,
-              }}
+              style={{ backgroundColor: currentColor }}
             />
-            {gradientName(preset.name)}
+            {m.color()}
           </Button>
-        ))}
+          {GRADIENT_PRESETS.map((preset) => (
+            <Button
+              key={preset.name}
+              type="button"
+              variant={
+                fill.type === "gradient" &&
+                fill.kind === preset.fill.kind &&
+                fill.stops[0].color === preset.fill.stops[0].color
+                  ? "default"
+                  : "outline"
+              }
+              aria-pressed={
+                fill.type === "gradient" &&
+                fill.kind === preset.fill.kind &&
+                fill.stops[0].color === preset.fill.stops[0].color
+              }
+              onClick={() => preview(preset.fill)}
+            >
+              <span
+                aria-hidden="true"
+                data-testid="fill-swatch"
+                className="size-4 rounded-full border border-border"
+                style={{
+                  backgroundImage: `${preset.fill.kind === "linear" ? "linear-gradient(135deg" : "radial-gradient(circle at center"}, ${preset.fill.stops[0].color}, ${preset.fill.stops[1].color})`,
+                }}
+              />
+              {gradientName(preset.name)}
+            </Button>
+          ))}
+        </div>
+        {colorPickerOpen && (
+          <div id="background-color-picker" className="flex flex-col items-start gap-2">
+            <InlineColorPicker color={currentColor} onChange={selectColor} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setColorPickerOpen(false)}
+            >
+              {m.done()}
+            </Button>
+          </div>
+        )}
       </div>
-      {colorPickerOpen && (
-        <div id="background-color-picker" className="flex flex-col items-start gap-2">
-          <InlineColorPicker color={currentColor} onChange={selectColor} />
+
+      <div>
+        <label className="flex min-w-0 max-w-full cursor-pointer flex-col gap-2 text-sm font-medium">
+          <span className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            {m.customImage()}
+          </span>
+          <input
+            aria-label={m.customBackgroundImage()}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void selectImage(file);
+              event.target.value = "";
+            }}
+            className="block w-full min-w-0 max-w-full overflow-hidden text-ellipsis text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2"
+          />
+        </label>
+      </div>
+
+      <div className="mt-auto flex flex-col gap-2 pt-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setColorPickerOpen(false)}
+            onClick={() => void save()}
+            disabled={!dirty || saving}
+            aria-busy={saving}
           >
-            {m.done()}
+            {m.backgroundApply()}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={cancel}
+            disabled={!dirty && !saving}
+          >
+            {m.cancel()}
           </Button>
         </div>
-      )}
-      <label className="flex min-w-0 max-w-full cursor-pointer flex-col gap-1 text-sm font-medium">
-        {m.customImage()}
-        <input
-          aria-label={m.customBackgroundImage()}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void selectImage(file);
-            event.target.value = "";
-          }}
-          className="block w-full min-w-0 max-w-full overflow-hidden text-ellipsis text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2"
-        />
-      </label>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          onClick={() => void save()}
-          disabled={!dirty || saving}
-          aria-busy={saving}
-        >
-          {m.backgroundApply()}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={cancel}
-          disabled={!dirty && !saving}
-        >
-          {m.cancel()}
-        </Button>
         {(dirty || saving) && (
           <p role="status" className="text-sm text-muted-foreground">
             {saving ? m.savingBackground() : m.unsavedBackground()}

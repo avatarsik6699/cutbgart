@@ -32,7 +32,11 @@ export interface UseQualityModeResult {
  */
 export function useQualityMode(defaultMode: QualityMode): UseQualityModeResult {
   const normalizedDefault =
-    defaultMode === "max" || defaultMode === "isnet-fp32" ? "isnet-fp32" : "isnet-q8";
+    defaultMode === "ben2-fp16"
+      ? "ben2-fp16"
+      : defaultMode === "max" || defaultMode === "isnet-fp32"
+        ? "isnet-fp32"
+        : "isnet-q8";
   const [qualityMode, setQualityModeState] =
     useState<AutomaticModelMode>(normalizedDefault);
   const [trackedDefaultMode, setTrackedDefaultMode] = useState(normalizedDefault);

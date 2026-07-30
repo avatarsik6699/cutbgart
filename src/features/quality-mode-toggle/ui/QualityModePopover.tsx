@@ -30,7 +30,7 @@ export function QualityModePopover(props: QualityModeToggleProps) {
         <Gauge aria-hidden="true" />
         <span className="truncate">{selectedModeLabel(props.qualityMode)}</span>
       </PopoverTrigger>
-      <PopoverContent className="w-[min(42rem,calc(100vw-2rem))]">
+      <PopoverContent className="w-[min(46rem,calc(100vw-2rem))]">
         <PopoverHeader>
           <PopoverTitle>{m.processingModeLabel()}</PopoverTitle>
           <PopoverDescription className="sr-only">

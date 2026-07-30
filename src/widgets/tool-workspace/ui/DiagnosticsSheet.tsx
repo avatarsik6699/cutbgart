@@ -49,7 +49,7 @@ function DiagnosticsBody({
       className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-xs text-muted-foreground"
       data-testid="processing-details"
     >
-      <dl className="mb-4 grid gap-2 rounded-xl border bg-muted/30 p-3">
+      <dl className="mb-4 grid gap-2 rounded-lg border border-border bg-muted/30 p-3">
         {runInfo && (
           <div>
             <dt className="inline text-foreground">runtime: </dt>

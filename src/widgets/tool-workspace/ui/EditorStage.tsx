@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Skeleton } from "@/shared/ui";
 
 export interface EditorStageProps {
   children: ReactNode;
@@ -90,16 +89,14 @@ export function EditorStage({
       className={`editor-stage grid place-items-center overflow-hidden bg-muted/25 p-3 ${
         inlineExpanded
           ? "fixed inset-0 z-[80] h-[100dvh] rounded-none border-0 bg-background p-4"
-          : "relative h-[clamp(22rem,62dvh,46rem)] rounded-2xl border"
+          : "editor-stage-grid relative h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border"
       }`}
     >
       {loading ? (
-        <div className="relative size-full overflow-hidden rounded-xl">
-          <Skeleton
-            className="size-full rounded-xl motion-reduce:animate-none"
-            data-testid="editor-stage-placeholder"
-            aria-hidden="true"
-          />
+        <div
+          className="editor-stage-loading relative size-full cursor-wait overflow-hidden rounded-xl"
+          data-testid="editor-stage-placeholder"
+        >
           <div className="absolute inset-0 grid place-items-center">{children}</div>
         </div>
       ) : (

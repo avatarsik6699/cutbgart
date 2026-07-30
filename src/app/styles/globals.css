@@ -2,23 +2,50 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+@property --shimmer-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --preparing-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+
+@property --preparing-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+
 /*
- * Design tokens (Phase 30 `T3`, docs/design/DESIGN_SYSTEM.md §2).
+ * Design tokens (Phase 30 `T3`, docs/design/DESIGN_SYSTEM.md §2; palette
+ * replaced by `T23`-`T28`, §9 — "System Interface" visual identity).
  *
- * - Color: unchanged from Phase 03/12 — the `:root`/`.dark` OKLCH values below
- *   remain the approved palette; only newly-approved colors get added here.
- *   `T16` added `warning`/`info`/`success` (+ `-foreground`) semantic pairs,
- *   formalizing raw `amber`/`blue`/`emerald` Tailwind classes already used ad
- *   hoc for batch-item status and notice banners (docs/design/DESIGN_SYSTEM.md
- *   §4e) — same swatches, zero visual change, referenced via Tailwind's own
- *   `--color-amber-*`/`--color-blue-*`/`--color-emerald-*` theme variables.
+ * - Color: `T23` replaces the stock Phase 03/12 shadcn "neutral" OKLCH
+ *   palette with named roles (`canvas`/`ink`/`line`/`signal`/`local`/
+ *   `alert`) documented in docs/design/DESIGN_SYSTEM.md §9, per explicit
+ *   2026-07-30 architect approval. `:root` keeps the light values (used if
+ *   the `.dark` class is ever removed); `<html>` now renders `.dark` by
+ *   default (`src/routes/__root.tsx`) so dark is the shipped default surface,
+ *   matching a browser-native developer-tool aesthetic. There is no theme
+ *   toggle yet — the light values stay fully tokenized and contrast-audited
+ *   so one is trivial to add later, not an afterthought. `warning`/`info`/
+ *   `success` (+ `-foreground`) semantic pairs (added `T16`) are retuned to
+ *   sit against the new `canvas`/`ink` pair rather than removed.
  * - Typography: the brand font (`--font-sans`/`--font-heading`, Geist
- *   Variable) is the formalized token. Sizing intentionally reuses Tailwind's
- *   stock `--text-*` scale rather than a parallel named scale, so there is one
- *   source of truth for type sizes.
+ *   Variable) is the formalized token. `T24` adds `--font-mono` (Geist Mono)
+ *   as a first-class second voice — toolbar/panel labels, stage readouts,
+ *   `<kbd>` chips, diagnostics, hex output — not a rare diagnostic-only
+ *   accent. Sizing intentionally reuses Tailwind's stock `--text-*` scale
+ *   rather than a parallel named scale, so there is one source of truth for
+ *   type sizes.
  * - Spacing: Tailwind's own `--spacing` base unit (0.25rem) is the token;
  *   `--spacing-stage`/`--spacing-stage-lg` below are the one named exception,
  *   replacing a magic number (`20rem`/`28rem`) that was previously repeated
@@ -40,6 +67,7 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
   --spacing-stage: 20rem;
   --spacing-stage-lg: 28rem;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -59,12 +87,15 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-local: var(--local);
+  --color-local-foreground: var(--local-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -88,85 +119,103 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * "System Interface" palette (Phase 30 `T23`, docs/design/DESIGN_SYSTEM.md
+ * §9) — named roles `canvas`/`ink`/`line`/`signal`/`local`/`alert` expressed
+ * as the underlying shadcn variable names. `:root` holds the light values
+ * (used only if the `.dark` class is ever removed); `<html>` renders `.dark`
+ * by default (`src/routes/__root.tsx`), so dark is the shipped surface. Every
+ * foreground/background pairing below is WCAG AA audited (docs/design/
+ * DESIGN_SYSTEM.md §9) — note dark-mode `primary`/`local`/`destructive` pair
+ * with a near-black foreground rather than white, since their dark-mode
+ * swatches are the *lighter* end of the ramp; this is what resolves the
+ * previously flagged 3.55:1 `primary-foreground`/`primary` failure.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.546 0.215 264.376);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --background: oklch(0.967 0.002 247.839); /* canvas */
+  --foreground: oklch(0.203 0.008 248.202); /* ink */
+  --card: oklch(0.995 0.002 247.839);
+  --card-foreground: oklch(0.203 0.008 248.202);
+  --popover: oklch(0.995 0.002 247.839);
+  --popover-foreground: oklch(0.203 0.008 248.202);
+  --primary: oklch(0.519 0.185 262.867); /* signal */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.93 0.004 250);
+  --secondary-foreground: oklch(0.203 0.008 248.202);
+  --muted: oklch(0.93 0.004 250);
+  --muted-foreground: oklch(0.489 0.012 248.077);
+  --accent: oklch(0.93 0.004 250);
+  --accent-foreground: oklch(0.203 0.008 248.202);
+  --destructive: oklch(0.564 0.193 24.829); /* alert */
+  --destructive-foreground: oklch(1 0 0);
+  --local: oklch(0.664 0.149 157.39); /* local — on-device trust/success */
+  --local-foreground: oklch(0.203 0.008 248.202);
   --warning: var(--color-amber-100);
   --warning-foreground: var(--color-amber-900);
   --info: var(--color-blue-100);
   --info-foreground: var(--color-blue-900);
   --success: var(--color-emerald-100);
   --success-foreground: var(--color-emerald-900);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(0.899 0.006 255.478); /* line */
+  --input: oklch(0.899 0.006 255.478);
+  --ring: oklch(0.519 0.185 262.867); /* signal */
+  --chart-1: oklch(0.899 0.006 255.478);
+  --chart-2: oklch(0.706 0.012 252.128);
+  --chart-3: oklch(0.564 0.012 252);
+  --chart-4: oklch(0.42 0.012 250);
+  --chart-5: oklch(0.3 0.01 250);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.995 0.002 247.839);
+  --sidebar-foreground: oklch(0.203 0.008 248.202);
+  --sidebar-primary: oklch(0.203 0.008 248.202);
+  --sidebar-primary-foreground: oklch(0.995 0.002 247.839);
+  --sidebar-accent: oklch(0.93 0.004 250);
+  --sidebar-accent-foreground: oklch(0.203 0.008 248.202);
+  --sidebar-border: oklch(0.899 0.006 255.478);
+  --sidebar-ring: oklch(0.519 0.185 262.867);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.623 0.188 264.376);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.153 0.005 248.216); /* canvas */
+  --foreground: oklch(0.933 0.005 258.325); /* ink */
+  --card: oklch(0.196 0.006 250);
+  --card-foreground: oklch(0.933 0.005 258.325);
+  --popover: oklch(0.196 0.006 250);
+  --popover-foreground: oklch(0.933 0.005 258.325);
+  --primary: oklch(0.659 0.167 263.49); /* signal */
+  --primary-foreground: oklch(0.153 0.005 248.216);
+  --secondary: oklch(0.267 0.011 254.026);
+  --secondary-foreground: oklch(0.933 0.005 258.325);
+  --muted: oklch(0.267 0.011 254.026);
+  --muted-foreground: oklch(0.706 0.012 252.128);
+  --accent: oklch(0.267 0.011 254.026);
+  --accent-foreground: oklch(0.933 0.005 258.325);
+  --destructive: oklch(0.679 0.176 21.01); /* alert */
+  --destructive-foreground: oklch(0.153 0.005 248.216);
+  --local: oklch(0.742 0.163 156.335); /* local — on-device trust/success */
+  --local-foreground: oklch(0.153 0.005 248.216);
   --warning: var(--color-amber-950);
   --warning-foreground: var(--color-amber-200);
   --info: var(--color-blue-950);
   --info-foreground: var(--color-blue-200);
   --success: var(--color-emerald-950);
   --success-foreground: var(--color-emerald-200);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: color-mix(in oklch, var(--foreground) 12%, transparent); /* line */
+  --input: color-mix(in oklch, var(--foreground) 16%, transparent);
+  --ring: oklch(0.659 0.167 263.49); /* signal */
+  --chart-1: oklch(0.899 0.006 255.478);
+  --chart-2: oklch(0.706 0.012 252.128);
+  --chart-3: oklch(0.564 0.012 252);
+  --chart-4: oklch(0.42 0.012 250);
+  --chart-5: oklch(0.3 0.01 250);
+  --sidebar: oklch(0.196 0.006 250);
+  --sidebar-foreground: oklch(0.933 0.005 258.325);
+  --sidebar-primary: oklch(0.659 0.167 263.49);
+  --sidebar-primary-foreground: oklch(0.153 0.005 248.216);
+  --sidebar-accent: oklch(0.267 0.011 254.026);
+  --sidebar-accent-foreground: oklch(0.933 0.005 258.325);
+  --sidebar-border: color-mix(in oklch, var(--foreground) 12%, transparent);
+  --sidebar-ring: oklch(0.659 0.167 263.49);
 }
 
 @layer base {
@@ -306,6 +355,131 @@
     }
   }
 
+  /* A single traveling arc of light circling the "Maximum" quality-mode
+     card, singling it out as the premium/hero option (Beta and Recommended
+     badges were dropped in favor of this one signature treatment). Stays on
+     the app's single-accent palette — a brightness sweep, not a rainbow. */
+  .quality-mode-shimmer {
+    position: relative;
+  }
+
+  .quality-mode-shimmer::before {
+    content: "";
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+      from var(--shimmer-angle),
+      transparent 0%,
+      transparent 80%,
+      var(--primary) 89%,
+      oklch(0.97 0.02 255) 93%,
+      var(--primary) 97%,
+      transparent 100%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: quality-mode-shimmer-spin 4.5s linear infinite;
+  }
+
+  @keyframes quality-mode-shimmer-spin {
+    to {
+      --shimmer-angle: 360deg;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .quality-mode-shimmer::before {
+      animation: none;
+      background: conic-gradient(
+        var(--primary) 0%,
+        color-mix(in oklch, var(--primary) 40%, transparent) 100%
+      );
+    }
+  }
+
+  /* Guided-brush "preparing" state: a soft moving gradient wash over the
+     photo itself instead of a skeleton mockup — enough to read as "busy"
+     without hiding the image or adding boilerplate loading chrome. */
+  .guided-brush-preparing-overlay {
+    background: radial-gradient(
+      120% 120% at var(--preparing-x, 30%) var(--preparing-y, 30%),
+      color-mix(in oklch, var(--primary) 22%, transparent) 0%,
+      color-mix(in oklch, var(--primary) 8%, transparent) 45%,
+      color-mix(in oklch, var(--background) 55%, transparent) 100%
+    );
+    animation: guided-brush-preparing-drift 3.2s ease-in-out infinite alternate;
+  }
+
+  @keyframes guided-brush-preparing-drift {
+    from {
+      --preparing-x: 25%;
+      --preparing-y: 20%;
+    }
+    to {
+      --preparing-x: 75%;
+      --preparing-y: 70%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .guided-brush-preparing-overlay {
+      animation: none;
+      background: radial-gradient(
+        120% 120% at 50% 50%,
+        color-mix(in oklch, var(--primary) 18%, transparent) 0%,
+        color-mix(in oklch, var(--background) 55%, transparent) 100%
+      );
+    }
+  }
+
+  /* Editor-stage "still loading" surface: a clearly darker scrim (not just a
+     faint pulse) with a diagonal shimmer sweep, so it reads unmistakably as
+     "busy" even glanced at from across the page. */
+  .editor-stage-loading {
+    background: color-mix(in oklch, var(--foreground) 10%, var(--muted));
+  }
+
+  .editor-stage-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in oklch, var(--primary) 30%, transparent) 45%,
+      color-mix(in oklch, var(--primary) 50%, transparent) 50%,
+      color-mix(in oklch, var(--primary) 30%, transparent) 55%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: editor-stage-shimmer-sweep 1.8s ease-in-out infinite;
+  }
+
+  @keyframes editor-stage-shimmer-sweep {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .editor-stage-loading::after {
+      animation: none;
+      background: color-mix(in oklch, var(--primary) 12%, transparent);
+    }
+  }
+
   .site-background-pattern {
     background-image:
       linear-gradient(
@@ -424,6 +598,26 @@
   .editor-tool-panel {
     width: 100%;
     min-width: 0;
+  }
+
+  /* Extends the site's engineering-grid language (T4) into the editor
+     stage's own letterboxed margins (T26) — same technique, smaller/no-mask
+     since the stage is already a bounded box, not a full viewport. */
+  .editor-stage-grid {
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
+        transparent 1px
+      );
+    background-size:
+      24px 24px,
+      24px 24px;
   }
 
   .editor-stage:fullscreen {

@@ -12,30 +12,31 @@ describe("processing mode selector", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByText("Fast")).toBeDefined();
     expect(screen.getByText("Optimal")).toBeDefined();
-    expect(screen.getByText("Maximum quality")).toBeDefined();
-    expect(screen.getByText("Beta")).toBeDefined();
-    expect(screen.getByText("Recommended")).toBeDefined();
-    expect(screen.queryByText(/IS-Net|BEN2|WebGPU|WASM|MB|MiB/i)).toBeNull();
+    expect(screen.getByText("Maximum")).toBeDefined();
+    expect(screen.queryByText(/IS-Net|BEN2|WASM/i)).toBeNull();
   });
 
   it("maps Maximum quality to the BEN2 internal profile", () => {
     const onChange = vi.fn();
     render(<QualityModeToggle qualityMode="isnet-q8" onQualityModeChange={onChange} />);
 
-    fireEvent.click(screen.getByRole("radio", { name: /Maximum quality/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Maximum/ }));
 
     expect(onChange).toHaveBeenCalledWith("ben2-fp16");
   });
 
-  it("keeps recommendation and Beta badges in the title row", () => {
+  it("shows no Beta or Recommended badges and highlights Maximum with the shimmer border", () => {
     render(<QualityModeToggle qualityMode="isnet-q8" onQualityModeChange={vi.fn()} />);
 
-    for (const badge of [screen.getByText("Recommended"), screen.getByText("Beta")]) {
-      const titleRow = badge.parentElement?.parentElement;
-      expect(titleRow?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
-      expect(titleRow?.className).toContain("gap-2");
-      expect(badge.parentElement?.className).toContain("shrink-0");
-    }
+    expect(screen.queryByText("Beta")).toBeNull();
+    expect(screen.queryByText("Recommended")).toBeNull();
+
+    const maximumRadio = screen.getByRole("radio", { name: /Maximum/ });
+    const maximumCard = maximumRadio.closest(
+      '[data-testid="processing-mode-selector"] .group',
+    );
+    expect(maximumCard?.className).toContain("quality-mode-shimmer");
+
     expect(
       screen
         .getAllByRole("radio")

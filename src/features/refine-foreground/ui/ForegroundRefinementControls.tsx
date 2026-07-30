@@ -52,14 +52,17 @@ export function ForegroundRefinementControls({
       data-testid="foreground-refinement-controls"
     >
       <div>
-        <h3 id="foreground-refinement-title" className="text-sm font-semibold">
+        <h3
+          id="foreground-refinement-title"
+          className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+        >
           {m.foregroundRefinementTitle()}
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
           {m.foregroundRefinementHint()}
         </p>
       </div>
-      <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors duration-200 hover:border-foreground/30 hover:bg-accent/30 motion-reduce:transition-none has-[:checked]:border-primary has-[:checked]:bg-primary/5">
         <input
           type="checkbox"
           checked={componentCleanup}
@@ -80,7 +83,7 @@ export function ForegroundRefinementControls({
           className={
             terminalError
               ? "rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
-              : "rounded-lg border border-emerald-500/40 bg-emerald-50 p-3 text-xs text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+              : "rounded-lg border border-border bg-success p-3 text-xs text-success-foreground"
           }
         >
           {terminalMessage}

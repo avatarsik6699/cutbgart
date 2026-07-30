@@ -1,40 +1,44 @@
 import { Popover } from "@base-ui/react/popover";
-import { Bolt, CircleHelp, Gauge, Sparkles, Target, X } from "lucide-react";
+import { CircleHelp, Gauge, Gem, Scale, X, Zap } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { m } from "@/paraglide/messages";
+import { cn } from "@/shared/lib/utils";
 import type { AutomaticModelMode } from "../../../entities/processed-image";
 
 const PUBLIC_MODE_OPTIONS = [
   {
     id: "isnet-q8",
-    icon: Bolt,
+    icon: Zap,
     label: () => m.processingModeFast(),
     hint: () => m.processingModeFastHint(),
+    meta: () => m.processingModeFastMeta(),
   },
   {
     id: "isnet-fp32",
-    icon: Target,
+    icon: Scale,
     label: () => m.processingModePrecise(),
     hint: () => m.processingModeOptimalHint(),
+    meta: () => m.processingModeOptimalMeta(),
   },
   {
     id: "ben2-fp16",
-    icon: Sparkles,
+    icon: Gem,
     label: () => m.processingModeBen2(),
     hint: () => m.processingModeMaximumHint(),
+    meta: () => m.processingModeMaximumMeta(),
   },
 ] as const satisfies ReadonlyArray<{
   id: AutomaticModelMode;
-  icon: typeof Bolt;
+  icon: typeof Zap;
   label: () => string;
   hint: () => string;
+  meta: () => string;
 }>;
 
 export interface QualityModeToggleProps {
   qualityMode: AutomaticModelMode;
   onQualityModeChange: (mode: AutomaticModelMode) => void;
-  recommendedMode?: AutomaticModelMode;
   disabled?: boolean;
 }
 
@@ -83,9 +87,9 @@ function MaximumQualityHelp() {
           dismissLockRef.current = false;
         }}
         aria-label={m.processingModeMaximumHelpLabel()}
-        className="relative z-20 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="relative z-20 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <CircleHelp className="size-4" aria-hidden="true" />
+        <CircleHelp className="size-3.5" aria-hidden="true" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner sideOffset={8} collisionPadding={12} className="z-50">
@@ -114,31 +118,37 @@ function MaximumQualityHelp() {
 export function QualityModeToggle({
   qualityMode,
   onQualityModeChange,
-  recommendedMode = "isnet-fp32",
   disabled = false,
 }: QualityModeToggleProps) {
   return (
-    <fieldset className="w-full space-y-2" data-testid="processing-mode-selector">
+    <fieldset
+      className="w-full space-y-2 [container-type:inline-size]"
+      data-testid="processing-mode-selector"
+    >
       <legend className="flex items-center gap-2 text-sm font-semibold">
         <Gauge className="size-4 text-primary" aria-hidden="true" />
         {m.processingModeLabel()}
       </legend>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="flex flex-col gap-2 @[28rem]:grid @[28rem]:grid-cols-3">
         {PUBLIC_MODE_OPTIONS.map((profile) => {
           const Icon = profile.icon;
           const selected = qualityMode === profile.id;
-          const recommended = profile.id === recommendedMode;
+          const isMaximum = profile.id === "ben2-fp16";
           return (
             <div
               key={profile.id}
-              className={`group relative grid min-w-0 grid-cols-[minmax(0,1fr)_auto] rounded-2xl border transition-[border-color,background-color,box-shadow,transform] duration-200 motion-reduce:transition-none ${
+              className={cn(
+                "group relative flex min-w-0 items-start rounded-lg border transition-[border-color,background-color] duration-200 motion-reduce:transition-none",
                 selected
-                  ? "border-primary/70 bg-primary/[0.055] shadow-[0_8px_30px_-22px_var(--primary)] sm:-translate-y-0.5"
-                  : "border-border/80 bg-background/55 hover:border-foreground/20 hover:bg-background/90"
-              }`}
+                  ? "border-primary bg-primary/[0.055]"
+                  : isMaximum
+                    ? "border-transparent bg-background/55 hover:bg-background/90"
+                    : "border-border/80 bg-background/55 hover:border-foreground/20 hover:bg-background/90",
+                isMaximum && "quality-mode-shimmer",
+              )}
               data-selected={selected || undefined}
             >
-              <label className="relative min-w-0 cursor-pointer p-3.5 text-left text-sm">
+              <label className="relative min-w-0 flex-1 cursor-pointer p-3 text-left text-sm">
                 <input
                   type="radio"
                   name="processing-mode"
@@ -148,43 +158,29 @@ export function QualityModeToggle({
                   disabled={disabled}
                   className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
-                <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
+                <span className="flex min-w-0 items-start gap-2.5">
                   <span
-                    className={`grid size-8 shrink-0 place-items-center rounded-xl transition-colors ${
+                    className={`grid size-7 shrink-0 place-items-center rounded-lg transition-colors ${
                       selected
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground group-hover:text-foreground"
                     }`}
                   >
-                    <Icon className="size-4" aria-hidden="true" />
+                    <Icon className="size-3.5" aria-hidden="true" />
                   </span>
-                  <span className="min-w-0">
-                    <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 font-medium">
-                      <span className="min-w-0 leading-5">{profile.label()}</span>
-                      <span
-                        className="flex shrink-0 items-center gap-1"
-                        data-testid={`processing-mode-badges-${profile.id}`}
-                      >
-                        {profile.id === "ben2-fp16" && (
-                          <span className="inline-flex rounded-full bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-200">
-                            {m.beta()}
-                          </span>
-                        )}
-                        {recommended && (
-                          <span className="inline-flex rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-semibold text-primary">
-                            {m.processingModeRecommended()}
-                          </span>
-                        )}
-                      </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="truncate font-medium leading-5">
+                      {profile.label()}
                     </span>
-                    <span className="mt-1 block text-xs leading-4 text-muted-foreground">
-                      {profile.hint()}
+                    <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">
+                      {profile.meta()}
                     </span>
+                    <span className="sr-only">{profile.hint()}</span>
                   </span>
                 </span>
               </label>
-              {profile.id === "ben2-fp16" && (
-                <div className="self-start p-2.5 pl-0">
+              {isMaximum && (
+                <div className="relative z-20 shrink-0 self-start pt-1.5 pr-1.5">
                   <MaximumQualityHelp />
                 </div>
               )}

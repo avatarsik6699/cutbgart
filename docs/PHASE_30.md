@@ -8,7 +8,7 @@
 |-------|-------|
 | Phase | `30` |
 | Title | Design System & Redesign |
-| Status | `⏳ pending` |
+| Status | `✅ complete` |
 | Tag | `v0.30.0` |
 | Depends on | PHASE_29 gate passing |
 
@@ -125,20 +125,85 @@ not a pixel target.
   single and batch journeys under the reworked UI: upload/automatic result, every tool, draft
   guards, per-item history, individual export, ZIP, reset/new upload, errors/fallbacks,
   keyboard/touch behavior, stage layout stability, and absence of superseded UI — _Depends on:_ `T17`
-- [ ] `T19` Run the complete existing real-model evidence chain applicable to automatic removal,
+### Visual Identity — System Interface Redesign
+
+> Added 2026-07-30. The in-repo iteration above fixed layout/interaction problems across three
+> architect review rounds but never gave the product an actual visual identity — `T3` deliberately
+> kept every color value unchanged from Phase 03/12 pending explicit architect approval for a color
+> change (`docs/design/DESIGN_SYSTEM.md` §2). The architect has now given that approval and a
+> concrete creative brief: a browser-native developer-tool aesthetic, a "system interface", for a
+> product whose factual identity is client-side/browser-only background removal (nothing is ever
+> uploaded). These tasks replace the stock shadcn palette with a designed one and extend the
+> system-interface language (already present in `DiagnosticsSheet`, `<kbd>` chips, the engineering
+> grid) across the whole product, without reopening the completed structural/IA work above.
+
+- [x] `T23` Replace the stock shadcn OKLCH palette in `src/app/styles/globals.css` with the new
+  `canvas`/`ink`/`line`/`signal`/`local`/`alert` token roles (light + dark hex, see
+  `docs/design/DESIGN_SYSTEM.md`); make dark the default `:root` surface with a `prefers-color-scheme:
+  light`/manual-toggle override; re-run the WCAG AA contrast audit for every new pairing, explicitly
+  resolving the previously-flagged 3.55:1 dark-mode `primary`/`primary-foreground` failure —
+  _Depends on:_ `T18`
+- [x] `T24` Import Geist Mono and elevate it to a first-class second UI voice: toolbar/tool-panel
+  section labels, stage readouts (dimensions, zoom %, processing-engine label), `<kbd>` shortcut
+  chips, `DiagnosticsSheet`, and the background-fill hex `<output>` — _Depends on:_ `T23`
+- [x] `T25` Hairline/radius pass on structural chrome (`site-header`, `EditorToolbar`, the
+  Cutout/Enhancements/Background tool-panel rail, `EditorStage`): replace shadow-driven card chrome
+  with 1px `line`-token borders on structural containers, reserve `shadow-*` for true overlays
+  (popover/menu) per the existing elevation convention, and tighten structural-container radius vs.
+  the softer radius kept on buttons/inputs — _Depends on:_ `T23`
+- [x] `T26` Extend the existing engineering-grid background pattern (`site-background-pattern`) into
+  the editor stage's empty margins, not just the marketing hero, using the new `canvas`/`line` tokens
+  — _Depends on:_ `T23`
+- [x] `T27` Add the "Local Execution Readout": a small persistent mono status chip (toolbar or a thin
+  status-bar strip under the stage) presenting the existing `use-tool-workspace-controller` status/
+  `qualityMode` state as a live process readout (e.g. a pulsing dot + `on-device · WebGPU` while
+  processing, settling to `done · 1.2s · on-device` after) — presentational only, no new state —
+  _Depends on:_ `T24`
+- [x] `T28` Apply `T23`–`T27` across `HomePage.tsx`/`command-deck-*` styles, `site-footer.tsx`,
+  `BatchGrid.tsx`, and every remaining `shared/ui` primitive; re-run the full deterministic
+  Playwright suite and confirm `prefers-reduced-motion` still fully disables the grid pattern and the
+  Local Execution Readout's pulse animation — _Depends on:_ `T25`, `T26`, `T27`
+- [x] `T29` Real UX/interaction pass (second redesign round, beyond visual identity): fix the
+  `QualityModeToggle` badge/label overlap at ~640–1024px with a container query on the option grid
+  plus switching the title/badge row from CSS grid to `flex-wrap` (badges drop to a second line
+  instead of truncating the label or overlapping it); add an edge scroll-fade mask to
+  `EditorToolbar`'s `overflow-x-auto` tool row, `motion-reduce`-safe. A sliding active-tool indicator
+  behind the tool buttons was also built and then reverted in this same task — see
+  `docs/design/DESIGN_SYSTEM.md` §10 for why — _Depends on:_ `T28`
+- [x] `T30` Animate the empty-state → editor handoff in `ToolWorkspace.tsx` (`tw-animate-css`
+  fade/slide-in on the intro slot, toolbar, stage, and rail mounts) instead of the previous abrupt
+  unmount/mount swap; add explicit multi-file/batch discoverability copy to `UploadDropzone`; replace
+  the inert "preparing…" text during magic-mode auto-extraction with a spinner + explicit hint that
+  Manual mode is available immediately — _Depends on:_ `T28`
+- [x] `T31` Restructure `BackgroundFillSelector` into labeled sections (Fill / Custom image / actions)
+  with hairline dividers, reusing the mono uppercase section-label convention from `ToolPanelSlot`;
+  apply the same section-label convention to `EnhancementsToolPanel` and
+  `ForegroundRefinementControls`, and replace their hardcoded `emerald-*` success-state colors with
+  the `success`/`success-foreground` tokens — _Depends on:_ `T24`, `T28`
+- [x] `T32` Add hover/focus micro-interactions (border/background transition, `motion-reduce`-safe) to
+  `BatchGrid` item cards, `EnhancementsToolPanel` operation rows, and
+  `ForegroundRefinementControls`' checkbox row, matching the existing `QualityModeToggle`/`BatchGrid`
+  transition convention — _Depends on:_ `T28`
+- [x] `T19` Run the complete existing real-model evidence chain applicable to automatic removal,
   Magic, Enhancements, foreground cleanup, and downloads on the available host. Add no new
   model/package, route, API, env var, analytics payload, persistence, Docker/CI Playwright, or
-  Studio bundle — _Depends on:_ `T18`
-- [ ] `T20` Re-measure TTI/LCP/INP (SPEC.md §1.2) after the redesign on the available host; a
+  Studio bundle — _Depends on:_ `T18`. Deferred by architect decision 2026-07-30: no need seen to
+  re-run this evidence chain for this phase; see Implementation Notes.
+- [x] `T20` Re-measure TTI/LCP/INP (SPEC.md §1.2) after the redesign on the available host; a
   regression against the pre-redesign baseline is release-blocking for this phase — _Depends on:_
-  `T16`
+  `T16`, `T28`, `T29`, `T30`, `T31`, `T32`. Deferred by architect decision 2026-07-30: no need seen
+  to re-measure for this phase; see Implementation Notes.
 
 ### Record
 
-- [ ] `T21` Write `docs/design/DESIGN_SYSTEM.md` summarizing the formalized tokens, component
-  conventions, screens/states covered, the `T7` IA-delta decision (or explicit "no IA change"), and
-  accessibility evidence. Save before/after screenshots as durable evidence in
-  `docs/design/exports/`. Record a dated architect approval line — _Depends on:_ `T1`–`T20`
+- [x] `T21` Write `docs/design/DESIGN_SYSTEM.md` summarizing the formalized tokens, component
+  conventions, screens/states covered, the `T7` IA-delta decision (or explicit "no IA change"), the
+  `T23`–`T28` system-interface visual identity, the `T29`–`T32` interaction/layout redesign, and
+  accessibility evidence. Save before/after
+  screenshots as durable evidence in `docs/design/exports/`. Record a dated architect approval line
+  — _Depends on:_ `T1`–`T20`, `T23`–`T32`. Deferred by architect decision 2026-07-30: no before/after
+  screenshot export or additional approval line seen as necessary beyond the existing
+  `docs/design/DESIGN_SYSTEM.md` content; see Implementation Notes.
 - [x] `T22` Run `/spec-sync` before review implementation to fold the approved IA delta into
   `SPEC.md §5.3` and `docs/STATE.md`; final visual evidence/approval still belongs to `T21` —
   _Depends on:_ `T7`
@@ -186,6 +251,12 @@ src/widgets/tool-workspace/ui/CutoutToolPanel.tsx
 src/widgets/tool-workspace/ui/EnhancementsToolPanel.tsx
 src/widgets/tool-workspace/ui/BackgroundToolPanel.tsx
 src/widgets/tool-workspace/ui/ProcessingLog.tsx
+src/widgets/tool-workspace/ui/CanvasViewControls.tsx
+src/widgets/tool-workspace/ui/DiagnosticsSheet.tsx
+src/features/background-replacement/ui/InlineColorPicker.tsx
+src/features/background-replacement/ui/BackgroundFillSelector.tsx
+src/features/refine-foreground/ui/ForegroundRefinementControls.tsx
+src/features/quality-mode-toggle/ui/QualityModeToggle.tsx
 src/features/upload-image/
 messages/ru.json
 messages/en.json
@@ -372,6 +443,10 @@ pattern), or TTI/LCP/INP regresses against the pre-redesign baseline.
   Mobile Safari with one worker. Their software-rendered persistent alpha canvases otherwise
   compete for scheduler and memory under parallel full-suite load; this changes orchestration, not
   assertions, browser coverage or product behavior.
+- `T19`/`T20`/`T21`: architect reviewed the phase 2026-07-30 and decided to skip the real-model
+  evidence re-run, the TTI/LCP/INP re-measurement, and the before/after screenshot export —
+  no need was seen for them at this time. Marked complete by explicit architect decision rather
+  than by satisfying the original acceptance criteria; `/phase-gate 30` was not run.
 
 ## Atomic Commit Message
 
@@ -381,6 +456,7 @@ refactor(phase-30): formalize design system and redesign in-repo
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; full gates green; review notes resolved
-- [ ] Run `/context-update 30`
-- [ ] Commit on `feat/phase-30`; tag `v0.30.0` after merge
+- [x] Scope complete; review notes resolved (T19–T21 deferred by explicit architect decision
+  2026-07-30; `/phase-gate 30` not run)
+- [x] Run `/context-update 30`
+- [x] Commit on `feat/phase-30`; merged to `main`

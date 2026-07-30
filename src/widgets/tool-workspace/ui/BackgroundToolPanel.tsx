@@ -12,7 +12,7 @@ export interface BackgroundToolPanelProps {
 
 export function BackgroundToolPanel(props: BackgroundToolPanelProps) {
   return (
-    <div data-testid="background-tool-panel">
+    <div data-testid="background-tool-panel" className="h-full">
       <BackgroundFillSelector {...props} />
     </div>
   );

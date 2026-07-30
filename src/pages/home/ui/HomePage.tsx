@@ -21,9 +21,6 @@ export function HomePage() {
           emptyIntroSlot={
             <section className="flex h-full flex-col justify-center gap-7 py-4">
               <header className="flex flex-col items-start gap-5 text-left">
-                <span className="rounded-full border border-primary/20 bg-background/75 px-3 py-1 text-xs font-medium text-primary shadow-sm backdrop-blur">
-                  {m.trustBadge()}
-                </span>
                 <h1 className="max-w-xl text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
                   {m.heroHeadline()}
                 </h1>
@@ -34,7 +31,7 @@ export function HomePage() {
               <div className="grid gap-4">
                 {FEATURES.map(({ icon: Icon, title, body }) => (
                   <div key={title()} className="flex max-w-xl gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl border bg-card/80 shadow-sm">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-card/80">
                       <Icon className="size-4 text-primary" aria-hidden="true" />
                     </span>
                     <div>

@@ -3,6 +3,7 @@ import { MessageCircle } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 
 const TELEGRAM_FEEDBACK_URL = "https://t.me/+HaqBWI1A3vg4MWJi";
 
@@ -13,7 +14,7 @@ function SiteFooter({ className }: { className?: string }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1">
             <Link to="/" aria-label={m.brandName()} className="w-fit">
-              <img src="/logo.png" alt={m.brandName()} className="h-8 w-auto" />
+              <BrandLogo />
             </Link>
             <p className="text-sm text-muted-foreground">{m.footerTagline()}</p>
           </div>
@@ -35,7 +36,7 @@ function SiteFooter({ className }: { className?: string }) {
             </a>
           </nav>
         </div>
-        <div className="flex flex-col gap-1 border-t border-border pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1 border-t border-border pt-4 font-mono text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>{m.footerTrust()}</p>
           <p>{m.footerCopyright({ year: String(new Date().getFullYear()) })}</p>
         </div>

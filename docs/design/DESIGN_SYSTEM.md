@@ -41,6 +41,10 @@ No color values changed — SPEC.md and `docs/PHASE_30.md` both require the exis
 unchanged unless the architect explicitly approves a change. This section documents the tokens as
 formalized in `src/app/styles/globals.css`, which is now the source-of-truth comment block.
 
+> **Superseded 2026-07-30 by `T23`–`T28` — see §9.** The architect explicitly approved a full color
+> replacement and gave a concrete creative brief (a "browser-native developer-tool" / "system
+> interface" aesthetic). The palette below is the pre-`T23` historical record; §9 is current.
+
 ### Color
 
 The `:root`/`.dark` OKLCH values are unchanged (Phase 03 base palette + Phase 12's one added accent).
@@ -409,3 +413,166 @@ _Pending — see `docs/design/exports/`._
 ## 8. Architect Approval
 
 _Pending — recorded at `T21`._
+
+## 9. Visual Identity — System Interface Redesign (`T23`–`T28`)
+
+**Approved 2026-07-30.** Three architect review rounds on top of `T1`–`T22` fixed real structural
+problems (broken breakpoints, flicker, layout instability) but left the product's actual identity
+untouched — §2 above records that no color value changed from Phase 03/12's stock, unbranded shadcn
+"neutral" palette. That is the root of the continued dissatisfaction: this section is the architect's
+creative brief for closing that gap, superseding §2's palette (typography, spacing, radius, and
+elevation *conventions* from §2 are otherwise unchanged and still apply).
+
+**Brief:** a browser-native developer-tool aesthetic — a "system interface" — for a product whose
+factual identity is `cutbg.art`: free, client-side, browser-only background removal and finishing;
+image processing happens entirely on-device, nothing is ever uploaded to a server. The app already
+leans partway this direction without owning it (`DiagnosticsSheet`'s monospace log, `<kbd>` shortcut
+chips, the engineering-grid background, a component literally named `command-deck`) — this redesign
+elevates that latent language into the actual product identity instead of adding a fourth cosmetic
+pass.
+
+### Color
+
+Replaces the stock indigo-264° shadcn defaults. Named roles, not a raw scale — each has a light and
+dark hex value; dark is the default rendered surface (`:root` ships the dark values, a
+`prefers-color-scheme: light` / manual toggle applies light), because a browser-native developer tool
+(VS Code, a terminal, DevTools) reads as dark-by-default. Light stays a fully-supported, equally
+rigorous second theme.
+
+| Role | Light | Dark | Use |
+|---|---|---|---|
+| `canvas` | `#F3F4F5` | `#0A0C0E` | page/app background |
+| `ink` | `#14171A` | `#E7E9EC` | text, primary foreground |
+| `line` | `#DBDEE2` | `#22262B` | hairline borders — replaces most `shadow-*` on structural chrome |
+| `signal` | `#2F6FEB` | `#5B8DF7` | the one functional accent: focus, active tool, processing state |
+| `local` | `#1FAE6E` | `#33C97F` | "runs on your device" trust/success state — the product's on-device promise made visible |
+| `alert` | `#E5484D` | `#F16267` | destructive/error (tuned from the current `--destructive`, not reinvented) |
+
+Every new pairing gets the same WCAG AA contrast audit method as §2's table (OKLCH → linear sRGB →
+relative luminance → ratio) before `T23` is marked complete, including resolving the previously
+flagged 3.55:1 dark-mode `primary`/`primary-foreground` failure as part of choosing `signal`'s
+dark-mode lightness. `warning`/`info`/`success` (§1, §6) stay as semantic status tokens, retuned to
+sit consistently against the new `canvas`/`ink` pair rather than removed.
+
+### Typography
+
+Geist Variable stays the UI/display face (already reads as a "system" typeface — no reason to
+replace it), used with restraint. **Geist Mono** (same family, guaranteed metric harmony) becomes a
+first-class second voice rather than a rare diagnostic-only accent: toolbar/tool-panel section
+labels, stage readouts (image dimensions, zoom %, processing-engine label), `<kbd>` shortcut chips,
+`DiagnosticsSheet`, and the background-fill hex `<output>` all move to mono (`T24`). This is the
+single biggest typographic move in the redesign — it takes a device that today only shows up in
+`DiagnosticsSheet` and `InlineColorPicker`'s hex readout and makes it the product's signature voice
+throughout.
+
+### Layout
+
+Hairline 1px `line`-token borders replace shadow-driven card chrome on structural surfaces
+(`site-header`, `EditorToolbar`, the tool-panel rail, `EditorStage`) so panels read as instrument/
+window chrome, not consumer-web cards — `shadow-*` stays reserved for true overlays (popover/menu),
+per §2's existing elevation convention (`T25`). A tighter radius on structural containers vs. the
+existing softer radius kept on buttons/inputs creates a deliberate two-tier radius hierarchy
+(instrument vs. control). The existing engineering-grid `.site-background-pattern` — already
+architect-approved through three review rounds — is kept as-is and extended into the editor stage's
+empty margins, not just the marketing hero (`T26`); it is the one visual element already
+unambiguously working and is not being redesigned, only extended.
+
+### Signature element — Local Execution Readout (`T27`)
+
+A persistent, small mono status chip (toolbar or a thin new status-bar strip under the stage)
+presenting the existing `use-tool-workspace-controller` status/`qualityMode` state as a live process
+readout: a pulsing dot + `on-device · WebGPU` while `status: "processing"`, settling to
+`done · 1.2s · on-device` after. Presentational only — reads existing state, introduces no new state
+machine branch. This is the one deliberately memorable device in the redesign: it turns the product's
+core factual promise ("nothing is ever uploaded, it all happens in your browser") into a literal
+piece of system-interface UI instead of marketing copy — the kind of live status line a real
+developer tool would show for a build or process, applied to this product's actual mechanism.
+
+**WCAG AA contrast audit** (same OKLCH → linear sRGB → relative luminance → ratio method as §2),
+computed for every new pairing actually shipped in `globals.css`:
+
+| Pair | Light | Dark | Normal-text AA (≥4.5) |
+|---|---|---|---|
+| `foreground` / `background` | 16.34 | 16.11 | PASS / PASS |
+| `muted-foreground` / `background` | 5.69 | 7.52 | PASS / PASS |
+| `primary-foreground` / `primary` | 5.74 | **6.16** | PASS / **PASS** |
+| `destructive-foreground` / `destructive` | 5.04 | 6.24 | PASS / PASS |
+| `local-foreground` / `local` | 6.29 | 9.14 | PASS / PASS |
+| `foreground` / `card` | 17.99 | 15.31 | PASS / PASS |
+
+The dark-mode `primary-foreground`/`primary` pair — previously flagged at 3.55:1 (§2) — is fixed at
+6.16:1. This isn't a lightness tweak to the old value; the fix is structural: `signal`'s dark-mode
+swatch is deliberately the *lighter* end of its ramp (so it reads clearly against the new near-black
+`canvas`), which means its foreground text is `canvas`-dark (near-black) rather than white — the same
+pattern applied to `destructive` and `local`. `warning`/`info`/`success` (§1, §6) are unchanged
+absolute Tailwind colors (`amber`/`blue`/`emerald` `-100`/`-900` and `-950`/`-200` pairs), independent
+of `canvas`/`ink`, so their existing 8.17–12.03:1 audit from §6 still holds against the new background.
+
+Before/after evidence and the dated architect sign-off for this section are recorded at `T21` (§7,
+§8), alongside the rest of the phase.
+
+## 10. Interaction & Layout Redesign (`T29`–`T32`)
+
+`T23`–`T28` delivered visual identity — palette, type, chrome — without touching component
+composition or interaction. The architect's follow-up brief asked for a real second pass: real UX
+defects fixed, and deliberate interaction/layout upgrades applying the `frontend-design` skill's
+process (structure encodes information, one signature motion, restraint elsewhere) to the parts of
+the product that actually carry the user through the flow.
+
+### Defects fixed
+
+- **`QualityModeToggle` badge/label overlap** (~640–1024px): the 3-column grid keyed off *viewport*
+  width while the component actually lives in a narrower panel column. Fixed with a container query
+  (`@container` + `@[26rem]:grid-cols-3`) so the column count reacts to the panel's real width. A
+  first attempt also added `truncate`/`whitespace-nowrap` and kept the title+badge row as a CSS grid
+  — that stopped the overlap but introduced a second defect: the "Recommended" badge is wide enough
+  that the label track could starve down to truncating short labels (e.g. "Fast") even on a full
+  1440px desktop layout, caught via manual screenshot review. Fixed properly by switching that row
+  from `grid-cols-[minmax(0,1fr)_auto]` to `flex flex-wrap`: the label keeps its natural width and the
+  badge(s) wrap onto a second line when the row is too narrow for both, instead of either truncating
+  or overlapping.
+- **`EditorToolbar` silent horizontal scroll**: `overflow-x-auto` had no affordance, so tools could
+  scroll off-screen unnoticed on narrow viewports. Fixed with edge fade masks that only render when
+  the toolbar is actually scrollable (tracked via `scrollLeft`/`scrollWidth`/`clientWidth` + a
+  `window` `resize` listener and the container's own `scroll` event).
+- **Abrupt empty-state → editor handoff**: `ToolWorkspace`'s hero/toolbar/stage/rail mounts now use
+  `tw-animate-css` `animate-in fade-in slide-in-from-bottom-2`, gated by `motion-safe:`, in place of
+  an unannounced unmount/mount swap.
+- **Batch-mode discoverability**: multi-file drop was only reachable by already knowing it existed.
+  `UploadDropzone` now shows an explicit mono hint line under the primary prompt.
+- **Magic-mode auto-extraction felt like a dead end**: the "preparing…" placeholder is now a spinner
+  plus explicit copy pointing at the always-visible Manual tab as an immediate alternative — no
+  fabricated cancel button was added, since the extraction itself isn't abortable client-side; the fix
+  is making the existing, already-functional escape hatch (the Manual tab) visibly reachable.
+- **`BackgroundFillSelector` undifferentiated control block**: fill options, custom-image upload, and
+  save actions now sit in labeled sections (reusing `ToolPanelSlot`'s mono uppercase section-label
+  convention) separated by hairline dividers, and the redundant nested border/padding (duplicating the
+  `ToolPanelSlot` card chrome it's always rendered inside) was removed.
+
+### Signature interaction motif — tried, and reverted
+
+The original plan for this pass's "one bold move" was a sliding active-tool indicator behind
+`EditorToolbar`'s tool buttons: an absolutely positioned pill animating `transform: translateX(...)`
+and `width` when the active tool changed, measured via a `ResizeObserver` on the button group.
+
+It was built, then reverted during this same task after e2e verification surfaced real,
+reproducible failures: the `ResizeObserver` watched a container that also renders the very indicator
+element its own callback drives, and even after replacing that with a `window` `resize` listener, the
+feature kept causing intermittent timeouts across multiple batch/multi-document apply flows
+(`ci-critical`, `brush-guided-correction`, `hybrid-pipeline` specs) — confirmed as caused by this
+feature specifically via `git stash` bisection (the failures disappeared entirely, 15/15 reliable
+across three repeated runs, once the indicator was removed and only the scroll-fade masks kept).
+Undo/redo/apply reliability in the editor is more important than an animated tab indicator, so it was
+dropped rather than shipped. The toolbar's actual interaction refinement in this pass is the
+scroll-fade masks above; everything else is a quiet, consistent `transition-colors` hover/focus
+treatment (extended to `BatchGrid` item cards, `EnhancementsToolPanel` operation rows, and
+`ForegroundRefinementControls`' checkbox row), not a second bold move.
+
+### Token consistency
+
+`EnhancementsToolPanel` and `ForegroundRefinementControls` had hardcoded `emerald-*` success-state
+colors predating the `success`/`success-foreground` semantic pair (§1, §6). Both now use the token
+pair instead — same computed colors, now sourced from one place.
+
+Verification, before/after evidence, and the dated architect sign-off for this section are recorded
+at `T21` alongside `T23`–`T28`.

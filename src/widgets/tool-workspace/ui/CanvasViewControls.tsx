@@ -67,7 +67,7 @@ function IconButton({
       <TooltipContent>
         <span>{label}</span>
         {shortcut && (
-          <kbd className="ml-2 rounded border border-border/70 bg-muted px-1.5 py-0.5 font-mono text-[0.625rem]">
+          <kbd className="ml-2 rounded border border-background/30 bg-background/15 px-1.5 py-0.5 font-mono text-[0.625rem] text-background">
             {shortcut}
           </kbd>
         )}
@@ -119,7 +119,7 @@ export function CanvasViewControls({
   if (collapsed) {
     return (
       <div
-        className="absolute bottom-3 right-3 z-30 rounded-xl border bg-card/95 p-1 shadow-lg backdrop-blur"
+        className="absolute bottom-3 right-3 z-30 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur"
         data-testid="canvas-view-controls"
         data-collapsed="true"
       >
@@ -137,7 +137,7 @@ export function CanvasViewControls({
     <div
       role="toolbar"
       aria-label={m.viewControls()}
-      className="absolute bottom-3 right-3 z-30 flex items-center gap-0.5 rounded-xl border bg-card/95 p-1 shadow-lg backdrop-blur"
+      className="absolute bottom-3 right-3 z-30 flex items-center gap-0.5 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur"
       data-testid="canvas-view-controls"
       data-collapsed="false"
     >
@@ -166,7 +166,7 @@ export function CanvasViewControls({
         <ZoomOut aria-hidden="true" />
       </IconButton>
       <span
-        className="min-w-12 px-1 text-center text-xs tabular-nums"
+        className="min-w-12 px-1 text-center font-mono text-xs tabular-nums"
         aria-label={`Zoom ${String(zoomPercent)}%`}
       >
         {zoomPercent}%

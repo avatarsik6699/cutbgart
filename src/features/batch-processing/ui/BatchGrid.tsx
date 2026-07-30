@@ -63,7 +63,7 @@ function SourceThumbnail({ item }: { item: BatchItem }) {
         />
       )}
       <span
-        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[0.6875rem] font-medium shadow-sm ${STATUS_STYLES[item.status]}`}
+        className={`absolute left-2 top-2 rounded-full px-2 py-1 font-mono text-[0.625rem] font-medium tracking-wide uppercase ${STATUS_STYLES[item.status]}`}
       >
         {statusLabel(item.status)}
       </span>
@@ -115,12 +115,12 @@ export function BatchGrid({
 
   return (
     <section
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/95 p-3 shadow-sm"
+      className="flex min-w-0 flex-col gap-3 border-t border-border pt-3"
       aria-label={m.batchProcessing()}
       data-testid="batch-overview"
     >
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <h3 className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h3 className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           {m.batchImagesHeading()}
         </h3>
         <BatchStatus snapshot={snapshot} modelLoad={modelLoad} />
@@ -141,9 +141,9 @@ export function BatchGrid({
           return (
             <article
               key={item.id}
-              className={`group relative w-32 shrink-0 overflow-hidden rounded-xl border bg-card text-card-foreground transition-[border-color,box-shadow] duration-200 ${
+              className={`group relative w-32 shrink-0 overflow-hidden rounded-lg border bg-card text-card-foreground transition-[border-color,background-color] duration-200 motion-reduce:transition-none ${
                 selectable
-                  ? "hover:border-foreground/30 hover:shadow-sm"
+                  ? "hover:border-foreground/30 hover:bg-accent/40"
                   : "border-border"
               } ${selected ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
             >
@@ -267,7 +267,7 @@ export function BatchStatus({
   modelLoad?: ModelLoadProgress;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2" data-testid="batch-status">
+    <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="batch-status">
       <p className="sr-only" data-testid="scheduler-summary">
         {m.batchSummary({
           active: snapshot.activeCount,
@@ -278,25 +278,8 @@ export function BatchStatus({
           total: snapshot.totalCount,
         })}
       </p>
-      <div className="flex min-w-0 flex-wrap justify-end gap-1.5 text-xs">
-        <span className="rounded-full bg-muted px-2 py-1 font-medium">
-          {m.batchTotalCount({ count: snapshot.totalCount })}
-        </span>
-        <span className="rounded-full bg-success px-2 py-1 font-medium text-success-foreground">
-          {m.batchReadyCount({ count: snapshot.completedCount })}
-        </span>
-        <span className="rounded-full bg-info px-2 py-1 font-medium text-info-foreground">
-          {m.batchActiveCount({ count: snapshot.activeCount })}
-        </span>
-        <span className="rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground">
-          {m.batchQueuedCount({ count: snapshot.queuedCount })}
-        </span>
-        <span className="rounded-full bg-destructive/10 px-2 py-1 font-medium text-destructive">
-          {m.batchFailedCount({ count: snapshot.failedCount })}
-        </span>
-      </div>
       <div
-        className="ml-auto flex h-1.5 w-full max-w-xl overflow-hidden rounded-full bg-muted"
+        className="flex h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted"
         aria-hidden="true"
         data-testid="batch-status-bar"
       >
@@ -331,21 +314,45 @@ export function BatchStatus({
           />
         )}
       </div>
-      {modelLoad && (
-        <div
-          className="rounded-xl border bg-background/70 p-2 text-xs"
-          data-testid="shared-model-progress"
-          role="progressbar"
-          aria-valuenow={modelLoad.percent ?? undefined}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <p className="font-medium">{progressText(modelLoad)}</p>
-          {modelLoad.status !== "ready" && (
-            <Skeleton className="mt-2 h-1.5 w-full rounded-full" aria-hidden="true" />
-          )}
-        </div>
-      )}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 font-mono text-[0.6875rem] text-muted-foreground">
+        <span>{m.batchTotalCount({ count: snapshot.totalCount })}</span>
+        <span aria-hidden="true">·</span>
+        <span>{m.batchReadyCount({ count: snapshot.completedCount })}</span>
+        {snapshot.activeCount > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{m.batchActiveCount({ count: snapshot.activeCount })}</span>
+          </>
+        )}
+        {snapshot.queuedCount > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{m.batchQueuedCount({ count: snapshot.queuedCount })}</span>
+          </>
+        )}
+        {snapshot.failedCount > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="font-medium text-destructive">
+              {m.batchFailedCount({ count: snapshot.failedCount })}
+            </span>
+          </>
+        )}
+        {modelLoad && modelLoad.status !== "ready" && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span
+              role="progressbar"
+              aria-valuenow={modelLoad.percent ?? undefined}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              data-testid="shared-model-progress"
+            >
+              {progressText(modelLoad)}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { Images, Loader2 } from "lucide-react";
 
 import type {
   AlphaMatte,
@@ -54,6 +55,7 @@ import {
   type EnhancementOperationId,
 } from "../model/enhancement-operation-registry";
 import { useToolWorkspaceController } from "../model/use-tool-workspace-controller";
+import { LocalExecutionReadout } from "./LocalExecutionReadout";
 import {
   createEditorToolRegistry,
   type EditorToolId,
@@ -557,6 +559,16 @@ export function ToolWorkspace({
     state.status,
   ]);
 
+  // Auto-select the first finished batch item so the editor/tools surface
+  // appears as soon as anything is ready, mirroring the single-image flow
+  // instead of leaving the user staring at an empty rail until they click a
+  // thumbnail themselves.
+  useEffect(() => {
+    if (batch.session.selectedItemId) return;
+    const firstReady = batch.session.items.find((item) => item.status === "result");
+    if (firstReady) handleSelectBatchItem(firstReady.id);
+  }, [batch.session.items, batch.session.selectedItemId, handleSelectBatchItem]);
+
   const handleManualDirtyChange = useCallback((dirty: boolean) => {
     setManualDraftDirty(dirty);
   }, []);
@@ -893,15 +905,24 @@ export function ToolWorkspace({
         onApply={() => void handleApplyGuided()}
         onCancel={guided.cancelDraft}
       />
+    ) : extractingMatte ? (
+      <div
+        className="flex items-start gap-2 text-sm text-muted-foreground"
+        aria-busy="true"
+      >
+        <Loader2
+          className="mt-0.5 size-4 shrink-0 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <p>{m.cutoutMagicExtractingHint()}</p>
+      </div>
     ) : (
-      <p className="text-sm text-muted-foreground" aria-busy={extractingMatte}>
-        {extractingMatte ? m.preparing() : m.cutoutMagicReady()}
-      </p>
+      <p className="text-sm text-muted-foreground">{m.cutoutMagicReady()}</p>
     );
 
   if (!displayError && state.status === "idle" && !batch.session.items.length) {
     surfaceNode = guidedCanvas ?? (
-      <section className="command-deck relative isolate flex min-h-[30rem] flex-col justify-center gap-5 overflow-hidden px-1 py-5 sm:px-3 sm:py-7">
+      <section className="command-deck relative isolate flex min-h-[30rem] flex-col justify-center gap-5 px-1 py-5 sm:px-3 sm:py-7">
         <span
           aria-hidden="true"
           className="command-deck-ambient command-deck-ambient-primary"
@@ -913,9 +934,6 @@ export function ToolWorkspace({
         <QualityModeToggle
           qualityMode={qualityMode}
           onQualityModeChange={setQualityMode}
-          recommendedMode={
-            deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
-          }
           disabled={!hydrated}
         />
         <UploadDropzone
@@ -923,7 +941,7 @@ export function ToolWorkspace({
           onUploads={handleUploads}
           onPreparationChange={setPreparingFileCount}
           disabled={!hydrated || busy || preparingFileCount > 0}
-          className="command-deck-dropzone border border-border/80 bg-background/50 shadow-[0_18px_70px_-55px_var(--foreground)] backdrop-blur-sm"
+          className="command-deck-dropzone border border-border bg-background/50 backdrop-blur-sm"
         />
         <ChoosePhotoButton
           onUpload={handleUpload}
@@ -945,9 +963,6 @@ export function ToolWorkspace({
       <QualityModePopover
         qualityMode={qualityMode}
         onQualityModeChange={setQualityMode}
-        recommendedMode={
-          deviceCapabilities?.inferencePath === "webgpu" ? "isnet-fp32" : "isnet-q8"
-        }
         disabled={!hydrated}
       />
       <ChoosePhotoButton
@@ -1016,102 +1031,140 @@ export function ToolWorkspace({
           />
         </div>
       )}
-      {!selectedBatchItem?.processedImage && (
-        <div className="grid size-full place-items-center rounded-xl border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          <div className="max-w-xs">
-            <Skeleton className="mx-auto mb-4 h-36 w-48 rounded-xl" aria-hidden="true" />
-            <p>{m.batchEditorEmpty()}</p>
+      {!selectedBatchItem?.processedImage &&
+        (batch.snapshot.activeCount > 0 || batch.snapshot.queuedCount > 0 ? (
+          <EditorStage documentId="batch-loading" loading>
+            <p
+              className="rounded-full border border-border bg-background/90 px-4 py-2 font-mono text-sm font-medium text-foreground"
+              data-testid="batch-stage-skeleton"
+            >
+              {m.removingBackground()}
+            </p>
+          </EditorStage>
+        ) : (
+          <div className="grid size-full min-[56rem]:min-h-72 place-items-center rounded-xl border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+            <div className="max-w-xs">
+              <Images
+                className="mx-auto mb-3 size-8 text-muted-foreground/60"
+                aria-hidden="true"
+              />
+              <p>{m.batchEditorEmpty()}</p>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
     </section>
   ) : null;
 
+  const batchStillLoading =
+    !selectedBatchItem?.processedImage &&
+    (batch.snapshot.activeCount > 0 || batch.snapshot.queuedCount > 0);
+
   const batchRailBase = batchActive ? (
-    <ToolPanelSlot
-      toolId={activeTool}
-      label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
-    >
-      {selectedBatchItem?.processedImage ? (
-        <div className="flex flex-col gap-4" data-testid="batch-controls">
-          {activeTool === "cutout" && (
-            <CutoutToolPanel
-              mode={cutoutMode}
-              onModeChange={selectCutoutMode}
-              magicControls={magicControls}
-              manualControls={
-                <p className="text-sm text-muted-foreground" aria-busy={extractingMatte}>
-                  {extractingMatte ? m.preparing() : m.cutoutManualReady()}
-                </p>
-              }
-            />
-          )}
-          {activeTool === "enhance" && (
-            <EnhancementsToolPanel
-              registry={enhancementRegistry}
-              draft={visibleEnhancementDraft}
-              progress={enhancementProgress}
-              activeOperationId={enhancementState.activeOperationId}
-              outcome={
-                enhancementState.documentId === activeDocumentId
-                  ? enhancementState.outcome
-                  : null
-              }
-              errorCode={
-                enhancementState.documentId === activeDocumentId
-                  ? enhancementState.errorCode
-                  : null
-              }
-              disabled={Boolean(batch.snapshot.activeCount || batch.snapshot.queuedCount)}
-              onOperationChange={updateEnhancementOperation}
-              onApply={applyBatchEnhancementDraft}
-              onCancel={cancelEnhancementDraft}
-              onRetry={retryEnhancements}
-            />
-          )}
-          {activeTool === "background" && (
-            <BackgroundToolPanel
-              image={{
-                source: selectedBatchItem.processedImage.source,
-                backgroundFill: selectedBatchItem.processedImage.backgroundFill,
-              }}
-              onPreview={(fill) => {
-                setBatchPreviewFills((current) => ({
-                  ...current,
-                  [selectedBatchItem.id]: fill,
-                }));
-              }}
-              onApply={(fill) =>
-                batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
-              }
-              onResult={(updated) => {
-                commitBatchBackground(selectedBatchItem.id, updated);
-                setBatchPreviewFills((current) => ({
-                  ...current,
-                  [selectedBatchItem.id]: updated.backgroundFill ?? {
-                    type: "transparent",
-                  },
-                }));
-                if (activeDocumentId)
+    batchStillLoading ? (
+      <Skeleton
+        className="min-h-72 rounded-lg border border-border min-[56rem]:h-[clamp(22rem,62dvh,46rem)]"
+        data-testid="batch-panel-skeleton"
+      />
+    ) : (
+      <ToolPanelSlot
+        toolId={activeTool}
+        label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
+        fitContent={!selectedBatchItem?.processedImage}
+      >
+        {selectedBatchItem?.processedImage ? (
+          <div className="flex flex-col gap-4" data-testid="batch-controls">
+            {activeTool === "cutout" && (
+              <CutoutToolPanel
+                mode={cutoutMode}
+                onModeChange={selectCutoutMode}
+                magicControls={magicControls}
+                manualControls={
+                  <p
+                    className="text-sm text-muted-foreground"
+                    aria-busy={extractingMatte}
+                  >
+                    {extractingMatte ? m.preparing() : m.cutoutManualReady()}
+                  </p>
+                }
+              />
+            )}
+            {activeTool === "enhance" && (
+              <EnhancementsToolPanel
+                registry={enhancementRegistry}
+                draft={visibleEnhancementDraft}
+                progress={enhancementProgress}
+                activeOperationId={enhancementState.activeOperationId}
+                outcome={
+                  enhancementState.documentId === activeDocumentId
+                    ? enhancementState.outcome
+                    : null
+                }
+                errorCode={
+                  enhancementState.documentId === activeDocumentId
+                    ? enhancementState.errorCode
+                    : null
+                }
+                disabled={Boolean(
+                  batch.snapshot.activeCount || batch.snapshot.queuedCount,
+                )}
+                onOperationChange={updateEnhancementOperation}
+                onApply={applyBatchEnhancementDraft}
+                onCancel={cancelEnhancementDraft}
+                onRetry={retryEnhancements}
+              />
+            )}
+            {activeTool === "background" && (
+              <BackgroundToolPanel
+                image={{
+                  source: selectedBatchItem.processedImage.source,
+                  backgroundFill: selectedBatchItem.processedImage.backgroundFill,
+                }}
+                onPreview={(fill) => {
+                  setBatchPreviewFills((current) => ({
+                    ...current,
+                    [selectedBatchItem.id]: fill,
+                  }));
+                }}
+                onApply={(fill) =>
+                  batch.applyBackgroundFill(selectedBatchItem.processedImage!, fill)
+                }
+                onResult={(updated) => {
+                  commitBatchBackground(selectedBatchItem.id, updated);
+                  setBatchPreviewFills((current) => ({
+                    ...current,
+                    [selectedBatchItem.id]: updated.backgroundFill ?? {
+                      type: "transparent",
+                    },
+                  }));
+                  if (activeDocumentId)
+                    setBackgroundDraftByDocument((current) => ({
+                      ...current,
+                      [activeDocumentId]: false,
+                    }));
+                }}
+                onDirtyChange={(dirty) => {
+                  if (!activeDocumentId) return;
                   setBackgroundDraftByDocument((current) => ({
                     ...current,
-                    [activeDocumentId]: false,
+                    [activeDocumentId]: dirty,
                   }));
-              }}
-              onDirtyChange={(dirty) => {
-                if (!activeDocumentId) return;
-                setBackgroundDraftByDocument((current) => ({
-                  ...current,
-                  [activeDocumentId]: dirty,
-                }));
-              }}
-            />
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">{m.batchSettingsEmpty()}</p>
-      )}
-    </ToolPanelSlot>
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="grid flex-1 place-items-center min-[56rem]:min-h-56 p-2 text-center">
+            <div className="max-w-[14rem]">
+              <Images
+                className="mx-auto mb-3 size-8 text-muted-foreground/60"
+                aria-hidden="true"
+              />
+              <p className="text-sm text-muted-foreground">{m.batchSettingsEmpty()}</p>
+            </div>
+          </div>
+        )}
+      </ToolPanelSlot>
+    )
   ) : null;
 
   const batchPersistentMatte =
@@ -1130,7 +1183,7 @@ export function ToolWorkspace({
     surfaceNode = (
       <EditorStage documentId="single-loading" loading>
         <p
-          className="rounded-full border bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+          className="rounded-full border border-border bg-background/90 px-4 py-2 font-mono text-sm font-medium text-foreground"
           role="progressbar"
           aria-valuenow={Math.round(state.progress)}
           aria-valuemin={0}
@@ -1146,7 +1199,7 @@ export function ToolWorkspace({
     );
     railNode = (
       <Skeleton
-        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-2xl border"
+        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border"
         data-testid="processing-panel-skeleton"
       />
     );
@@ -1156,7 +1209,7 @@ export function ToolWorkspace({
     surfaceNode = (
       <EditorStage documentId="single-processing" loading>
         <p
-          className="rounded-full border bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+          className="rounded-full border border-border bg-background/90 px-4 py-2 font-mono text-sm font-medium text-foreground"
           data-testid="processing-stage-skeleton"
         >
           {state.status === "processing" ? m.removingBackground() : m.preparing()}
@@ -1165,7 +1218,7 @@ export function ToolWorkspace({
     );
     railNode = (
       <Skeleton
-        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-2xl border"
+        className="min-h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border"
         data-testid="processing-panel-skeleton"
       />
     );
@@ -1204,7 +1257,7 @@ export function ToolWorkspace({
         toolId={activeTool}
         label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
           {activeTool === "cutout" && (
             <CutoutToolPanel
               mode={cutoutMode}
@@ -1550,6 +1603,14 @@ export function ToolWorkspace({
       redoLabel={historySelectors.redoLabel}
       onUndo={() => window.setTimeout(handleUndoDocument, 50)}
       onRedo={() => window.setTimeout(handleRedoDocument, 50)}
+      statusSlot={
+        <LocalExecutionReadout
+          busy={busy}
+          inferencePath={
+            runInfo?.inferencePath ?? deviceCapabilities?.inferencePath ?? null
+          }
+        />
+      }
       workspaceActionsSlot={batchActionsNode}
       downloadSlot={
         (activeDownloadDocument && activeDocumentId) ||
@@ -1622,7 +1683,10 @@ export function ToolWorkspace({
         </div>
 
         {showEmptyComposition && emptyIntroSlot && (
-          <div className="[grid-area:intro]" data-testid="home-empty-intro">
+          <div
+            className="[grid-area:intro] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
+            data-testid="home-empty-intro"
+          >
             {emptyIntroSlot}
           </div>
         )}
@@ -1688,7 +1752,7 @@ export function ToolWorkspace({
         )}
 
         {editorToolbarNode && (
-          <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
+          <div className="min-w-0 overflow-hidden [grid-area:toolbar] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
             {editorToolbarNode}
           </div>
         )}
@@ -1698,9 +1762,15 @@ export function ToolWorkspace({
         {correctionGridBody ?? (
           <>
             {stagedSurfaceNode && (
-              <div className="[grid-area:surface]">{stagedSurfaceNode}</div>
+              <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+                {stagedSurfaceNode}
+              </div>
             )}
-            {railNode && <div className="[grid-area:rail]">{railNode}</div>}
+            {railNode && (
+              <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+                {railNode}
+              </div>
+            )}
           </>
         )}
       </div>

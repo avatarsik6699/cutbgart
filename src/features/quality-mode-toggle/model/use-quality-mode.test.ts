@@ -70,6 +70,12 @@ describe("useQualityMode", () => {
     expect(result.current.qualityMode).toBe("isnet-q8");
   });
 
+  it("defaults straight to BEN2 when the device qualifies for it", () => {
+    const { result } = renderHook(() => useQualityMode("ben2-fp16"));
+
+    expect(result.current.qualityMode).toBe("ben2-fp16");
+  });
+
   it("keeps BEN2 session-only without changing the IS-Net preference", () => {
     window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "max");
     const { result } = renderHook(() => useQualityMode("fast"));

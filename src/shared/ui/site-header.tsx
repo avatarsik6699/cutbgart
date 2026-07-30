@@ -6,6 +6,7 @@ import { MessageCircle } from "lucide-react";
 import { m } from "@/paraglide/messages";
 import { getLocale, localizeHref, locales } from "@/paraglide/runtime";
 import { cn } from "@/shared/lib/utils";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 
 const TELEGRAM_FEEDBACK_URL = "https://t.me/+HaqBWI1A3vg4MWJi";
 
@@ -67,45 +68,49 @@ function SiteHeader({
       data-slot="site-header"
       data-hydrated={hydrated}
       className={cn(
-        "border-b border-border bg-background/95 shadow-[0_1px_0_color-mix(in_oklch,var(--border)_70%,transparent)] backdrop-blur-md",
+        "border-b border-border bg-background/90 backdrop-blur-md",
         className,
       )}
     >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-4 sm:px-8">
         <Link to="/" aria-label={m.brandName()} className="shrink-0">
-          <img src="/logo.png" alt={m.brandName()} className="h-8 w-auto sm:h-9" />
+          <BrandLogo />
         </Link>
         <nav
           aria-label="Main"
           className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm sm:gap-x-6"
         >
-          <Link
-            to="/"
-            className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
-          >
-            {m.navHome()}
-          </Link>
-          <Link
-            to="/about"
-            className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
-          >
-            {m.navAbout()}
-          </Link>
-          <a
-            href={TELEGRAM_FEEDBACK_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden items-center gap-1 text-muted-foreground hover:text-foreground sm:inline-flex"
-          >
-            <MessageCircle className="size-4" aria-hidden="true" />
-            {m.navFeedback()}
-          </a>
-          {utilitySlot}
-          <span
-            ref={workspaceUtilityRef}
-            className="grid min-h-9 min-w-9 shrink-0 place-items-center"
-            data-testid="workspace-header-utilities"
-          />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-6">
+            <Link
+              to="/"
+              className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
+            >
+              {m.navHome()}
+            </Link>
+            <Link
+              to="/about"
+              className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
+            >
+              {m.navAbout()}
+            </Link>
+            <a
+              href={TELEGRAM_FEEDBACK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden items-center gap-1 text-muted-foreground hover:text-foreground sm:inline-flex"
+            >
+              <MessageCircle className="size-4" aria-hidden="true" />
+              {m.navFeedback()}
+            </a>
+          </div>
+          <div className="flex shrink-0 items-center gap-x-1">
+            {utilitySlot}
+            <span
+              ref={workspaceUtilityRef}
+              className="grid min-h-9 min-w-9 shrink-0 place-items-center"
+              data-testid="workspace-header-utilities"
+            />
+          </div>
           <LanguageSwitcher />
         </nav>
       </div>
