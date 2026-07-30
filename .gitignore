@@ -20,6 +20,7 @@ public/sitemap.xml
 coverage
 playwright-report
 test-results
+.playwright-mcp
 
 # Host-only Phase 23 release records and encrypted operational backups
 .ops/

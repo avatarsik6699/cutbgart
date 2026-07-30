@@ -82,7 +82,7 @@ authorization for a rewrite, speculative abstraction, or Studio scope (SPEC.md �
 - [x] `F2` Consolidate only proven duplicate business/state/geometry/export/error logic into the
   correct FSD owner and remove only proven-dead adapters/callsites. Preserve public contracts,
   localization, accessibility, model results, and lazy loading — _Depends on:_ `F1`
-- [ ] `F3` Fix approved React findings: eliminate render-phase side effects and effect feedback
+- [x] `F3` Fix approved React findings: eliminate render-phase side effects and effect feedback
   loops, add missing cleanup, narrow subscriptions/selectors, stabilize ownership/identity where
   measured, and split hot visual updates away from React state when already required by the canvas
   contract — _Depends on:_ `F1`, `T4`
@@ -267,6 +267,43 @@ touches.
   a third/fourth shared hook fit to just one call site each would be indirection, not
   deduplication, the same mistake `F-10` corrected. 4 of 7 worker-owning hooks now share two real,
   evidenced patterns; the other 3 keep their own shape by deliberate, evidence-backed decision.
+- **Continued at the architect's explicit request (2026-07-30) to finish every remaining `T`/`F`
+  item rather than close on the state above**, including standing up new tooling where needed:
+  - `T2`/`T5`: built `scripts/profiling/measure-baseline.ts` (`pnpm profile:baseline`, documented in
+    `docs/STACK.md`) — a real CDP-based harness for JS-heap trend and long-task tracking. Measured
+    single-upload churn at 2 independent sample sizes (40 and 100 iterations) and batch churn (60
+    iterations): growth decelerates ~10x from first-10 to tail in every run, with 8–9% of iterations
+    showing real GC reclamation — no leak found (`F-15`).
+  - `T3`: ran `knip` (ad hoc, not added as a dependency) across the repo. Verified every "unused
+    file"/"unused devDependency" flag as a false positive (shell/Dockerfile-invoked scripts, a
+    config-file-only import knip's default setup doesn't trace) and the ~234 "unused export" flags
+    as FSD-barrel/router-codegen noise. One real, unresolved candidate found (`onnxruntime-web`,
+    likely a deliberate version-pin anchor for the Phase 22 security gate) — not removed; flagged
+    for whoever owns that gate (`F-16`).
+  - `T4`: widened the effect audit to every hook/component with 2+ `useEffect` sites
+    (`use-batch-processing.ts`, `use-object-selection.ts`, `GuidedBrushCanvas.tsx`,
+    `MaskCorrectionCanvas.tsx`), beyond the 2 files already checked. Found one real bug —
+    `MaskCorrectionCanvas.tsx`'s keyboard/wheel-shortcut effect had no dependency array at all,
+    unlike the correct sibling pattern in `GuidedBrushCanvas.tsx` — and fixed it via ref-forwarding
+    so the effect properly scopes to `[interactionEnabled]` without a stale-closure risk (`F-17`,
+    `F3`). Added a characterization test confirmed to fail against the pre-fix code.
+  - Manually spot-checked live via Playwright MCP (per the architect's invitation, not just
+    automated coverage): the `F7` invalid-upload flow and a real (non-mocked) automatic-cutout run
+    against the actual inference pipeline — both worked correctly end-to-end in a real browser.
+  - Final full regression: `chromium` 77/77, `firefox` 76/76, `webkit` 76/76 all green (0 failed) —
+    confirmed both before and after the `F-17` fix, the last source change this phase. A first
+    attempt at the post-`F-17` run showed 71 firefox failures traced immediately to this session's
+    own process hygiene (a `pkill` aimed at an unrelated manually-started dev server also killed the
+    e2e run's own server mid-suite) — not a regression; a clean immediate rerun confirmed green.
+    `Mobile Safari` was intentionally not run to completion in the final pass (stopped partway,
+    0 failures observed) at the architect's direction, given it's the already-documented
+    contention-prone secondary browser and the other three are fully clean.
+  - **Result**: `F2` and `F3` now have real, implemented, evidence-backed fixes. `F4`/`F5` remain
+    unchecked — not from time pressure, but because every measurement this phase could responsibly
+    take (`F-12`, `F-15`, `F-08`'s chunk-size piece) came back clean, and the only way to find more
+    would be tooling (a `Profiler`-instrumented build, real-WebGPU hardware) this environment cannot
+    stand up and validate. Those are named, scoped candidates for a future pass, not gaps papered
+    over.
 
 ## Atomic Commit Message
 

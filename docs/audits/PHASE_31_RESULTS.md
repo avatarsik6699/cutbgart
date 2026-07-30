@@ -80,6 +80,8 @@ assertion update because `F7` intentionally changed the upload-error dismiss con
 
 ### Cross-browser (`pnpm e2e`, all 4 projects: chromium, firefox, webkit, Mobile Safari)
 
+Run 1 (after `F2` parts 1–2 and `F-16`/T3, before `F-17`/`F3`):
+
 | Project | Passed | Failed | Skipped |
 |---|---|---|---|
 | chromium | 77 | 0 | 3 |
@@ -88,24 +90,49 @@ assertion update because `F7` intentionally changed the upload-error dismiss con
 | Mobile Safari (full-suite run) | 74 | 2 | 4 |
 | Mobile Safari (rerun alone, per `F-05`) | 76 | 0 | 4 |
 
-`chromium`/`firefox`/`webkit` are fully green. `Mobile Safari`'s 2 failures in the full-suite run
+`chromium`/`firefox`/`webkit` were fully green. `Mobile Safari`'s 2 failures in the full-suite run
 (one `page.goto` "Page crashed", one downstream element-not-found) were the documented contention
-flake (`F-05`, `PHASE_31_FINDINGS.md`) — confirmed by rerunning `Mobile Safari` alone immediately
-afterward: 76/76 passed, 0 failed. **All 4 browser projects are green** as of this phase's close;
-no real regression from any change made this session.
+flake (`F-05`) — confirmed by rerunning `Mobile Safari` alone immediately afterward: 76/76 passed.
+
+Final run (after `F-17`/`F3`, the `MaskCorrectionCanvas.tsx` fix — the last source change this
+phase): `chromium` 77/77, `firefox` 76/76, `webkit` 76/76, all 0 failed. A first attempt at this
+final run showed 71 firefox failures — traced immediately to this session's own process hygiene
+(a `pkill -f "vite dev"` aimed at a separately-started manual dev server also killed the e2e run's
+server mid-suite, `NS_ERROR_CONNECTION_REFUSED` on every subsequent test) — not a real regression;
+confirmed by an immediate clean rerun. `Mobile Safari` was interrupted partway through this final
+run at the architect's explicit direction (11/80 passed, 0 failures observed before stopping) —
+accepted given it's the already-documented secondary/contention-prone browser and the other three
+browsers are fully clean both before and after `F-17`.
+
+Also manually spot-checked live in a browser via Playwright MCP (not just automated): uploaded an
+invalid-format file — error appeared in place inside the upload surface with a working "Try again"
+that dismissed it without disturbing the upload controls (`F7`); then uploaded a real image through
+the real (non-mocked) inference pipeline on this dev server — automatic Cutout completed and the
+editor rendered correctly end-to-end.
 
 ## Chunk sizes (`T2`, single data point — see `PHASE_31_T2_MEASUREMENTS.md`)
 
-No regression: `F7`'s changes (`UploadErrorNotice`, `handleDismissUploadError`) are small in-file
-additions to already-loaded `tool-workspace-*.js`; no new route, no new lazy chunk, no new
-dependency. Not re-measured byte-for-byte after `F7` since the change is too small relative to the
-227 KB chunk to be a meaningful signal without a dedicated bundle-diff tool (out of this pass's
-scope per `F-08`).
+No regression from `F7`: `UploadErrorNotice`/`handleDismissUploadError` are small in-file additions
+to already-loaded `tool-workspace-*.js`; no new route, no new lazy chunk, no new dependency. `F2`
+(two new `shared/lib` hooks) and `F-17` (ref-forwarding in an existing file) are similarly small,
+in-place additions with no new chunks. Not re-measured byte-for-byte — each change is too small
+relative to the 227 KB `tool-workspace` chunk to be a meaningful signal without a dedicated
+bundle-diff tool (still named in `F-08` as unbuilt tooling).
 
 ## Findings not acted on this phase
 
-See `PHASE_31_FINDINGS.md` for the full ledger. Everything with a `defer` decision (`F2`–`F5`'s
-god-hook/duplication decompositions, and `F-08`'s remaining `T2` interaction/heap tooling) needs
-either characterization tests per call site or new profiling tooling that doesn't exist yet — both
-are real, separately-scoped deliverables per this phase's own no-blanket-rewrite/no-unverifiable-
-performance-claim rules, not something safely rushed inside this pass.
+See `PHASE_31_FINDINGS.md` for the full ledger — updated through `F-17`. What remains `defer`/
+`reject`-without-action, and why:
+- **`F2` (worker-lifecycle), 3 of 7 hooks**: `useBackgroundRemoval.ts`, `use-batch-processing.ts`,
+  `use-object-selection.ts` — each read in full and confirmed to have a genuinely different
+  lifecycle shape from the two patterns already extracted (`F-09`'s final entry). Not a time
+  shortfall; a deliberate `reject` against forcing a third/fourth abstraction onto one call site
+  each.
+- **`F-10`, canvas pointer math**: rejected outright — the two implementations compute different
+  quantities (scale factor vs. normalized position), not the same logic twice.
+- **`F-08`, remaining `T2` scope**: real-model timing (needs WebGPU-capable hardware this dev
+  machine doesn't have) and React commit/duration profiling (needs a `Profiler`-instrumented build
+  not built this pass, deprioritized given clean heap/long-task/effect-audit results elsewhere).
+- **`F-16`, `onnxruntime-web` dependency**: real candidate, deliberately not removed — package-churn
+  risk on a security-pinned dependency without real-hardware verification is exactly what this
+  phase's rules forbid taking casually; flagged for whoever owns the Phase 22 security gate.
