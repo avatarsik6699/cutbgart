@@ -253,6 +253,20 @@ touches.
   only look like duplication from the outside — no extraction made; ledger corrected. `F3`–`F5` have
   no approved findings to act on (`T4`/`T5` spot-checks found no defects in what was checked; `T2`'s
   remaining scope is deferred tooling gaps, not approved fixes) — left unchecked, not overlooked.
+- `F2` continued (2026-07-30, same session): found `use-model-lab.ts`/`use-interactive-matting-lab.ts`
+  shared a second, different byte-for-byte-identical pattern (request-id/`Map`/`stopWorker`, no
+  cancel/dispose protocol) — extracted `src/shared/lib/use-pending-request-worker.ts` and migrated
+  both; pre-existing tests (2+1) and `e2e/model-lab.spec.ts` (4 browsers) pass unmodified. Caught and
+  fixed a self-introduced bug before committing: both new shared hooks returned an unmemoized object
+  every render, silently defeating downstream `useCallback` memoization (`F-14`) — wrapped in
+  `useMemo`. Then read all 3 remaining hooks (`useBackgroundRemoval.ts`, `use-batch-processing.ts`,
+  `use-object-selection.ts`) in full and confirmed none fit either extracted shape: each has a
+  genuinely different lifecycle (heterogeneous multi-map + reducer-driven; scheduler/queue-driven
+  with 3 pending maps; two separate `workerRef`s with revision-based swap logic, respectively).
+  **`F2`'s worker-lifecycle line of work is closed as `reject`, not `defer`**, for the remaining 3 —
+  a third/fourth shared hook fit to just one call site each would be indirection, not
+  deduplication, the same mistake `F-10` corrected. 4 of 7 worker-owning hooks now share two real,
+  evidenced patterns; the other 3 keep their own shape by deliberate, evidence-backed decision.
 
 ## Atomic Commit Message
 

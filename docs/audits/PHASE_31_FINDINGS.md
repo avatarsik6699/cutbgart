@@ -241,15 +241,36 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   `useWorkerLifecycle` — it doesn't). Extracted a second shared hook,
   `src/shared/lib/use-pending-request-worker.ts` (`usePendingRequestWorker`), and migrated both.
   Both hooks' pre-existing tests (2 + 1) pass unmodified; `e2e/model-lab.spec.ts` (all 4 browsers)
-  passes. **Remaining `defer`**: `useBackgroundRemoval.ts`, `use-object-selection.ts`, and
-  `use-batch-processing.ts` — the three production-critical hooks — remain unmigrated.
-  `use-object-selection.ts` in particular (1026 lines, 10 `.terminate()` sites, worker-swap/retry
-  semantics) is a materially different, higher-risk shape than either pattern extracted this
-  session and deserves its own dedicated pass with its own characterization-test read, not a rushed
-  same-session extrapolation. `useBackgroundRemoval.ts`/`use-batch-processing.ts` weren't read
-  closely enough this pass to know which (if either) shared shape they'd actually fit — forcing them
-  into one of the two hooks above without first confirming byte-for-byte equivalence, the way both
-  completed extractions were verified, would repeat exactly the mistake `F-10` corrected.
+  passes.
+
+  **Final disposition, all 3 remaining hooks read in full this session** (2026-07-30) —
+  `reject`/`defer` for extraction, none migrated:
+  - **`useBackgroundRemoval.ts`** (607 lines) — does not fit either shared hook. It has *three*
+    heterogeneous concurrent request trackers (a singular `pendingRequestIdRef` for the main
+    process flow, driven by a `useReducer` state machine rather than a resolved promise; a
+    `pendingAlphaMatteRequestsRef` Map with `{resolve, reject}`; a `pendingRecompositeRequestsRef`
+    Map, same shape; a `pendingDisposeRequestsRef` Map matching the cancel/dispose protocol) —
+    no single active-request concept (`useWorkerLifecycle`) and no single homogeneous pending map
+    with uniform outcome resolution (`usePendingRequestWorker`). Forcing it into either would mean
+    rewriting, not extracting.
+  - **`use-batch-processing.ts`** (628 lines) — a genuine scheduler (queue/active-set/concurrency-
+    limit orchestration across `queueRef`/`activeRef`/`workRef`), not a single-request or
+    Map-of-independent-requests hook. It also has three separate pending Maps (mattes, composites,
+    disposals) plus queue-scheduling state with no equivalent in either extracted hook. Its worker
+    is created via a `useEffect` keyed on `batchStarted`, not an on-demand lazy `getWorker()` call.
+  - **`use-object-selection.ts`** (1026 lines) — confirmed the highest-risk shape suspected
+    up-front: it contains **two separate `workerRef` declarations** (two distinct worker-owning
+    subsystems in one file) using **revision-number-based staleness checks**
+    (`revisionRef.current`) and explicit stale-worker-swap logic
+    (`if (workerRef.current !== worker) return; worker.terminate();`) instead of either
+    extracted hook's request-id/Map-based model entirely.
+  - **Decision**: `reject` (not `defer`) — this isn't "ran out of time," it's "read all three fully
+    and confirmed none of them share genuine, provable duplication with the two hooks already
+    extracted, or with each other." A third or fourth shared hook built to fit just one call site
+    each would be indirection, not deduplication — exactly the mistake `F-10` corrected earlier in
+    this same session. `F2`'s worker-lifecycle line of work is complete: 4 of 7 hooks share two
+    real, evidenced patterns now; the other 3 each have a genuinely distinct shape and stay as they
+    are.
 
 ### F-10 — Duplicated canvas pointer-to-pixel scale math (2 real, independent implementations)
 
