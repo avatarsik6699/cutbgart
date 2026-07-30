@@ -217,12 +217,27 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   `docs/FRONTEND_CONVENTIONS.md` §9) is worth building.
 - **Owner layer**: `docs/FRONTEND_CONVENTIONS.md` §9 (doc accuracy) + the 7 hooks above (actual dedup
   target).
-- **Decision**: `fix` (doc only, this pass) for the count correction — updated §9 to say "seven" and
-  list `use-interactive-matting-lab.ts`. `defer` for the actual `shared/lib/use-worker.ts` extraction
-  itself: consolidating 7 independent lifecycle implementations (with different message-payload
-  shapes, retry/swap semantics in `use-object-selection.ts` particularly) is real refactor work that
-  needs its own characterization tests per call site before touching — sized for a dedicated `F2`
-  follow-up pass, not something to do as an unplanned addition alongside `F7`.
+- **Decision**: `fix` (doc count correction, this pass) — **and partially `fix` for the extraction
+  itself**, completed during `F2` (2026-07-30). Comparing `use-foreground-refinement.ts` and
+  `use-matte-refinement.ts` line-by-line found their worker scaffolding
+  (`workerRef`/`requestCounterRef`/`activeRequestRef`/`pendingDisposeRef`, `getWorker`'s lazy-init +
+  message-listener + stale-requestId filtering + `"disposed"` handling, `release`, and
+  terminate-on-unmount) was **byte-for-byte identical** apart from naming — a clean, low-risk,
+  fully-covered-by-existing-tests extraction target, unlike `F-10`. Extracted
+  `src/shared/lib/use-worker-lifecycle.ts` (`useWorkerLifecycle`, with its own 7-test unit suite) and
+  migrated both hooks to it, preserving their one genuine behavioral difference (`useForegroundRefinement.start`
+  cancels a prior in-flight request before starting a new one; `useMatteRefinement.start` does not —
+  documented inline in the migrated file so it isn't "fixed away" by a future edit). Both hooks' own
+  pre-existing test suites (4 + 5 tests) pass **unmodified**, which is the strongest available
+  evidence of behavior preservation — the public API (`{state, start, cancel, prepareNext,
+  finishApplying, release, reset}`) is unchanged. `tsc`, `vitest` (375/375), `steiger`, and
+  `e2e/foreground-refinement.spec.ts` + `e2e/matte-refinement.spec.ts` (all 4 browsers) all pass.
+  **Remaining `defer`**: the other 5 hooks (`useBackgroundRemoval.ts`, `use-model-lab.ts`,
+  `use-object-selection.ts`, `use-batch-processing.ts`, `use-interactive-matting-lab.ts`) were
+  deliberately left unmigrated this pass — `use-object-selection.ts` in particular (1026 lines, 10
+  `.terminate()` sites, worker-swap/retry semantics) is a materially different, higher-risk shape
+  that deserves its own dedicated pass with its own characterization-test read, not a rushed
+  same-session migration riding on the confidence gained from the two simple, near-identical hooks.
 
 ### F-10 — Duplicated canvas pointer-to-pixel scale math (2 real, independent implementations)
 
@@ -235,10 +250,18 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   `InlineColorPicker.tsx` also call `getBoundingClientRect()` independently, though for simpler
   single-axis-percentage cases, not full canvas-pixel scale math — less clearly the same duplication
   class.
-- **Decision**: `defer` — genuine duplication confirmed with line-level evidence (stronger than the
-  prior "assumed" finding), but extracting a shared `shared/lib/canvas-pointer.ts` needs to preserve
-  each call site's exact current behavior (verified via existing canvas e2e coverage) before/after —
-  sized for a dedicated `F2` pass alongside `F-09`, not this session.
+- **Decision**: `reject` — **corrected during `F2`** (2026-07-30). On closer read while scoping the
+  extraction, the two implementations compute genuinely different quantities, not the same math
+  twice: `MaskCorrectionCanvas.readCanvasGeometry()` returns CSS-to-canvas-**backing-store-pixel
+  scale factors** (`canvas.width / canvasRect.width`) for placing brush stamps at exact bitmap
+  resolution; `GuidedBrushCanvas` computes a CSS-to-**normalized-[0,1]-fraction position**
+  (`displayPointToNormalized`, already factored into `select-object/model/prompt-coordinates.ts`)
+  for SAM prompt coordinates, plus a separate CSS-pixel **pan delta** for viewport panning. All
+  three start from `getBoundingClientRect()`, which is why they read as "the same duplication" from
+  the outside, but forcing them into one shared function would produce a worse abstraction than two
+  small, purpose-specific ones — exactly what this phase's no-speculative-abstraction rule warns
+  against. No extraction made; `DisplayRect`-shaped rect params could be shared trivially but that's
+  not meaningful deduplication on its own.
 
 ### F-11 — React correctness spot-check: no new defects found in the two hottest files this session touched
 

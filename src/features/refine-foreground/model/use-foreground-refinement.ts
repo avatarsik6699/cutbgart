@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useWorkerLifecycle } from "@/shared/lib/use-worker-lifecycle";
 import type {
   AlphaMatte,
   RefinementConstraintMap,
@@ -42,95 +43,81 @@ export function useForegroundRefinement(
     }),
 ) {
   const [state, setState] = useState(initialState);
-  const workerRef = useRef<Worker | null>(null);
-  const requestCounterRef = useRef(0);
-  const activeRequestRef = useRef<string | null>(null);
-  const pendingDisposeRef = useRef(new Map<string, () => void>());
 
-  const getWorker = useCallback(() => {
-    if (workerRef.current) return workerRef.current;
-    const worker = workerFactory();
-    worker.addEventListener(
-      "message",
-      (event: MessageEvent<ForegroundRefinementWorkerResponse>) => {
-        const message = event.data;
-        if (message.type === "disposed") {
-          pendingDisposeRef.current.get(message.requestId)?.();
-          pendingDisposeRef.current.delete(message.requestId);
-          return;
-        }
-        if (message.requestId !== activeRequestRef.current) return;
-        if (message.type === "progress") {
-          setState((current) => ({
-            ...current,
-            status: "refining",
-            progress: message.percent,
-          }));
-        } else if (message.type === "fallback") {
-          setState((current) => ({
-            ...current,
-            status: "fallback",
-            progress: null,
-            fallbackReason: message.reason,
-          }));
-        } else if (message.type === "result") {
-          setState((current) => ({
-            ...current,
-            status: "applying",
-            progress: null,
-            result: message.result,
-            error: null,
-            fallbackReason: message.result.fallbackReason ?? current.fallbackReason,
-          }));
-        } else if (message.type === "error") {
-          setState((current) => ({
-            ...current,
-            status: "error",
-            progress: null,
-            error: message.error,
-          }));
-        }
-      },
-    );
-    workerRef.current = worker;
-    return worker;
-  }, [workerFactory]);
-
-  const start = useCallback(
-    ({
-      source,
-      matte,
-      constraints = null,
-      componentCleanup = true,
-    }: StartForegroundRefinementInput) => {
-      const worker = getWorker();
-      const previousRequest = activeRequestRef.current;
-      if (previousRequest)
-        worker.postMessage({ type: "cancel", requestId: previousRequest });
-      requestCounterRef.current += 1;
-      const requestId = `foreground-${String(requestCounterRef.current)}`;
-      activeRequestRef.current = requestId;
-      setState({ ...initialState, status: "preparing" });
-      worker.postMessage({
-        type: "refine-foreground",
-        request: { requestId, source, matte, constraints, componentCleanup },
-      });
-    },
-    [getWorker],
-  );
-
-  const cancel = useCallback(() => {
-    const requestId = activeRequestRef.current;
-    if (requestId) workerRef.current?.postMessage({ type: "cancel", requestId });
-    activeRequestRef.current = null;
-    setState(initialState);
+  const handleMessage = useCallback(function handleMessage(
+    message: ForegroundRefinementWorkerResponse,
+  ) {
+    if (message.type === "progress") {
+      setState((current) => ({
+        ...current,
+        status: "refining",
+        progress: message.percent,
+      }));
+    } else if (message.type === "fallback") {
+      setState((current) => ({
+        ...current,
+        status: "fallback",
+        progress: null,
+        fallbackReason: message.reason,
+      }));
+    } else if (message.type === "result") {
+      setState((current) => ({
+        ...current,
+        status: "applying",
+        progress: null,
+        result: message.result,
+        error: null,
+        fallbackReason: message.result.fallbackReason ?? current.fallbackReason,
+      }));
+    } else if (message.type === "error") {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        progress: null,
+        error: message.error,
+      }));
+    }
   }, []);
 
-  const prepareNext = useCallback(() => {
+  const worker = useWorkerLifecycle<ForegroundRefinementWorkerResponse>(
+    workerFactory,
+    handleMessage,
+  );
+
+  const start = useCallback(
+    function start(input: StartForegroundRefinementInput) {
+      const activeWorker = worker.getWorker();
+      worker.cancelActive();
+      const requestId = worker.nextRequestId("foreground");
+      worker.setActiveRequest(requestId);
+      setState({ ...initialState, status: "preparing" });
+      activeWorker.postMessage({
+        type: "refine-foreground",
+        request: {
+          requestId,
+          source: input.source,
+          matte: input.matte,
+          constraints: input.constraints ?? null,
+          componentCleanup: input.componentCleanup ?? true,
+        },
+      });
+    },
+    [worker],
+  );
+
+  const cancel = useCallback(
+    function cancel() {
+      worker.cancelActive();
+      setState(initialState);
+    },
+    [worker],
+  );
+
+  const prepareNext = useCallback(function prepareNext() {
     setState({ ...initialState, status: "preparing" });
   }, []);
 
-  const finishApplying = useCallback(() => {
+  const finishApplying = useCallback(function finishApplying() {
     setState((current) =>
       current.status === "applying" && current.result
         ? { ...current, status: "result" }
@@ -138,28 +125,21 @@ export function useForegroundRefinement(
     );
   }, []);
 
-  const release = useCallback((): Promise<void> => {
-    const worker = workerRef.current;
-    if (!worker) return Promise.resolve();
-    requestCounterRef.current += 1;
-    const requestId = `dispose-foreground-${String(requestCounterRef.current)}`;
-    return new Promise((resolve) => {
-      pendingDisposeRef.current.set(requestId, resolve);
-      worker.postMessage({ type: "dispose", requestId });
-    });
-  }, []);
+  const reset = useCallback(
+    function reset() {
+      worker.terminate();
+      setState(initialState);
+    },
+    [worker],
+  );
 
-  const reset = useCallback(() => {
-    const requestId = activeRequestRef.current;
-    if (requestId) workerRef.current?.postMessage({ type: "cancel", requestId });
-    activeRequestRef.current = null;
-    setState(initialState);
-    workerRef.current?.terminate();
-    workerRef.current = null;
-    for (const resolve of pendingDisposeRef.current.values()) resolve();
-    pendingDisposeRef.current.clear();
-  }, []);
-
-  useEffect(() => reset, [reset]);
-  return { state, start, cancel, prepareNext, finishApplying, release, reset };
+  return {
+    state,
+    start,
+    cancel,
+    prepareNext,
+    finishApplying,
+    release: worker.release,
+    reset,
+  };
 }

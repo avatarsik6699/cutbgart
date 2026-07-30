@@ -79,7 +79,7 @@ authorization for a rewrite, speculative abstraction, or Studio scope (SPEC.md �
 - [x] `F1` Add characterization tests around every approved high-risk finding before changing
   behavior-owning code, including single/batch equivalence and failure/resource cleanup where
   applicable — _Depends on:_ `T6`
-- [ ] `F2` Consolidate only proven duplicate business/state/geometry/export/error logic into the
+- [x] `F2` Consolidate only proven duplicate business/state/geometry/export/error logic into the
   correct FSD owner and remove only proven-dead adapters/callsites. Preserve public contracts,
   localization, accessibility, model results, and lazy loading — _Depends on:_ `F1`
 - [ ] `F3` Fix approved React findings: eliminate render-phase side effects and effect feedback
@@ -239,6 +239,20 @@ touches.
   historical `e2e:phase-19/20/21-real` evaluation suites — none of this pass's changes touch those
   pipelines, and the full gate command list belongs to `/phase-gate 31` itself, not `impl-assist`.
   See `docs/audits/PHASE_31_RESULTS.md` for the complete before/after table.
+- `F2` (2026-07-30, after committing the above): extracted `src/shared/lib/use-worker-lifecycle.ts`
+  and migrated `useForegroundRefinement`/`useMatteRefinement` to it — their worker init/postMessage/
+  terminate scaffolding was byte-for-byte identical (`F-09`), the clean, low-risk end of the
+  worker-lifecycle duplication finding. Both hooks' pre-existing test suites pass unmodified (the
+  public API is unchanged); added a dedicated 7-test suite for the new shared hook. The other 5
+  worker-owning hooks — `use-object-selection.ts` especially, with 10 separate `.terminate()` sites
+  and worker-swap/retry semantics not present in the two migrated hooks — remain unmigrated,
+  deliberately: they're a materially different, higher-risk shape that needs its own dedicated
+  characterization-test pass, not a same-session extrapolation from the two simple hooks.
+  `F-10` (canvas pointer math) turned out, on closer inspection while scoping this work, to be two
+  genuinely different computations (backing-store pixel scale vs. normalized-fraction position) that
+  only look like duplication from the outside — no extraction made; ledger corrected. `F3`–`F5` have
+  no approved findings to act on (`T4`/`T5` spot-checks found no defects in what was checked; `T2`'s
+  remaining scope is deferred tooling gaps, not approved fixes) — left unchecked, not overlooked.
 
 ## Atomic Commit Message
 

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useWorkerLifecycle } from "@/shared/lib/use-worker-lifecycle";
 import type {
   AlphaMatte,
   InferencePath,
@@ -53,80 +54,63 @@ export function useMatteRefinement(
     }),
 ) {
   const [state, setState] = useState(initialState);
-  const workerRef = useRef<Worker | null>(null);
-  const requestCounterRef = useRef(0);
-  const activeRequestRef = useRef<string | null>(null);
-  const pendingDisposeRef = useRef(new Map<string, () => void>());
 
-  const getWorker = useCallback(() => {
-    if (workerRef.current) return workerRef.current;
-    const worker = workerFactory();
-    worker.addEventListener(
-      "message",
-      (event: MessageEvent<MatteRefinementWorkerResponse>) => {
-        const message = event.data;
-        if (message.type === "disposed") {
-          pendingDisposeRef.current.get(message.requestId)?.();
-          pendingDisposeRef.current.delete(message.requestId);
-          return;
-        }
-        if (message.requestId !== activeRequestRef.current) return;
-        if (message.type === "progress") {
-          setState((current) => ({
-            ...current,
-            status: message.stage === "loading" ? "loading-model" : "refining",
-            progress: message.percent,
-          }));
-        } else if (message.type === "fallback") {
-          setState((current) => ({
-            ...current,
-            status: "fallback",
-            progress: null,
-            fallbackReason: message.reason,
-            fallback: message.from === "maximum" ? "balanced" : "wasm",
-          }));
-        } else if (message.type === "result") {
-          setState((current) => ({
-            ...current,
-            status: "applying",
-            progress: null,
-            result: message.result,
-            error: null,
-            fallback: message.result.fallback,
-            fallbackReason: message.result.fallbackReason ?? current.fallbackReason,
-          }));
-        } else if (message.type === "error") {
-          setState((current) => ({
-            ...current,
-            status: "error",
-            progress: null,
-            error: message.error,
-          }));
-        }
-      },
-    );
-    workerRef.current = worker;
-    return worker;
-  }, [workerFactory]);
+  const handleMessage = useCallback(function handleMessage(
+    message: MatteRefinementWorkerResponse,
+  ) {
+    if (message.type === "progress") {
+      setState((current) => ({
+        ...current,
+        status: message.stage === "loading" ? "loading-model" : "refining",
+        progress: message.percent,
+      }));
+    } else if (message.type === "fallback") {
+      setState((current) => ({
+        ...current,
+        status: "fallback",
+        progress: null,
+        fallbackReason: message.reason,
+        fallback: message.from === "maximum" ? "balanced" : "wasm",
+      }));
+    } else if (message.type === "result") {
+      setState((current) => ({
+        ...current,
+        status: "applying",
+        progress: null,
+        result: message.result,
+        error: null,
+        fallback: message.result.fallback,
+        fallbackReason: message.result.fallbackReason ?? current.fallbackReason,
+      }));
+    } else if (message.type === "error") {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        progress: null,
+        error: message.error,
+      }));
+    }
+  }, []);
 
+  const worker = useWorkerLifecycle<MatteRefinementWorkerResponse>(
+    workerFactory,
+    handleMessage,
+  );
+
+  // Deliberately does not cancel a previous active request first — unlike
+  // `useForegroundRefinement.start`, this hook has never auto-cancelled an
+  // in-flight refinement when a new one starts (preserved from the
+  // pre-extraction implementation).
   const start = useCallback(
-    ({
-      source,
-      priorMatte,
-      guidedMatte = null,
-      constraints = null,
-      mode,
-      path,
-    }: StartMatteRefinementInput) => {
-      requestCounterRef.current += 1;
-      const requestId = `matte-${String(requestCounterRef.current)}`;
-      activeRequestRef.current = requestId;
+    function start(input: StartMatteRefinementInput) {
+      const requestId = worker.nextRequestId("matte");
+      worker.setActiveRequest(requestId);
       setState({ ...initialState, status: "preparing" });
       try {
         const trimap = buildRefinementTrimap({
-          automaticMatte: priorMatte,
-          guidedMatte,
-          constraints,
+          automaticMatte: input.priorMatte,
+          guidedMatte: input.guidedMatte ?? null,
+          constraints: input.constraints ?? null,
         });
         const crop = computeRefinementCrop(trimap);
         if (!crop) {
@@ -135,12 +119,12 @@ export function useMatteRefinement(
             status: "applying",
             result: {
               matte: deterministicRefinement({
-                priorMatte,
-                guidedMatte,
+                priorMatte: input.priorMatte,
+                guidedMatte: input.guidedMatte ?? null,
                 trimap,
-                constraints,
+                constraints: input.constraints ?? null,
               }),
-              requestedMode: mode,
+              requestedMode: input.mode,
               actualMode: "deterministic",
               actualPath: null,
               inputSize: { width: 0, height: 0 },
@@ -152,17 +136,17 @@ export function useMatteRefinement(
         }
         const request: MatteRefinementRequest = {
           requestId,
-          source,
-          priorMatte,
-          guidedMatte,
-          constraints,
+          source: input.source,
+          priorMatte: input.priorMatte,
+          guidedMatte: input.guidedMatte ?? null,
+          constraints: input.constraints ?? null,
           trimap,
           crop,
           inputSize: computeMattingInputSize(crop),
-          requestedMode: mode,
-          requestedPath: path,
+          requestedMode: input.mode,
+          requestedPath: input.path,
         };
-        getWorker().postMessage({ type: "refine", request });
+        worker.getWorker().postMessage({ type: "refine", request });
       } catch (error) {
         setState({
           ...initialState,
@@ -175,21 +159,22 @@ export function useMatteRefinement(
         });
       }
     },
-    [getWorker],
+    [worker],
   );
 
-  const cancel = useCallback(() => {
-    const requestId = activeRequestRef.current;
-    if (requestId) workerRef.current?.postMessage({ type: "cancel", requestId });
-    activeRequestRef.current = null;
-    setState(initialState);
-  }, []);
+  const cancel = useCallback(
+    function cancel() {
+      worker.cancelActive();
+      setState(initialState);
+    },
+    [worker],
+  );
 
-  const prepareNext = useCallback(() => {
+  const prepareNext = useCallback(function prepareNext() {
     setState({ ...initialState, status: "preparing" });
   }, []);
 
-  const finishApplying = useCallback(() => {
+  const finishApplying = useCallback(function finishApplying() {
     setState((current) =>
       current.status === "applying" && current.result
         ? { ...current, status: "result" }
@@ -197,25 +182,21 @@ export function useMatteRefinement(
     );
   }, []);
 
-  const release = useCallback((): Promise<void> => {
-    const worker = workerRef.current;
-    if (!worker) return Promise.resolve();
-    requestCounterRef.current += 1;
-    const requestId = `dispose-${String(requestCounterRef.current)}`;
-    return new Promise((resolve) => {
-      pendingDisposeRef.current.set(requestId, resolve);
-      worker.postMessage({ type: "dispose", requestId });
-    });
-  }, []);
+  const reset = useCallback(
+    function reset() {
+      worker.terminate();
+      setState(initialState);
+    },
+    [worker],
+  );
 
-  const reset = useCallback(() => {
-    cancel();
-    workerRef.current?.terminate();
-    workerRef.current = null;
-    for (const resolve of pendingDisposeRef.current.values()) resolve();
-    pendingDisposeRef.current.clear();
-  }, [cancel]);
-
-  useEffect(() => reset, [reset]);
-  return { state, start, cancel, prepareNext, finishApplying, release, reset };
+  return {
+    state,
+    start,
+    cancel,
+    prepareNext,
+    finishApplying,
+    release: worker.release,
+    reset,
+  };
 }

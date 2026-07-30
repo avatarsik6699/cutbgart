@@ -23,6 +23,21 @@ Findings and decisions: `PHASE_31_FINDINGS.md`.
      changing which download control is visible, `F7`'s own Reset→Try-again change).
 3. **Doc corrections**: `docs/FRONTEND_CONVENTIONS.md` §9 worker-lifecycle count (6 → 7 hooks,
    `F-09`).
+4. **`F2` — worker-lifecycle deduplication** (`F-09`, committed separately after the above):
+   - New `src/shared/lib/use-worker-lifecycle.ts` (`useWorkerLifecycle`) + its own test suite.
+   - `src/features/refine-foreground/model/use-foreground-refinement.ts` and
+     `src/features/refine-matte/model/use-matte-refinement.ts` migrated to it; public API and all
+     pre-existing tests unchanged. 5 other worker-owning hooks remain unmigrated (deliberately).
+
+## Before / after (`F2` extraction)
+
+| | Before | After |
+|---|---|---|
+| `use-foreground-refinement.test.ts` | 4/4 pass | 4/4 pass (unmodified) |
+| `use-matte-refinement.test.ts` | 5/5 pass | 5/5 pass (unmodified) |
+| `use-worker-lifecycle.test.ts` | n/a (new) | 7/7 pass |
+| `e2e/foreground-refinement.spec.ts` + `e2e/matte-refinement.spec.ts` (4 browsers) | not rerun | 36/36 pass |
+| `pnpm vitest run` | 368/368 | 375/375 |
 
 ## Before / after
 
