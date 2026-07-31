@@ -18,6 +18,8 @@ export type {
   ForegroundRefinementState,
   StartForegroundRefinementInput,
 } from "./model/use-foreground-refinement";
+// @deprecated — not rendered in production (PHASE_31 F-19); see the JSDoc on
+// ForegroundRefinementControls itself. Removal candidate for a future phase.
 export { ForegroundRefinementControls } from "./ui/ForegroundRefinementControls";
 export {
   FOREGROUND_QUALITY_THRESHOLDS,

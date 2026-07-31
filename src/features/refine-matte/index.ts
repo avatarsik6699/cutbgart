@@ -1,4 +1,6 @@
 export { useMatteRefinement } from "./model/use-matte-refinement";
+// @deprecated — not rendered in production (PHASE_31 F-19); see the JSDoc on
+// MatteRefinementControls itself. Removal candidate for a future phase.
 export { MatteRefinementControls } from "./ui/MatteRefinementControls";
 export type {
   MatteRefinementState,

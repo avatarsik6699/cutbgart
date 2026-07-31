@@ -1,5 +1,5 @@
 import type { InferencePath } from "../../../entities/processed-image";
-import { Button } from "../../../shared/ui";
+import { Button, InlineStatusNotice, ProgressBar } from "../../../shared/ui";
 import { MATTING_MODELS, recommendMattingMode } from "../model/model-registry";
 import type {
   MattingRefinementMode,
@@ -8,6 +8,18 @@ import type {
 } from "../model/types";
 import { m } from "@/paraglide/messages";
 
+/**
+ * @deprecated Not rendered anywhere in production — `EnhancementsToolPanel`
+ * (`widgets/tool-workspace`) drives this feature's business logic
+ * (`useMatteRefinement`) through its own generic progress/error UI instead.
+ * The Balanced/Maximum mode radio buttons this component offers are
+ * unreachable; the controller auto-selects `refinementMode` once via
+ * `recommendMattingMode` and never exposes `setRefinementMode` to any UI.
+ * Confirmed intentional by the architect (2026-07-31, PHASE_31 F-19) —
+ * auto-select-only is the desired product behavior, not a regression. Kept
+ * only for its own test coverage; candidate for deletion (with its tests) in
+ * a future phase once nobody needs the historical reference.
+ */
 export interface MatteRefinementControlsProps {
   mode: MattingRefinementMode;
   path: InferencePath | null;
@@ -22,6 +34,7 @@ export interface MatteRefinementControlsProps {
   onSkip: () => void;
 }
 
+/** @deprecated See `MatteRefinementControlsProps` — not rendered in production. */
 export function MatteRefinementControls({
   mode,
   path,
@@ -87,16 +100,13 @@ export function MatteRefinementControls({
         ))}
       </fieldset>
       {(fallbackReason || fallback === "deterministic") && (
-        <p
-          role="status"
-          className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
-        >
+        <InlineStatusNotice>
           {fallback === "deterministic"
             ? m.matteRefinementDeterministicFallback()
             : fallback === "wasm"
               ? m.matteRefinementWasmFallback()
               : m.matteRefinementFallback()}
-        </p>
+        </InlineStatusNotice>
       )}
       {busy && (
         <div className="space-y-2" role="status">
@@ -109,20 +119,7 @@ export function MatteRefinementControls({
                   progress: String(Math.round(progress ?? 0)),
                 })}
           </p>
-          {progress !== null && (
-            <div
-              role="progressbar"
-              aria-valuenow={Math.round(progress)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              className="h-2 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className="h-full bg-primary"
-                style={{ width: `${String(Math.round(progress))}%` }}
-              />
-            </div>
-          )}
+          {progress !== null && <ProgressBar value={progress} />}
         </div>
       )}
       <div className="flex flex-wrap gap-2">

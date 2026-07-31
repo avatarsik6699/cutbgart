@@ -305,6 +305,39 @@ touches.
     stand up and validate. Those are named, scoped candidates for a future pass, not gaps papered
     over.
 
+- Architecture audit vs `patient_tracker`/`FRONTEND_CONVENTIONS.md` (2026-07-31, architect request —
+  never actually performed earlier this phase, only the conventions doc itself was adapted). Six
+  findings (`F-19`–`F-24`) added to `PHASE_31_FINDINGS.md`. Implemented: `F-20` (extracted
+  `ToolWorkspace.tsx`'s 4 inline sub-components into their own files, §2.1 violation), `F-21`
+  (extracted `shared/ui/progress-bar.tsx` + `inline-status-notice.tsx`, deduplicating byte-identical
+  markup found triplicated across `refine-foreground`/`refine-matte`/the live
+  `EnhancementsToolPanel`), `F-23` (converted the canonical `entities/processed-image/model/types.ts`
+  from `interface` to `type` per §8 — narrow fix, not a codebase-wide rewrite). `F-19` (found
+  `ForegroundRefinementControls`/`MatteRefinementControls` are fully-built, tested, dead production
+  UI — their business-logic hooks are live but the presentational components have zero call sites)
+  confirmed by the architect (2026-07-31) as an **intentional** auto-select-only decision, not a
+  regression — both components marked `@deprecated` with a removal-candidate note (JSDoc +
+  `index.ts` comment) instead of deleted or fixed, per the architect's explicit instruction, so a
+  future phase doesn't need to rediscover this. Deferred with named reasons: `F-22` (3 non-identical
+  byte-formatting functions — needs a rounding/behavior decision before consolidating), `F-24`
+  (widens the already-deferred `use-tool-workspace-controller.ts` decomposition to include ~20
+  `useState`s duplicated directly in `ToolWorkspace.tsx`). Verified: `pnpm tsc --noEmit`,
+  `pnpm exec eslint src/`, `pnpm exec steiger ./src` all clean; `pnpm vitest run` 376/376;
+  `pnpm e2e e2e/home.spec.ts` 16/16.
+- `T8` full-inventory follow-up (2026-07-31, architect request — `F-03` had only spot-checked
+  before). Systematically covered every interactive surface. Fixed: `F-25` (`ModelStorageManager`
+  had no retry on a failed initial load — only button stayed disabled; added a "Try again" button +
+  its first test file, 3 tests), `F-26` (`GuidedBrushControls`' errored-prediction state offered
+  only Cancel even though `use-object-selection.ts`'s `retry()` existed and was never called —
+  wired it to a new "Try again" button), `F-27` (`ModelLab.tsx`'s precondition hint used identical
+  `role="alert"`/destructive styling to real errors — changed to `role="status"`/muted). Deferred
+  with named reasons (each needs real behavior-changing work, not a bounded-pass fix): worker
+  `"error"`-event listener gap in `use-pending-request-worker.ts`, `loadSyntheticCorpus` missing
+  busy flag, `MaskCorrectionCanvas`'s unhandled `createImageBitmap` rejection, discarded
+  GuidedBrush download-progress percentage, an unguarded upload-preparation-counter race, and
+  `__root.tsx`'s missing router-level error/not-found fallback. Verified: `pnpm tsc --noEmit`,
+  `pnpm exec eslint src/`, `pnpm exec steiger ./src` clean; `pnpm vitest run` 379/379; full
+  `pnpm e2e` 77/77 (3 skipped), Chromium-only per the same-day gate change above.
 - Configured Playwright gate scoped to Chromium-only (2026-07-31, architect request, propagated via
   `/spec-sync`): `SPEC.md §7.4` and `playwright.config.ts` no longer configure Firefox/WebKit/Mobile
   Safari projects — Chromium remains the fast local/CI regression gate; Phase 33's physical-device

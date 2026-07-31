@@ -79,16 +79,28 @@ export function ModelStorageManager() {
           {m.modelStorageError()}
         </p>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        disabled={busy || !status || status.assetCount === 0}
-        onClick={() => void clear()}
-        className="self-start"
-      >
-        <Trash2 aria-hidden="true" />
-        {m.modelStorageClear()}
-      </Button>
+      {error && !status ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void refresh()}
+          className="self-start"
+        >
+          {m.tryAgain()}
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy || !status || status.assetCount === 0}
+          onClick={() => void clear()}
+          className="self-start"
+        >
+          <Trash2 aria-hidden="true" />
+          {m.modelStorageClear()}
+        </Button>
+      )}
     </div>
   );
 }

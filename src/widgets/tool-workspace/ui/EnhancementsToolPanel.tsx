@@ -1,5 +1,5 @@
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, ProgressBar } from "@/shared/ui";
 import type {
   EnhancementDraft,
   EnhancementOperationDefinition,
@@ -83,20 +83,7 @@ export function EnhancementsToolPanel({
               progress: String(Math.round(progress ?? 0)),
             })}
           </p>
-          {progress !== null && (
-            <div
-              role="progressbar"
-              aria-valuenow={Math.round(progress)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              className="h-2 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className="h-full bg-primary"
-                style={{ width: `${String(Math.round(progress))}%` }}
-              />
-            </div>
-          )}
+          {progress !== null && <ProgressBar value={progress} />}
         </div>
       )}
 

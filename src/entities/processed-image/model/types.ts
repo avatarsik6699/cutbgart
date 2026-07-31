@@ -9,57 +9,57 @@ export type QualityMode = AutomaticModelMode | "fast" | "max";
 
 export type InferencePath = "webgpu" | "wasm";
 
-export interface DeviceCapabilities {
+export type DeviceCapabilities = {
   /** Selected once per session via `navigator.gpu.requestAdapter()`. */
   inferencePath: InferencePath;
   /** Downgraded to "fast" on weak devices (SPEC.md §2.2). */
   defaultQualityMode: QualityMode;
-}
+};
 
-export interface SourceImage {
+export type SourceImage = {
   blob: Blob;
   width: number;
   height: number;
   format: "image/jpeg" | "image/png" | "image/webp";
-}
+};
 
-export interface AlphaMatte {
+export type AlphaMatte = {
   // Single-channel alpha-matte output of the ML model — preserves soft edges
   // (hair/fur/translucent objects), not a binary mask.
   width: number;
   height: number;
   data: Uint8ClampedArray;
-}
+};
 
 export type TrimapValue = 0 | 128 | 255;
 export type HardConstraintValue = -1 | 0 | 1;
 
-export interface PixelRect {
+export type PixelRect = {
   x: number;
   y: number;
   width: number;
   height: number;
-}
+};
 
-export interface Trimap {
+export type Trimap = {
   width: number;
   height: number;
   data: Uint8ClampedArray;
   unknownBounds: PixelRect | null;
-}
+};
 
-export interface RefinementConstraintMap {
+export type RefinementConstraintMap = {
   width: number;
   height: number;
   data: Int8Array;
-}
+};
 
 export type HexColor = `#${string}`;
 
-export interface BackgroundGradientStop {
+export type BackgroundGradientStop = {
   offset: 0 | 1;
   color: HexColor;
-}
+};
 
 export type BackgroundFill =
   | { type: "transparent" }
@@ -74,7 +74,7 @@ export type BackgroundFill =
     }
   | { type: "image"; blob: Blob };
 
-export interface ProcessedImage {
+export type ProcessedImage = {
   source: SourceImage;
   /** Composited PNG-with-alpha, produced via OffscreenCanvas. */
   result: Blob;
@@ -92,4 +92,4 @@ export interface ProcessedImage {
   backgroundFill?: BackgroundFill;
   /** True while the visual preview is newer than the downloadable PNG. */
   backgroundPending?: boolean;
-}
+};

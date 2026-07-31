@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, InlineStatusNotice, ProgressBar } from "@/shared/ui";
 
 import type {
   ForegroundRefinementError,
@@ -9,6 +9,17 @@ import type {
   ForegroundRefinementStatus,
 } from "../model/types";
 
+/**
+ * @deprecated Not rendered anywhere in production — `EnhancementsToolPanel`
+ * (`widgets/tool-workspace`) drives this feature's business logic
+ * (`useForegroundRefinement`) through its own generic progress/error UI
+ * instead. The "component cleanup" checkbox this component offers is
+ * unreachable; the controller hardcodes `componentCleanup: true`. Confirmed
+ * intentional by the architect (2026-07-31, PHASE_31 F-19) — auto-select-only
+ * is the desired product behavior, not a regression. Kept only for its own
+ * test coverage; candidate for deletion (with its tests) in a future phase
+ * once nobody needs the historical reference.
+ */
 export interface ForegroundRefinementControlsProps {
   status: ForegroundRefinementStatus;
   progress: number | null;
@@ -21,6 +32,7 @@ export interface ForegroundRefinementControlsProps {
   onSkip: () => void;
 }
 
+/** @deprecated See `ForegroundRefinementControlsProps` — not rendered in production. */
 export function ForegroundRefinementControls({
   status,
   progress,
@@ -90,12 +102,7 @@ export function ForegroundRefinementControls({
         </p>
       )}
       {fallbackReason && !terminalMessage && status !== "fallback" && (
-        <p
-          role="status"
-          className="rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
-        >
-          {m.foregroundRefinementFallback()}
-        </p>
+        <InlineStatusNotice>{m.foregroundRefinementFallback()}</InlineStatusNotice>
       )}
       {busy && (
         <div className="space-y-2" role="status">
@@ -106,20 +113,7 @@ export function ForegroundRefinementControls({
                   progress: String(Math.round(progress ?? 0)),
                 })}
           </p>
-          {progress !== null && (
-            <div
-              role="progressbar"
-              aria-valuenow={Math.round(progress)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              className="h-2 overflow-hidden rounded-full bg-muted"
-            >
-              <div
-                className="h-full bg-primary"
-                style={{ width: `${String(Math.round(progress))}%` }}
-              />
-            </div>
-          )}
+          {progress !== null && <ProgressBar value={progress} />}
         </div>
       )}
       <div className="flex flex-wrap gap-2">

@@ -14,6 +14,8 @@ export {
   CardContent,
 } from "./card";
 export { Skeleton } from "./skeleton";
+export { ProgressBar } from "./progress-bar";
+export { InlineStatusNotice } from "./inline-status-notice";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./tooltip";
 export {
   Popover,

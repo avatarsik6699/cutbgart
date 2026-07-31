@@ -60,6 +60,72 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   and the spot-check above was not completed this pass; name a future `T8`-style pass if new
   interactive surfaces are added (e.g. Phase 32's guided-help UI) rather than re-opening this phase.
 
+## T8 full-inventory follow-up (2026-07-31)
+
+Architect asked for the `F-03`-deferred full pass to actually be completed ("детально проработать
+обработку состояний empty, error, warning, loading"). Systematically covered every surface under
+`src/features/*/ui/`, `src/widgets/*/ui/`, `src/routes/`. Personally re-verified each item below
+before deciding, not taken on trust from the research pass.
+
+**Clean, no defect** (matches `F7`'s in-place/no-layout-shift pattern correctly): `BackgroundToolPanel`,
+`BackgroundFillSelector`, `InlineColorPicker`, `CutoutToolPanel`, `EditorStage`, `EditorToolbar`,
+`ToolPanelSlot`, `DiagnosticsSheet`, `LocalExecutionReadout`, `CanvasViewControls`,
+`BrushSizeStagePreview`, `BatchGrid`, `DownloadResultButton`, `DownloadSplitButton`, `editor-history`
+undo/redo, `ForegroundRefinementControls` (in isolation — see `F-19` for its dead-call-site issue),
+`QualityModeToggle`, `about`/`privacy` routes (genuinely static, both locales).
+
+**F-25 — `ModelStorageManager` had no retry on a failed initial load (`fix`)**: `busy`/`error`
+rendered correctly in place, but the only button stayed `disabled` while `status` was `null`, so a
+failed mount-time `refresh()` left no way to recover short of closing/reopening the popover.
+Verified directly (`ModelStorageManager.tsx`, pre-fix): `disabled={busy || !status || ...}`. Fixed:
+renders a "Try again" button (calling `refresh()`) in place of the disabled Clear button whenever
+`error && !status`. Added `ModelStorageManager.test.tsx` (component had zero test coverage before
+this fix) — 3 tests, including one asserting the retry button is present/enabled and successfully
+recovers. Confirmed via `git stash` that the retry test fails pre-fix, passes post-fix.
+
+**F-26 — `GuidedBrushControls` had a working `retry()` on its model hook that no button ever called (`fix`)**:
+verified `use-object-selection.ts`'s `retry` (line 339) has zero call sites anywhere before this fix
+(`grep`) — an errored prediction left only "Cancel," forcing the user to abandon the guided-brush
+session and re-enter the tool from scratch. Fixed: `GuidedBrushControls` now takes a required
+`onRetry` prop and swaps its Apply button for a "Try again" button when `status === "error"`;
+`ToolWorkspace.tsx` wires `guided.retry` to it. Added a characterization test; confirmed via
+`git stash` it fails pre-fix (no "Try again" button rendered) and passes post-fix.
+
+**F-27 — `ModelLab.tsx`'s precondition hint used identical error styling to real failures (`fix`)**:
+the "select ≥2 models" hint used `role="alert"`+`text-destructive`, visually indistinguishable from
+the genuine `state.error` alert rendered a few lines below it in the same section. Fixed: changed to
+`role="status"`+`text-muted-foreground`. No new test added — this is a dev-only,
+`VITE_ENABLE_MODEL_LAB`-gated route with no existing component-render test harness (only its
+model/hooks are unit-tested); the fix is a one-line role/class correction, verified by direct read,
+not a behavior change worth standing up new render-test infrastructure for on a dev-only surface.
+
+**Deferred (named, not implemented — each needs real behavior-changing work this pass's bounded
+scope doesn't cover)**:
+- `MatteRefinementControls` missing an `error` prop — superseded by `F-19` (component has no live
+  call site; fixing this in isolation was deprioritized once that was found).
+- `use-pending-request-worker.ts` has no worker `"error"`-event listener (affects `ModelLab`/
+  `InteractiveMattingLab`): a hard worker crash leaves `status: "running"` forever with no visible
+  failure. Needs a new error-message contract on the shared hook (`F2`'s extraction) — real,
+  moderate-risk shared-hook surgery, not a one-line fix.
+- `loadSyntheticCorpus` (`use-interactive-matting-lab.ts`) has no busy flag during its async corpus
+  build — dev-only lab feature, lower priority.
+- `MaskCorrectionCanvas.tsx`'s `createImageBitmap` has no `.catch` — a decode failure leaves the
+  canvas permanently inert with no error/retry. Core correction-canvas path; needs a
+  characterization test against the actual decode-failure path before touching, per this phase's
+  own no-blind-fix rule for behavior-owning code.
+- `describe-state.ts`'s `loadSyntheticCorpus`/GuidedBrush download progress is received but
+  discarded (`void progress`) — the busy overlay shows a static message instead of the real
+  percentage the worker reports, unlike the main pipeline's equivalent state. Needs the discarded
+  value threaded through an existing prop, verified against real worker timing.
+- `UploadDropzone.tsx`/`ChoosePhotoButton.tsx` share an unguarded preparation counter that two
+  overlapping upload triggers could race — needs a revision-guard fix mirroring
+  `use-background-fill.ts`'s existing pattern for the same class of problem, plus a race-condition
+  characterization test (harder to write reliably than the fixes above).
+- `__root.tsx` has no `errorComponent`/`notFoundComponent`/`pendingComponent` on
+  `createRootRoute` — latent (no route currently uses loaders), but a lazy-chunk fetch failure or
+  unmapped path has no branded fallback today. Router-wide infra change, not a single-surface fix;
+  worth a dedicated finding in a phase that touches routing.
+
 ## T7 — Test-suite reliability and speed
 
 ### F-04 — Stale assertion text in `QualityModeToggle.test.tsx` (deterministic failure, not flake)
@@ -472,6 +538,153 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
 - **Decision**: `reject` for the one hook checked — `defer` for a full `T5` pass across the remaining
   6 hooks (particularly `use-object-selection.ts`, the highest-risk one given its termination-site
   count) and the still-unmeasured heap/resource trend from `F-08`.
+
+## Architecture audit vs `patient_tracker` / `FRONTEND_CONVENTIONS.md` (2026-07-31)
+
+Architect-requested comparison against the reference codebase `patient_tracker` and this project's
+own `docs/FRONTEND_CONVENTIONS.md` (never actually performed earlier this phase — only the doc was
+adapted). Each finding below was personally re-verified against the cited files after an initial
+research pass, not taken on trust.
+
+### F-19 — `ForegroundRefinementControls`/`MatteRefinementControls` are fully-built, tested, dead production UI; the configuration options they offer no longer reach the user
+
+- **Evidence**: `EnhancementsToolPanel.tsx` (live, rendered from `ToolWorkspace.tsx`) is a generic,
+  operation-agnostic progress/error/outcome panel driven by `enhancement-operation-registry.ts`'s
+  `"matte-refinement"`/`"foreground-cleanup"` adapters. `use-tool-workspace-controller.ts` calls
+  `useForegroundRefinement()` (line 186) and `useMatteRefinement()` (via `refinement`, wired
+  similarly) directly — their business logic (start/cancel/progress/error) is fully live and feeds
+  `EnhancementsToolPanel` through `failEnhancementRun` (lines ~1009-1021, ~956-969). But their
+  dedicated presentational components, `features/refine-foreground/ui/ForegroundRefinementControls.tsx`
+  and `features/refine-matte/ui/MatteRefinementControls.tsx`, have **zero import sites anywhere in
+  `src/` outside their own feature folder and their own `*.test.tsx`** (`grep -rln` confirmed) — they
+  are never rendered in the actual app. Two concrete, user-facing configuration options are lost as a
+  result: `MatteRefinementControls`' Balanced/Maximum mode radio buttons (the controller exposes
+  `setRefinementMode` at `use-tool-workspace-controller.ts:1391` but `ToolWorkspace.tsx` never
+  destructures or wires it — confirmed via `grep`), and `ForegroundRefinementControls`' "component
+  cleanup" checkbox (the controller hardcodes `componentCleanup: true` at line 811 instead of reading
+  a user choice). `refinementMode` is still auto-selected once via `recommendMattingMode` (line 266),
+  so the feature isn't broken, but the user can no longer override it, and this isn't stated anywhere
+  as an intentional simplification.
+- **Owner layer**: `widgets/tool-workspace` (consumes the generic panel instead of the dedicated
+  ones), `features/refine-foreground/ui`, `features/refine-matte/ui` (orphaned).
+- **Why it's a problem**: two fully-tested feature UI components (with their own `*.test.tsx`,
+  exported through their slice's `index.ts`, matching every rule in `FRONTEND_CONVENTIONS.md`) do
+  nothing in production — anyone reading these features in isolation would reasonably believe mode
+  selection and cleanup-toggle are live product behavior. This is exactly the "legacy protocols
+  still imported" / dead-code class `T3` asked to inventory, missed by this phase's earlier `knip`
+  pass (`F-16`) because `knip` doesn't flag re-exported-but-never-rendered components the way it
+  flags unused files.
+- **Decision**: `fix` (resolved 2026-07-31) — architect confirmed the auto-select-only behavior is
+  **intentional**, not a regression: "да, это умышленное решение с автовыбором, так и было
+  задумано." Per the architect's explicit instruction, the dead components are left in place
+  (not deleted, not behaviorally touched) but marked `@deprecated` with a removal-candidate note:
+  a JSDoc block on `ForegroundRefinementControlsProps`/`ForegroundRefinementControls` and on
+  `MatteRefinementControlsProps`/`MatteRefinementControls` (both `ui/*.tsx` files), plus a one-line
+  comment on their `index.ts` re-exports, so this doesn't get silently rediscovered/re-litigated in
+  a future phase — anyone reading either component now sees immediately that it has no production
+  call site and why. No behavior change, no deletion; this phase's own "prove call sites before
+  marking dead" evidence (the `grep` above) is preserved as the deprecation rationale for whenever a
+  future phase does the actual removal. **This supersedes the narrower T8 finding below
+  (`MatteRefinementControls` missing an `error` prop) — fixing that prop on a deprecated component
+  with no live call site is not worthwhile.**
+- **Confidence**: high — every claim above is a direct `grep`/read result, not inference.
+
+### F-20 — `ToolWorkspace.tsx` violates its own §2.1 ("one component per file"): four sub-components extracted
+
+- **Evidence**: `PersistentPreviewLayers`, `MaskCorrectionSlots`, `UploadErrorNotice`,
+  `CorrectionErrorAlert` were all defined inline in `ToolWorkspace.tsx` (1815 lines) alongside the
+  exported `ToolWorkspace` itself — direct violation of `FRONTEND_CONVENTIONS.md` §2.1 ("Never
+  define two functional … components in the same file"), which unlike §2.4/§2.5/§2.7/§1 is **not**
+  listed among the doc's own open/grandfathered exceptions. `patient_tracker` has no comparable
+  multi-component business/widget file (only shadcn compound-primitive files under
+  `components/ui/` mix exports, e.g. `card.tsx`).
+- **Owner layer**: `widgets/tool-workspace/ui`.
+- **Decision**: `fix` (implemented this pass). Extracted all four into their own files
+  (`PersistentPreviewLayers.tsx`, `MaskCorrectionSlots.tsx`, `UploadErrorNotice.tsx`,
+  `CorrectionErrorAlert.tsx`), each re-exporting its own props type, no public-API/behavior change.
+  `ToolWorkspace.tsx` now imports them. Verified: `pnpm tsc --noEmit` clean, `pnpm exec eslint`
+  clean on all 5 files, `pnpm exec steiger ./src` clean (no new FSD violations), `pnpm vitest run
+  src/widgets/tool-workspace` 41/41 pass (unmodified behavior/tests).
+- **Confidence**: high.
+
+### F-21 — Byte-identical progress-bar/fallback-banner markup triplicated across `refine-foreground`, `refine-matte`, and the live `EnhancementsToolPanel`
+
+- **Evidence**: `ForegroundRefinementControls.tsx` and `MatteRefinementControls.tsx` both rendered
+  the identical `role="progressbar"` markup (`h-2 overflow-hidden rounded-full bg-muted` wrapping
+  `h-full bg-primary` sized via inline `width` style) and an identical amber fallback banner
+  (`rounded-lg border border-amber-400/50 bg-amber-50 p-3 text-xs text-amber-900
+  dark:bg-amber-950/30 dark:text-amber-200`). While investigating `F-19` above, found the exact same
+  progressbar markup a **third** time in the live `EnhancementsToolPanel.tsx` (lines 87-96,
+  pre-fix) — this one is the one actually rendered in production. `patient_tracker` has a shared
+  `components/ui/progress.tsx` primitive for exactly this case.
+- **Owner layer**: `shared/ui` (new primitives), all three consumers.
+- **Decision**: `fix` (implemented this pass). Extracted `shared/ui/progress-bar.tsx`
+  (`ProgressBar`, parameterized on `value`) and `shared/ui/inline-status-notice.tsx`
+  (`InlineStatusNotice`, the amber fallback banner — kept single-purpose, no speculative `tone`
+  prop since only the warning variant is actually duplicated 2+ times; `ForegroundRefinementControls`'
+  separate destructive/success terminal-message block is NOT identical to anything else and was left
+  untouched). Applied `ProgressBar` in all three consumers (`ForegroundRefinementControls`,
+  `MatteRefinementControls`, `EnhancementsToolPanel`); `InlineStatusNotice` in the two refinement
+  controls files (`EnhancementsToolPanel` has no equivalent fallback banner to replace). Verified:
+  `pnpm tsc --noEmit` clean, unit tests for all three files still pass.
+- **Confidence**: high — markup verified byte-identical by direct read, not impression.
+
+### F-22 — Three independent byte-formatting functions instead of one `shared/lib` helper
+
+- **Evidence**: `features/refine-matte/model/model-registry.ts:51` `formatMattingModelSize`
+  (1,000,000-based, `.toFixed`), `features/model-storage/model/model-cache.ts:58-65`
+  `formatStorageBytes` (1024-based B/KB/MB/GB ladder, used in the live `ModelStorageManager.tsx`
+  settings surface), `features/model-lab/model/model-registry.ts:190` `formatModelSize`
+  (1,000,000-based, hardcoded Cyrillic `"МБ"` unit, dev-only `routes/dev.model-lab.tsx`) — three
+  different "format bytes as text" implementations in three `features/*/model/` files.
+- **Owner layer**: candidate `shared/lib/format-bytes.ts`.
+- **Decision**: `defer` — the three implementations are not behaviorally identical (1024- vs
+  1,000,000-based, different rounding, one hardcoded-locale), so consolidation requires a decision on
+  which behavior wins for each caller, not a mechanical extraction; doing that silently risks
+  changing a user-visible number (e.g. `ModelStorageManager`'s displayed cache size) without the
+  measurement/characterization-test rigor this phase requires for any behavior change. Named as a
+  future-phase candidate, not implemented.
+- **Confidence**: medium (real duplication, but consolidation needs a product decision on rounding).
+
+### F-23 — Pervasive `interface` usage contradicts §2.3/§8 ("use `type`, never `interface`"), including the canonical domain-type source file
+
+- **Evidence**: 215 production `interface` declarations vs 122 `type` declarations (`grep -rn`
+  count, excluding tests). `entities/processed-image/model/types.ts` — named by `FRONTEND_CONVENTIONS.md`
+  §3/§8 as the domain-type source of truth — used `interface` for every one of its 8 exported domain
+  types (`DeviceCapabilities`, `SourceImage`, `AlphaMatte`, `PixelRect`, `Trimap`,
+  `RefinementConstraintMap`, `BackgroundGradientStop`, `ProcessedImage`), zero `type` aliases. Unlike
+  §2.4/§2.5/§2.7/§1, §8's `type`-not-`interface` rule has no listed exception in the doc's own
+  Architect Review Notes.
+- **Owner layer**: `entities/processed-image/model/types.ts` (fixed); rest of the codebase
+  (unfixed, out of bounded scope).
+- **Decision**: `fix`, narrowly — converted only the canonical domain-types file (8 interfaces to
+  `type`; confirmed zero `extends` usages of any of them anywhere in `src/` first, so the conversion
+  is mechanical and behavior-preserving). Did **not** mass-convert the other ~207 `interface`
+  declarations project-wide — that is exactly the blanket rewrite `docs/PHASE_31.md` forbids without
+  per-callsite evidence and characterization tests, and is a separate, much larger, dedicated-phase
+  scope. Recommend the architect add this as an explicit open item in `FRONTEND_CONVENTIONS.md`'s
+  Architect Review Notes (parallel to the existing §2.4/§2.5/§2.7/§1 entry), since right now the doc
+  gives no acknowledgment that this rule is violated almost everywhere.
+- **Confidence**: medium — real, verified, codebase-wide violation of an explicit rule, but it's a
+  typing-style rule, and the fix applied is intentionally narrow.
+
+### F-24 — `use-tool-workspace-controller.ts`'s god-hook shape is also duplicated directly inside `ToolWorkspace.tsx` itself
+
+- **Evidence**: `ToolWorkspace.tsx` calls `useToolWorkspaceController()` but *also* declares ~20 of
+  its own `useState` hooks in the component body (`toolByDocument`, `viewPositionByDocument`,
+  `backgroundDraftByDocument`, `exportSettingsByDocument`, `cutoutModeByDocument`,
+  `interactionModeByDocument`, `pendingTool`, `pendingBatchItem`, etc.) feeding ~18 handler
+  functions defined in the same file. `patient_tracker`'s largest comparable UI files
+  (`se-wizard/index.tsx`, `add-patient-modal/index.tsx`) have 0-1 `useState` calls each; all
+  workflow state lives in a dedicated hook.
+- **Owner layer**: `widgets/tool-workspace/ui/ToolWorkspace.tsx` + `model/use-tool-workspace-controller.ts`.
+- **Decision**: `defer` — this widens the scope of the god-hook decomposition already deferred
+  above ("Overall T2–T5 disposition") to explicitly include `ToolWorkspace.tsx`'s own state, not
+  just the model hook file. Confirmed real and evidenced, but per-callsite characterization tests
+  for ~20 state variables and ~18 handlers is real, separately-scoped decomposition work, not
+  something to rush inside this already-large pass.
+- **Confidence**: high (exact useState/handler locations cited) — sizing/risk is what pushes this to
+  `defer`, not doubt about the finding.
 
 ### Overall T2–T5 disposition
 

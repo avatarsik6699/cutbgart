@@ -1,30 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Images, Loader2 } from "lucide-react";
 
-import type {
-  AlphaMatte,
-  BackgroundFill,
-  QualityMode,
-  SourceImage,
-} from "../../../entities/processed-image";
+import type { QualityMode } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
-import {
-  MaskCorrectionCanvas,
-  MaskCorrectionToolbar,
-  useMaskCorrection,
-  useMaskCorrectionViewport,
-  type MaskCanvasHandle,
-  type MaskCorrectionViewportControls,
-} from "../../../features/correct-mask";
+import { useMaskCorrectionViewport } from "../../../features/correct-mask";
 import {
   DEFAULT_EXPORT_SETTINGS,
   DownloadSplitButton,
@@ -40,7 +20,6 @@ import {
   ChoosePhotoButton,
   UploadDropzone,
   UploadPreparationNotice,
-  type UploadValidationError,
 } from "../../../features/upload-image";
 import { Button, Skeleton } from "@/shared/ui";
 import { useHeaderUtilityPortalTarget } from "@/shared/ui/header-utility-portal-context";
@@ -70,280 +49,15 @@ import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
 import { CanvasViewControls, type CanvasInteractionMode } from "./CanvasViewControls";
 import { DiagnosticsSheet } from "./DiagnosticsSheet";
 import { ToolPanelSlot } from "./ToolPanelSlot";
+import { PersistentPreviewLayers } from "./PersistentPreviewLayers";
+import { MaskCorrectionSlots } from "./MaskCorrectionSlots";
+import { UploadErrorNotice } from "./UploadErrorNotice";
+import { CorrectionErrorAlert, type DisplayError } from "./CorrectionErrorAlert";
 
 function modeLabel(mode: QualityMode): string {
   if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
   if (mode === "ben2-fp16") return m.processingModeBen2();
   return m.processingModeFast();
-}
-
-function PersistentPreviewLayers({
-  activeLayer,
-  comparison,
-  magic,
-  manual,
-}: {
-  activeLayer: "comparison" | "magic" | "manual";
-  comparison: ReactNode;
-  magic?: ReactNode;
-  manual?: ReactNode;
-}) {
-  return (
-    <div
-      className="relative size-full"
-      data-testid="persistent-preview-stack"
-      data-active-layer={activeLayer}
-    >
-      {(
-        [
-          ["comparison", comparison],
-          ["magic", magic],
-          ["manual", manual],
-        ] as const
-      ).map(([name, layer]) =>
-        layer ? (
-          <div
-            key={name}
-            className="persistent-preview-layer absolute inset-0 grid size-full place-items-center"
-            data-preview-layer={name}
-            data-active={activeLayer === name}
-            aria-hidden={activeLayer !== name}
-          >
-            {layer}
-          </div>
-        ) : null,
-      )}
-    </div>
-  );
-}
-
-interface MaskCorrectionSlotsProps {
-  sourceImage: SourceImage;
-  originalMatte: AlphaMatte;
-  backgroundFill?: BackgroundFill;
-  onDone: (matte: AlphaMatte) => Promise<boolean>;
-  doneDisabled?: boolean;
-  viewportControls: MaskCorrectionViewportControls;
-  surfaceTargetRef: RefObject<HTMLCanvasElement | null>;
-  onBrushSizeInteraction: () => void;
-  previewInteractionKey: number;
-  onViewAnnouncementChange: (announcement: string) => void;
-  onDirtyChange: (dirty: boolean) => void;
-  interactionMode: CanvasInteractionMode;
-  interactionEnabled: boolean;
-  draftResetKey: number;
-  children: (slots: { surface: ReactNode; rail: ReactNode }) => ReactNode;
-}
-
-/**
- * Composes `features/correct-mask`'s hook + canvas + toolbar into the
- * `correcting` state's UI (Phase 07, SPEC.md §5.2/§5.3). Renders via a
- * children-render-prop so the canvas (visual editing surface) and the
- * toolbar/Done button (control rail) can be placed in different grid areas
- * (Phase 12 F4) while keeping `useMaskCorrection` mounted/unmounted exactly
- * once per correction session, same as before this phase's layout change —
- * hoisting the hook to always-mount would let undo/redo history leak across
- * sessions (docs/KNOWN_GOTCHAS.md R4).
- */
-function MaskCorrectionSlots({
-  sourceImage,
-  originalMatte,
-  backgroundFill,
-  onDone,
-  doneDisabled = false,
-  viewportControls,
-  surfaceTargetRef,
-  onBrushSizeInteraction,
-  previewInteractionKey,
-  onViewAnnouncementChange,
-  onDirtyChange,
-  interactionMode,
-  interactionEnabled,
-  draftResetKey,
-  children,
-}: MaskCorrectionSlotsProps) {
-  const canvasHandleRef = useRef<MaskCanvasHandle>(null);
-  const {
-    mode,
-    setMode,
-    brushSize,
-    setBrushSize,
-    canUndo,
-    commitStroke,
-    viewport,
-    zoomAnnouncement,
-    zoomIn,
-    zoomOut,
-    zoomByWheel,
-    resetView,
-    panView,
-    panBySourcePixels,
-    clearDraft,
-    commitDraft,
-  } = useMaskCorrection(
-    canvasHandleRef,
-    {
-      width: sourceImage.width,
-      height: sourceImage.height,
-    },
-    viewportControls,
-    interactionEnabled,
-  );
-  const initialDraftResetKeyRef = useRef(draftResetKey);
-
-  useEffect(() => {
-    if (draftResetKey === initialDraftResetKeyRef.current) return;
-    initialDraftResetKeyRef.current = draftResetKey;
-    const timeout = window.setTimeout(clearDraft, 0);
-    return () => window.clearTimeout(timeout);
-  }, [clearDraft, draftResetKey]);
-
-  useEffect(() => {
-    onViewAnnouncementChange(zoomAnnouncement);
-    return () => {
-      onViewAnnouncementChange("");
-    };
-  }, [onViewAnnouncementChange, zoomAnnouncement]);
-
-  useEffect(() => {
-    onDirtyChange(canUndo);
-    return () => onDirtyChange(false);
-  }, [canUndo, onDirtyChange]);
-
-  const ratio = sourceImage.width / sourceImage.height;
-  const surface = (
-    <div
-      className="editor-image-frame relative"
-      style={{
-        aspectRatio: `${String(sourceImage.width)} / ${String(sourceImage.height)}`,
-        width: `min(100cqw, calc(100cqh * ${String(ratio)}))`,
-        height: `min(100cqh, calc(100cqw / ${String(ratio)}))`,
-      }}
-    >
-      <MaskCorrectionCanvas
-        ref={canvasHandleRef}
-        sourceImage={sourceImage}
-        backgroundFill={backgroundFill}
-        initialMatte={originalMatte}
-        original={originalMatte}
-        mode={mode}
-        brushRadius={brushSize}
-        brushHardness={1}
-        viewport={viewport}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onWheelZoom={zoomByWheel}
-        onResetView={resetView}
-        onPan={panView}
-        onPanBySourcePixels={panBySourcePixels}
-        onStrokeCommitted={commitStroke}
-        stageTargetRef={surfaceTargetRef}
-        interactionMode={interactionMode}
-        interactionEnabled={interactionEnabled}
-      />
-      <BrushSizeStagePreview
-        sourceDiameter={brushSize * 2}
-        sourceWidth={sourceImage.width}
-        targetRef={surfaceTargetRef}
-        interactionKey={previewInteractionKey}
-        tone={mode === "erase" ? "erase" : "restore"}
-        coreRatio={1 / 3}
-      />
-    </div>
-  );
-
-  const rail = (
-    <div className="flex h-full flex-col gap-4">
-      <MaskCorrectionToolbar
-        mode={mode}
-        onModeChange={setMode}
-        brushSize={brushSize}
-        onBrushSizeChange={(size) => {
-          setBrushSize(size);
-          onBrushSizeInteraction();
-        }}
-      />
-      <div className="mt-auto grid grid-cols-2 gap-2 pt-2">
-        <Button
-          type="button"
-          disabled={doneDisabled || !canUndo}
-          onClick={() => {
-            const matte = canvasHandleRef.current?.extractMatte();
-            if (matte)
-              void onDone(matte).then((committed) => {
-                if (committed) commitDraft();
-              });
-          }}
-        >
-          {doneDisabled ? m.cutoutApplying() : m.cutoutApply()}
-        </Button>
-        <Button type="button" variant="outline" onClick={clearDraft}>
-          {m.cancel()}
-        </Button>
-      </div>
-    </div>
-  );
-
-  return children({ surface, rail });
-}
-
-type DisplayError = { message: string; action: "retry" | "reset" };
-
-function localizedUploadError(error: UploadValidationError): string {
-  if (error.code === "unsupported-format") {
-    const format = error.message.match(/"([^"]+)"/)?.[1] ?? "unknown";
-    return m.uploadUnsupported({ format });
-  }
-  if (error.code === "exceeds-size-limit") return m.uploadTooLarge();
-  return m.uploadResolutionError();
-}
-
-interface UploadErrorNoticeProps {
-  error: UploadValidationError;
-  onDismiss: () => void;
-}
-
-// Renders in place inside the owning upload surface (idle dropzone or batch
-// "add images" row) instead of a separate grid area, so an invalid file
-// never hides the upload controls or shifts them down the page (PHASE_31
-// T8/F7).
-function UploadErrorNotice({ error, onDismiss }: UploadErrorNoticeProps) {
-  return (
-    <div
-      role="alert"
-      className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
-    >
-      <p>{localizedUploadError(error)}</p>
-      <Button type="button" variant="outline" onClick={onDismiss} className="self-start">
-        {m.tryAgain()}
-      </Button>
-    </div>
-  );
-}
-
-interface CorrectionErrorAlertProps {
-  error: DisplayError;
-  onRetry: () => void;
-  onReset: () => void;
-}
-
-function CorrectionErrorAlert({ error, onRetry, onReset }: CorrectionErrorAlertProps) {
-  return (
-    <div
-      role="alert"
-      className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
-    >
-      <p>{error.message}</p>
-      <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="outline" onClick={onRetry}>
-          {m.tryAgain()}
-        </Button>
-        <Button type="button" variant="outline" onClick={onReset}>
-          {m.reset()}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -932,6 +646,7 @@ export function ToolWorkspace({
         onBrushSizeInteraction={() => setMagicPreviewKey((current) => current + 1)}
         onApply={() => void handleApplyGuided()}
         onCancel={guided.cancelDraft}
+        onRetry={guided.retry}
       />
     ) : extractingMatte ? (
       <div

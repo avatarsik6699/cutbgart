@@ -19,6 +19,7 @@ interface Props {
   onBrushSizeInteraction: () => void;
   onApply: () => void;
   onCancel: () => void;
+  onRetry: () => void;
 }
 
 export function GuidedBrushControls({
@@ -32,6 +33,7 @@ export function GuidedBrushControls({
   onBrushSizeInteraction,
   onApply,
   onCancel,
+  onRetry,
 }: Props) {
   const busy =
     applying ||
@@ -124,14 +126,20 @@ export function GuidedBrushControls({
       <div className="flex-1" aria-hidden="true" />
 
       <div className="grid grid-cols-2 gap-2 pt-2">
-        <Button
-          type="button"
-          className="w-full"
-          disabled={!canApply || busy}
-          onClick={onApply}
-        >
-          {applying || status === "predicting" ? m.cutoutApplying() : m.cutoutApply()}
-        </Button>
+        {status === "error" ? (
+          <Button type="button" className="w-full" onClick={onRetry}>
+            {m.tryAgain()}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            className="w-full"
+            disabled={!canApply || busy}
+            onClick={onApply}
+          >
+            {applying || status === "predicting" ? m.cutoutApplying() : m.cutoutApply()}
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"

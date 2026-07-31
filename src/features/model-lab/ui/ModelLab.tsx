@@ -121,7 +121,7 @@ export function ModelLab() {
           })}
         </div>
         {state.selectedModelIds.length < 2 && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="status" className="text-sm text-muted-foreground">
             Для сравнения выберите минимум две модели.
           </p>
         )}

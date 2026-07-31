@@ -35,6 +35,7 @@ function renderControls(
     onClear: vi.fn(),
     onApply: vi.fn(),
     onCancel: vi.fn(),
+    onRetry: vi.fn(),
   };
   render(
     <GuidedBrushControls
@@ -101,5 +102,15 @@ describe("GuidedBrushControls", () => {
       canApply: false,
     });
     expect(screen.getByText(/green Keep marking/i)).toBeDefined();
+  });
+
+  // PHASE_31 T8 full-inventory finding: an errored prediction offered only
+  // Cancel, forcing the user to abandon the guided-brush session — `retry()`
+  // existed on the model hook but was never wired to any button.
+  it("offers a retry action instead of Apply when the prediction errors, wired to onRetry", () => {
+    const callbacks = renderControls(undefined, { status: "error" });
+    expect(screen.queryByRole("button", { name: /apply/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
   });
 });
