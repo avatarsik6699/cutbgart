@@ -768,6 +768,9 @@ research pass, not taken on trust.
   something to rush inside this already-large pass.
 - **Confidence**: high (exact useState/handler locations cited) — sizing/risk is what pushes this to
   `defer`, not doubt about the finding.
+- **Update**: see `F-34` below for a first decomposition slice of the *model* hook
+  (`use-tool-workspace-controller.ts`, 1453 → 1113 lines). `ToolWorkspace.tsx`'s own component-level
+  state — the part this finding is actually about — is untouched; still `defer`.
 
 ### Overall T2–T5 disposition
 
@@ -781,3 +784,32 @@ decompositions/extractions to a dedicated `F2` follow-up pass** — each needs c
 per call site before touching, which is real, sizable work the phase's own rules require doing
 properly rather than rushed inside an already-large session. `T2`'s interaction/heap tooling (`F-08`)
 is deferred for the same reason: it doesn't exist yet and building it safely is its own deliverable.
+
+### F-34 — First decomposition slice of `use-tool-workspace-controller.ts` (F-24 follow-up)
+
+- **Evidence**: `use-tool-workspace-controller.ts` was 1453 lines, with the fine-detail/colour-halo
+  enhancement pipeline (state machine + refs + 4 effects, ~340 lines) fully self-contained apart from
+  two ref pairs (`refinementTargetRef`/`foregroundTargetRef`, `refinementContextRef`) that the
+  mask-correction flow also writes into by design (tracking "what am I refining right now" across
+  both flows).
+- **Owner layer**: `widgets/tool-workspace/model/`.
+- **Decision**: `fix` — extracted the enhancement-run state machine into a new
+  `use-enhancement-runner.ts` (442 lines), taking `recomposite`/`batch.recomposite`,
+  `releaseInference`, `guided.release`, `batch.releaseInference`, `refinementMode`, `inferencePath`,
+  and the `commitSingleResult`/`commitBatchResult` callbacks as explicit dependencies, and exposing
+  the shared ref pair back to the controller (not made fully private, since the correction flow
+  genuinely needs to write into them). `use-tool-workspace-controller.ts` is now 1113 lines (~23%
+  smaller); its public return-object shape (`enhancementState`, `enhancementProgress`, `refinement`,
+  `foregroundRefinement`, `cancelEnhancements`, `retryEnhancements`, `releaseRefinementBeforeHeavyWork`
+  keys) is unchanged, so `ToolWorkspace.tsx` needed no changes at all. No new characterization tests
+  were written — this is a pure behavior-preserving extraction, verified instead by the full existing
+  suite (43 `tool-workspace` tests, 392 project-wide) passing unchanged before and after, plus `tsc`,
+  `eslint`, and `steiger` all clean.
+- **Remaining scope** (still `defer`, unchanged from `F-24`/"Overall T2–T5" above): `ToolWorkspace.tsx`
+  itself still owns ~20 `useState` calls and ~18 handlers directly in the component body;
+  `use-object-selection.ts` (1026 lines) is untouched; further slices of
+  `use-tool-workspace-controller.ts` (e.g. guided-cutout target tracking, mask-correction handlers)
+  remain, each sized similarly to this one and each needing the same dependency-injection treatment
+  since they also cross-reference shared refs.
+- **Confidence**: high — mechanical extraction, fully covered by pre-existing tests, zero behavior
+  change intended or observed.

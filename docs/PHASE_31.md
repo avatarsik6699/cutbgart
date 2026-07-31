@@ -370,6 +370,16 @@ touches.
     own dedicated design pass, not force-fit here).
   - Every fix has a characterization test confirmed via `git stash` to fail pre-fix, pass post-fix.
     Verified: `tsc`, `eslint`, `steiger` clean; `pnpm vitest run` 392/392.
+- F-24 follow-up (2026-07-31, `F-34`): extracted the fine-detail/colour-halo enhancement-run state
+  machine out of `use-tool-workspace-controller.ts` (1453 → 1113 lines) into a new
+  `use-enhancement-runner.ts` (442 lines), a self-contained subsystem apart from a ref pair the
+  mask-correction flow also writes into (exposed back to the controller by design). Public return
+  shape of the controller unchanged, so `ToolWorkspace.tsx` needed no edits. Pure behavior-preserving
+  extraction — no new characterization tests; verified by the full existing suite (43 tool-workspace
+  tests, 392 project-wide) passing unchanged before/after, plus `tsc`/`eslint`/`steiger` clean.
+  Remaining scope explicitly still deferred: `ToolWorkspace.tsx`'s own ~20 `useState`/~18 handlers
+  (what `F-24` is actually about), `use-object-selection.ts` (1026 lines, untouched), and further
+  slices of the controller (guided-cutout tracking, mask-correction handlers).
 
 ## Atomic Commit Message
 
