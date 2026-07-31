@@ -200,7 +200,7 @@ test("real Phase 19 refinement: current enhancement path, hard constraints, and 
       ).__phase19Trace.responses.filter((response) => response.type === "disposed")
         .length,
   );
-  await page.getByRole("button", { name: "Process another image" }).click();
+  await page.getByRole("button", { name: /Back to upload/ }).click();
   await expect
     .poll(
       () =>

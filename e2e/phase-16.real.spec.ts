@@ -41,7 +41,7 @@ test("Phase 16 real models: BEN2 lifecycle and SlimSAM point/box", async ({
     .getByText(/BEN2 could not run/)
     .isVisible()
     .catch(() => false);
-  await page.getByRole("button", { name: /Process another image/ }).click();
+  await page.getByRole("button", { name: /Back to upload/ }).click();
 
   await page.getByRole("button", { name: /Point or box/ }).click();
   await page.getByLabel("Upload an image").setInputFiles(SAMPLE);
