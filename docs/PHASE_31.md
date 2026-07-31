@@ -442,6 +442,16 @@ touches.
   (1026 lines, the other F-24 candidate) and found it is two already-cohesive single-responsibility
   worker-orchestration hooks sharing one file, not a god-hook; left untouched as lower-value pure
   file-organization churn rather than a real decomposition (`F-38`).
+- `docs/FRONTEND_CONVENTIONS.md` compliance close-out (2026-07-31, `F-39`): architect asked whether
+  the conventions doc's outstanding items were actually closed — audit found they weren't fully.
+  Fixed the session's own new F-24 hooks against §2.5/§2.7/§4.2 (they postdate the doc's adoption, so
+  were hard-required, not legacy debt); built the 3 missing shared wrappers the doc named
+  (`use-router.ts`, `shared/lib/storage/{safe-ls,safe-json}.ts`) and migrated their one known call
+  site each; resolved the open Architect Review Notes decision as prospective-only (no mass rewrite
+  of the ~45+ pre-existing files, consistent with Scope Lock). Grouped `storage/` and `worker/`
+  (the latter existing `F-09` output) under `shared/lib/` with public-API barrels to clear
+  `steiger`'s shared-lib module-count threshold after adding the 3 new files. Full detail in
+  `PHASE_31_FINDINGS.md` F-39.
 
 ## Atomic Commit Message
 

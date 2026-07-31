@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { getLocale, localizeHref, locales } from "@/paraglide/runtime";
+import { useRouter } from "@/shared/lib/use-router";
 import { cn } from "@/shared/lib/utils";
 import { BrandLogo } from "@/shared/ui/brand-logo";
 
@@ -16,7 +17,8 @@ const LOCALE_LABELS = {
 } satisfies Record<(typeof locales)[number], () => string>;
 
 function LanguageSwitcher() {
-  const href = useLocation({ select: (location) => location.href });
+  const router = useRouter();
+  const href = router.location.href;
   const currentLocale = getLocale();
 
   return (

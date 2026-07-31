@@ -147,7 +147,6 @@ export function ToolWorkspace({
     selectedBatchItem?.id ??
     (state.status === "result" || state.status === "correcting" ? "single-result" : null);
   const documentUiState = useDocumentUiState(activeDocumentId);
-  const { activeTool, cutoutMode } = documentUiState;
   const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
   const [manualPreviewKey, setManualPreviewKey] = useState(0);
@@ -166,7 +165,6 @@ export function ToolWorkspace({
     },
     activeDocumentId ?? "no-document",
   );
-  const { interactionMode, backgroundDraftDirty, exportSettings } = documentUiState;
   const magicSurfaceRef = useRef<HTMLCanvasElement>(null);
   const manualSurfaceRef = useRef<HTMLCanvasElement>(null);
   const initializedMagicDocumentRef = useRef<string | null>(null);
@@ -189,11 +187,11 @@ export function ToolWorkspace({
   };
   const draftGuard = useDraftGuard({
     activeDocumentId,
-    activeTool,
+    activeTool: documentUiState.activeTool,
     guided,
     finalizingCorrection,
     originalMatte,
-    backgroundDraftDirty,
+    backgroundDraftDirty: documentUiState.backgroundDraftDirty,
     enhancementDraftDirty: enhancementDraft.dirty,
     activeEnhancementStatus,
     selectedBatchItem,
@@ -222,26 +220,11 @@ export function ToolWorkspace({
     initializedMagicDocumentRef,
     initializedManualDocumentRef,
   });
-  const {
-    manualDraftResetKey,
-    handleManualDirtyChange,
-    activeDraftDirty,
-    draftGuardOpen,
-    requestTool,
-    requestBatchItem,
-    requestBatchReprocess,
-    requestBatchRemove,
-    requestBatchClear,
-    requestReset,
-    discardActiveDraft,
-    dismissPendingGuard,
-  } = draftGuard;
-
   useEffect(() => {
     if (
       !activeDocumentId ||
-      activeTool !== "cutout" ||
-      cutoutMode !== "magic" ||
+      documentUiState.activeTool !== "cutout" ||
+      documentUiState.cutoutMode !== "magic" ||
       guided.state.session ||
       extractingMatte ||
       initializedMagicDocumentRef.current === activeDocumentId
@@ -259,8 +242,8 @@ export function ToolWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeDocumentId,
-    activeTool,
-    cutoutMode,
+    documentUiState.activeTool,
+    documentUiState.cutoutMode,
     extractingMatte,
     guided.state.session,
     selectedBatchItem?.id,
@@ -270,8 +253,8 @@ export function ToolWorkspace({
   useEffect(() => {
     if (
       !activeDocumentId ||
-      activeTool !== "cutout" ||
-      cutoutMode !== "manual" ||
+      documentUiState.activeTool !== "cutout" ||
+      documentUiState.cutoutMode !== "manual" ||
       originalMatte ||
       extractingMatte ||
       initializedManualDocumentRef.current === activeDocumentId
@@ -284,8 +267,8 @@ export function ToolWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeDocumentId,
-    activeTool,
-    cutoutMode,
+    documentUiState.activeTool,
+    documentUiState.cutoutMode,
     extractingMatte,
     originalMatte,
     selectedBatchItem?.id,
@@ -303,7 +286,7 @@ export function ToolWorkspace({
   }, [batch.session.items, batch.session.selectedItemId, handleSelectBatchItem]);
 
   function selectCutoutMode(mode: CutoutMode) {
-    if (!activeDocumentId || mode === cutoutMode) return;
+    if (!activeDocumentId || mode === documentUiState.cutoutMode) return;
     if (mode === "manual" && extractingMatte && !guided.state.session) {
       cancelGuided();
     } else if (mode === "magic" && extractingMatte && !originalMatte) {
@@ -403,7 +386,7 @@ export function ToolWorkspace({
   const canvasViewControls = activeDocumentId
     ? ({ expanded, toggleFullscreen }: EditorStageFullscreenControls) => (
         <CanvasViewControls
-          interactionMode={interactionMode}
+          interactionMode={documentUiState.interactionMode}
           onInteractionModeChange={documentUiState.setInteractionMode}
           zoomPercent={cutoutViewport.zoomPercent}
           canZoomIn={cutoutViewport.canZoomIn}
@@ -437,10 +420,13 @@ export function ToolWorkspace({
           baseMatteRevision={guided.state.baseMatteRevision}
           entryKind={guidedVisualContext.entryKind}
           applying={finalizingCorrection}
-          active={activeTool === "cutout" && cutoutMode === "magic"}
+          active={
+            documentUiState.activeTool === "cutout" &&
+            documentUiState.cutoutMode === "magic"
+          }
           mode={magicIntent}
           viewportControls={cutoutViewport}
-          interactionMode={interactionMode}
+          interactionMode={documentUiState.interactionMode}
           surfaceTargetRef={magicSurfaceRef}
           promptCounts={{
             total: guided.state.lastPromptCount,
@@ -562,10 +548,10 @@ export function ToolWorkspace({
         selectedItemId={batch.session.selectedItemId}
         snapshot={batch.snapshot}
         modelLoad={batch.session.modelLoads[batchModelKey]}
-        onSelect={requestBatchItem}
+        onSelect={draftGuard.requestBatchItem}
         onDownload={downloadBatchItem}
-        onRetry={requestBatchReprocess}
-        onRemove={requestBatchRemove}
+        onRetry={draftGuard.requestBatchReprocess}
+        onRemove={draftGuard.requestBatchRemove}
       />
     </>
   ) : null;
@@ -581,7 +567,9 @@ export function ToolWorkspace({
         >
           <PersistentPreviewLayers
             activeLayer={
-              activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas
+              documentUiState.activeTool === "cutout" &&
+              documentUiState.cutoutMode === "magic" &&
+              guidedCanvas
                 ? "magic"
                 : "comparison"
             }
@@ -640,15 +628,15 @@ export function ToolWorkspace({
       />
     ) : (
       <ToolPanelSlot
-        toolId={activeTool}
-        label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
+        toolId={documentUiState.activeTool}
+        label={tools.find(({ id }) => id === documentUiState.activeTool)?.label ?? ""}
         fitContent={!selectedBatchItem?.processedImage}
       >
         {selectedBatchItem?.processedImage ? (
           <div className="flex flex-col gap-4" data-testid="batch-controls">
-            {activeTool === "cutout" && (
+            {documentUiState.activeTool === "cutout" && (
               <CutoutToolPanel
-                mode={cutoutMode}
+                mode={documentUiState.cutoutMode}
                 onModeChange={selectCutoutMode}
                 magicControls={magicControls}
                 manualControls={
@@ -661,7 +649,7 @@ export function ToolWorkspace({
                 }
               />
             )}
-            {activeTool === "enhance" && (
+            {documentUiState.activeTool === "enhance" && (
               <EnhancementsToolPanel
                 registry={enhancementRegistry}
                 draft={visibleEnhancementDraft}
@@ -686,7 +674,7 @@ export function ToolWorkspace({
                 onRetry={retryEnhancements}
               />
             )}
-            {activeTool === "background" && (
+            {documentUiState.activeTool === "background" && (
               <BackgroundToolPanel
                 image={{
                   source: selectedBatchItem.processedImage.source,
@@ -791,7 +779,9 @@ export function ToolWorkspace({
     surfaceNode = (
       <PersistentPreviewLayers
         activeLayer={
-          activeTool === "cutout" && cutoutMode === "magic" && guidedCanvas
+          documentUiState.activeTool === "cutout" &&
+          documentUiState.cutoutMode === "magic" &&
+          guidedCanvas
             ? "magic"
             : "comparison"
         }
@@ -809,13 +799,13 @@ export function ToolWorkspace({
     );
     railNode = (
       <ToolPanelSlot
-        toolId={activeTool}
-        label={tools.find(({ id }) => id === activeTool)?.label ?? ""}
+        toolId={documentUiState.activeTool}
+        label={tools.find(({ id }) => id === documentUiState.activeTool)?.label ?? ""}
       >
         <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
-          {activeTool === "cutout" && (
+          {documentUiState.activeTool === "cutout" && (
             <CutoutToolPanel
-              mode={cutoutMode}
+              mode={documentUiState.cutoutMode}
               onModeChange={selectCutoutMode}
               magicControls={magicControls}
               manualControls={
@@ -825,7 +815,7 @@ export function ToolWorkspace({
               }
             />
           )}
-          {activeTool === "enhance" && (
+          {documentUiState.activeTool === "enhance" && (
             <EnhancementsToolPanel
               registry={enhancementRegistry}
               draft={visibleEnhancementDraft}
@@ -847,7 +837,7 @@ export function ToolWorkspace({
               onRetry={retryEnhancements}
             />
           )}
-          {activeTool === "background" && (
+          {documentUiState.activeTool === "background" && (
             <BackgroundToolPanel
               image={{
                 source: state.result.source,
@@ -907,10 +897,13 @@ export function ToolWorkspace({
         onBrushSizeInteraction={() => setManualPreviewKey((current) => current + 1)}
         previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
-        onDirtyChange={handleManualDirtyChange}
-        interactionMode={interactionMode}
-        interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
-        draftResetKey={manualDraftResetKey}
+        onDirtyChange={draftGuard.handleManualDirtyChange}
+        interactionMode={documentUiState.interactionMode}
+        interactionEnabled={
+          documentUiState.activeTool === "cutout" &&
+          documentUiState.cutoutMode === "manual"
+        }
+        draftResetKey={draftGuard.manualDraftResetKey}
         onDecodeError={handleCanvasDecodeError}
         decodeRetryToken={canvasDecodeRetryToken}
       >
@@ -923,9 +916,10 @@ export function ToolWorkspace({
               >
                 <PersistentPreviewLayers
                   activeLayer={
-                    activeTool === "cutout" &&
-                    ((cutoutMode === "magic" && guidedCanvas) || cutoutMode === "manual")
-                      ? cutoutMode
+                    documentUiState.activeTool === "cutout" &&
+                    ((documentUiState.cutoutMode === "magic" && guidedCanvas) ||
+                      documentUiState.cutoutMode === "manual")
+                      ? documentUiState.cutoutMode
                       : "comparison"
                   }
                   magic={guidedCanvas}
@@ -943,7 +937,7 @@ export function ToolWorkspace({
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
-              {activeTool === "cutout" ? (
+              {documentUiState.activeTool === "cutout" ? (
                 <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
                   <div className="flex h-full flex-col gap-4">
                     {correctionError && (
@@ -954,7 +948,7 @@ export function ToolWorkspace({
                       />
                     )}
                     <CutoutToolPanel
-                      mode={cutoutMode}
+                      mode={documentUiState.cutoutMode}
                       onModeChange={selectCutoutMode}
                       magicControls={magicControls}
                       manualControls={rail}
@@ -987,10 +981,13 @@ export function ToolWorkspace({
         onBrushSizeInteraction={() => setManualPreviewKey((current) => current + 1)}
         previewInteractionKey={manualPreviewKey}
         onViewAnnouncementChange={setCorrectionViewAnnouncement}
-        onDirtyChange={handleManualDirtyChange}
-        interactionMode={interactionMode}
-        interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
-        draftResetKey={manualDraftResetKey}
+        onDirtyChange={draftGuard.handleManualDirtyChange}
+        interactionMode={documentUiState.interactionMode}
+        interactionEnabled={
+          documentUiState.activeTool === "cutout" &&
+          documentUiState.cutoutMode === "manual"
+        }
+        draftResetKey={draftGuard.manualDraftResetKey}
         onDecodeError={handleCanvasDecodeError}
         decodeRetryToken={canvasDecodeRetryToken}
       >
@@ -1003,9 +1000,10 @@ export function ToolWorkspace({
               >
                 <PersistentPreviewLayers
                   activeLayer={
-                    activeTool === "cutout" &&
-                    ((cutoutMode === "magic" && guidedCanvas) || cutoutMode === "manual")
-                      ? cutoutMode
+                    documentUiState.activeTool === "cutout" &&
+                    ((documentUiState.cutoutMode === "magic" && guidedCanvas) ||
+                      documentUiState.cutoutMode === "manual")
+                      ? documentUiState.cutoutMode
                       : "comparison"
                   }
                   magic={guidedCanvas}
@@ -1029,10 +1027,10 @@ export function ToolWorkspace({
               </EditorStage>
             </div>
             <div className="[grid-area:rail]">
-              {activeTool === "cutout" ? (
+              {documentUiState.activeTool === "cutout" ? (
                 <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
                   <CutoutToolPanel
-                    mode={cutoutMode}
+                    mode={documentUiState.cutoutMode}
                     onModeChange={selectCutoutMode}
                     magicControls={magicControls}
                     manualControls={rail}
@@ -1056,7 +1054,9 @@ export function ToolWorkspace({
       <EditorStage
         documentId={activeDocumentId}
         overlaySlot={
-          activeTool === "cutout" && guidedCanvas ? canvasViewControls : undefined
+          documentUiState.activeTool === "cutout" && guidedCanvas
+            ? canvasViewControls
+            : undefined
         }
       >
         {surfaceNode}
@@ -1064,7 +1064,7 @@ export function ToolWorkspace({
     ) : (
       surfaceNode
     );
-  const draftGuardNode = draftGuardOpen ? (
+  const draftGuardNode = draftGuard.draftGuardOpen ? (
     <div
       role="alertdialog"
       aria-labelledby="editor-draft-guard-title"
@@ -1079,13 +1079,13 @@ export function ToolWorkspace({
         {m.editorDraftGuardBody()}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={dismissPendingGuard}>
+        <Button type="button" variant="outline" onClick={draftGuard.dismissPendingGuard}>
           {m.editorDraftContinue()}
         </Button>
         <Button
           type="button"
           variant="destructive"
-          onClick={() => window.setTimeout(discardActiveDraft, 50)}
+          onClick={() => window.setTimeout(draftGuard.discardActiveDraft, 50)}
         >
           {m.editorDraftDiscard()}
         </Button>
@@ -1104,10 +1104,10 @@ export function ToolWorkspace({
   const editorToolbarNode = !showEmptyComposition ? (
     <EditorToolbar
       tools={activeDocumentId ? tools : []}
-      activeTool={activeDocumentId ? activeTool : null}
-      onToolChange={activeDocumentId ? requestTool : undefined}
-      canUndo={!activeDraftDirty && historySelectors.canUndo}
-      canRedo={!activeDraftDirty && historySelectors.canRedo}
+      activeTool={activeDocumentId ? documentUiState.activeTool : null}
+      onToolChange={activeDocumentId ? draftGuard.requestTool : undefined}
+      canUndo={!draftGuard.activeDraftDirty && historySelectors.canUndo}
+      canRedo={!draftGuard.activeDraftDirty && historySelectors.canRedo}
       undoLabel={historySelectors.undoLabel}
       redoLabel={historySelectors.redoLabel}
       onUndo={() => window.setTimeout(handleUndoDocument, 50)}
@@ -1135,7 +1135,7 @@ export function ToolWorkspace({
                   }
                 : undefined
             }
-            settings={exportSettings}
+            settings={documentUiState.exportSettings}
             onSettingsChange={
               activeDocumentId ? documentUiState.setExportSettings : undefined
             }
@@ -1144,7 +1144,9 @@ export function ToolWorkspace({
         ) : undefined
       }
       onBack={(trigger) =>
-        batchActive ? requestBatchClear(trigger) : requestReset(trigger)
+        batchActive
+          ? draftGuard.requestBatchClear(trigger)
+          : draftGuard.requestReset(trigger)
       }
     />
   ) : null;

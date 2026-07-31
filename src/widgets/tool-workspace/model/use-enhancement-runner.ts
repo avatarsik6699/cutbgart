@@ -105,18 +105,6 @@ export interface EnhancementRunnerDeps {
  * (PHASE_31 F-24 extraction.)
  */
 export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
-  const {
-    recompositeSingle,
-    recompositeBatch,
-    releaseInference,
-    guidedRelease,
-    batchReleaseInference,
-    refinementMode,
-    inferencePath,
-    commitSingleResult,
-    commitBatchResult,
-  } = deps;
-
   const refinement = useMatteRefinement();
   const foregroundRefinement = useForegroundRefinement();
   const finishRefinementApplying = refinement.finishApplying;
@@ -136,12 +124,11 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
   const runRef = useRef<EnhancementRun | null>(null);
   const requestRef = useRef<EnhancementRequest | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(function bumpSequenceOnUnmountFx() {
+    return function bumpSequenceOnUnmountCleanupFx() {
       sequenceRef.current += 1;
-    },
-    [],
-  );
+    };
+  }, []);
 
   function finishRun(run: EnhancementRun) {
     if (runRef.current !== run) return;
@@ -149,13 +136,13 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
     if (run.changed) {
       const committed =
         run.target.kind === "single"
-          ? commitSingleResult(
+          ? deps.commitSingleResult(
               run.image,
               "enhance",
               run.historyLabel,
               run.target.documentRevision,
             )
-          : commitBatchResult(
+          : deps.commitBatchResult(
               run.target.itemId,
               run.image,
               "enhance",
@@ -215,8 +202,8 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
         priorMatte: matte,
         guidedMatte: refinementContextRef.current.guidedMatte,
         constraints: refinementContextRef.current.constraints,
-        mode: refinementMode,
-        path: inferencePath ?? "wasm",
+        mode: deps.refinementMode,
+        path: deps.inferencePath ?? "wasm",
       });
       return;
     }
@@ -273,11 +260,11 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
       documentId: request.documentId,
     });
     void Promise.all([
-      releaseInference(),
-      guidedRelease(),
+      deps.releaseInference(),
+      deps.guidedRelease(),
       refinement.release(),
       foregroundRefinement.release(),
-      request.target.kind === "batch" ? batchReleaseInference() : Promise.resolve(),
+      request.target.kind === "batch" ? deps.batchReleaseInference() : Promise.resolve(),
     ]).then(() => {
       if (runRef.current !== run || sequenceRef.current !== id) return;
       refinement.reset();
@@ -343,103 +330,117 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
     appliedForegroundRef.current = null;
   }
 
-  useEffect(() => {
-    const result = refinement.state.result;
-    const target = refinementTargetRef.current;
-    const run = runRef.current;
-    if (
-      !result ||
-      !target ||
-      !run ||
-      run.operationIds[run.operationIndex] !== "fine-detail" ||
-      appliedRefinementRef.current === result.matte
-    )
-      return;
-    appliedRefinementRef.current = result.matte;
-    if (!run.image.alphaMatte || sameAlphaMatte(run.image.alphaMatte, result.matte)) {
-      finishRefinementApplying();
-      continueRun(run);
-      return;
-    }
-    const apply = target.kind === "single" ? recompositeSingle : recompositeBatch;
-    void apply({ ...run.image, foreground: undefined }, result.matte)
-      .then((updated) => {
-        if (runRef.current !== run || refinementTargetRef.current !== target) return;
-        run.image = updated;
-        run.changed = true;
+  useEffect(
+    function applyRefinementResultFx() {
+      const result = refinement.state.result;
+      const target = refinementTargetRef.current;
+      const run = runRef.current;
+      if (
+        !result ||
+        !target ||
+        !run ||
+        run.operationIds[run.operationIndex] !== "fine-detail" ||
+        appliedRefinementRef.current === result.matte
+      )
+        return;
+      appliedRefinementRef.current = result.matte;
+      if (!run.image.alphaMatte || sameAlphaMatte(run.image.alphaMatte, result.matte)) {
         finishRefinementApplying();
         continueRun(run);
-      })
-      .catch(() => failRun(run, "failed"));
-  }, [
-    continueRun,
-    finishRefinementApplying,
-    recompositeBatch,
-    recompositeSingle,
-    refinement.state.result,
-  ]);
+        return;
+      }
+      const apply =
+        target.kind === "single" ? deps.recompositeSingle : deps.recompositeBatch;
+      void apply({ ...run.image, foreground: undefined }, result.matte)
+        .then((updated: ProcessedImage) => {
+          if (runRef.current !== run || refinementTargetRef.current !== target) return;
+          run.image = updated;
+          run.changed = true;
+          finishRefinementApplying();
+          continueRun(run);
+        })
+        .catch(() => failRun(run, "failed"));
+    },
+    [
+      continueRun,
+      finishRefinementApplying,
+      deps.recompositeBatch,
+      deps.recompositeSingle,
+      refinement.state.result,
+    ],
+  );
 
-  useEffect(() => {
-    const error = refinement.state.error;
-    const run = runRef.current;
-    if (
-      refinement.state.status !== "error" ||
-      !error ||
-      !run ||
-      run.operationIds[run.operationIndex] !== "fine-detail"
-    )
-      return;
-    failRun(run, error.code === "device-out-of-memory" ? "out-of-memory" : "failed");
-  }, [refinement.state.error, refinement.state.status]);
+  useEffect(
+    function handleRefinementErrorFx() {
+      const error = refinement.state.error;
+      const run = runRef.current;
+      if (
+        refinement.state.status !== "error" ||
+        !error ||
+        !run ||
+        run.operationIds[run.operationIndex] !== "fine-detail"
+      )
+        return;
+      failRun(run, error.code === "device-out-of-memory" ? "out-of-memory" : "failed");
+    },
+    [refinement.state.error, refinement.state.status],
+  );
 
-  useEffect(() => {
-    const result = foregroundRefinement.state.result;
-    const target = foregroundTargetRef.current;
-    const run = runRef.current;
-    if (
-      !result ||
-      !target ||
-      !run ||
-      run.operationIds[run.operationIndex] !== "colour-halo" ||
-      appliedForegroundRef.current === result.foreground
-    )
-      return;
-    appliedForegroundRef.current = result.foreground;
-    if (result.actualPath === "unchanged") {
-      finishForegroundApplying();
-      continueRun(run);
-      return;
-    }
-    const apply = target.kind === "single" ? recompositeSingle : recompositeBatch;
-    void apply({ ...run.image, foreground: result.foreground }, result.matte)
-      .then((updated) => {
-        if (runRef.current !== run || foregroundTargetRef.current !== target) return;
-        run.image = updated;
-        run.changed = true;
+  useEffect(
+    function applyForegroundResultFx() {
+      const result = foregroundRefinement.state.result;
+      const target = foregroundTargetRef.current;
+      const run = runRef.current;
+      if (
+        !result ||
+        !target ||
+        !run ||
+        run.operationIds[run.operationIndex] !== "colour-halo" ||
+        appliedForegroundRef.current === result.foreground
+      )
+        return;
+      appliedForegroundRef.current = result.foreground;
+      if (result.actualPath === "unchanged") {
         finishForegroundApplying();
         continueRun(run);
-      })
-      .catch(() => failRun(run, "failed"));
-  }, [
-    continueRun,
-    finishForegroundApplying,
-    foregroundRefinement.state.result,
-    recompositeBatch,
-    recompositeSingle,
-  ]);
+        return;
+      }
+      const apply =
+        target.kind === "single" ? deps.recompositeSingle : deps.recompositeBatch;
+      void apply({ ...run.image, foreground: result.foreground }, result.matte)
+        .then((updated: ProcessedImage) => {
+          if (runRef.current !== run || foregroundTargetRef.current !== target) return;
+          run.image = updated;
+          run.changed = true;
+          finishForegroundApplying();
+          continueRun(run);
+        })
+        .catch(() => failRun(run, "failed"));
+    },
+    [
+      continueRun,
+      finishForegroundApplying,
+      foregroundRefinement.state.result,
+      deps.recompositeBatch,
+      deps.recompositeSingle,
+    ],
+  );
 
-  useEffect(() => {
-    const error = foregroundRefinement.state.error;
-    const run = runRef.current;
-    if (
-      foregroundRefinement.state.status !== "error" ||
-      !error ||
-      !run ||
-      run.operationIds[run.operationIndex] !== "colour-halo"
-    )
-      return;
-    failRun(run, error.code === "device-out-of-memory" ? "out-of-memory" : "failed");
-  }, [foregroundRefinement.state.error, foregroundRefinement.state.status]);
+  useEffect(
+    function handleForegroundErrorFx() {
+      const error = foregroundRefinement.state.error;
+      const run = runRef.current;
+      if (
+        foregroundRefinement.state.status !== "error" ||
+        !error ||
+        !run ||
+        run.operationIds[run.operationIndex] !== "colour-halo"
+      )
+        return;
+      failRun(run, error.code === "device-out-of-memory" ? "out-of-memory" : "failed");
+    },
+    [foregroundRefinement.state.error, foregroundRefinement.state.status],
+  );
 
   return {
     state,

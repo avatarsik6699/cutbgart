@@ -982,3 +982,57 @@ is deferred for the same reason: it doesn't exist yet and building it safely is 
   pursued without a more specific rationale.
 - **Confidence**: high — mechanical extraction, fully covered by pre-existing tests plus a live run
   exercising both guard outcomes (dismiss and discard) directly.
+
+### F-39 — `docs/FRONTEND_CONVENTIONS.md` compliance audit and close-out
+
+- **Evidence**: on architect request, audited every section of `docs/FRONTEND_CONVENTIONS.md`
+  against the actual codebase, including this session's own PHASE_31 F-24/F-09 work. Found the
+  session's own new files from *after* the doc's adoption (2026-07-30 19:14, commit `3bb3659`) —
+  `use-enhancement-runner.ts`, `use-document-ui-state.ts`, `use-draft-guard.ts` — violated rules
+  that were hard requirements for new code, not legacy debt: §2.5 (`ToolWorkspace.tsx` destructured
+  `documentUiState`/`draftGuard`'s return values instead of using dot notation), §2.7 (all 5
+  `useEffect`s in `use-enhancement-runner.ts` were anonymous, no `Fx` suffix), and §4.2
+  (`useEnhancementRunner`/`useDraftGuard` destructured their `deps` parameter in the function body).
+  Also found 3 genuinely unbuilt pieces the doc had explicitly flagged as not-yet-created:
+  `shared/lib/use-router.ts` (§5.1, one direct call site: `site-header.tsx`'s `LanguageSwitcher`),
+  `shared/lib/safe-ls.ts`/`safe-json.ts` (§6.1/§6.2, one direct call site: `use-quality-mode.ts`).
+- **Owner layer**: `widgets/tool-workspace/model/use-enhancement-runner.ts`,
+  `widgets/tool-workspace/ui/{ToolWorkspace.tsx,use-draft-guard.ts}`, new `shared/lib/use-router.ts`
+  + `shared/lib/storage/{safe-ls.ts,safe-json.ts}`, `docs/FRONTEND_CONVENTIONS.md`.
+- **Decision**: `fix`, all three prongs the architect prioritized:
+  1. **Own-code compliance** — un-destructured `documentUiState`/`draftGuard` throughout
+     `ToolWorkspace.tsx` (mechanical, script-assisted with an attribute-name-aware regex so JSX prop
+     names like `activeTool={...}` weren't corrupted — verified by full `tsc`/test-suite pass, not
+     just visual diff review); named all 5 `use-enhancement-runner.ts` effects
+     (`bumpSequenceOnUnmountFx`, `applyRefinementResultFx`, `handleRefinementErrorFx`,
+     `applyForegroundResultFx`, `handleForegroundErrorFx`); removed both hooks' `deps` param
+     destructuring, accessing fields via `deps.x` instead.
+  2. **Built the 3 missing shared wrappers** — `use-router.ts` (thin wrapper over
+     `useNavigate`/`useParams`/`useSearch`/`useLocation`, `strict: false` for `params`/`search`
+     since it's shared code with no single owning route, confirmed against TanStack Router's docs
+     via context7); `shared/lib/storage/{safe-ls.ts,safe-json.ts}` (SSR-safe, try/catch-guarded
+     `localStorage` wrapper; `safeJsonParse<T>` validating against a caller-supplied type guard,
+     returning `null` instead of throwing on malformed input or a shape mismatch) — 7 new unit tests
+     across both. Migrated the one known call site each: `site-header.tsx`'s `LanguageSwitcher`
+     (`useLocation({select})` → `router.location.href`) and `use-quality-mode.ts` (`window.localStorage`
+     → `safeLs`).
+  3. **Resolved the open Architect Review Notes decision** — retroactive enforcement of
+     §2.4/§2.5/§2.7/§1 across the ~45+ pre-existing files is **prospective-only**, not authorized as a
+     standalone mass rewrite (see the updated checkbox in `FRONTEND_CONVENTIONS.md` for full
+     reasoning). This closes the open item without the large-blast-radius edit `AGENTS.md` Scope Lock
+     and `PHASE_31.md` already ban.
+- **FSD follow-up during the fix**: adding 3 new top-level files to `shared/lib/` pushed it to 19
+  modules, past `steiger`'s FSD shared-lib-grouping threshold (15). Grouped `safe-ls.ts`/`safe-json.ts`
+  into `shared/lib/storage/` and (to clear the threshold, not because they were the new work)
+  `use-worker-lifecycle.ts`/`use-pending-request-worker.ts` (existing, from `F-09`) into
+  `shared/lib/worker/` — both with an `index.ts` public API per `steiger`'s `no-public-api-sidestep`
+  rule, all 6 call sites migrated to import from the folder.
+- **Verification**: `tsc --noEmit` clean, `eslint --no-cache` clean on every touched file, full suite
+  392 → 399 tests (7 new: `safe-ls.test.ts` x4, `safe-json.test.ts` x4 minus one shared setup — see
+  file) all passing, `steiger` clean. Live Playwright MCP smoke test of the two migrated call sites:
+  `use-quality-mode.ts` verified indirectly via its own 13 existing tests passing unchanged; the
+  router migration verified live — clicked the "English" language link, confirmed navigation to
+  `/en/` with only the 4 known pre-existing console errors.
+- **Confidence**: high — every fix is either a pure mechanical rename (verified by full green
+  suite + tsc, not just diff review) or a thin, fully-unit-tested wrapper around an existing,
+  unchanged code path.

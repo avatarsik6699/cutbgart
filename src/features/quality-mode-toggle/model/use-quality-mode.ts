@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { safeLs } from "@/shared/lib/storage";
 import type { AutomaticModelMode, QualityMode } from "../../../entities/processed-image";
 
 export const QUALITY_MODE_STORAGE_KEY = "qualityMode";
 
 function readStoredQualityMode(): AutomaticModelMode | null {
-  // TanStack Start renders this hook on the server first (no `window`) before
-  // hydrating on the client — SPEC.md's `localStorage` persistence is
+  // `safeLs` already guards SSR (TanStack Start renders on the server first,
+  // before hydrating on the client) — SPEC.md's `localStorage` persistence is
   // necessarily client-only.
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const stored = window.localStorage.getItem(QUALITY_MODE_STORAGE_KEY);
+  const stored = safeLs.getItem(QUALITY_MODE_STORAGE_KEY);
   return stored === "fast" ? "isnet-q8" : stored === "max" ? "isnet-fp32" : null;
 }
 
@@ -64,9 +62,9 @@ export function useQualityMode(defaultMode: QualityMode): UseQualityModeResult {
     // BEN2 is intentionally session-only. Preserve the established storage
     // contract only when an IS-Net preference is explicitly selected.
     if (mode === "isnet-q8") {
-      window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "fast");
+      safeLs.setItem(QUALITY_MODE_STORAGE_KEY, "fast");
     } else if (mode === "isnet-fp32") {
-      window.localStorage.setItem(QUALITY_MODE_STORAGE_KEY, "max");
+      safeLs.setItem(QUALITY_MODE_STORAGE_KEY, "max");
     }
   }, []);
 

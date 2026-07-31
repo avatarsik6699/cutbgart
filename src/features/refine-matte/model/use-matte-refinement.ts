@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { useWorkerLifecycle } from "@/shared/lib/use-worker-lifecycle";
+import { useWorkerLifecycle } from "@/shared/lib/worker";
 import type {
   AlphaMatte,
   InferencePath,

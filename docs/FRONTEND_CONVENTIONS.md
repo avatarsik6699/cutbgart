@@ -167,8 +167,9 @@ router.navigate({ to: '/avatar' });
 router.params.someParam;
 ```
 
-This hook does not exist yet — creating it is a PHASE_31/32-scoped task (a shared wrapper, not a
-per-call-site migration mandate); new code should use it as soon as it lands.
+Created in PHASE_31 (`src/shared/lib/use-router.ts`); the one pre-existing direct call site
+(`shared/ui/site-header.tsx`'s `LanguageSwitcher`) has been migrated. New code must use it —
+this is no longer a "when it lands" note.
 
 ### 5.2 Typed search params
 
@@ -182,18 +183,19 @@ rather than reading raw string params ad hoc in a component.
 
 ### 6.1 Never access `window.localStorage` directly
 
-Route all reads/writes through a `safeLs` wrapper in `shared/lib/safe-ls.ts` (does not exist yet —
-create it before or alongside the next feature that touches `localStorage`, e.g. PHASE_32's
-`helpState`). Existing direct `localStorage` call sites (`use-quality-mode.ts`, `ToolWorkspace`
-tests) migrate opportunistically, not as a standalone rename pass.
+Route all reads/writes through the `safeLs` wrapper in `shared/lib/storage/safe-ls.ts` (created in
+PHASE_31, grouped with `safe-json.ts` under `shared/lib/storage/` per FSD's shared-lib module-count
+threshold — import both via `@/shared/lib/storage`, the folder's public API). The one production
+call site (`use-quality-mode.ts`) has been migrated; `ToolWorkspace` tests stub `localStorage` as a
+test double, which is a different concern and out of scope for this wrapper.
 
 **Why:** raw `localStorage` throws under SSR, hides deserialization errors, and has no schema
 versioning — all three matter here since TanStack Start renders on the server first.
 
 ### 6.2 Never use raw `JSON.parse`/`JSON.stringify` for persisted state
 
-Use a `safeJson` wrapper (`shared/lib/safe-json.ts`, to be created alongside `safe-ls`) that
-validates the parsed shape against a type guard instead of trusting `JSON.parse`'s `any`.
+Use the `safeJsonParse` wrapper (`shared/lib/storage/safe-json.ts`) that validates the parsed shape
+against a type guard instead of trusting `JSON.parse`'s `any`.
 
 **Exception**: `JSON.stringify` for a Worker `postMessage` payload or an HTTP-adjacent boundary is
 not "storage" — no wrapper required, but note the exception inline if it's non-obvious.
@@ -279,11 +281,18 @@ Docker or (beyond the mocked `ci-critical` exception) in CI. No change here.
 - [x] `React.FC`/arrow-function question resolved (2026-07-30): keep the existing
   `function Component(props)` declaration style codebase-wide. §2.2 updated to match; this is now a
   fixed constraint, not a target to migrate away from.
-- [ ] **Open decision**: how strictly should existing files be brought into line with §2.4/§2.5
-  (no destructuring of props or hook returns), §2.7 (`Fx`-suffixed effects), and §1 (kebab-case
-  component filenames)? Today's codebase destructures props in some components (e.g.
-  `QualityModeToggle`) and uses PascalCase component filenames throughout (~45+ files would be
-  touched by a literal rename). Adopting these prospectively-only (new code + files already being
-  touched for another reason) avoids a blanket rewrite that `docs/PHASE_31.md` explicitly forbids;
-  adopting them as an explicit dedicated PHASE_31 finding would require the architect's sign-off on
-  that scope before any mass edit starts.
+- [x] **Retroactive enforcement of §2.4/§2.5/§2.7/§1 resolved (2026-07-31)**: **prospective-only**.
+  New code and any file already being touched for unrelated work must comply; a standalone,
+  mechanical pass to bring the other ~45+ existing files (PascalCase component filenames, prop/hook
+  destructuring) into line is explicitly **not** authorized. Reasoning: `docs/PHASE_31.md` and
+  `AGENTS.md`'s Scope Lock already ban blanket rewrites without callsite evidence — a pure style
+  rename touches every one of those files' full diff surface for zero behavior change, which is a
+  large-blast-radius edit with no corresponding bug or duplication evidence, exactly what Scope Lock
+  exists to prevent. Concretely surfaced by PHASE_31 F-24 follow-up work: the session's own new
+  hooks (`use-enhancement-runner.ts`, `use-draft-guard.ts`, `use-document-ui-state.ts`) were written
+  after this file's adoption and were audited/fixed against §2.5/§2.7/§4.2 (`PHASE_31_FINDINGS.md`
+  F-39) — confirming the rules are enforceable per-file at low risk, but a codebase-wide sweep is a
+  different, much larger, unauthorized-scope action. Future phases may open a dedicated,
+  explicitly-scoped finding for a batched rename if a concrete cost (e.g., a bug traced to
+  destructuring-hidden prop shadowing) justifies it — this decision does not forbid that, only the
+  default "just do it now" mass edit.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { usePendingRequestWorker } from "@/shared/lib/use-pending-request-worker";
+import { usePendingRequestWorker } from "@/shared/lib/worker";
 import type { InferencePath, SourceImage } from "../../../entities/processed-image";
 import { createBenchmarkExport, downloadBenchmarkExport } from "./benchmark-export";
 import { EVALUATION_MODELS } from "./model-registry";
