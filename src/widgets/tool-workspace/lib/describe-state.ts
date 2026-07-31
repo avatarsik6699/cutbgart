@@ -17,9 +17,11 @@ export function describeGuidedState(
   status: GuidedBrushStatus,
   progress: number | null,
 ): string {
-  void progress;
-  if (status === "loading-model" || status === "encoding-image")
-    return m.cutoutPreparing();
+  if (status === "loading-model" || status === "encoding-image") {
+    return progress === null
+      ? m.cutoutPreparing()
+      : m.cutoutPreparingProgress({ progress: String(Math.round(progress)) });
+  }
   if (status === "predicting") return m.cutoutApplying();
   if (status === "preview") return m.cutoutMagicReady();
   if (status === "dirty") return m.cutoutMagicDraftReady();

@@ -232,6 +232,22 @@ test.describe("/en/about", () => {
   });
 });
 
+// PHASE_31 T8 full-inventory finding: `__root.tsx` had no
+// `notFoundComponent`, so an unmapped path fell back to TanStack Router's
+// bare, unbranded `<p>Not Found</p>`.
+test.describe("an unmapped path", () => {
+  test("renders the branded not-found page instead of the router's bare default", async ({
+    page,
+  }) => {
+    await page.goto("/this-path-does-not-exist");
+
+    await expect(page.getByTestId("not-found-page")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: /на главную/i })).toBeVisible();
+    await expect(page.getByText("Not Found", { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe("language switcher (Phase 12)", () => {
   test("preserves the current page when toggling locale", async ({ page }) => {
     await page.goto("/about");

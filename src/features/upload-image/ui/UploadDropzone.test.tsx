@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UploadDropzone } from "./UploadDropzone";
+import * as validateAndPrepareUploadModule from "../model/validate-and-prepare-upload";
 
 function makeFile(overrides: { type?: string; size?: number } = {}): File {
   const size = overrides.size ?? 1024;
@@ -127,5 +128,55 @@ describe("UploadDropzone", () => {
     });
 
     expect(onUpload).not.toHaveBeenCalled();
+  });
+
+  // PHASE_31 T8 full-inventory finding: an earlier trigger's `.finally`
+  // could zero the shared preparation counter after a newer, still-pending
+  // trigger had already reported its own (possibly different) count.
+  it("does not let an earlier drop's finally clear the counter while a newer drop is still preparing", async () => {
+    let resolveFirst!: (
+      result: Awaited<
+        ReturnType<typeof validateAndPrepareUploadModule.validateAndPrepareUpload>
+      >,
+    ) => void;
+    const spy = vi
+      .spyOn(validateAndPrepareUploadModule, "validateAndPrepareUpload")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          image: { blob: new Blob(), width: 1, height: 1, format: "image/jpeg" },
+        }),
+      );
+
+    const onPreparationChange = vi.fn();
+    render(
+      <UploadDropzone onUpload={vi.fn()} onPreparationChange={onPreparationChange} />,
+    );
+    const dropTarget = screen.getByLabelText("Upload an image").parentElement!;
+
+    fireEvent.drop(dropTarget, { dataTransfer: { files: [makeFile()] } });
+    expect(onPreparationChange).toHaveBeenLastCalledWith(1);
+
+    fireEvent.drop(dropTarget, { dataTransfer: { files: [makeFile()] } });
+    expect(onPreparationChange).toHaveBeenLastCalledWith(1);
+
+    resolveFirst({
+      ok: true,
+      image: { blob: new Blob(), width: 1, height: 1, format: "image/jpeg" },
+    });
+    await waitFor(() => expect(onPreparationChange).toHaveBeenLastCalledWith(0));
+    // The first (stale) drop's finally must not have been the one that zeroed
+    // it — confirmed by there being no 0-then-1 flicker after the real zero.
+    expect(onPreparationChange.mock.calls.filter(([count]) => count === 0)).toHaveLength(
+      1,
+    );
+
+    spy.mockRestore();
   });
 });

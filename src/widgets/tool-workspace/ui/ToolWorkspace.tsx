@@ -642,6 +642,7 @@ export function ToolWorkspace({
         onModeChange={setMagicIntent}
         session={guidedViewSession}
         status={guided.state.status}
+        progress={guided.state.progress}
         applying={finalizingCorrection}
         canApply={guided.canApply}
         onBrushRadiusChange={guided.setBrushRadius}

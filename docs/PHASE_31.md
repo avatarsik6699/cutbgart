@@ -347,6 +347,29 @@ touches.
   unedited as a historical record; going forward, `pnpm e2e` runs Chromium only. `PHASE_32`/`PHASE_34`
   marked `⚠️ NEEDS_REVIEW` in `STATE.md` — both still name cross-browser Playwright coverage in their
   scope text. See `docs/STATE.md` § Project Log (2026-07-31) for the full decision record.
+- Closed 6 of the 7 previously-deferred T8/architecture findings above (2026-07-31, architect
+  request to "continue further work"), superseding their "deferred" framing:
+  - `F-22` (byte-formatting consolidation) — turned out to be behavior-preserving once reframed
+    around 2 real shapes instead of 3 surface call sites; no product decision actually needed.
+  - `F-28` `use-pending-request-worker.ts` gained a worker `"error"`-listener (a hard crash
+    previously hung `ModelLab`/`InteractiveMattingLab` at `status: "running"` forever).
+  - `F-29` `loadSyntheticCorpus` gained a `corpusLoading` busy flag.
+  - `F-30` `MaskCorrectionCanvas`'s `createImageBitmap` gained a `.catch`, wired through the
+    existing `correctionError`/`CorrectionErrorAlert` mechanism (no new UI pattern).
+  - `F-31` `describeGuidedState`/`GuidedBrushControls` now show the worker's real download
+    percentage during first-time SlimSAM model loading instead of a static message.
+  - `F-32` `UploadDropzone`/`ChoosePhotoButton` gained a `revisionRef` guard (mirroring
+    `use-background-fill.ts`) so an earlier trigger's `.finally` can no longer zero the shared
+    preparation counter out from under a newer, still-in-flight trigger.
+  - `F-33` `__root.tsx` gained `notFoundComponent`/`errorComponent` (new `pages/not-found`,
+    `pages/route-error` slices, both wrapped in `SiteShell`) — verified live via Playwright MCP
+    (branded 404 page renders correctly) and a new `e2e/scenario-pages.spec.ts` test.
+  - Left deferred, unchanged from above: `F-19`'s dead-UI decision (already resolved separately —
+    architect confirmed intentional, components marked `@deprecated`) and `F-24` (god-hook
+    decomposition — assessed as genuinely too large/risky for this bounded continuation; needs its
+    own dedicated design pass, not force-fit here).
+  - Every fix has a characterization test confirmed via `git stash` to fail pre-fix, pass post-fix.
+    Verified: `tsc`, `eslint`, `steiger` clean; `pnpm vitest run` 392/392.
 
 ## Atomic Commit Message
 

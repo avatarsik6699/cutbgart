@@ -1,5 +1,5 @@
 import { Camera } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
@@ -29,12 +29,21 @@ export function ChoosePhotoButton({
   label,
   className,
 }: ChoosePhotoButtonProps) {
+  // Guards the preparation counter against overlapping triggers: only the
+  // most recent call's `.finally` may zero the shared counter (PHASE_31 T8,
+  // mirrors `use-background-fill.ts`'s revision pattern).
+  const revisionRef = useRef(0);
+
   const handleFile = useCallback(
     (file: File) => {
+      revisionRef.current += 1;
+      const revision = revisionRef.current;
       onPreparationChange?.(1);
       void validateAndPrepareUpload(file)
         .then(onUpload)
-        .finally(() => onPreparationChange?.(0));
+        .finally(() => {
+          if (revisionRef.current === revision) onPreparationChange?.(0);
+        });
     },
     [onPreparationChange, onUpload],
   );
@@ -61,6 +70,8 @@ export function ChoosePhotoButton({
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           if ((files.length > 1 || batchMode) && onUploads) {
+            revisionRef.current += 1;
+            const revision = revisionRef.current;
             onPreparationChange?.(files.length);
             void Promise.all(
               files.map(async (file) => ({
@@ -69,7 +80,9 @@ export function ChoosePhotoButton({
               })),
             )
               .then(onUploads)
-              .finally(() => onPreparationChange?.(0));
+              .finally(() => {
+                if (revisionRef.current === revision) onPreparationChange?.(0);
+              });
           } else if (files[0]) {
             handleFile(files[0]);
           }

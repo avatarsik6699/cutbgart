@@ -1,5 +1,5 @@
 import { Upload } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
@@ -32,12 +32,23 @@ export function UploadDropzone({
   batchMode = false,
   className,
 }: UploadDropzoneProps) {
+  // Guards the preparation counter against overlapping triggers (e.g. a
+  // paste while a drop is still validating): only the most recent call's
+  // `.finally` may zero the shared counter, so a newer in-flight upload's
+  // count is never wiped out from under it (PHASE_31 T8, mirrors
+  // `use-background-fill.ts`'s revision pattern).
+  const revisionRef = useRef(0);
+
   const handleFile = useCallback(
     (file: File) => {
+      revisionRef.current += 1;
+      const revision = revisionRef.current;
       onPreparationChange?.(1);
       void validateAndPrepareUpload(file)
         .then(onUpload)
-        .finally(() => onPreparationChange?.(0));
+        .finally(() => {
+          if (revisionRef.current === revision) onPreparationChange?.(0);
+        });
     },
     [onPreparationChange, onUpload],
   );
@@ -48,6 +59,8 @@ export function UploadDropzone({
         if (files[0]) handleFile(files[0]);
         return;
       }
+      revisionRef.current += 1;
+      const revision = revisionRef.current;
       onPreparationChange?.(files.length);
       void Promise.all(
         files.map(async (file) => ({
@@ -56,7 +69,9 @@ export function UploadDropzone({
         })),
       )
         .then(onUploads)
-        .finally(() => onPreparationChange?.(0));
+        .finally(() => {
+          if (revisionRef.current === revision) onPreparationChange?.(0);
+        });
     },
     [batchMode, handleFile, onPreparationChange, onUploads],
   );

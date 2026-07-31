@@ -6,6 +6,8 @@ import appCss from "../app/styles/globals.css?url";
 import { env } from "../shared/config";
 import { getLocale } from "../paraglide/runtime";
 import { TooltipProvider } from "../shared/ui";
+import { NotFoundPage } from "../pages/not-found";
+import { RouteErrorPage } from "../pages/route-error";
 
 // Umami + Cloudflare Web Analytics (Phase 05, SPEC.md §7.6). Each script is
 // only added when its env var is configured — unset in local dev, so dev
@@ -50,6 +52,8 @@ export const Route = createRootRoute({
     scripts: analyticsScripts,
   }),
   component: RootComponent,
+  notFoundComponent: NotFoundPage,
+  errorComponent: ({ reset }) => <RouteErrorPage onRetry={reset} />,
 });
 
 function RootComponent() {

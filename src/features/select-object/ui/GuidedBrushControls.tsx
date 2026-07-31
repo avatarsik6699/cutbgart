@@ -1,7 +1,7 @@
 import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "../../../shared/ui";
+import { Button, ProgressBar } from "../../../shared/ui";
 import type {
   GuidedBrushMode,
   GuidedBrushStatus,
@@ -13,6 +13,8 @@ interface Props {
   onModeChange: (mode: GuidedBrushMode) => void;
   session: GuidedBrushViewSession;
   status: GuidedBrushStatus;
+  /** SlimSAM model-download/image-encode progress, worker-reported. */
+  progress?: number | null;
   applying?: boolean;
   canApply: boolean;
   onBrushRadiusChange: (radius: number) => void;
@@ -27,6 +29,7 @@ export function GuidedBrushControls({
   onModeChange,
   session,
   status,
+  progress = null,
   applying = false,
   canApply,
   onBrushRadiusChange,
@@ -35,11 +38,8 @@ export function GuidedBrushControls({
   onCancel,
   onRetry,
 }: Props) {
-  const busy =
-    applying ||
-    status === "loading-model" ||
-    status === "encoding-image" ||
-    status === "predicting";
+  const loadingModel = status === "loading-model" || status === "encoding-image";
+  const busy = applying || loadingModel || status === "predicting";
   const hasKeep = session.strokes.some((stroke) => stroke.mode === "keep");
   const directKeepMissing = !session.hasBaseMatte && !hasKeep;
   const maxBrushRadius = Math.max(
@@ -92,7 +92,18 @@ export function GuidedBrushControls({
         </Button>
       </div>
 
-      <p className="min-h-10 text-xs text-muted-foreground">{activeHint}</p>
+      {loadingModel ? (
+        <div className="min-h-10 space-y-2" role="status">
+          <p className="text-xs text-muted-foreground">
+            {progress === null
+              ? m.cutoutPreparing()
+              : m.cutoutPreparingProgress({ progress: String(Math.round(progress)) })}
+          </p>
+          {progress !== null && <ProgressBar value={progress} />}
+        </div>
+      ) : (
+        <p className="min-h-10 text-xs text-muted-foreground">{activeHint}</p>
+      )}
 
       <label className="grid max-w-md gap-2 text-sm font-medium">
         <span>{m.brushSize()}</span>

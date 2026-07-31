@@ -145,23 +145,63 @@ rejection and hangs against the pre-fix code, passes cleanly post-fix. Verified:
 clean, `pnpm vitest run` 387/387, `pnpm e2e e2e/home.spec.ts` 16/16 (no regression in the
 already-covered manual-correction flows).
 
+**F-31 — `describe-state.ts`'s GuidedBrush download progress was discarded (`fix`, resolved
+2026-07-31)**: `describeGuidedState` took a `progress` parameter and immediately `void`-discarded
+it, so both the sr-only `aria-live` announcement and `GuidedBrushControls`' visible loading state
+showed only a static "Preparing Magic…" message during the first-time SlimSAM model
+download/image-encode — indistinguishable from a hang, even though the worker (`select-object.worker.ts`)
+posts real percentages the whole time (`use-object-selection.ts`'s `state.progress`, already flowing
+correctly, just never read by either consumer). Fixed: `describeGuidedState` now returns a new
+`cutoutPreparingProgress` message (`en`/`ru`, `{progress}` placeholder) when `progress` isn't `null`,
+falling back to the prior static text before the worker reports anything. `GuidedBrushControls`
+gained an optional `progress` prop, rendered as the same text plus the shared `shared/ui/ProgressBar`
+(`F-21`'s extraction) whenever `status` is `"loading-model"`/`"encoding-image"` — instead of the
+generic keep/remove hint it showed before. `ToolWorkspace.tsx` now passes `guided.state.progress`
+through. Added characterization tests in both `describe-state.test.ts` (new file) and
+`GuidedBrushControls.test.tsx`; confirmed via `git stash` both fail against the pre-fix code
+(static text, no `progressbar` role) and pass post-fix. Verified: `tsc`/`eslint` clean, `pnpm vitest
+run` 390/390.
+
+**F-32 — `UploadDropzone.tsx`/`ChoosePhotoButton.tsx` shared an unguarded preparation counter (`fix`,
+resolved 2026-07-31)**: both components called `onPreparationChange?.(N)` at the start of an upload
+and `onPreparationChange?.(0)` unconditionally in `.finally()` — an earlier trigger's `.finally`
+firing after a newer, still-in-flight trigger had already reported its own count would zero the
+shared counter mid-flight, making `UploadPreparationNotice` disappear while a real upload was still
+preparing. Fixed by mirroring `use-background-fill.ts`'s existing `revisionRef` pattern in both
+components: each call bumps a shared `revisionRef` and captures its own revision; the `.finally`
+only zeroes the counter if no newer call has started since (`revisionRef.current === revision`).
+Applied to all four call sites (`UploadDropzone`'s single/batch paths, `ChoosePhotoButton`'s
+single/batch paths). Added a characterization test per component using a `vi.spyOn` on
+`validateAndPrepareUpload` with a manually-resolved first call and an immediately-resolved second
+call, asserting the counter is zeroed exactly once (not twice) after two overlapping triggers.
+Confirmed via `git stash`: both tests fail against the pre-fix code (counter zeroed twice — once
+stale, once real) and pass post-fix. Verified: `tsc`/`eslint` clean, `pnpm vitest run` 392/392.
+
+**F-33 — `__root.tsx` had no `errorComponent`/`notFoundComponent` (`fix`, resolved 2026-07-31)**:
+an unmapped path fell back to TanStack Router's bare, unbranded `<p>Not Found</p>` (the library logs
+its own console warning recommending exactly this fix), and an uncaught render/loader error had no
+branded fallback at all — reproduced by temporarily reverting the fix: navigating to an unmapped
+path shows the literal "Not Found" text with no site chrome. Fixed by adding two new `pages/`
+slices, `pages/not-found` (`NotFoundPage`) and `pages/route-error` (`RouteErrorPage`), each wrapped
+in the existing `SiteShell` for consistent branding, with new localized message keys (`en`/`ru`).
+Wired via `createRootRoute({ notFoundComponent: NotFoundPage, errorComponent: ({ reset }) =>
+<RouteErrorPage onRetry={reset} /> })` in `__root.tsx`. Confirmed with a new
+`e2e/scenario-pages.spec.ts` test navigating to a real unmapped path in a real browser, asserting
+the branded page renders and the router's bare default text does not; `git stash`-verified this
+test fails against the pre-fix `__root.tsx` (times out waiting for the branded testid, and the
+router's own console warning about the missing `notFoundComponent` appears in the log) and passes
+post-fix. `errorComponent` is wired identically and verified via `tsc`, but — matching this
+finding's own original "latent" framing — remains unexercised by an automated trigger: no route in
+this app currently has a loader or otherwise throws during render, so there is no real code path to
+deliberately fail without adding synthetic test-only scaffolding; this is honestly the same
+limitation the original finding named, not newly introduced by the fix. Verified: `tsc`/`eslint`/
+`steiger` clean, `pnpm vitest run` 392/392 (one unrelated pre-existing flaky focus-trap timing test
+failed once, passed on immediate rerun — not caused by this change).
+
 **Deferred (named, not implemented — each needs real behavior-changing work this pass's bounded
 scope doesn't cover)**:
 - `MatteRefinementControls` missing an `error` prop — superseded by `F-19` (component has no live
   call site; fixing this in isolation was deprioritized once that was found).
-- `describe-state.ts`'s `loadSyntheticCorpus`/GuidedBrush download progress is received but
-  discarded (`void progress`) — the busy overlay shows a static message instead of the real
-  percentage the worker reports, unlike the main pipeline's equivalent state. Needs the discarded
-  value threaded through an existing prop, verified against real worker timing.
-- `UploadDropzone.tsx`/`ChoosePhotoButton.tsx` share an unguarded preparation counter that two
-  overlapping upload triggers could race — needs a revision-guard fix mirroring
-  `use-background-fill.ts`'s existing pattern for the same class of problem, plus a race-condition
-  characterization test (harder to write reliably than the fixes above).
-- `__root.tsx` has no `errorComponent`/`notFoundComponent`/`pendingComponent` on
-  `createRootRoute` — latent (no route currently uses loaders), but a lazy-chunk fetch failure or
-  unmapped path has no branded fallback today. Router-wide infra change, not a single-surface fix;
-  worth a dedicated finding in a phase that touches routing.
-
 ## T7 — Test-suite reliability and speed
 
 ### F-04 — Stale assertion text in `QualityModeToggle.test.tsx` (deterministic failure, not flake)

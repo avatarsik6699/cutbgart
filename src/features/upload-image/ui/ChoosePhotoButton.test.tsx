@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChoosePhotoButton } from "./ChoosePhotoButton";
+import * as validateAndPrepareUploadModule from "../model/validate-and-prepare-upload";
 
 function makeFile(): File {
   const bytes = new Uint8Array(1024);
@@ -52,5 +53,53 @@ describe("ChoosePhotoButton", () => {
       "dataset.disabled",
       "true",
     );
+  });
+
+  // PHASE_31 T8 full-inventory finding: an earlier trigger's `.finally`
+  // could zero the shared preparation counter after a newer, still-pending
+  // trigger had already reported its own count.
+  it("does not let an earlier selection's finally clear the counter while a newer one is still preparing", async () => {
+    let resolveFirst!: (
+      result: Awaited<
+        ReturnType<typeof validateAndPrepareUploadModule.validateAndPrepareUpload>
+      >,
+    ) => void;
+    const spy = vi
+      .spyOn(validateAndPrepareUploadModule, "validateAndPrepareUpload")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          image: { blob: new Blob(), width: 1, height: 1, format: "image/jpeg" },
+        }),
+      );
+
+    const onPreparationChange = vi.fn();
+    const { container } = render(
+      <ChoosePhotoButton onUpload={vi.fn()} onPreparationChange={onPreparationChange} />,
+    );
+    const input = container.querySelector("input[type='file']")!;
+
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    expect(onPreparationChange).toHaveBeenLastCalledWith(1);
+
+    fireEvent.change(input, { target: { files: [makeFile()] } });
+    expect(onPreparationChange).toHaveBeenLastCalledWith(1);
+
+    resolveFirst({
+      ok: true,
+      image: { blob: new Blob(), width: 1, height: 1, format: "image/jpeg" },
+    });
+    await waitFor(() => expect(onPreparationChange).toHaveBeenLastCalledWith(0));
+    expect(onPreparationChange.mock.calls.filter(([count]) => count === 0)).toHaveLength(
+      1,
+    );
+
+    spy.mockRestore();
   });
 });

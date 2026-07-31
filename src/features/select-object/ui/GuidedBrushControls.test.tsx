@@ -113,4 +113,16 @@ describe("GuidedBrushControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
   });
+
+  // PHASE_31 T8 full-inventory finding: the worker-reported download
+  // percentage was received but discarded, making the first-time SlimSAM
+  // model download indistinguishable from a hang.
+  it("shows the real download percentage while loading the model, not just a disabled hint", () => {
+    renderControls(undefined, { status: "loading-model", progress: 37 });
+    expect(screen.getByText(/37/)).toBeDefined();
+    expect(screen.getByRole("progressbar", { hidden: true })).toHaveProperty(
+      "ariaValueNow",
+      "37",
+    );
+  });
 });
