@@ -941,3 +941,44 @@ is deferred for the same reason: it doesn't exist yet and building it safely is 
   1413 lines (was 1537) with ~13 remaining component-level `useState` calls (was ~20).
 - **Confidence**: high for the extracted piece (mechanical, fully covered by pre-existing tests plus a
   live run); the "remaining scope" boundary is a deliberate, reasoned stop, not an oversight.
+
+### F-38 — Fifth decomposition slice: `ToolWorkspace.tsx`'s draft-guard cluster (F-24 follow-up)
+
+- **Evidence**: the "remaining scope" flagged in `F-37` — the "confirm before discarding unsaved
+  changes" navigation guard — was `ToolWorkspace.tsx`'s single largest remaining tangled cluster: 6
+  `pendingX` `useState` calls, `pendingToolTriggerRef`, `manualDraftDirty`/`manualDraftResetKey`, the
+  `activeDraftDirty` derivation (reads guided/manual/enhancement/background draft dirtiness), and 11
+  functions (`requestTool`, `requestBatchItem`, `prepareActiveBatchMutation`,
+  `executeBatchReprocess`/`requestBatchReprocess`, `executeBatchRemove`/`requestBatchRemove`,
+  `requestBatchClear`, `requestReset`, `clearActiveDraftState`, `discardActiveDraft`).
+- **Owner layer**: `widgets/tool-workspace/ui/ToolWorkspace.tsx`.
+- **Decision**: `fix` — extracted to `use-draft-guard.ts` (ui/, presentation-tier state, same
+  co-location rationale as `F-37`), taking a ~24-key dependency-injection object (controller handlers,
+  `documentUiState` setters, `batch` accessors, the two document-initialization refs already owned by
+  `ToolWorkspace.tsx`). The hook owns all pending-navigation state plus `manualDraftDirty`/
+  `manualDraftResetKey` (tightly coupled to the guard — both feed `activeDraftDirty` and are reset on
+  discard) and returns `activeDraftDirty`, `draftGuardOpen`, the `requestX` wrappers,
+  `discardActiveDraft`, and `dismissPendingGuard` (the "continue editing" button's handler, previously
+  an inline arrow function in the JSX). `ToolWorkspace.tsx`: 1413 → 1274 lines.
+- **Fix note — `react-hooks/immutability` on a dependency object's ref property**: writing
+  `deps.initializedMagicDocumentRef.current = null` (a nested property path off the hook's own `deps`
+  parameter) was flagged by the same rule documented in `F-36`, extended here to hook *arguments*, not
+  just other hooks' return values — `deps` is itself never reassignable inside the hook body. Fixed by
+  destructuring `const { initializedMagicDocumentRef, initializedManualDocumentRef } = deps;` once at
+  the top of the hook and writing through the local bindings instead of the nested path.
+- **Verification**: full existing suite (43 `tool-workspace` + 392 project-wide) passing unchanged,
+  `tsc`/`eslint --no-cache` clean, `steiger` clean, plus a live Playwright MCP run: uploaded a sample
+  image, switched to "Улучшения", unchecked an enhancement option (dirties the draft), then clicked
+  "Фон" — the guard dialog appeared and the tool stayed on "Улучшения". Clicked "Продолжить
+  редактирование" (dismiss) — guard closed, draft state untouched, still on "Улучшения". Re-triggered
+  the guard and clicked "Отбросить черновик" (discard) — draft cleared and the tool switched to "Фон"
+  as originally requested. Console showed only the same 4 pre-existing unrelated errors throughout.
+- **Remaining scope** (still `defer`): `use-object-selection.ts` (1026 lines) is untouched — on
+  inspection it is two already-cohesive, single-responsibility worker-orchestration hooks
+  (`useObjectSelection`, a Phase-17 compatibility hook, and `useGuidedBrushSelection`, the Phase-21
+  primary flow) sharing one file, not a god-hook blending unrelated concerns; its length comes from two
+  complete state machines, not poor separation. Splitting it into two files would be a pure
+  file-organization change with materially lower value than the slices done so far, and was not
+  pursued without a more specific rationale.
+- **Confidence**: high — mechanical extraction, fully covered by pre-existing tests plus a live run
+  exercising both guard outcomes (dismiss and discard) directly.

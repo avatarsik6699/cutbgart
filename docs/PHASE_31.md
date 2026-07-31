@@ -424,6 +424,24 @@ touches.
   `ToolWorkspace.test.tsx`, 392 project-wide) unchanged, `tsc`/`eslint --no-cache`/`steiger` clean, plus
   a live Playwright MCP run exercising the extracted state directly (tool switch, before/after slider,
   background-preset dirty-state) — no new console errors.
+- F-24 follow-up (2026-07-31, `F-38`): second slice of `ToolWorkspace.tsx`'s own state — the
+  draft-guard cluster deferred by `F-37`: 6 `pendingX` `useState` calls, `pendingToolTriggerRef`,
+  `manualDraftDirty`/`manualDraftResetKey`, the `activeDraftDirty` derivation, and 11 functions
+  (`requestTool`/`requestBatchItem`/`requestBatchReprocess`/`requestBatchRemove`/`requestBatchClear`/
+  `requestReset`/`prepareActiveBatchMutation`/`executeBatchReprocess`/`executeBatchRemove`/
+  `clearActiveDraftState`/`discardActiveDraft`), extracted into `use-draft-guard.ts` (ui/, ~24-key
+  deps object). `ToolWorkspace.tsx` is now 1274 lines (was 1537 at phase start). Hit the same
+  `react-hooks/immutability` rule from `F-36`, this time on a write through the hook's own `deps`
+  parameter (`deps.initializedMagicDocumentRef.current = null`); fixed by destructuring the two refs
+  into local bindings once at the top of the hook rather than writing through the nested path.
+  Verified: full suite (43 tool-workspace, 392 project-wide) unchanged, `tsc`/`eslint --no-cache`/
+  `steiger` clean, plus a live Playwright MCP run exercising both guard outcomes directly — dirtied an
+  enhancement draft, triggered the guard by switching tools, confirmed "Продолжить редактирование"
+  closes the guard without discarding, then confirmed "Отбросить черновик" discards the draft and
+  completes the original tool switch — no new console errors. Inspected `use-object-selection.ts`
+  (1026 lines, the other F-24 candidate) and found it is two already-cohesive single-responsibility
+  worker-orchestration hooks sharing one file, not a god-hook; left untouched as lower-value pure
+  file-organization churn rather than a real decomposition (`F-38`).
 
 ## Atomic Commit Message
 

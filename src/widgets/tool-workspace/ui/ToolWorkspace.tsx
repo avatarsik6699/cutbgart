@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Images, Loader2 } from "lucide-react";
 
@@ -31,10 +31,7 @@ import {
 } from "../model/enhancement-operation-registry";
 import { useToolWorkspaceController } from "../model/use-tool-workspace-controller";
 import { LocalExecutionReadout } from "./LocalExecutionReadout";
-import {
-  createEditorToolRegistry,
-  type EditorToolId,
-} from "../model/editor-tool-registry";
+import { createEditorToolRegistry } from "../model/editor-tool-registry";
 import { EditorStage } from "./EditorStage";
 import type { EditorStageFullscreenControls } from "./EditorStage";
 import { EditorToolbar } from "./EditorToolbar";
@@ -50,6 +47,7 @@ import { MaskCorrectionSlots } from "./MaskCorrectionSlots";
 import { UploadErrorNotice } from "./UploadErrorNotice";
 import { CorrectionErrorAlert, type DisplayError } from "./CorrectionErrorAlert";
 import { useDocumentUiState } from "./use-document-ui-state";
+import { useDraftGuard } from "./use-draft-guard";
 
 function modeLabel(mode: QualityMode): string {
   if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
@@ -153,18 +151,9 @@ export function ToolWorkspace({
   const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
   const [manualPreviewKey, setManualPreviewKey] = useState(0);
-  const [manualDraftResetKey, setManualDraftResetKey] = useState(0);
-  const [manualDraftDirty, setManualDraftDirty] = useState(false);
   const [enhancementDraftByDocument, setEnhancementDraftByDocument] = useState<
     Record<string, EnhancementDraft>
   >({});
-  const [pendingTool, setPendingTool] = useState<EditorToolId | null>(null);
-  const [pendingBatchItem, setPendingBatchItem] = useState<string | null>(null);
-  const [pendingBatchReprocess, setPendingBatchReprocess] = useState<string | null>(null);
-  const [pendingBatchRemove, setPendingBatchRemove] = useState<string | null>(null);
-  const [pendingBatchClear, setPendingBatchClear] = useState(false);
-  const [pendingReset, setPendingReset] = useState(false);
-  const pendingToolTriggerRef = useRef<HTMLButtonElement | null>(null);
   const activeSource =
     selectedBatchItem?.processedImage?.source ??
     (state.status === "result" || state.status === "correcting"
@@ -182,11 +171,6 @@ export function ToolWorkspace({
   const manualSurfaceRef = useRef<HTMLCanvasElement>(null);
   const initializedMagicDocumentRef = useRef<string | null>(null);
   const initializedManualDocumentRef = useRef<string | null>(null);
-  const guidedDraftDirty = Boolean(
-    guided.state.session?.strokes.length ||
-    guided.state.status === "predicting" ||
-    finalizingCorrection,
-  );
   const defaultEnhancementDraft = useMemo(
     () =>
       createEnhancementDraft(enhancementRegistry, {
@@ -203,12 +187,55 @@ export function ToolWorkspace({
     ...enhancementDraft,
     status: activeEnhancementStatus,
   };
-  const activeDraftDirty =
-    activeTool === "cutout"
-      ? guidedDraftDirty || manualDraftDirty
-      : activeTool === "enhance"
-        ? enhancementDraft.dirty || activeEnhancementStatus !== "idle"
-        : activeTool === "background" && backgroundDraftDirty;
+  const draftGuard = useDraftGuard({
+    activeDocumentId,
+    activeTool,
+    guided,
+    finalizingCorrection,
+    originalMatte,
+    backgroundDraftDirty,
+    enhancementDraftDirty: enhancementDraft.dirty,
+    activeEnhancementStatus,
+    selectedBatchItem,
+    state,
+    cancelGuided,
+    handleCancelCorrection,
+    setPreviewFill,
+    setBatchPreviewFills,
+    cancelEnhancements,
+    clearEnhancementDraft: () => {
+      if (!activeDocumentId) return;
+      setEnhancementDraftByDocument((current) => ({
+        ...current,
+        [activeDocumentId]: defaultEnhancementDraft,
+      }));
+    },
+    activateTool: documentUiState.activateTool,
+    setBackgroundDraftDirty: documentUiState.setBackgroundDraftDirty,
+    batchSelectedItemId: batch.session.selectedItemId,
+    batchRetryItem: batch.retryItem,
+    batchRemoveItem: batch.removeItem,
+    handleSelectBatchItem,
+    handleClearBatch,
+    handleReset,
+    releaseRefinementBeforeHeavyWork,
+    initializedMagicDocumentRef,
+    initializedManualDocumentRef,
+  });
+  const {
+    manualDraftResetKey,
+    handleManualDirtyChange,
+    activeDraftDirty,
+    draftGuardOpen,
+    requestTool,
+    requestBatchItem,
+    requestBatchReprocess,
+    requestBatchRemove,
+    requestBatchClear,
+    requestReset,
+    discardActiveDraft,
+    dismissPendingGuard,
+  } = draftGuard;
 
   useEffect(() => {
     if (
@@ -275,10 +302,6 @@ export function ToolWorkspace({
     if (firstReady) handleSelectBatchItem(firstReady.id);
   }, [batch.session.items, batch.session.selectedItemId, handleSelectBatchItem]);
 
-  const handleManualDirtyChange = useCallback((dirty: boolean) => {
-    setManualDraftDirty(dirty);
-  }, []);
-
   function selectCutoutMode(mode: CutoutMode) {
     if (!activeDocumentId || mode === cutoutMode) return;
     if (mode === "manual" && extractingMatte && !guided.state.session) {
@@ -287,63 +310,6 @@ export function ToolWorkspace({
       handleCancelCorrection();
     }
     documentUiState.setCutoutMode(mode);
-  }
-
-  function requestTool(tool: EditorToolId, trigger: HTMLButtonElement) {
-    if (tool === activeTool) return;
-    if (activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingTool(tool);
-      return;
-    }
-    documentUiState.activateTool(tool);
-  }
-
-  function requestBatchItem(id: string, trigger: HTMLButtonElement) {
-    if (id === batch.session.selectedItemId) return;
-    if (activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingBatchItem(id);
-      return;
-    }
-    handleSelectBatchItem(id);
-  }
-
-  function prepareActiveBatchMutation(id: string) {
-    if (id !== batch.session.selectedItemId) return;
-    if (guided.state.session) cancelGuided();
-    if (originalMatte) handleCancelCorrection();
-    initializedMagicDocumentRef.current = null;
-    initializedManualDocumentRef.current = null;
-    setManualDraftDirty(false);
-  }
-
-  function executeBatchReprocess(id: string) {
-    prepareActiveBatchMutation(id);
-    void releaseRefinementBeforeHeavyWork().then(() => batch.retryItem(id));
-  }
-
-  function requestBatchReprocess(id: string, trigger: HTMLButtonElement) {
-    if (id === batch.session.selectedItemId && activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingBatchReprocess(id);
-      return;
-    }
-    executeBatchReprocess(id);
-  }
-
-  function executeBatchRemove(id: string) {
-    prepareActiveBatchMutation(id);
-    batch.removeItem(id);
-  }
-
-  function requestBatchRemove(id: string, trigger: HTMLButtonElement) {
-    if (id === batch.session.selectedItemId && activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingBatchRemove(id);
-      return;
-    }
-    executeBatchRemove(id);
   }
 
   function downloadBatchItem(item: BatchItem) {
@@ -358,24 +324,6 @@ export function ToolWorkspace({
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  }
-
-  function requestBatchClear(trigger: HTMLButtonElement) {
-    if (activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingBatchClear(true);
-      return;
-    }
-    handleClearBatch();
-  }
-
-  function requestReset(trigger: HTMLButtonElement) {
-    if (activeDraftDirty) {
-      pendingToolTriggerRef.current = trigger;
-      setPendingReset(true);
-      return;
-    }
-    handleReset();
   }
 
   function updateEnhancementOperation(
@@ -430,66 +378,6 @@ export function ToolWorkspace({
       enhancementDraft.selectedOperationIds,
       enhancementRegistry[0]?.historyLabel ?? m.editorToolEnhance(),
     );
-  }
-
-  function clearActiveDraftState() {
-    if (guided.state.session) cancelGuided();
-    if (originalMatte) handleCancelCorrection();
-    if (activeDocumentId && backgroundDraftDirty) {
-      const appliedFill = selectedBatchItem?.processedImage?.backgroundFill ??
-        (state.status === "result" || state.status === "correcting"
-          ? state.result.backgroundFill
-          : undefined) ?? { type: "transparent" };
-      if (selectedBatchItem) {
-        setBatchPreviewFills((current) => ({
-          ...current,
-          [selectedBatchItem.id]: appliedFill,
-        }));
-      } else {
-        setPreviewFill(appliedFill);
-      }
-      documentUiState.setBackgroundDraftDirty(false);
-    }
-    if (activeDocumentId && activeTool === "enhance") {
-      cancelEnhancements();
-      setEnhancementDraftByDocument((current) => ({
-        ...current,
-        [activeDocumentId]: defaultEnhancementDraft,
-      }));
-    }
-    if (manualDraftDirty) setManualDraftResetKey((current) => current + 1);
-    setManualDraftDirty(false);
-  }
-
-  function discardActiveDraft() {
-    if (pendingTool) {
-      const nextTool = pendingTool;
-      documentUiState.activateTool(nextTool);
-      setManualDraftDirty(false);
-      setPendingTool(null);
-      setPendingBatchItem(null);
-      setPendingBatchReprocess(null);
-      setPendingBatchRemove(null);
-      setPendingBatchClear(false);
-      setPendingReset(false);
-      requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
-      window.setTimeout(clearActiveDraftState, 100);
-      return;
-    }
-    clearActiveDraftState();
-    if (pendingTool) documentUiState.activateTool(pendingTool);
-    else if (pendingBatchItem) handleSelectBatchItem(pendingBatchItem);
-    else if (pendingBatchReprocess) executeBatchReprocess(pendingBatchReprocess);
-    else if (pendingBatchRemove) executeBatchRemove(pendingBatchRemove);
-    else if (pendingBatchClear) handleClearBatch();
-    else if (pendingReset) handleReset();
-    setPendingTool(null);
-    setPendingBatchItem(null);
-    setPendingBatchReprocess(null);
-    setPendingBatchRemove(null);
-    setPendingBatchClear(false);
-    setPendingReset(false);
-    requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
   }
 
   // Upload-validation errors (`uploadError`) are rendered in place inside the
@@ -1176,14 +1064,6 @@ export function ToolWorkspace({
     ) : (
       surfaceNode
     );
-  const draftGuardOpen = Boolean(
-    pendingTool ||
-    pendingBatchItem ||
-    pendingBatchReprocess ||
-    pendingBatchRemove ||
-    pendingBatchClear ||
-    pendingReset,
-  );
   const draftGuardNode = draftGuardOpen ? (
     <div
       role="alertdialog"
@@ -1199,19 +1079,7 @@ export function ToolWorkspace({
         {m.editorDraftGuardBody()}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setPendingTool(null);
-            setPendingBatchItem(null);
-            setPendingBatchReprocess(null);
-            setPendingBatchRemove(null);
-            setPendingBatchClear(false);
-            setPendingReset(false);
-            requestAnimationFrame(() => pendingToolTriggerRef.current?.focus());
-          }}
-        >
+        <Button type="button" variant="outline" onClick={dismissPendingGuard}>
           {m.editorDraftContinue()}
         </Button>
         <Button
