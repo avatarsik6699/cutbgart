@@ -409,6 +409,21 @@ touches.
   scope stays deferred: `ToolWorkspace.tsx`'s own state/handlers and `use-object-selection.ts`; what's
   left in the controller is now mostly document-lifecycle orchestration, a materially smaller-risk
   shape than the original god-hook.
+- F-24 follow-up (2026-07-31, `F-37`): first slice of `ToolWorkspace.tsx`'s *own* state — the part
+  `F-24` literally named, distinct from the controller hook `F-34`–`F-36` addressed. Extracted the 7
+  `useState` maps sharing one exact shape (`Record<string, T>` keyed by `activeDocumentId`: active
+  tool, cutout mode, interaction mode, background-draft dirtiness, export settings, before/after
+  slider position, view-controls collapsed) into `use-document-ui-state.ts` (129 lines, co-located in
+  `ui/`). `ToolWorkspace.tsx` is now 1413 lines (was 1537), ~13 remaining component-level `useState`
+  calls (was ~20). Deliberately did **not** touch the remaining draft-guard cluster
+  (`activeDraftDirty`/`discardActiveDraft`/`clearActiveDraftState` + `pendingX` state) — it reads from
+  nearly every other piece of component state and calls back into most controller handlers, the same
+  entanglement shape already solved for `F-35`/`F-36` but larger and directly inside a 1400+ line
+  render function, which materially raises mistake risk; treating it as its own dedicated pass is a
+  deliberate stop, not an oversight. Verified: full suite (43 tool-workspace incl.
+  `ToolWorkspace.test.tsx`, 392 project-wide) unchanged, `tsc`/`eslint --no-cache`/`steiger` clean, plus
+  a live Playwright MCP run exercising the extracted state directly (tool switch, before/after slider,
+  background-preset dirty-state) — no new console errors.
 
 ## Atomic Commit Message
 

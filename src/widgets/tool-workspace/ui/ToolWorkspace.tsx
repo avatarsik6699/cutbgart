@@ -5,11 +5,7 @@ import { Images, Loader2 } from "lucide-react";
 import type { QualityMode } from "../../../entities/processed-image";
 import { BeforeAfterSlider } from "../../../entities/processed-image";
 import { useMaskCorrectionViewport } from "../../../features/correct-mask";
-import {
-  DEFAULT_EXPORT_SETTINGS,
-  DownloadSplitButton,
-  type ExportSettings,
-} from "../../../features/download-result";
+import { DownloadSplitButton } from "../../../features/download-result";
 import { BatchGrid, type BatchItem } from "../../../features/batch-processing";
 import {
   QualityModePopover,
@@ -46,13 +42,14 @@ import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
 import { BackgroundToolPanel } from "./BackgroundToolPanel";
 import { CutoutToolPanel, type CutoutIntent, type CutoutMode } from "./CutoutToolPanel";
 import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
-import { CanvasViewControls, type CanvasInteractionMode } from "./CanvasViewControls";
+import { CanvasViewControls } from "./CanvasViewControls";
 import { DiagnosticsSheet } from "./DiagnosticsSheet";
 import { ToolPanelSlot } from "./ToolPanelSlot";
 import { PersistentPreviewLayers } from "./PersistentPreviewLayers";
 import { MaskCorrectionSlots } from "./MaskCorrectionSlots";
 import { UploadErrorNotice } from "./UploadErrorNotice";
 import { CorrectionErrorAlert, type DisplayError } from "./CorrectionErrorAlert";
+import { useDocumentUiState } from "./use-document-ui-state";
 
 function modeLabel(mode: QualityMode): string {
   if (mode === "max" || mode === "isnet-fp32") return m.processingModePrecise();
@@ -151,25 +148,8 @@ export function ToolWorkspace({
     activeEditDocument?.document.id ??
     selectedBatchItem?.id ??
     (state.status === "result" || state.status === "correcting" ? "single-result" : null);
-  const [toolByDocument, setToolByDocument] = useState<Record<string, EditorToolId>>({});
-  const [viewPositionByDocument, setViewPositionByDocument] = useState<
-    Record<string, number>
-  >({});
-  const [backgroundDraftByDocument, setBackgroundDraftByDocument] = useState<
-    Record<string, boolean>
-  >({});
-  const [exportSettingsByDocument, setExportSettingsByDocument] = useState<
-    Record<string, ExportSettings>
-  >({});
-  const [cutoutModeByDocument, setCutoutModeByDocument] = useState<
-    Record<string, CutoutMode>
-  >({});
-  const [interactionModeByDocument, setInteractionModeByDocument] = useState<
-    Record<string, CanvasInteractionMode>
-  >({});
-  const [viewControlsCollapsedByDocument, setViewControlsCollapsedByDocument] = useState<
-    Record<string, boolean>
-  >({});
+  const documentUiState = useDocumentUiState(activeDocumentId);
+  const { activeTool, cutoutMode } = documentUiState;
   const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
   const [manualPreviewKey, setManualPreviewKey] = useState(0);
@@ -185,12 +165,6 @@ export function ToolWorkspace({
   const [pendingBatchClear, setPendingBatchClear] = useState(false);
   const [pendingReset, setPendingReset] = useState(false);
   const pendingToolTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const activeTool = activeDocumentId
-    ? (toolByDocument[activeDocumentId] ?? "cutout")
-    : "cutout";
-  const cutoutMode = activeDocumentId
-    ? (cutoutModeByDocument[activeDocumentId] ?? "magic")
-    : "magic";
   const activeSource =
     selectedBatchItem?.processedImage?.source ??
     (state.status === "result" || state.status === "correcting"
@@ -203,9 +177,7 @@ export function ToolWorkspace({
     },
     activeDocumentId ?? "no-document",
   );
-  const interactionMode = activeDocumentId
-    ? (interactionModeByDocument[activeDocumentId] ?? "brush")
-    : "brush";
+  const { interactionMode, backgroundDraftDirty, exportSettings } = documentUiState;
   const magicSurfaceRef = useRef<HTMLCanvasElement>(null);
   const manualSurfaceRef = useRef<HTMLCanvasElement>(null);
   const initializedMagicDocumentRef = useRef<string | null>(null);
@@ -215,12 +187,6 @@ export function ToolWorkspace({
     guided.state.status === "predicting" ||
     finalizingCorrection,
   );
-  const backgroundDraftDirty = activeDocumentId
-    ? Boolean(backgroundDraftByDocument[activeDocumentId])
-    : false;
-  const exportSettings = activeDocumentId
-    ? (exportSettingsByDocument[activeDocumentId] ?? DEFAULT_EXPORT_SETTINGS)
-    : DEFAULT_EXPORT_SETTINGS;
   const defaultEnhancementDraft = useMemo(
     () =>
       createEnhancementDraft(enhancementRegistry, {
@@ -320,15 +286,7 @@ export function ToolWorkspace({
     } else if (mode === "magic" && extractingMatte && !originalMatte) {
       handleCancelCorrection();
     }
-    setCutoutModeByDocument((current) => ({
-      ...current,
-      [activeDocumentId]: mode,
-    }));
-  }
-
-  function activateTool(tool: EditorToolId) {
-    if (!activeDocumentId) return;
-    setToolByDocument((current) => ({ ...current, [activeDocumentId]: tool }));
+    documentUiState.setCutoutMode(mode);
   }
 
   function requestTool(tool: EditorToolId, trigger: HTMLButtonElement) {
@@ -338,7 +296,7 @@ export function ToolWorkspace({
       setPendingTool(tool);
       return;
     }
-    activateTool(tool);
+    documentUiState.activateTool(tool);
   }
 
   function requestBatchItem(id: string, trigger: HTMLButtonElement) {
@@ -490,10 +448,7 @@ export function ToolWorkspace({
       } else {
         setPreviewFill(appliedFill);
       }
-      setBackgroundDraftByDocument((current) => ({
-        ...current,
-        [activeDocumentId]: false,
-      }));
+      documentUiState.setBackgroundDraftDirty(false);
     }
     if (activeDocumentId && activeTool === "enhance") {
       cancelEnhancements();
@@ -509,7 +464,7 @@ export function ToolWorkspace({
   function discardActiveDraft() {
     if (pendingTool) {
       const nextTool = pendingTool;
-      activateTool(nextTool);
+      documentUiState.activateTool(nextTool);
       setManualDraftDirty(false);
       setPendingTool(null);
       setPendingBatchItem(null);
@@ -522,7 +477,7 @@ export function ToolWorkspace({
       return;
     }
     clearActiveDraftState();
-    if (pendingTool) activateTool(pendingTool);
+    if (pendingTool) documentUiState.activateTool(pendingTool);
     else if (pendingBatchItem) handleSelectBatchItem(pendingBatchItem);
     else if (pendingBatchReprocess) executeBatchReprocess(pendingBatchReprocess);
     else if (pendingBatchRemove) executeBatchRemove(pendingBatchRemove);
@@ -561,12 +516,7 @@ export function ToolWorkspace({
     ? ({ expanded, toggleFullscreen }: EditorStageFullscreenControls) => (
         <CanvasViewControls
           interactionMode={interactionMode}
-          onInteractionModeChange={(mode) =>
-            setInteractionModeByDocument((current) => ({
-              ...current,
-              [activeDocumentId]: mode,
-            }))
-          }
+          onInteractionModeChange={documentUiState.setInteractionMode}
           zoomPercent={cutoutViewport.zoomPercent}
           canZoomIn={cutoutViewport.canZoomIn}
           canZoomOut={cutoutViewport.canZoomOut}
@@ -575,27 +525,16 @@ export function ToolWorkspace({
           onZoomOut={() => {
             cutoutViewport.zoomOut();
             if (cutoutViewport.zoomPercent <= 125)
-              setInteractionModeByDocument((current) => ({
-                ...current,
-                [activeDocumentId]: "brush",
-              }));
+              documentUiState.setInteractionMode("brush");
           }}
           onResetView={() => {
             cutoutViewport.resetView();
-            setInteractionModeByDocument((current) => ({
-              ...current,
-              [activeDocumentId]: "brush",
-            }));
+            documentUiState.setInteractionMode("brush");
           }}
           expanded={expanded}
           onToggleFullscreen={toggleFullscreen}
-          collapsed={Boolean(viewControlsCollapsedByDocument[activeDocumentId])}
-          onCollapsedChange={(collapsed) =>
-            setViewControlsCollapsedByDocument((current) => ({
-              ...current,
-              [activeDocumentId]: collapsed,
-            }))
-          }
+          collapsed={documentUiState.viewControlsCollapsed}
+          onCollapsedChange={documentUiState.setViewControlsCollapsed}
         />
       )
     : undefined;
@@ -770,16 +709,8 @@ export function ToolWorkspace({
                   batchPreviewFills[selectedBatchItem.id] ??
                   selectedBatchItem.processedImage.backgroundFill
                 }
-                position={
-                  activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-                }
-                onPositionChange={(position) => {
-                  if (!activeDocumentId) return;
-                  setViewPositionByDocument((current) => ({
-                    ...current,
-                    [activeDocumentId]: position,
-                  }));
-                }}
+                position={documentUiState.viewPosition}
+                onPositionChange={documentUiState.setViewPosition}
               />
             }
           />
@@ -890,19 +821,9 @@ export function ToolWorkspace({
                       type: "transparent",
                     },
                   }));
-                  if (activeDocumentId)
-                    setBackgroundDraftByDocument((current) => ({
-                      ...current,
-                      [activeDocumentId]: false,
-                    }));
+                  documentUiState.setBackgroundDraftDirty(false);
                 }}
-                onDirtyChange={(dirty) => {
-                  if (!activeDocumentId) return;
-                  setBackgroundDraftByDocument((current) => ({
-                    ...current,
-                    [activeDocumentId]: dirty,
-                  }));
-                }}
+                onDirtyChange={documentUiState.setBackgroundDraftDirty}
               />
             )}
           </div>
@@ -992,16 +913,8 @@ export function ToolWorkspace({
             before={state.result.source}
             after={state.result.cutout ?? state.result.result}
             backgroundFill={previewFill}
-            position={
-              activeDocumentId ? (viewPositionByDocument[activeDocumentId] ?? 50) : 50
-            }
-            onPositionChange={(position) => {
-              if (!activeDocumentId) return;
-              setViewPositionByDocument((current) => ({
-                ...current,
-                [activeDocumentId]: position,
-              }));
-            }}
+            position={documentUiState.viewPosition}
+            onPositionChange={documentUiState.setViewPosition}
           />
         }
       />
@@ -1059,19 +972,9 @@ export function ToolWorkspace({
               onResult={(updated) => {
                 commitSingleBackground(updated);
                 setPreviewFill(updated.backgroundFill ?? { type: "transparent" });
-                if (activeDocumentId)
-                  setBackgroundDraftByDocument((current) => ({
-                    ...current,
-                    [activeDocumentId]: false,
-                  }));
+                documentUiState.setBackgroundDraftDirty(false);
               }}
-              onDirtyChange={(dirty) => {
-                if (!activeDocumentId) return;
-                setBackgroundDraftByDocument((current) => ({
-                  ...current,
-                  [activeDocumentId]: dirty,
-                }));
-              }}
+              onDirtyChange={documentUiState.setBackgroundDraftDirty}
             />
           )}
         </div>
@@ -1144,18 +1047,8 @@ export function ToolWorkspace({
                       before={state.result.source}
                       after={state.result.cutout ?? state.result.result}
                       backgroundFill={previewFill}
-                      position={
-                        activeDocumentId
-                          ? (viewPositionByDocument[activeDocumentId] ?? 50)
-                          : 50
-                      }
-                      onPositionChange={(position) => {
-                        if (!activeDocumentId) return;
-                        setViewPositionByDocument((current) => ({
-                          ...current,
-                          [activeDocumentId]: position,
-                        }));
-                      }}
+                      position={documentUiState.viewPosition}
+                      onPositionChange={documentUiState.setViewPosition}
                     />
                   }
                 />
@@ -1240,18 +1133,8 @@ export function ToolWorkspace({
                         batchPreviewFills[selectedBatchItem.id] ??
                         selectedBatchItem.processedImage!.backgroundFill
                       }
-                      position={
-                        activeDocumentId
-                          ? (viewPositionByDocument[activeDocumentId] ?? 50)
-                          : 50
-                      }
-                      onPositionChange={(position) => {
-                        if (!activeDocumentId) return;
-                        setViewPositionByDocument((current) => ({
-                          ...current,
-                          [activeDocumentId]: position,
-                        }));
-                      }}
+                      position={documentUiState.viewPosition}
+                      onPositionChange={documentUiState.setViewPosition}
                     />
                   }
                 />
@@ -1386,14 +1269,7 @@ export function ToolWorkspace({
             }
             settings={exportSettings}
             onSettingsChange={
-              activeDocumentId
-                ? (nextSettings) => {
-                    setExportSettingsByDocument((current) => ({
-                      ...current,
-                      [activeDocumentId]: nextSettings,
-                    }));
-                  }
-                : undefined
+              activeDocumentId ? documentUiState.setExportSettings : undefined
             }
             batchItems={batchActive ? batch.session.items : undefined}
           />

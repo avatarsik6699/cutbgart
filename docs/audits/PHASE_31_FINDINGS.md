@@ -899,3 +899,45 @@ is deferred for the same reason: it doesn't exist yet and building it safely is 
   manual run of the exact flow touched; the immutability-rule fix is a correctness improvement, not a
   cosmetic one (mutating properties off unstable hook-return objects is unsafe under the React
   Compiler's memoization assumptions).
+
+### F-37 — Fourth decomposition slice: `ToolWorkspace.tsx`'s own per-document UI state (F-24, the literal finding)
+
+- **Evidence**: `F-24` was originally about `ToolWorkspace.tsx` itself — not the controller hook —
+  declaring ~20 `useState` calls and ~18 handlers directly in the component body. `F-34`–`F-36`
+  addressed the controller (`use-tool-workspace-controller.ts`, 1453 → 690 lines); this slice is the
+  first to touch the component that `F-24` actually named. Of the ~20 component-level `useState`
+  calls, 7 followed one exact repeated shape: `Record<string, T>` keyed by `activeDocumentId`, each
+  read as `activeDocumentId ? map[activeDocumentId] ?? default : default` and written via a
+  `setX((current) => ({...current, [activeDocumentId]: value}))` updater — active tool, cutout mode,
+  interaction mode, background-draft dirtiness, export settings, before/after slider position, and
+  view-controls collapsed state.
+- **Owner layer**: `widgets/tool-workspace/ui/ToolWorkspace.tsx`.
+- **Decision**: `fix`, narrowly scoped to the 7 maps sharing the identical shape — new
+  `use-document-ui-state.ts` (129 lines, co-located in `ui/` since this is presentation-tier state, not
+  business logic, so it stays out of `model/`). Read this finding's "Remaining scope" for why the rest
+  of the component's state was deliberately **not** touched in this slice.
+- **Why not the rest of the component's state in the same pass**: the remaining ~13 `useState` calls
+  and the `activeDraftDirty`/`discardActiveDraft`/`clearActiveDraftState` "confirm before discarding
+  unsaved changes" logic are a fundamentally different, much more tightly-coupled cluster — that logic
+  reads from nearly every other piece of state in the component (guided/manual draft dirtiness,
+  background draft dirtiness, enhancement draft dirtiness) and calls back into most of the controller's
+  handlers (`cancelGuided`, `handleCancelCorrection`, `cancelEnhancements`, `handleSelectBatchItem`,
+  `handleClearBatch`, `handleReset`). Extracting it would repeat the same entanglement pattern already
+  seen and solved for `F-35`/`F-36`, but at larger scale and directly inside a 1400+ line render
+  function rather than an orchestration-only hook, which materially raises the chance of a JSX-level
+  mistake a type checker won't catch. Treating this as its own dedicated pass (with its own read of
+  `ToolWorkspace.test.tsx`'s 599 lines as the regression baseline) is the same judgment call this phase
+  applied throughout, not new caution invented for this finding.
+- **Verification**: full existing suite (43 `tool-workspace` tests — including `ToolWorkspace.test.tsx`
+  — 392 project-wide) passing unchanged before/after, `tsc`/`eslint --no-cache` clean, `steiger` clean,
+  plus a live Playwright MCP run exercising the extracted state directly: switched the active tool to
+  "Фон" (confirms `activateTool`/`requestTool`), the before/after slider rendered (confirms
+  `viewPosition`), and selecting a background preset flipped the panel into its dirty/unapplied state
+  (confirms `setBackgroundDraftDirty` wired through `onDirtyChange` correctly) — console showed only
+  the same 4 pre-existing unrelated analytics/CSP errors, no new errors.
+- **Remaining scope** (still `defer`): the draft-guard cluster described above (~13 `useState` +
+  `activeDraftDirty`/`discardActiveDraft`/`clearActiveDraftState` + the `pendingX`/request* wrapper
+  functions), and `use-object-selection.ts` (1026 lines), are untouched. `ToolWorkspace.tsx` is now
+  1413 lines (was 1537) with ~13 remaining component-level `useState` calls (was ~20).
+- **Confidence**: high for the extracted piece (mechanical, fully covered by pre-existing tests plus a
+  live run); the "remaining scope" boundary is a deliberate, reasoned stop, not an oversight.
