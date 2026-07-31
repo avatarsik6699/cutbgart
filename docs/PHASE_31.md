@@ -380,6 +380,19 @@ touches.
   Remaining scope explicitly still deferred: `ToolWorkspace.tsx`'s own ~20 `useState`/~18 handlers
   (what `F-24` is actually about), `use-object-selection.ts` (1026 lines, untouched), and further
   slices of the controller (guided-cutout tracking, mask-correction handlers).
+- F-24 follow-up (2026-07-31, `F-35`): attempted the next slice (guided-cutout orchestration) and
+  found it substantially more entangled than `F-34` — `extractingMatte`/`correctionError`/
+  `finalizingCorrection`/`retryCorrectionRef` are shared with the manual mask-correction flow, and the
+  handlers touch ~15 external collaborators. Asked the architect explicitly given the elevated risk
+  ("Извлечь аккуратно сейчас" chosen over stopping or pivoting to `ToolWorkspace.tsx`); proceeded with
+  the same dependency-injection pattern. New `use-guided-cutout.ts` (387 lines) takes the
+  `useGuidedBrushSelection()` result as an input rather than owning it, avoiding a hook-to-hook
+  circular dependency with `use-enhancement-runner.ts` (`guided.release` is needed by both).
+  `use-tool-workspace-controller.ts` is now 874 lines (~40% smaller than the original 1453). Verified:
+  full suite (43 tool-workspace, 392 project-wide) unchanged before/after, `tsc`/`eslint`/`steiger`
+  clean, plus a live Playwright MCP run of the guided auto-cutout flow end-to-end (no new console
+  errors). Next candidate slice: the mask-correction handlers, which share the same state this slice
+  reached into.
 
 ## Atomic Commit Message
 

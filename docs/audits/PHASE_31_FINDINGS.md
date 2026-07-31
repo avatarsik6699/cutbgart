@@ -813,3 +813,42 @@ is deferred for the same reason: it doesn't exist yet and building it safely is 
   since they also cross-reference shared refs.
 - **Confidence**: high — mechanical extraction, fully covered by pre-existing tests, zero behavior
   change intended or observed.
+
+### F-35 — Second decomposition slice: guided-cutout orchestration (F-24 follow-up)
+
+- **Evidence**: the guided ("magic") cutout target-tracking (`handleApplyGuided`,
+  `handleGuideAutomaticResult`, `handleGuideBatchResult`, `cancelGuided`, `guidedRunRef`,
+  `guidedTargetRef`) turned out to be substantially more entangled with the rest of the controller
+  than `F-34`'s enhancement-runner slice: `extractingMatte`, `correctionError`, `finalizingCorrection`,
+  and `retryCorrectionRef` are genuinely shared display/race-guard state with the manual
+  mask-correction flow, not guided-exclusive, and the three handlers collectively touch ~15 external
+  collaborators (`commitSingleResult`/`commitBatchResult`, `recomposite`/`batch.recomposite`,
+  `extractMatte`/`batch.extractMatte`, `releaseInference`, the enhancement-runner's
+  `refinementContextRef`/`refinement`/`foregroundRefinement` release-reset pairs, `selectedBatchItem`,
+  `deviceCapabilities`, the removal `state`). This is exactly the shape of entanglement that made the
+  original `F-24` finding a `defer` rather than a `fix`.
+- **Owner layer**: `widgets/tool-workspace/model/`.
+- **Decision**: `fix` — asked the architect explicitly given the elevated risk (see
+  `docs/PHASE_31.md` Implementation Notes for the question/answer); proceeded with the same
+  dependency-injection pattern as `F-34`. New `use-guided-cutout.ts` (387 lines) takes the
+  `useGuidedBrushSelection()` result as an *input* dependency rather than instantiating it itself —
+  `guided.release` is also needed by `use-enhancement-runner.ts`, and owning the call inside
+  `use-guided-cutout.ts` would have created a hook-to-hook circular dependency (enhancement-runner
+  needs `guided.release`; guided-cutout needs the enhancement-runner's release/reset handles). `guided`
+  and `guidedViewSession` stay directly in the controller as shared inputs to both sub-hooks.
+  `use-tool-workspace-controller.ts` is now 874 lines (~40% smaller than the original 1453); public
+  return-object shape unchanged, so `ToolWorkspace.tsx` needed no edits.
+- **Verification**: full existing suite (43 `tool-workspace` tests, 392 project-wide) passing
+  unchanged before/after this slice, `tsc`/`eslint`/`steiger` clean, plus a live Playwright MCP smoke
+  test of the actual guided auto-cutout flow (upload → automatic matte extraction → "Подготовка
+  Магии…" progress → interactive brush canvas ready with Оставить/Удалить enabled) — console showed
+  only the same 4 pre-existing unrelated analytics/CSP errors seen in earlier phase verifications, no
+  new errors introduced.
+- **Remaining scope** (still `defer`): `ToolWorkspace.tsx`'s own component-level state (~20
+  `useState`/~18 handlers) and `use-object-selection.ts` (1026 lines) are still untouched; the
+  mask-correction handlers (`handleEditMask`, `handleBatchEditMask`, `handleDoneCorrecting`,
+  `handleBatchDoneCorrecting`, `handleCancelCorrection`) remain in the controller and are the next
+  candidate slice, sharing the same `extractingMatte`/`correctionError`/`finalizingCorrection`/
+  `retryCorrectionRef` state this slice also reached into.
+- **Confidence**: high — behavior-preserving extraction, verified by the full pre-existing automated
+  suite plus a live manual run of the specific flow this slice touched.
