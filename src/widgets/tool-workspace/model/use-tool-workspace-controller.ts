@@ -141,6 +141,7 @@ export function useToolWorkspaceController() {
   const [correctionError, setCorrectionError] = useState<WorkspaceDisplayError | null>(
     null,
   );
+  const [canvasDecodeRetryToken, setCanvasDecodeRetryToken] = useState(0);
   const [correctionViewAnnouncement, setCorrectionViewAnnouncement] = useState("");
   const [previewFill, setPreviewFill] = useState<BackgroundFill>({
     type: "transparent",
@@ -1029,6 +1030,14 @@ export function useToolWorkspaceController() {
     retry();
   }
 
+  const handleCanvasDecodeError = useCallback(() => {
+    setCorrectionError({ message: m.cutoutCanvasDecodeError(), action: "retry" });
+    retryCorrectionRef.current = () => {
+      setCorrectionError(null);
+      setCanvasDecodeRetryToken((current) => current + 1);
+    };
+  }, []);
+
   function handleEditMask() {
     if (state.status !== "result") return;
     const image = state.result;
@@ -1366,6 +1375,8 @@ export function useToolWorkspaceController() {
     extractingMatte,
     finalizingCorrection,
     correctionError,
+    canvasDecodeRetryToken,
+    handleCanvasDecodeError,
     correctionViewAnnouncement,
     setCorrectionViewAnnouncement,
     previewFill,

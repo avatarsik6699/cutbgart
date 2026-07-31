@@ -127,10 +127,11 @@ export function InteractiveMattingLab({
                 data-testid="load-matting-corpus"
                 type="button"
                 variant="outline"
-                disabled={controlsDisabled}
+                disabled={controlsDisabled || state.corpusLoading}
+                aria-busy={state.corpusLoading}
                 onClick={() => void loadSyntheticCorpus()}
               >
-                Создать синтетический корпус
+                {state.corpusLoading ? "Строим корпус…" : "Создать синтетический корпус"}
               </Button>
               <Button
                 data-testid="run-matting-lab"

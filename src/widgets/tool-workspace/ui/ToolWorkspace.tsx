@@ -86,6 +86,8 @@ export function ToolWorkspace({
     extractingMatte,
     finalizingCorrection,
     correctionError,
+    canvasDecodeRetryToken,
+    handleCanvasDecodeError,
     correctionViewAnnouncement,
     setCorrectionViewAnnouncement,
     previewFill,
@@ -1117,6 +1119,8 @@ export function ToolWorkspace({
         interactionMode={interactionMode}
         interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
         draftResetKey={manualDraftResetKey}
+        onDecodeError={handleCanvasDecodeError}
+        decodeRetryToken={canvasDecodeRetryToken}
       >
         {({ surface, rail }) => (
           <>
@@ -1205,6 +1209,8 @@ export function ToolWorkspace({
         interactionMode={interactionMode}
         interactionEnabled={activeTool === "cutout" && cutoutMode === "manual"}
         draftResetKey={manualDraftResetKey}
+        onDecodeError={handleCanvasDecodeError}
+        decodeRetryToken={canvasDecodeRetryToken}
       >
         {({ surface, rail }) => (
           <>

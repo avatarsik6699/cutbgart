@@ -32,6 +32,8 @@ export interface MaskCorrectionSlotsProps {
   interactionMode: CanvasInteractionMode;
   interactionEnabled: boolean;
   draftResetKey: number;
+  onDecodeError?: () => void;
+  decodeRetryToken?: number;
   children: (slots: { surface: ReactNode; rail: ReactNode }) => ReactNode;
 }
 
@@ -60,6 +62,8 @@ export function MaskCorrectionSlots({
   interactionMode,
   interactionEnabled,
   draftResetKey,
+  onDecodeError,
+  decodeRetryToken,
   children,
 }: MaskCorrectionSlotsProps) {
   const canvasHandleRef = useRef<MaskCanvasHandle>(null);
@@ -138,6 +142,8 @@ export function MaskCorrectionSlots({
         onPanBySourcePixels={panBySourcePixels}
         onStrokeCommitted={commitStroke}
         stageTargetRef={surfaceTargetRef}
+        onDecodeError={onDecodeError}
+        decodeRetryToken={decodeRetryToken}
         interactionMode={interactionMode}
         interactionEnabled={interactionEnabled}
       />

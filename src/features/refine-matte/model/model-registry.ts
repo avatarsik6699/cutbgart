@@ -1,4 +1,5 @@
 import type { InferencePath } from "../../../entities/processed-image";
+import { formatMegabytes } from "@/shared/lib/format-bytes";
 import type {
   MattingModelProfile,
   MattingModelVariantId,
@@ -49,5 +50,8 @@ export function recommendMattingMode(path: InferencePath | null): MattingRefinem
 }
 
 export function formatMattingModelSize(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(bytes < 50_000_000 ? 1 : 0)} MB`;
+  return formatMegabytes(bytes, {
+    decimals: bytes < 50_000_000 ? 1 : 0,
+    unitLabel: "MB",
+  });
 }

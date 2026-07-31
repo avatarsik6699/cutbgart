@@ -219,6 +219,7 @@
   "cutoutMagicDraftReady": "Markings changed. Apply when ready.",
   "cutoutManualReady": "Choose Manual to restore or erase exact areas.",
   "cutoutMagicError": "The change could not be applied. Your markings are still here.",
+  "cutoutCanvasDecodeError": "The image could not be loaded for editing.",
   "cutoutMagicStage": "Magic cutout editor",
   "cutoutManualRestore": "Restore",
   "cutoutManualErase": "Erase",

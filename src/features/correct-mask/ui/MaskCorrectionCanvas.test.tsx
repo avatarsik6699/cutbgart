@@ -553,4 +553,25 @@ describe("MaskCorrectionCanvas", () => {
     fireEvent.pointerLeave(canvas);
     expect(cursor.style.opacity).toBe("0");
   });
+
+  // PHASE_31 T8 full-inventory finding: an unhandled createImageBitmap
+  // rejection left the canvas permanently inert with no error surfaced.
+  it("calls onDecodeError when createImageBitmap rejects, and recovers on a decodeRetryToken bump", async () => {
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockRejectedValueOnce(new Error("decode failed")),
+    );
+    const onDecodeError = vi.fn();
+    const { rerender, props } = renderCanvas({ onDecodeError, decodeRetryToken: 0 });
+
+    await waitFor(() => expect(onDecodeError).toHaveBeenCalledTimes(1));
+
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockResolvedValue({ width: 100, height: 50, close: vi.fn() }),
+    );
+    rerender(<MaskCorrectionCanvas {...props} decodeRetryToken={1} />);
+    await waitUntilReady();
+    expect(onDecodeError).toHaveBeenCalledTimes(1);
+  });
 });

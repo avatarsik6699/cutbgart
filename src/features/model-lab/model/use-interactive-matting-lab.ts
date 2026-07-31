@@ -28,7 +28,12 @@ type InteractiveResponse = Extract<
   ModelLabAnyWorkerResponse,
   { type: "interactive-result" | "interactive-error" }
 >;
-type InteractiveOutcome = InteractiveResponse | { type: "cancelled" };
+type InteractiveOutcome =
+  | InteractiveResponse
+  | { type: "cancelled" }
+  // A hard worker crash never posts a "interactive-result"/"interactive-error"
+  // message — PHASE_31 T8 full-inventory finding.
+  | { type: "worker-crashed" };
 
 interface InteractiveState {
   status: "idle" | "ready" | "running" | "complete" | "cancelled";
@@ -43,6 +48,7 @@ interface InteractiveState {
     resultUrl: string;
   }>;
   decision: InteractiveEvaluationModelId | "none";
+  corpusLoading: boolean;
   progress: { completed: number; total: number };
   current?: {
     caseOrdinal: number;
@@ -68,6 +74,7 @@ function initialState(): InteractiveState {
     quality: [],
     previews: [],
     decision: "none",
+    corpusLoading: false,
     progress: { completed: 0, total: 0 },
   };
 }
@@ -111,6 +118,7 @@ export function useInteractiveMattingLab() {
     ),
     handleMessage,
     useCallback(() => ({ type: "cancelled" }) as const, []),
+    useCallback(() => ({ type: "worker-crashed" }) as const, []),
   );
   resolvePendingRef.current = worker.resolvePending;
 
@@ -149,8 +157,9 @@ export function useInteractiveMattingLab() {
   );
 
   const loadSyntheticCorpus = useCallback(async () => {
-    if (!state.optedIn || state.status === "running") return;
+    if (!state.optedIn || state.status === "running" || state.corpusLoading) return;
     revokeCases(state.cases);
+    setState((current) => ({ ...current, corpusLoading: true }));
     try {
       const cases = await createSyntheticMattingCorpus();
       for (const item of cases) objectUrlsRef.current.add(item.sourceUrl);
@@ -158,6 +167,7 @@ export function useInteractiveMattingLab() {
         ...current,
         cases,
         status: "ready",
+        corpusLoading: false,
         runtime: [],
         quality: [],
         previews: [],
@@ -167,10 +177,11 @@ export function useInteractiveMattingLab() {
     } catch (error) {
       setState((current) => ({
         ...current,
+        corpusLoading: false,
         error: error instanceof Error ? error.message : String(error),
       }));
     }
-  }, [revokeCases, state.cases, state.optedIn, state.status]);
+  }, [revokeCases, state.cases, state.corpusLoading, state.optedIn, state.status]);
 
   const setModelSelected = useCallback(
     (modelId: InteractiveEvaluationModelId, selected: boolean) => {
@@ -249,6 +260,15 @@ export function useInteractiveMattingLab() {
           modelId,
           currentCapabilities.requestedPath,
         );
+        if (response.type === "worker-crashed") {
+          setState((current) => ({
+            ...current,
+            status: "cancelled",
+            current: undefined,
+            error: "The matting worker crashed unexpectedly. You can run again.",
+          }));
+          return;
+        }
         if (response.type === "cancelled" || runTokenRef.current !== runToken) return;
         completed += 1;
         const quality =

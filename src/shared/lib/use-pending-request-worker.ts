@@ -18,18 +18,24 @@ export function usePendingRequestWorker<TMessage, TOutcome>(
   workerFactory: () => Worker,
   handleMessage: (message: TMessage) => void,
   cancelledOutcome: () => TOutcome,
+  // A hard worker crash (uncaught exception, syntax error, OOM) never posts a
+  // "message" — without this, every pending request hangs at its caller's
+  // "running" status forever (PHASE_31 T8 full-inventory finding).
+  errorOutcome: () => TOutcome,
 ) {
   const workerRef = useRef<Worker | null>(null);
   const pendingRef = useRef(new Map<string, (outcome: TOutcome) => void>());
   const requestCounterRef = useRef(0);
   const handleMessageRef = useRef(handleMessage);
   const cancelledOutcomeRef = useRef(cancelledOutcome);
+  const errorOutcomeRef = useRef(errorOutcome);
   useEffect(
     function syncCallbackRefsFx() {
       handleMessageRef.current = handleMessage;
       cancelledOutcomeRef.current = cancelledOutcome;
+      errorOutcomeRef.current = errorOutcome;
     },
-    [handleMessage, cancelledOutcome],
+    [handleMessage, cancelledOutcome, errorOutcome],
   );
 
   const nextRequestId = useCallback(function nextRequestId(prefix: string) {
@@ -48,6 +54,13 @@ export function usePendingRequestWorker<TMessage, TOutcome>(
             handleMessageRef.current(event.data);
           },
         );
+        worker.addEventListener("error", function handleWorkerError() {
+          workerRef.current?.terminate();
+          workerRef.current = null;
+          for (const resolve of pendingRef.current.values())
+            resolve(errorOutcomeRef.current());
+          pendingRef.current.clear();
+        });
         workerRef.current = worker;
       }
       return worker;

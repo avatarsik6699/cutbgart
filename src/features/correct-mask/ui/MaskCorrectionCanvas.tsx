@@ -153,6 +153,10 @@ export interface MaskCorrectionCanvasProps {
   stageTargetRef?: RefObject<HTMLCanvasElement | null>;
   interactionMode?: "brush" | "hand";
   interactionEnabled?: boolean;
+  /** Fires if `createImageBitmap(sourceImage.blob)` rejects (e.g. OOM). */
+  onDecodeError?: () => void;
+  /** Bump to force a fresh decode attempt after `onDecodeError`. */
+  decodeRetryToken?: number;
 }
 
 /**
@@ -187,6 +191,8 @@ export function MaskCorrectionCanvas({
   stageTargetRef,
   interactionMode = "brush",
   interactionEnabled = true,
+  onDecodeError,
+  decodeRetryToken,
 }: MaskCorrectionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const setCanvasRef = useCallback(
@@ -229,6 +235,10 @@ export function MaskCorrectionCanvas({
   // the browser to keep the canvas CPU-backed rather than paying a GPU
   // readback stall on every call.
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const onDecodeErrorRef = useRef(onDecodeError);
+  useEffect(function syncDecodeErrorRef() {
+    onDecodeErrorRef.current = onDecodeError;
+  });
   const brushCursorVisible = pointerInside && !spacePanning && !panning;
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
 
@@ -383,33 +393,37 @@ export function MaskCorrectionCanvas({
     documentAlphaRef.current = null;
     ctxRef.current = null;
 
-    void createImageBitmap(sourceImage.blob).then((bitmap) => {
-      if (cancelled) {
+    void createImageBitmap(sourceImage.blob)
+      .then((bitmap) => {
+        if (cancelled) {
+          bitmap.close();
+          return;
+        }
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
-        return;
-      }
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      overwriteAlphaChannel(imageData.data, initialMatte);
-      ctxRef.current = ctx;
-      rgbaRef.current = imageData;
-      committedAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
-      documentAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
-      repaintAll();
-    });
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        overwriteAlphaChannel(imageData.data, initialMatte);
+        ctxRef.current = ctx;
+        rgbaRef.current = imageData;
+        committedAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
+        documentAlphaRef.current = new Uint8ClampedArray(initialMatte.data);
+        repaintAll();
+      })
+      .catch(() => {
+        if (!cancelled) onDecodeErrorRef.current?.();
+      });
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally excludes `initialMatte`: it is read exactly once per source decode by contract (see its prop doc); re-decoding on a matte change would defeat the persistent buffer.
-  }, [sourceImage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally excludes `initialMatte`/`onDecodeError`: `initialMatte` is read exactly once per source decode by contract (see its prop doc), re-decoding on a matte change would defeat the persistent buffer; `onDecodeError` is read through a ref (kept fresh below) so the effect only re-runs on a real retry.
+  }, [sourceImage, decodeRetryToken]);
 
   function toMattePoint(
     clientX: number,

@@ -22,7 +22,11 @@ interface NavigatorDeviceMemory {
 type PendingOutcome =
   | { type: "result"; response: Extract<ModelLabWorkerResponse, { type: "result" }> }
   | { type: "error"; response: Extract<ModelLabWorkerResponse, { type: "error" }> }
-  | { type: "cancelled" };
+  | { type: "cancelled" }
+  // A hard worker crash never posts a "result"/"error" message — this is the
+  // only outcome shape that doesn't require per-request worker context we
+  // don't have at crash time (PHASE_31 T8 full-inventory finding).
+  | { type: "worker-crashed" };
 
 const DEFAULT_MODEL_IDS = EVALUATION_MODELS.map(({ id }) => id);
 
@@ -129,6 +133,7 @@ export function useModelLab() {
     ),
     handleWorkerMessage,
     useCallback(() => ({ type: "cancelled" }) as const, []),
+    useCallback(() => ({ type: "worker-crashed" }) as const, []),
   );
   resolvePendingRef.current = worker.resolvePending;
 
@@ -258,6 +263,15 @@ export function useModelLab() {
           modelId,
           currentCapabilities.requestedPath,
         );
+        if (outcome.type === "worker-crashed") {
+          setState((current) => ({
+            ...current,
+            status: "cancelled",
+            current: undefined,
+            error: "The evaluation worker crashed unexpectedly. You can run again.",
+          }));
+          return;
+        }
         if (outcome.type === "cancelled" || runTokenRef.current !== runToken) return;
         completed += 1;
         if (outcome.type === "result") {

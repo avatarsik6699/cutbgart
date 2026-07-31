@@ -1,3 +1,5 @@
+import { formatBytesLadder } from "@/shared/lib/format-bytes";
+
 export interface ModelCacheStatus {
   release: string;
   assetCount: number;
@@ -56,10 +58,5 @@ export async function clearModelCache(): Promise<void> {
 }
 
 export function formatStorageBytes(bytes: number): string {
-  if (bytes < 1024) return `${String(bytes)} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  return formatBytesLadder(bytes);
 }

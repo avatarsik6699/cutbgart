@@ -1,29 +1,32 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ModelLabAnyWorkerResponse } from "./types";
+import type { MattingCorpusCase, ModelLabAnyWorkerResponse } from "./types";
+import { createSyntheticMattingCorpus } from "./matting-corpus";
 import { useInteractiveMattingLab } from "./use-interactive-matting-lab";
 
-vi.mock("./matting-corpus", () => ({
-  createSyntheticMattingCorpus: vi.fn().mockResolvedValue([
-    {
-      ordinal: 1,
-      category: "hair-fur",
-      source: {
-        blob: new Blob([new Uint8Array([1])], { type: "image/png" }),
-        width: 2,
-        height: 2,
-        format: "image/png",
-      },
-      trimap: { width: 2, height: 2, data: Uint8ClampedArray.from([0, 128, 128, 255]) },
-      groundTruth: {
-        width: 2,
-        height: 2,
-        data: Uint8ClampedArray.from([0, 128, 128, 255]),
-      },
-      sourceUrl: "blob:corpus-1",
+const { SYNTHETIC_CASE } = vi.hoisted(() => ({
+  SYNTHETIC_CASE: {
+    ordinal: 1,
+    category: "hair-fur",
+    source: {
+      blob: new Blob([new Uint8Array([1])], { type: "image/png" }),
+      width: 2,
+      height: 2,
+      format: "image/png",
     },
-  ]),
+    trimap: { width: 2, height: 2, data: Uint8ClampedArray.from([0, 128, 128, 255]) },
+    groundTruth: {
+      width: 2,
+      height: 2,
+      data: Uint8ClampedArray.from([0, 128, 128, 255]),
+    },
+    sourceUrl: "blob:corpus-1",
+  } satisfies MattingCorpusCase,
+}));
+
+vi.mock("./matting-corpus", () => ({
+  createSyntheticMattingCorpus: vi.fn().mockResolvedValue([SYNTHETIC_CASE]),
 }));
 
 interface PostedMessage {
@@ -119,5 +122,31 @@ describe("useInteractiveMattingLab", () => {
     const report = result.current.buildExport();
     expect(report?.schemaVersion).toBe(2);
     expect(JSON.stringify(report)).not.toMatch(/blob:|sourceUrl|groundTruth|trimap/);
+  });
+
+  // PHASE_31 T8 full-inventory finding: the corpus-build button stayed
+  // clickable with no busy indicator during the async build.
+  it("reports corpusLoading true while building the synthetic corpus, false once settled", async () => {
+    let resolveCorpus!: (cases: MattingCorpusCase[]) => void;
+    vi.mocked(createSyntheticMattingCorpus).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCorpus = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useInteractiveMattingLab());
+    act(() => result.current.setOptedIn(true));
+
+    let loadPromise!: Promise<void>;
+    act(() => {
+      loadPromise = result.current.loadSyntheticCorpus();
+    });
+    await waitFor(() => expect(result.current.state.corpusLoading).toBe(true));
+
+    await act(async () => {
+      resolveCorpus([SYNTHETIC_CASE]);
+      await loadPromise;
+    });
+    expect(result.current.state.corpusLoading).toBe(false);
+    expect(result.current.state.cases).toHaveLength(1);
   });
 });

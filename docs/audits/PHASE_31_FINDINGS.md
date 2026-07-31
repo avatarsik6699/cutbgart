@@ -99,20 +99,56 @@ the genuine `state.error` alert rendered a few lines below it in the same sectio
 model/hooks are unit-tested); the fix is a one-line role/class correction, verified by direct read,
 not a behavior change worth standing up new render-test infrastructure for on a dev-only surface.
 
+**F-28 — `use-pending-request-worker.ts` had no worker `"error"`-event listener (`fix`, resolved
+2026-07-31)**: a hard worker crash (uncaught exception, syntax error, OOM) never posts a `"message"`
+— confirmed via a `MockWorker.crash()` test that a pending request registered before the crash never
+resolved, leaving `ModelLab`/`InteractiveMattingLab` stuck at `status: "running"` forever. Fixed:
+`usePendingRequestWorker` now takes a required `errorOutcome: () => TOutcome` parameter (parallel to
+the existing `cancelledOutcome`), wires `worker.addEventListener("error", ...)` in `getWorker()`
+that terminates the dead worker, resets `workerRef` so the next `getWorker()` call recreates it, and
+resolves every pending request with `errorOutcome()`. Both call sites (`use-model-lab.ts`,
+`use-interactive-matting-lab.ts`) added a `{ type: "worker-crashed" }` outcome variant and a run-loop
+branch that sets `status: "cancelled"` + a user-visible `error` message (re-enabling the Run button
+via the existing `canRun`/`controlsDisabled` derivation — no new UI needed, both surfaces already
+render `state.error`). Added `use-pending-request-worker.test.ts` (no test file existed for this
+hook before this fix) — 3 tests, including one asserting every pending resolver fires on crash and
+one asserting the worker is recreated lazily rather than reused dead. Confirmed via `git stash`: both
+new characterization tests fail against the pre-fix hook, pass post-fix.
+
+**F-29 — `loadSyntheticCorpus` had no busy flag during its async corpus build (`fix`, resolved
+2026-07-31)**: the "Создать синтетический корпус" button stayed clickable with no busy indicator
+while `createSyntheticMattingCorpus()` was in flight — a slow/repeated click could race, and there
+was no visual feedback the build was happening. Fixed: added a `corpusLoading: boolean` field to
+`InteractiveState` (independent from the existing `status`, which is reserved for actual matting
+runs and already drives the parent `ModelLab`'s "Run" button via `onRunningChange` — reusing it here
+would have incorrectly blocked the unrelated comparison run), set/cleared around the async call in
+`loadSyntheticCorpus`, and wired the button in `InteractiveMattingLab.tsx` to disable + show
+`aria-busy`/a "Строим корпус…" label while `true`. Added a characterization test using a manually
+resolved promise (`vi.hoisted` + `mockReturnValueOnce`) asserting `corpusLoading` is `true` mid-flight
+and `false` once settled. Confirmed via `git stash` it fails pre-fix (`corpusLoading` stays
+`undefined`), passes post-fix.
+
+**F-30 — `MaskCorrectionCanvas.tsx`'s `createImageBitmap` had no `.catch` (`fix`, resolved
+2026-07-31)**: a decode failure (rare — the blob already passed upload validation and prior ML
+inference, but `createImageBitmap` can still reject under OOM or exotic image data) left the canvas
+permanently inert with `rgbaRef`/`ctxRef` staying `null` forever, indistinguishable from still-loading,
+with no way to recover. Fixed via the existing `correctionError`/`retryCorrectionRef`/
+`CorrectionErrorAlert` mechanism already used for other correction-flow failures in
+`use-tool-workspace-controller.ts` — no new UI pattern introduced: `MaskCorrectionCanvas` gained
+optional `onDecodeError`/`decodeRetryToken` props (threaded through `MaskCorrectionSlots`), a new
+`handleCanvasDecodeError` controller handler sets `correctionError` (new `cutoutCanvasDecodeError`
+message, `en`/`ru`) and points `retryCorrectionRef` at a `canvasDecodeRetryToken` bump, which the
+canvas's decode `useEffect` now includes in its dependency array to force a fresh
+`createImageBitmap` attempt. Added a characterization test (`createImageBitmap` rejecting once,
+then resolving after a `decodeRetryToken` bump) — confirmed via `git stash` it produces an unhandled
+rejection and hangs against the pre-fix code, passes cleanly post-fix. Verified: `tsc`/`eslint`
+clean, `pnpm vitest run` 387/387, `pnpm e2e e2e/home.spec.ts` 16/16 (no regression in the
+already-covered manual-correction flows).
+
 **Deferred (named, not implemented — each needs real behavior-changing work this pass's bounded
 scope doesn't cover)**:
 - `MatteRefinementControls` missing an `error` prop — superseded by `F-19` (component has no live
   call site; fixing this in isolation was deprioritized once that was found).
-- `use-pending-request-worker.ts` has no worker `"error"`-event listener (affects `ModelLab`/
-  `InteractiveMattingLab`): a hard worker crash leaves `status: "running"` forever with no visible
-  failure. Needs a new error-message contract on the shared hook (`F2`'s extraction) — real,
-  moderate-risk shared-hook surgery, not a one-line fix.
-- `loadSyntheticCorpus` (`use-interactive-matting-lab.ts`) has no busy flag during its async corpus
-  build — dev-only lab feature, lower priority.
-- `MaskCorrectionCanvas.tsx`'s `createImageBitmap` has no `.catch` — a decode failure leaves the
-  canvas permanently inert with no error/retry. Core correction-canvas path; needs a
-  characterization test against the actual decode-failure path before touching, per this phase's
-  own no-blind-fix rule for behavior-owning code.
 - `describe-state.ts`'s `loadSyntheticCorpus`/GuidedBrush download progress is received but
   discarded (`void progress`) — the busy overlay shows a static message instead of the real
   percentage the worker reports, unlike the main pipeline's equivalent state. Needs the discarded
@@ -638,13 +674,20 @@ research pass, not taken on trust.
   (1,000,000-based, hardcoded Cyrillic `"МБ"` unit, dev-only `routes/dev.model-lab.tsx`) — three
   different "format bytes as text" implementations in three `features/*/model/` files.
 - **Owner layer**: candidate `shared/lib/format-bytes.ts`.
-- **Decision**: `defer` — the three implementations are not behaviorally identical (1024- vs
-  1,000,000-based, different rounding, one hardcoded-locale), so consolidation requires a decision on
-  which behavior wins for each caller, not a mechanical extraction; doing that silently risks
-  changing a user-visible number (e.g. `ModelStorageManager`'s displayed cache size) without the
-  measurement/characterization-test rigor this phase requires for any behavior change. Named as a
-  future-phase candidate, not implemented.
-- **Confidence**: medium (real duplication, but consolidation needs a product decision on rounding).
+- **Decision**: `fix` (resolved 2026-07-31) — re-examined: the three implementations reduce to two
+  genuinely distinct *shapes* (a fixed-unit "N MB/МБ" formatter, and a B/KB/MB/GB auto-selecting
+  ladder), not three arbitrary behaviors. Extracted `shared/lib/format-bytes.ts` with
+  `formatMegabytes(bytes, { decimals, unitLabel })` and `formatBytesLadder(bytes)` — both
+  parameterized so every call site's **exact prior output is preserved** (decimals/unit/locale
+  passed explicitly per caller), avoiding the behavior-change risk the original `defer` was written
+  against. `formatMattingModelSize`/`formatModelSize`/`formatStorageBytes` now thin wrappers.
+  `format-bytes.test.ts` pins the exact prior string output of all three call sites as
+  characterization tests (e.g. `formatMattingModelSize(60_000_000)` still `"60 MB"`,
+  `formatModelSize(87_654_321)` still `"88 МБ"`). Verified: `pnpm tsc --noEmit`/`eslint` clean,
+  `pnpm vitest run` 382/382 (including the pre-existing `model-registry.test.ts` suites, unchanged).
+- **Confidence**: high — this was a mechanical, behavior-preserving extraction once framed around
+  the two real shapes instead of the three surface-level call sites; no product decision was
+  actually needed.
 
 ### F-23 — Pervasive `interface` usage contradicts §2.3/§8 ("use `type`, never `interface`"), including the canonical domain-type source file
 

@@ -1,3 +1,4 @@
+import { formatMegabytes } from "@/shared/lib/format-bytes";
 import type {
   EvaluationModelId,
   EvaluationModelProfile,
@@ -188,5 +189,5 @@ export function getInteractiveEvaluationModel(
 }
 
 export function formatModelSize(bytes: number): string {
-  return `${Math.round(bytes / 1_000_000)} МБ`;
+  return formatMegabytes(bytes, { decimals: 0, unitLabel: "МБ" });
 }
