@@ -49,7 +49,7 @@
 | PHASE_28 | ✅ done | v0.28.0 | ✅ | 🤖 agent | Enhancements Tool & Committed History |
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
 | PHASE_30 | ✅ done | v0.30.0 | ⬜ | 🤖 agent | Design System & Redesign — T19–T21 deferred by architect decision 2026-07-30; `/phase-gate 30` not run |
-| PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Whole-Project Audit & Refactor |
+| PHASE_31 | ✅ done | v0.31.0 | ✅ | 🤖 agent | Whole-Project Audit & Refactor |
 | PHASE_32 | ⚠️ NEEDS_REVIEW | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
 | PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
 | PHASE_34 | ⚠️ NEEDS_REVIEW | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
