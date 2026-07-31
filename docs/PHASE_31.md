@@ -461,6 +461,11 @@ refactor(phase-31): harden architecture and runtime performance
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
+- [x] Scope complete; gates green; review notes resolved (2026-07-31 `/phase-gate 31`: PASS —
+      `tsc`, `vitest` 399/399, `steiger`, `build`, `pnpm e2e`, `e2e:real-model`,
+      `e2e:phase-21-real`, `e2e:phase-19-real`, `e2e:phase-20-real` all green; no unresolved
+      Architect Review Notes. Fixed a pre-existing phase-30 selector drift found mid-run in
+      `phase-19.real.spec.ts`/`phase-16.real.spec.ts` — "Process another image" button no longer
+      exists, replaced by "Back to upload".)
 - [ ] Run `/context-update 31`
 - [ ] Commit on `feat/phase-31`; tag `v0.31.0` after merge
