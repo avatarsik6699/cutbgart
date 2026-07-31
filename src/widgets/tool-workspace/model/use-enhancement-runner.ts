@@ -321,6 +321,28 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
     appliedForegroundRef.current = null;
   }
 
+  function setRefinementContext(context: {
+    guidedMatte: AlphaMatte | null;
+    constraints: RefinementConstraintMap | null;
+  }) {
+    refinementContextRef.current = context;
+  }
+
+  function setRefinementTarget(target: ResultTarget | null) {
+    refinementTargetRef.current = target;
+  }
+
+  function setForegroundTarget(target: ResultTarget | null) {
+    foregroundTargetRef.current = target;
+  }
+
+  function hardResetTargets() {
+    refinementTargetRef.current = null;
+    appliedRefinementRef.current = null;
+    foregroundTargetRef.current = null;
+    appliedForegroundRef.current = null;
+  }
+
   useEffect(() => {
     const result = refinement.state.result;
     const target = refinementTargetRef.current;
@@ -434,6 +456,10 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
     appliedRefinementRef,
     foregroundTargetRef,
     appliedForegroundRef,
+    setRefinementContext,
+    setRefinementTarget,
+    setForegroundTarget,
+    hardResetTargets,
     run: beginRun,
     cancel,
     retry,

@@ -7,7 +7,6 @@ import {
   type EditDocumentScope,
 } from "../../../entities/edit-document";
 import type {
-  AlphaMatte,
   BackgroundFill,
   ProcessedImage,
   QualityMode,
@@ -38,6 +37,7 @@ import { sourceImageToFile } from "../lib/source-image-to-file";
 import type { EnhancementOperationId } from "./enhancement-operation-registry";
 import { useEnhancementRunner, type ResultTarget } from "./use-enhancement-runner";
 import { useGuidedCutout, type WorkspaceDisplayError } from "./use-guided-cutout";
+import { useMaskCorrectionFlow } from "./use-mask-correction-flow";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 
@@ -60,7 +60,6 @@ export function useToolWorkspaceController() {
   const [defaultQualityMode, setDefaultQualityMode] = useState<QualityMode>("fast");
   const [uploadError, setUploadError] = useState<UploadValidationError | null>(null);
   const [preparingFileCount, setPreparingFileCount] = useState(0);
-  const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
   const [extractingMatte, setExtractingMatte] = useState(false);
   const [finalizingCorrection, setFinalizingCorrection] = useState(false);
   const [correctionError, setCorrectionError] = useState<WorkspaceDisplayError | null>(
@@ -80,7 +79,6 @@ export function useToolWorkspaceController() {
 
   const singleDocumentRef = useRef<EditDocumentScope | null>(null);
   const retryCorrectionRef = useRef<(() => void) | null>(null);
-  const correctionRunRef = useRef(0);
 
   const guided = useGuidedBrushSelection();
   const guidedViewSession = useMemo(
@@ -301,20 +299,45 @@ export function useToolWorkspaceController() {
     setFinalizingCorrection,
   });
 
+  const maskCorrection = useMaskCorrectionFlow({
+    singleDocumentRef,
+    publishSingleDocument,
+    selectedBatchItem,
+    removalState: state,
+    inferencePath: deviceCapabilities?.inferencePath,
+    extractMatte,
+    batchExtractMatte: batch.extractMatte,
+    recompositeSingle: recomposite,
+    recompositeBatch: batch.recomposite,
+    commitSingleResult,
+    commitBatchResult,
+    enterCorrecting,
+    exitCorrecting,
+    refinementTargetRef: enhancementRunner.refinementTargetRef,
+    retryCorrectionRef,
+    setCorrectionError,
+    setExtractingMatte,
+    setFinalizingCorrection,
+  });
+
   useEffect(
     () => () => {
-      correctionRunRef.current += 1;
-      guidedCutout.guidedRunRef.current += 1;
+      maskCorrection.bumpCorrectionRun();
+      guidedCutout.bumpGuidedRun();
       disposeScope(singleDocumentRef.current);
       singleDocumentRef.current = null;
     },
-    [guidedCutout.guidedRunRef],
+    // guidedCutout/maskCorrection are fresh object literals every render, so
+    // depending on either whole object would fire this unmount-only cleanup
+    // on every render instead. The two "bump" functions are individually
+    // stabilized with useCallback([]) precisely so this stays safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [guidedCutout.bumpGuidedRun, maskCorrection.bumpCorrectionRun],
   );
 
   function handleUpload(result: UploadResult) {
-    const guidedRunId = guidedCutout.guidedRunRef.current + 1;
-    guidedCutout.guidedRunRef.current = guidedRunId;
-    correctionRunRef.current += 1;
+    const guidedRunId = guidedCutout.bumpGuidedRun();
+    maskCorrection.bumpCorrectionRun();
     setCorrectionError(null);
     setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
@@ -326,21 +349,21 @@ export function useToolWorkspaceController() {
     disposeScope(singleDocumentRef.current);
     publishSingleDocument(null);
     setUploadError(null);
-    enhancementRunner.refinementContextRef.current = {
+    enhancementRunner.setRefinementContext({
       guidedMatte: null,
       constraints: null,
-    };
+    });
     void enhancementRunner.releaseBeforeHeavyWork().then(() => {
       if (guidedCutout.guidedRunRef.current !== guidedRunId) return;
       if (guidedCutout.guidedEntry) {
-        guidedCutout.guidedTargetRef.current = { kind: "direct" };
+        guidedCutout.setGuidedTarget({ kind: "direct" });
         guidedCutout.setGuidedVisualContext({
           entryKind: "direct",
           resultColorSource: result.image.blob,
         });
         guided.start(result.image);
       } else {
-        guidedCutout.guidedTargetRef.current = null;
+        guidedCutout.setGuidedTarget(null);
         guidedCutout.setGuidedVisualContext(null);
         selectFile(sourceImageToFile(result.image));
       }
@@ -371,8 +394,8 @@ export function useToolWorkspaceController() {
 
   function handleReset() {
     enhancementRunner.cancel();
-    correctionRunRef.current += 1;
-    guidedCutout.guidedRunRef.current += 1;
+    maskCorrection.bumpCorrectionRun();
+    guidedCutout.bumpGuidedRun();
     disposeScope(singleDocumentRef.current);
     publishSingleDocument(null);
     setUploadError(null);
@@ -380,21 +403,18 @@ export function useToolWorkspaceController() {
     setCorrectionError(null);
     setCorrectionViewAnnouncement("");
     retryCorrectionRef.current = null;
-    setOriginalMatte(null);
+    maskCorrection.setOriginalMatte(null);
     setExtractingMatte(false);
     setFinalizingCorrection(false);
     setPreviewFill({ type: "transparent" });
     guidedCutout.setGuidedEntry(false);
     guidedCutout.setGuidedVisualContext(null);
-    guidedCutout.guidedTargetRef.current = null;
-    enhancementRunner.refinementContextRef.current = {
+    guidedCutout.setGuidedTarget(null);
+    enhancementRunner.setRefinementContext({
       guidedMatte: null,
       constraints: null,
-    };
-    enhancementRunner.refinementTargetRef.current = null;
-    enhancementRunner.appliedRefinementRef.current = null;
-    enhancementRunner.foregroundTargetRef.current = null;
-    enhancementRunner.appliedForegroundRef.current = null;
+    });
+    enhancementRunner.hardResetTargets();
     void enhancementRunner.refinement.release().then(enhancementRunner.refinement.reset);
     void enhancementRunner.foregroundRefinement
       .release()
@@ -468,119 +488,24 @@ export function useToolWorkspaceController() {
     };
   }, []);
 
-  function handleEditMask() {
-    if (state.status !== "result") return;
-    const image = state.result;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    retryCorrectionRef.current = () => {
-      if (state.status === "result") handleEditMask();
-    };
-    setCorrectionError(null);
-    if (image.alphaMatte) {
-      let scope = singleDocumentRef.current;
-      if (!scope) {
-        scope = createEditDocumentScope(image, {
-          inferencePath: deviceCapabilities?.inferencePath ?? null,
-        });
-        publishSingleDocument(scope);
-      }
-      setExtractingMatte(false);
-      setOriginalMatte(image.alphaMatte);
-      retryCorrectionRef.current = null;
-      enhancementRunner.refinementTargetRef.current = {
-        kind: "single",
-        image,
-        documentRevision: scope.document.revision,
-      };
-      enterCorrecting();
-      return;
-    }
-    setExtractingMatte(true);
-    void extractMatte(image)
-      .then((matte) => {
-        if (correctionRunRef.current !== runId) return;
-        let scope = singleDocumentRef.current;
-        if (!scope) {
-          scope = createEditDocumentScope(
-            { ...image, alphaMatte: matte },
-            { inferencePath: deviceCapabilities?.inferencePath ?? null },
-          );
-          publishSingleDocument(scope);
-        }
-        setExtractingMatte(false);
-        setOriginalMatte(matte);
-        retryCorrectionRef.current = null;
-        enhancementRunner.refinementTargetRef.current = {
-          kind: "single",
-          image,
-          documentRevision: scope.document.revision,
-        };
-        enterCorrecting();
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
-
-  function handleBatchEditMask() {
-    if (!selectedBatchItem?.processedImage || !selectedBatchItem.editDocument) return;
-    const image = selectedBatchItem.processedImage;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    enhancementRunner.refinementTargetRef.current = {
-      kind: "batch",
-      itemId: selectedBatchItem.id,
-      image,
-      documentRevision: selectedBatchItem.editDocument.document.revision,
-      workerOwnerId: selectedBatchItem.editDocument.workerOwnerId,
-    };
-    if (image.alphaMatte) {
-      setExtractingMatte(false);
-      setOriginalMatte(image.alphaMatte);
-      return;
-    }
-    setExtractingMatte(true);
-    void batch
-      .extractMatte(image)
-      .then((matte) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setOriginalMatte(matte);
-      })
-      .catch((error: unknown) => {
-        if (correctionRunRef.current !== runId) return;
-        setExtractingMatte(false);
-        setCorrectionError({
-          message: `Could not prepare mask editor: ${error instanceof Error ? error.message : String(error)}`,
-          action: "retry",
-        });
-      });
-  }
-
   function handleSelectBatchItem(id: string) {
     if (id !== batch.session.selectedItemId) {
       enhancementRunner.cancel();
-      correctionRunRef.current += 1;
-      guidedCutout.guidedRunRef.current += 1;
+      maskCorrection.bumpCorrectionRun();
+      guidedCutout.bumpGuidedRun();
       setCorrectionError(null);
       setExtractingMatte(false);
-      setOriginalMatte(null);
+      maskCorrection.setOriginalMatte(null);
       setCorrectionViewAnnouncement("");
       enhancementRunner.refinement.cancel();
-      enhancementRunner.refinementTargetRef.current = null;
+      enhancementRunner.setRefinementTarget(null);
       enhancementRunner.foregroundRefinement.cancel();
-      enhancementRunner.foregroundTargetRef.current = null;
-      enhancementRunner.refinementContextRef.current = {
+      enhancementRunner.setForegroundTarget(null);
+      enhancementRunner.setRefinementContext({
         guidedMatte: null,
         constraints: null,
-      };
-      guidedCutout.guidedTargetRef.current = null;
+      });
+      guidedCutout.setGuidedTarget(null);
       guidedCutout.setGuidedVisualContext(null);
       guided.reset();
       setFinalizingCorrection(false);
@@ -591,20 +516,20 @@ export function useToolWorkspaceController() {
 
   function handleClearBatch() {
     enhancementRunner.cancel();
-    correctionRunRef.current += 1;
-    guidedCutout.guidedRunRef.current += 1;
+    maskCorrection.bumpCorrectionRun();
+    guidedCutout.bumpGuidedRun();
     retryCorrectionRef.current = null;
     setCorrectionError(null);
     setExtractingMatte(false);
     setFinalizingCorrection(false);
     guided.reset();
-    guidedCutout.guidedTargetRef.current = null;
+    guidedCutout.setGuidedTarget(null);
     guidedCutout.setGuidedVisualContext(null);
     guidedCutout.setGuidedEntry(false);
-    enhancementRunner.refinementContextRef.current = {
+    enhancementRunner.setRefinementContext({
       guidedMatte: null,
       constraints: null,
-    };
+    });
     void Promise.all([
       enhancementRunner.refinement.release().then(enhancementRunner.refinement.reset),
       enhancementRunner.foregroundRefinement
@@ -612,115 +537,6 @@ export function useToolWorkspaceController() {
         .then(enhancementRunner.foregroundRefinement.reset),
     ]);
     batch.reset();
-  }
-
-  async function handleBatchDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
-    const target = enhancementRunner.refinementTargetRef.current;
-    if (
-      !selectedBatchItem?.processedImage ||
-      !target ||
-      target.kind !== "batch" ||
-      target.itemId !== selectedBatchItem.id
-    )
-      return false;
-    const image = selectedBatchItem.processedImage;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    setFinalizingCorrection(true);
-    try {
-      const updated = await batch.recomposite(image, correctedMatte);
-      if (
-        correctionRunRef.current !== runId ||
-        enhancementRunner.refinementTargetRef.current !== target
-      )
-        return false;
-      const committed = commitBatchResult(
-        target.itemId,
-        updated,
-        "manual",
-        m.editorHistoryManual(),
-        target.documentRevision,
-        target.workerOwnerId,
-      );
-      if (!committed) {
-        setFinalizingCorrection(false);
-        return false;
-      }
-      enhancementRunner.refinementTargetRef.current = {
-        ...target,
-        image: updated,
-        documentRevision: target.documentRevision + 1,
-      };
-      setFinalizingCorrection(false);
-      return true;
-    } catch (error: unknown) {
-      if (correctionRunRef.current !== runId) return false;
-      setFinalizingCorrection(false);
-      setCorrectionError({
-        message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-        action: "retry",
-      });
-      return false;
-    }
-  }
-
-  async function handleDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
-    if (state.status !== "correcting") return false;
-    const target = enhancementRunner.refinementTargetRef.current;
-    if (!target || target.kind !== "single") return false;
-    const image = state.result;
-    const runId = correctionRunRef.current + 1;
-    correctionRunRef.current = runId;
-    retryCorrectionRef.current = () => {
-      if (state.status === "correcting") void handleDoneCorrecting(correctedMatte);
-    };
-    setCorrectionError(null);
-    setFinalizingCorrection(true);
-    try {
-      const updated = await recomposite(image, correctedMatte);
-      if (
-        correctionRunRef.current !== runId ||
-        enhancementRunner.refinementTargetRef.current !== target
-      )
-        return false;
-      if (
-        !commitSingleResult(
-          updated,
-          "manual",
-          m.editorHistoryManual(),
-          target.documentRevision,
-        )
-      ) {
-        setFinalizingCorrection(false);
-        return false;
-      }
-      enhancementRunner.refinementTargetRef.current = {
-        ...target,
-        image: updated,
-        documentRevision: target.documentRevision + 1,
-      };
-      setFinalizingCorrection(false);
-      retryCorrectionRef.current = null;
-      return true;
-    } catch (error: unknown) {
-      if (correctionRunRef.current !== runId) return false;
-      setFinalizingCorrection(false);
-      setCorrectionError({
-        message: `Could not apply mask correction: ${error instanceof Error ? error.message : String(error)}`,
-        action: "retry",
-      });
-      return false;
-    }
-  }
-
-  function handleCancelCorrection() {
-    correctionRunRef.current += 1;
-    setOriginalMatte(null);
-    setExtractingMatte(false);
-    setFinalizingCorrection(false);
-    setCorrectionError(null);
-    retryCorrectionRef.current = null;
-    if (state.status === "correcting") exitCorrecting(state.result);
   }
 
   function applySingleHistory(direction: "undo" | "redo") {
@@ -733,11 +549,11 @@ export function useToolWorkspaceController() {
     replaceResult(image);
     setPreviewFill(image.backgroundFill ?? { type: "transparent" });
     if (guidedCutout.guidedTargetRef.current?.kind === "single") {
-      guidedCutout.guidedTargetRef.current = {
+      guidedCutout.setGuidedTarget({
         ...guidedCutout.guidedTargetRef.current,
         image,
         documentRevision: next.document.revision,
-      };
+      });
       guidedCutout.setGuidedVisualContext({
         entryKind: "processed",
         resultColorSource: image.foreground ?? image.source.blob,
@@ -762,11 +578,11 @@ export function useToolWorkspaceController() {
       guidedCutout.guidedTargetRef.current?.kind === "batch" &&
       guidedCutout.guidedTargetRef.current.itemId === item.id
     ) {
-      guidedCutout.guidedTargetRef.current = {
+      guidedCutout.setGuidedTarget({
         ...guidedCutout.guidedTargetRef.current,
         image,
         documentRevision: next.document.revision,
-      };
+      });
       guidedCutout.setGuidedVisualContext({
         entryKind: "processed",
         resultColorSource: image.foreground ?? image.source.blob,
@@ -797,7 +613,7 @@ export function useToolWorkspaceController() {
     uploadError,
     preparingFileCount,
     setPreparingFileCount,
-    originalMatte,
+    originalMatte: maskCorrection.originalMatte,
     extractingMatte,
     finalizingCorrection,
     correctionError,
@@ -854,13 +670,13 @@ export function useToolWorkspaceController() {
     cancelEnhancements: enhancementRunner.cancel,
     retryEnhancements: enhancementRunner.retry,
     handleRetry,
-    handleEditMask,
-    handleBatchEditMask,
+    handleEditMask: maskCorrection.handleEditMask,
+    handleBatchEditMask: maskCorrection.handleBatchEditMask,
     handleSelectBatchItem,
     handleClearBatch,
-    handleBatchDoneCorrecting,
-    handleDoneCorrecting,
-    handleCancelCorrection,
+    handleBatchDoneCorrecting: maskCorrection.handleBatchDoneCorrecting,
+    handleDoneCorrecting: maskCorrection.handleDoneCorrecting,
+    handleCancelCorrection: maskCorrection.handleCancelCorrection,
     handleUndoDocument,
     handleRedoDocument,
     commitSingleBackground,

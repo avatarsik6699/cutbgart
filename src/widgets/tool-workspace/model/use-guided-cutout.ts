@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 
 import {
   createEditDocumentScope,
@@ -372,6 +372,15 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
     retryCorrectionRef.current = null;
   }
 
+  const bumpGuidedRun = useCallback((): number => {
+    guidedRunRef.current += 1;
+    return guidedRunRef.current;
+  }, []);
+
+  function setGuidedTarget(target: GuidedTarget | null) {
+    guidedTargetRef.current = target;
+  }
+
   return {
     guidedRunRef,
     guidedTargetRef,
@@ -379,6 +388,8 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
     setGuidedEntry,
     guidedVisualContext,
     setGuidedVisualContext,
+    bumpGuidedRun,
+    setGuidedTarget,
     handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,

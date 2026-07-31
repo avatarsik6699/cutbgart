@@ -393,6 +393,22 @@ touches.
   clean, plus a live Playwright MCP run of the guided auto-cutout flow end-to-end (no new console
   errors). Next candidate slice: the mask-correction handlers, which share the same state this slice
   reached into.
+- F-24 follow-up (2026-07-31, `F-36`): extracted the manual mask-correction flow
+  (`handleEditMask`/`handleBatchEditMask`/`handleDoneCorrecting`/`handleBatchDoneCorrecting`/
+  `handleCancelCorrection`) into `use-mask-correction-flow.ts` (303 lines).
+  `use-tool-workspace-controller.ts` is now 690 lines (~52% smaller than the original 1453). Adding
+  this third sub-hook tripped `eslint-plugin-react-hooks`'s `react-hooks/immutability` rule across all
+  three sub-hooks at once — direct `.current =` writes through another hook's returned object (e.g.
+  `enhancementRunner.refinementContextRef.current = {...}`) are a real anti-pattern the rule apparently
+  only fully engages once enough hook calls exist to analyze. Fixed by adding setter methods to each
+  sub-hook (`setRefinementContext`/`setRefinementTarget`/`setForegroundTarget`/`hardResetTargets`,
+  `setGuidedTarget`/`bumpGuidedRun`, `bumpCorrectionRun`) so the controller only calls methods, never
+  assigns through a nested property path. Verified: full suite (43 tool-workspace, 392 project-wide)
+  unchanged, `tsc`/`eslint --no-cache` clean (zero warnings) across all four model files, `steiger`
+  clean, plus a live Playwright MCP run of the manual mask-correction canvas end-to-end. Remaining
+  scope stays deferred: `ToolWorkspace.tsx`'s own state/handlers and `use-object-selection.ts`; what's
+  left in the controller is now mostly document-lifecycle orchestration, a materially smaller-risk
+  shape than the original god-hook.
 
 ## Atomic Commit Message
 

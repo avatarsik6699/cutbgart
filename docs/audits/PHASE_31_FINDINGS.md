@@ -852,3 +852,50 @@ is deferred for the same reason: it doesn't exist yet and building it safely is 
   `retryCorrectionRef` state this slice also reached into.
 - **Confidence**: high — behavior-preserving extraction, verified by the full pre-existing automated
   suite plus a live manual run of the specific flow this slice touched.
+
+### F-36 — Third decomposition slice: manual mask-correction flow (F-24 follow-up)
+
+- **Evidence**: as flagged in `F-35`'s "Remaining scope", `handleEditMask`, `handleBatchEditMask`,
+  `handleDoneCorrecting`, `handleBatchDoneCorrecting`, and `handleCancelCorrection` — plus the
+  `originalMatte`/`correctionRunRef` state exclusive to this flow — were still directly in
+  `use-tool-workspace-controller.ts`, sharing `extractingMatte`/`correctionError`/
+  `finalizingCorrection`/`retryCorrectionRef` and the enhancement-runner's `refinementTargetRef` with
+  the guided-cutout flow extracted in `F-35`.
+- **Owner layer**: `widgets/tool-workspace/model/`.
+- **Decision**: `fix` — new `use-mask-correction-flow.ts` (303 lines), same dependency-injection
+  pattern as the prior two slices. `use-tool-workspace-controller.ts` is now 690 lines (~52% smaller
+  than the original 1453).
+- **Correctness finding surfaced mid-slice**: adding this third `useX(...)` sub-hook call tripped
+  `eslint-plugin-react-hooks`'s `react-hooks/immutability` rule across *all three* sub-hooks at once —
+  it flagged every `controllerHookResult.someRef.current = value` write in the controller (e.g.
+  `enhancementRunner.refinementContextRef.current = {...}`, `guidedCutout.guidedTargetRef.current =
+  null`) as "modifying a value returned from a hook," even though the identical pattern had linted
+  clean after `F-34` and `F-35`. This was a real anti-pattern the rule's detection apparently only
+  fully engages once enough hook calls are present to analyze — not a false positive to suppress.
+  Fixed by adding setter methods to each sub-hook's returned API (`setRefinementContext`,
+  `setRefinementTarget`, `setForegroundTarget`, `hardResetTargets` on the enhancement runner;
+  `setGuidedTarget`, `bumpGuidedRun` on guided-cutout; `bumpCorrectionRun` on mask-correction) so the
+  controller only ever calls methods, never assigns through a nested property path off another hook's
+  return value. The two "bump" counter functions are wrapped in `useCallback(..., [])` for stable
+  identity so the pre-existing unmount-cleanup effect could depend on them correctly; that effect
+  still needs one precedented `eslint-disable-next-line react-hooks/exhaustive-deps` (matching the
+  existing exception in `use-enhancement-runner.ts`'s `continueRun`) since the rule wants the whole
+  `guidedCutout`/`maskCorrection` objects in the dependency array, which would fire the cleanup every
+  render instead of only on unmount (those objects are fresh literals each render; only the two bump
+  functions inside them are actually stable).
+- **Verification**: full existing suite (43 `tool-workspace` tests, 392 project-wide) passing
+  unchanged before/after, `tsc`/`eslint --no-cache` clean (zero errors, zero warnings) across all four
+  `widgets/tool-workspace/model/*.ts` files, `steiger` clean, plus a live Playwright MCP run of the
+  manual mask-correction flow specifically (upload → switch to "Вручную" tab → mask-correction canvas
+  renders with active brush controls) — console showed only the same 4 pre-existing unrelated
+  analytics/CSP errors, no new errors.
+- **Remaining scope** (still `defer`): `ToolWorkspace.tsx`'s own ~20 `useState`/~18 handlers (what
+  `F-24` itself names) and `use-object-selection.ts` (1026 lines) are untouched. What remains in
+  `use-tool-workspace-controller.ts` (690 lines) is now mostly document-lifecycle orchestration
+  (upload, reset, batch selection/clearing, undo/redo, background-commit wrappers) rather than a
+  single undifferentiated god-hook — a materially different, smaller-risk shape than where `F-24`
+  started, though still large enough that further splitting would need its own scoped pass.
+- **Confidence**: high — behavior-preserving, verified by the full pre-existing suite plus a live
+  manual run of the exact flow touched; the immutability-rule fix is a correctness improvement, not a
+  cosmetic one (mutating properties off unstable hook-return objects is unsafe under the React
+  Compiler's memoization assumptions).
