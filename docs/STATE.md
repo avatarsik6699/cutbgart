@@ -50,9 +50,9 @@
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
 | PHASE_30 | ✅ done | v0.30.0 | ⬜ | 🤖 agent | Design System & Redesign — T19–T21 deferred by architect decision 2026-07-30; `/phase-gate 30` not run |
 | PHASE_31 | ⏳ pending | v0.31.0 | ⬜ | — | Whole-Project Audit & Refactor |
-| PHASE_32 | ⏳ pending | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
+| PHASE_32 | ⚠️ NEEDS_REVIEW | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
 | PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
-| PHASE_34 | ⏳ pending | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
+| PHASE_34 | ⚠️ NEEDS_REVIEW | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -940,7 +940,12 @@ None yet.
 
 <!-- Format: PHASE_XX [YYYY-MM-DD]: description — who must resolve it -->
 
-None
+- PHASE_32 [2026-07-31]: needs review after spec change — `F7` still names "bilingual cross-browser
+  Playwright coverage," but `SPEC.md §7.4` now scopes the configured Playwright gate to Chromium
+  only (Firefox/WebKit/Mobile Safari dropped). Resolve before implementing.
+- PHASE_34 [2026-07-31]: needs review after spec change — `F9` still names "bilingual cross-browser
+  Playwright request/storage inspection," but `SPEC.md §7.4` now scopes the configured Playwright
+  gate to Chromium only (Firefox/WebKit/Mobile Safari dropped). Resolve before implementing.
 
 ---
 
@@ -950,6 +955,33 @@ None
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-07-31 — Configured Playwright gate scoped to Chromium-only
+
+**Type**: spec-change
+**Author**: AI (spec-sync), architect decision
+**Triggered by**: architect request to speed up local E2E iteration by dropping Firefox/WebKit/
+Mobile Safari from the fast regression gate.
+
+### Changes / Decision
+- `SPEC.md §7.4`: the configured-browser-projects rows for Firefox and WebKit removed from the
+  compatibility-evidence table; "cross-browser E2E suite" reworded to "Chromium E2E suite." Phase
+  33's physical-device sample is now the only remaining compatibility evidence for non-Chromium
+  engines, until a future phase reinstates configured multi-browser Playwright coverage if a
+  concrete defect class justifies it.
+- `playwright.config.ts`: `firefox`, `webkit`, and `Mobile Safari` projects removed; `chromium`
+  remains.
+
+### Affected Phases / Consequences
+- PHASE_31 — the phase making this change; `F6`'s "full cross-browser/localized Playwright
+  coverage for changed flows" scoped down to Chromium going forward (surgical edit in
+  `PHASE_31.md`/`PHASE_31_FINDINGS.md`, not flagged `NEEDS_REVIEW` against itself).
+- PHASE_32 — `F7` names "bilingual cross-browser Playwright coverage"; marked `⚠️ NEEDS_REVIEW`.
+- PHASE_34 — `F9` names "bilingual cross-browser Playwright request/storage inspection"; marked
+  `⚠️ NEEDS_REVIEW`.
+- All other phases referencing Firefox/WebKit/Mobile Safari (`PHASE_03`, `10`, `13`, `16`–`18`,
+  `20`, `21`, `23`, `24`, `26`, `28`–`30`) are `✅ done` and recorded evidence gathered under the
+  gate as it existed at the time; not reopened — their contracts are not broken retroactively.
 
 ## 2026-07-30 — PHASE_30 gate waived; PHASE_31 cleared to start
 

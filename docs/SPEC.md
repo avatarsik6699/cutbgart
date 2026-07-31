@@ -931,23 +931,27 @@ being converted into a universal compatibility claim.
 
 ### 7.4 Cross-Browser and Runtime Validation
 
-Compatibility claims are limited to environments actually exercised. During ordinary development,
-configured browser projects and the available host remain the fast regression gate; Phase 33 adds
-a focused product-validation sample rather than a permanent broad device lab.
+Compatibility claims are limited to environments actually exercised. As of Phase 31, the configured
+Chromium project and the available host are the fast regression gate for ordinary development;
+Firefox/WebKit/Mobile-Safari Playwright projects were dropped from that gate to keep local/CI E2E
+runtime bounded (`PHASE_31_FINDINGS.md`), leaving Phase 33's physical-device sample as the only
+remaining evidence for non-Chromium engines until a future phase reintroduces configured
+multi-browser Playwright coverage, if ever justified by a concrete defect class Chromium alone
+would miss.
 
 | Environment | Inference/runtime path | Required evidence |
 |-------------|------------------------|-------------------|
 | Configured Chromium project | Deterministic WebGPU and WASM/fallback branches | Full user-flow E2E; available-host real-model smoke for inference changes |
-| Configured Firefox project | Deterministic supported/fallback branches | User-flow, canvas interaction, state recovery, and download E2E |
-| Configured WebKit project | Deterministic WASM/fallback branches | User-flow, canvas interaction, state recovery, and download E2E; this is browser-engine coverage, not a claim that physical Safari/iOS hardware was tested |
 | Available development host | Its real detected WebGPU or WASM path | Serialized real-model smoke, capability report, classified failures, and measured timing for inference changes |
 | Synthetic weak/OOM conditions | Injected capability, allocation, and worker failures | Deterministic fallback, cancellation, resource-disposal, and UI-responsiveness tests |
 | Phase-33 physical sample | iPhone/Safari, Android/Chrome including one constrained device, macOS/Safari, Windows Chromium/integrated graphics, and a no-WebGPU path | Exact hardware/OS/browser evidence for core single/batch/edit/download journeys, accessibility and performance; cloud devices may supplement but not replace both mobile physical checks |
 
-Every phase that changes inference must pass the configured cross-browser E2E suite, its
+Every phase that changes inference must pass the configured Chromium E2E suite, its
 available-host real-model smoke, focused capability/fallback tests, and the applicable quality,
 latency, and memory thresholds. Phase 33 freezes the current Baseline-informed supported/fallback/
-unsupported browser policy and fixes P0/P1 physical-device findings. Missing hardware is recorded
+unsupported browser policy and fixes P0/P1 physical-device findings — for Firefox/WebKit/Mobile
+Safari, that physical/manual sample is now the only compatibility evidence this project collects
+until configured Playwright coverage for those engines is reinstated. Missing hardware is recorded
 as unverified; it is neither silently ignored nor represented as supported.
 
 A user may still contact the existing Telegram feedback channel and voluntarily attach the

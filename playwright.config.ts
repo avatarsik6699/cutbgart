@@ -58,17 +58,11 @@ export default defineConfig({
     actionTimeout: 10_000,
   },
   projects: [
-    // Chrome/Edge desktop — WebGPU + fp16 inference path (SPEC.md §7.4, high priority).
+    // Chrome/Edge desktop — WebGPU + fp16 inference path (SPEC.md §7.4).
+    // Firefox/WebKit/Mobile Safari projects were dropped from the fast
+    // regression gate in Phase 31 to bound local/CI E2E runtime; Phase 33's
+    // physical-device sample is now the only compatibility evidence for
+    // those engines (SPEC.md §7.4, PHASE_31_FINDINGS.md).
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    // SPEC.md §7.4 also requires desktop Firefox coverage.
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
-    // Safari desktop — Playwright's WebKit has no WebGPU support, so this
-    // exercises the automatic WASM fallback path (SPEC.md §7.4, high priority).
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    // iOS Safari — same WASM fallback path with a mobile viewport + touch
-    // input; SPEC.md §7.4 explicitly requires Safari/iOS coverage, not just
-    // desktop (real-device verification still needed manually per the spec's
-    // "requires testing on a real device, not just emulation" note).
-    { name: "Mobile Safari", use: { ...devices["iPhone 14"] } },
   ],
 });

@@ -12,6 +12,11 @@
 | Tag | `v0.34.0` |
 | Depends on | PHASE_33 gate passing; Phase-24 audit retained as the baseline input |
 
+> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-07-31.
+> Check `SPEC.md §7.4` against the updated `docs/SPEC.md` — the configured Playwright gate is now
+> Chromium-only (Firefox/WebKit/Mobile Safari dropped). Re-validate `F9`'s "bilingual cross-browser
+> Playwright request/storage inspection" wording before implementation.
+
 ---
 
 ## Phase Goal

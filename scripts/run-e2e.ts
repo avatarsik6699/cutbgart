@@ -3,16 +3,6 @@ import { chromium } from "@playwright/test";
 import { loadEnv } from "vite";
 
 const START_TIMEOUT_MS = 30_000;
-const DEFAULT_PROJECTS = [
-  { name: "chromium" },
-  // Persistent Magic/Manual layers intentionally retain full-resolution
-  // alpha buffers. Running several software-rendered browser pages in
-  // parallel makes Firefox/WebKit contend for the same host memory and turns
-  // deterministic canvas assertions into scheduler timeouts.
-  { name: "firefox", workers: 1 },
-  { name: "webkit", workers: 1 },
-  { name: "Mobile Safari", workers: 1 },
-] as const;
 
 // Vite reads `.env*` itself, while the Playwright config runs in a separate
 // Node process. Mirror Vite's public client env into that process so test
@@ -145,34 +135,15 @@ try {
   await waitForServer(server);
   await warmBrowserLocales(true);
   const forwardedArgs = process.argv.slice(2);
-  const hasExplicitProject = forwardedArgs.some(
-    (argument) => argument === "--project" || argument.startsWith("--project="),
-  );
-  // Keep one Vite lifecycle, but let Playwright collect and execute one browser
-  // project at a time. A single multi-project invocation can invalidate
-  // Paraglide's dev SSR module context while projects are collected, causing
-  // English requests to hydrate from the Russian base locale. Tests inside
-  // each project remain fully parallel according to playwright.config.ts.
-  const runs = hasExplicitProject
-    ? [forwardedArgs]
-    : DEFAULT_PROJECTS.map((project) => [
-        ...forwardedArgs,
-        `--project=${project.name}`,
-        ...("workers" in project ? [`--workers=${String(project.workers)}`] : []),
-      ]);
 
-  exitCode = 0;
-  for (const args of runs) {
-    const playwright = spawn("pnpm", ["exec", "playwright", "test", ...args], {
-      stdio: "inherit",
+  const playwright = spawn("pnpm", ["exec", "playwright", "test", ...forwardedArgs], {
+    stdio: "inherit",
+  });
+  exitCode = await new Promise<number>((resolve) => {
+    playwright.once("exit", (code, signal) => {
+      resolve(code ?? (signal === "SIGINT" ? 130 : 1));
     });
-    exitCode = await new Promise<number>((resolve) => {
-      playwright.once("exit", (code, signal) => {
-        resolve(code ?? (signal === "SIGINT" ? 130 : 1));
-      });
-    });
-    if (exitCode !== 0) break;
-  }
+  });
 } finally {
   stopServer();
 }

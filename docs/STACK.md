@@ -92,7 +92,7 @@ STACK.md` for those.
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |
-| E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic UI suite one browser project at a time under one managed Vite server (tests within each project remain fully parallel), then one serialized Chromium real-model/CDN smoke. The sole CI exception is `pnpm e2e:ci-critical`: mocked Chromium, one worker, no model/CDN/WebGPU dependency. Never run Playwright in Docker. |
+| E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic Chromium UI suite under one managed Vite server (tests remain fully parallel), then one serialized Chromium real-model/CDN smoke. As of Phase 31, Chromium is the only configured Playwright project — Firefox/WebKit/Mobile Safari were dropped from the fast gate (SPEC.md §7.4, PHASE_31_FINDINGS.md F-18); Phase 33's physical-device sample is the only remaining evidence for those engines. The sole CI exception is `pnpm e2e:ci-critical`: mocked Chromium, one worker, no model/CDN/WebGPU dependency. Never run Playwright in Docker. |
 | Smoke | `docker compose exec -T app node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` | Deterministic, container-network-native — doesn't need port 3000 published to the host or TLS/nginx up. `app` also has a Docker `healthcheck` (docker-compose.yml) doing the same check on a 10s interval; `docker compose ps app` should show `(healthy)`. Phase files may override with a phase-specific check. |
 
 Architecture lint (run in CI before tests, not part of the standard gate rows above — SPEC.md §7.7):
@@ -229,7 +229,7 @@ See [`docs/FRONTEND_CONVENTIONS.md`](FRONTEND_CONVENTIONS.md) for component/hook
 pnpm tsc --noEmit          # type-check, strict mode
 pnpm vitest run            # unit + integration (Testing Library for hooks)
 pnpm exec steiger ./src    # FSD architecture lint — run before tests in CI
-pnpm e2e                   # Fast deterministic cross-browser UI/canvas/download suite
+pnpm e2e                   # Fast deterministic Chromium UI/canvas/download suite
 pnpm e2e:ci-critical       # Mocked Chromium PR-CI exception; one worker
 pnpm e2e:real-model        # Serialized Chromium smoke against the real model/CDN
 pnpm e2e:model-lab-real    # Phase 15 only: serialized BEN2/MVANet WASM compatibility report
@@ -244,11 +244,13 @@ pnpm e2e:full              # Required phase gate: deterministic suite + real-mod
 
 Playwright drives the app the way a human would in a browser. `pnpm e2e` replaces only the external
 ML Worker boundary with a deterministic in-browser test double; uploads, state transitions,
-canvas editing, responsive layouts, and downloads remain real and run across the browser matrix.
-`pnpm e2e:real-model` owns the slow/network-dependent ONNX+CDN check and runs once, serially, in
-Chromium. Write or extend the deterministic suite for every changed user-facing flow and run
-`pnpm e2e:full` at `/phase-gate`. Only `e2e/ci-critical.spec.ts` runs in CI; it uses mocked
-inference, Chromium and one worker. Every other Playwright project remains host-only, and no
+canvas editing, responsive layouts, and downloads remain real. As of Phase 31, Chromium is the only
+configured project (Firefox/WebKit/Mobile Safari dropped to bound local/CI E2E runtime — SPEC.md
+§7.4, PHASE_31_FINDINGS.md F-18); Phase 33's physical-device sample is the sole remaining
+compatibility evidence for other engines. `pnpm e2e:real-model` owns the slow/network-dependent
+ONNX+CDN check and runs once, serially, in Chromium. Write or extend the deterministic suite for
+every changed user-facing flow and run `pnpm e2e:full` at `/phase-gate`. Only
+`e2e/ci-critical.spec.ts` runs in CI; it uses mocked inference, Chromium and one worker. No
 Playwright suite runs in Docker.
 
 ### Performance profiling (PHASE_31 T2)

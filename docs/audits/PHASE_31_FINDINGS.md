@@ -96,6 +96,38 @@ Scope: `T3`–`T5`, `T7`, `T8` inventory, `T6` prioritized decisions. Captured 2
   (and already in project memory) as the standing operating note: rerun `Mobile Safari` alone
   (`--project="Mobile Safari"`) before treating its failure as a real regression.
 
+### F-18 — Vitest full-run heap trend: stable, no leak; real root cause of the "memory/concurrency" complaint was the multi-browser E2E gate, now removed
+
+- **Symptom / evidence**: architect reported "periodically возникают проблемы с памятью,
+  конкурентностью" (periodic memory/concurrency problems) across unit/e2e/Playwright runs. Two
+  separate things were checked:
+  1. **Vitest** (`pnpm vitest run --logHeapUsage --reporter=verbose`, full 87-file/376-test suite):
+     per-test process heap fluctuates between ~50–190 MB with no monotonic growth trend across the
+     run (GC reclaims between tests, confirmed by non-increasing values later in the run vs.
+     earlier) — no leak, no "did not exit"/unhandled-process warnings. `/usr/bin/time -v` on the
+     same run: 410 MB peak RSS for the orchestrating process, 23s wall/483% CPU on 6 cores — nothing
+     indicating a resource problem in isolation.
+  2. **Playwright**: `scripts/run-e2e.ts`'s `DEFAULT_PROJECTS` constant pinned `firefox`/`webkit`/
+     `Mobile Safari` to `workers: 1` specifically because running several software-rendered browser
+     pages in parallel made them **contend for host memory** (in-file comment, corroborated by
+     `F-05`'s Mobile-Safari-CPU-contention finding earlier this phase). This is real, measured
+     evidence of the architect's "concurrency" complaint — not a false impression.
+- **Consequence of this session's separate chromium-only decision**: with Firefox/WebKit/Mobile
+  Safari removed from `playwright.config.ts` (architect request, 2026-07-31, see `docs/STATE.md` §
+  Project Log), `DEFAULT_PROJECTS` in `scripts/run-e2e.ts` became a live bug — `pnpm e2e` with no
+  explicit `--project` would loop over three browser names Playwright no longer configures and fail
+  immediately (`Error: Project(s) "firefox" not found`, reproduced before the fix). Fixed by
+  deleting `DEFAULT_PROJECTS` and the per-project-serialization loop entirely (`scripts/run-e2e.ts`)
+  — with a single configured project, the workaround has no purpose. Verified: `pnpm tsc --noEmit`
+  clean; `pnpm e2e e2e/ci-critical.spec.ts` passes end-to-end through the simplified script.
+- **Owner layer**: `scripts/run-e2e.ts`, `playwright.config.ts`.
+- **Decision**: `fix` (implemented this pass). The multi-browser memory-contention source of the
+  "concurrency" complaint is now structurally eliminated (one browser project, no serialization
+  workaround needed) rather than merely documented as a standing operating note like `F-05` was.
+- **Residual**: Vitest itself was never the source of the reported instability — its default thread
+  pool (up to 6, matching `nproc`) showed no leak or contention symptom over a full run. No
+  Vitest-side config change made; none evidenced as needed.
+
 ### F-06 — Real-vs-mocked-model segmentation and CI-vs-local invocation flow
 
 - **Coverage this pass**: confirmed `docs/STACK.md` and `.github/workflows/ci.yml` already match —

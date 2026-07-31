@@ -305,6 +305,16 @@ touches.
     stand up and validate. Those are named, scoped candidates for a future pass, not gaps papered
     over.
 
+- Configured Playwright gate scoped to Chromium-only (2026-07-31, architect request, propagated via
+  `/spec-sync`): `SPEC.md §7.4` and `playwright.config.ts` no longer configure Firefox/WebKit/Mobile
+  Safari projects — Chromium remains the fast local/CI regression gate; Phase 33's physical-device
+  sample is now the only remaining compatibility evidence for the dropped engines. `F6`'s "full
+  cross-browser/localized Playwright coverage" line above reflects what this phase's own regression
+  passes actually ran under the gate as it existed at the time (all 4 projects) and is left
+  unedited as a historical record; going forward, `pnpm e2e` runs Chromium only. `PHASE_32`/`PHASE_34`
+  marked `⚠️ NEEDS_REVIEW` in `STATE.md` — both still name cross-browser Playwright coverage in their
+  scope text. See `docs/STATE.md` § Project Log (2026-07-31) for the full decision record.
+
 ## Atomic Commit Message
 
 ```text

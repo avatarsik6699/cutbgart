@@ -12,6 +12,11 @@
 | Tag | `v0.32.0` |
 | Depends on | PHASE_31 gate passing |
 
+> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-07-31.
+> Check `SPEC.md §7.4` against the updated `docs/SPEC.md` — the configured Playwright gate is now
+> Chromium-only (Firefox/WebKit/Mobile Safari dropped). Re-validate `F7`'s "bilingual cross-browser
+> Playwright coverage" wording before implementation.
+
 ---
 
 ## Phase Goal
