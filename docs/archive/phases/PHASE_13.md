@@ -119,7 +119,7 @@ Run `/phase-gate 13` before committing.
 - Automated checks are green
 - All architect review items below are resolved (checked off)
 
-Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
+Use the commands in [docs/STACK.md](../../STACK.md#gate-commands) as the source of truth for:
 - infrastructure / bootstrap
 - frontend prep, type-check, unit tests
 - e2e — the existing Playwright cross-browser matrix must stay green; `e2e/scenario-pages.spec.ts`

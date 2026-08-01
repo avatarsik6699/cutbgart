@@ -421,7 +421,8 @@
   and every Undo/Redo click, on a mere 1MP image. A CPU profile shows the time inside react-dom's
   `addObjectToProperties`/`addValueToProperties`/`debugTask.run` plus GC, while the app's own
   handlers measure milliseconds. Production builds are unaffected, which makes it easy to
-  misattribute to app code (that happened here: the R3-addendum diagnosis in `docs/PHASE_07.md`
+  misattribute to app code (that happened here: the R3-addendum diagnosis in
+  `docs/archive/phases/PHASE_07.md`
   blamed and "fixed" a redundant repaint; the freeze survived).
 - **Root cause**: React 19.2's dev-only Component Performance Track (`logComponentRender` in
   `react-dom-client.development.js`) deep-diffs every changed prop object against its previous

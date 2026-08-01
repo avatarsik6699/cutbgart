@@ -136,7 +136,7 @@ Run `/phase-gate 01` before committing.
 - Automated checks are green
 - All architect review items below are resolved (checked off)
 
-Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
+Use the commands in [docs/STACK.md](../../STACK.md#gate-commands) as the source of truth for:
 - infrastructure / bootstrap — scoped to `app` only; `nginx`+`certbot` need a real cert and can only
   be verified on the VPS post `deploy/init-letsencrypt.sh` (see STACK.md § TLS / reverse-proxy
   verification)

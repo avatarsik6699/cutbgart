@@ -13,7 +13,8 @@
 >
 > **Adoption for existing code**: this file governs all code written from 2026-07-30 onward. It is
 > not retroactive authorization to mass-rename or mass-rewrite existing files — per `AGENTS.md`
-> Scope Lock and `docs/PHASE_31.md`'s explicit ban on blanket rewrites without callsite evidence,
+> Scope Lock and `docs/archive/phases/PHASE_31.md`'s explicit ban on blanket rewrites without
+> callsite evidence,
 > bringing existing files into line with a given rule happens only (a) as a normal side effect of a
 > file already being touched for unrelated work, or (b) as an approved PHASE_31 findings-ledger fix.
 > See the Architect Review Notes callout at the end of this file for the specific open decision.
@@ -88,6 +89,29 @@ useEffect(function syncActiveToolFx() {
   if (!activeTool) resetToDefaultTool();
 }, [activeTool]);
 ```
+
+### 2.8 V2 typography primitive
+
+New v2 presentation code must render reusable text styles through
+`src/v2/shared/ui/typography.tsx`, not repeat heading/body/caption Tailwind clusters in pages. The
+component has a finite typed variant registry, requires an explicit semantic `as` element when the
+variant alone cannot determine it, forwards safe HTML attributes/ref, and never infers heading
+level from visual size. Page-specific layout classes may be added through `className`; typography
+classes remain owned by the primitive.
+
+Do not migrate untouched legacy pages mechanically. This rule applies to all v2 code and to any
+legacy component deliberately migrated into v2.
+
+### 2.9 V2 image primitive
+
+New v2 presentation code must use `src/v2/shared/ui/image.tsx` for content/preview images. Its typed
+presets own aspect-ratio/object-fit and loading policy, require meaningful `alt` text or explicit
+decorative intent, preserve intrinsic dimensions where known, and set deliberate `loading`,
+`decoding`, and fetch-priority defaults. The component receives a URL whose lifetime is already
+owned by the artifact/static-asset layer; it must never call `URL.createObjectURL` or revoke a URL.
+
+Raw `<img>` remains allowed only inside the primitive itself or for a documented framework/tooling
+exception. Canvas drawing surfaces are not images and are unaffected.
 
 ---
 
@@ -200,10 +224,17 @@ against a type guard instead of trusting `JSON.parse`'s `any`.
 **Exception**: `JSON.stringify` for a Worker `postMessage` payload or an HTTP-adjacent boundary is
 not "storage" — no wrapper required, but note the exception inline if it's non-obvious.
 
-### 6.3 Never read `import.meta.env` directly outside the env module
+### 6.3 Never read `import.meta.env` directly outside the config boundary
 
-Already the convention here — `shared/config/env.ts` is the only file that should read
-`import.meta.env`. Keep it that way; import `env` from `@shared/config` everywhere else.
+`shared/config/env.ts` and `shared/config/runtime.ts` are the only files allowed to read
+`import.meta.env`. `env.ts` validates and exposes typed client/server configuration without leaking
+server secrets into the browser. `runtime.ts` owns dynamic SSR/client/window/mode detection. Import
+`env` or `runtime` from `@/shared/config` everywhere else; do not scatter `typeof window`,
+`process.env`, or `import.meta.env` checks through components/hooks.
+
+The v2 implementation adapts the proven shape from
+`patient_tracker/frontend/app/shared/config/{env,runtime}.ts`, but defines only values this project
+actually consumes. Do not add speculative API/payment/provider variables before their phase.
 
 ---
 
@@ -284,7 +315,8 @@ Docker or (beyond the mocked `ci-critical` exception) in CI. No change here.
 - [x] **Retroactive enforcement of §2.4/§2.5/§2.7/§1 resolved (2026-07-31)**: **prospective-only**.
   New code and any file already being touched for unrelated work must comply; a standalone,
   mechanical pass to bring the other ~45+ existing files (PascalCase component filenames, prop/hook
-  destructuring) into line is explicitly **not** authorized. Reasoning: `docs/PHASE_31.md` and
+  destructuring) into line is explicitly **not** authorized. Reasoning:
+  `docs/archive/phases/PHASE_31.md` and
   `AGENTS.md`'s Scope Lock already ban blanket rewrites without callsite evidence — a pure style
   rename touches every one of those files' full diff surface for zero behavior change, which is a
   large-blast-radius edit with no corresponding bug or duplication evidence, exactly what Scope Lock

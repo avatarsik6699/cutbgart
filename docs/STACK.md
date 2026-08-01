@@ -37,6 +37,9 @@ and gates the first vertical slice, the table above remains the deployed/current
 | Domain/application | Framework-free TypeScript commands, events, transitions, ports, policies | No React, worker, HTTP, provider, or binary values |
 | Binary ownership | Explicit artifact repository with opaque IDs and leases | Browser-tab memory only |
 | Local runtime | Unified typed protocol and bounded browser worker gateway | Existing model/assets; no remote processing |
+| V2 shared UI | Rewritten Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; no blanket legacy component import |
+| SSR/config | Typed `shared/config/env.ts` + `runtime.ts`, adapted from `patient_tracker` | Sole environment/runtime boundary; backward-compatible legacy exports during migration |
+| V2 utilities | `src/v2/shared/lib` plus reviewed repository-wide public APIs | Only utilities with a concrete Phase-33 consumer and tests; direct platform access forbidden |
 | Server state | TanStack Query v5 | Reserved for a future paid backend; not a local editor store and not added in Phase 33 |
 | Public paid API | Fastify-based TypeScript modular monolith is the current candidate | Research direction only; no API/dependency in Phase 33 |
 | GPU service | Isolated Python worker/container behind a job port | Future paid phase only |
@@ -90,10 +93,9 @@ iterates directly in the codebase instead: upgrade `shadcn/ui` (`components.json
 stock components rather than bespoke ones, and formalize the existing color palette/typography as
 documented Tailwind `@theme` tokens in `src/app/styles/globals.css`.
 
-Design output still lands as ordinary repository files: `docs/design/DESIGN_SYSTEM.md` (tokens,
-component conventions, screens, approval record) and `docs/design/exports/` (before/after
-screenshots as durable evidence) — written directly by whoever implements the phase, not exported
-from a design tool.
+The active design contract is `docs/design/DESIGN_SYSTEM.md` (tokens, component conventions,
+screens, approval record). Phase-30 screenshots/pattern evidence is retained under
+`docs/archive/design-phase-30/exports/`; new active-phase evidence belongs in `docs/audits/`.
 
 ---
 
@@ -289,7 +291,8 @@ device claim, SPEC.md §7.1). Uses the same mocked-worker double as `pnpm e2e`
 not real ONNX inference time. Iteration counts are literal constants in the script (edit them
 directly for a longer/shorter run) — default is enough to see a growth-rate trend, not to make a
 final leak/no-leak call; bump to 100+ when investigating a specific suspected leak. See
-`docs/audits/PHASE_31_T2_MEASUREMENTS.md` for a captured baseline run and how to read the output.
+`docs/archive/audits/phase-31/PHASE_31_T2_MEASUREMENTS.md` for the historical captured baseline run
+and how to read the output.
 
 ---
 

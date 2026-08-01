@@ -97,5 +97,6 @@ build once with a deliberately unreachable `VITE_MODEL_CDN_BASE_URL`, then run t
 smoke and confirm successful inference plus Hugging Face requests.
 
 For Phase 16, also run `pnpm e2e:phase-16-real` on the representative weak and powerful devices
-and record non-image-derived observations in `docs/PHASE_16_DEVICE_MATRIX.md`. The command is
+and record non-image-derived observations in
+`docs/archive/research/PHASE_16_DEVICE_MATRIX.md`. The command is
 host-only and must not be added to Docker or CI.

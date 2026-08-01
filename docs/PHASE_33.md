@@ -15,7 +15,9 @@
 ## Phase Goal
 
 Implement `docs/ARCHITECTURE_V2.md` as one separately reachable, fully tested local slice: choose
-one image → prepare → remove background → preview → export PNG. Prove workflow ownership, artifact
+one image → prepare → remove background → preview → export PNG. Build its presentation and shared
+foundation afresh—including Typography, optimized Image, and SSR-safe environment/runtime
+wrappers—under the hard rules in `docs/FRONTEND_CONVENTIONS.md`. Prove workflow ownership, artifact
 lifetime, worker isolation, and responsiveness on the architect's affected browser/device before
 migrating any other editor capability. Keep the legacy editor available for comparison/rollback.
 
@@ -26,8 +28,9 @@ migrating any other editor capability. Keep the legacy editor available for comp
 ### Other
 
 - [ ] `T1` Freeze the Phase-33 actor hierarchy, commands/events, legal transitions, artifact
-  ownership, processing port, worker protocol, performance marks, and exclusions from
-  `ARCHITECTURE_V2.md`. Record any evidence-driven deviation before implementation — _Depends on:_ —
+  ownership, processing port, worker protocol, shared/config/UI boundaries, performance marks, and
+  exclusions from `ARCHITECTURE_V2.md`. Add a file-by-file `FRONTEND_CONVENTIONS.md` compliance
+  matrix and record any evidence-driven deviation before implementation — _Depends on:_ —
 - [ ] `T2` Baseline the legacy single-image flow on the architect's affected browser/device:
   import event-to-next-paint, long tasks, scroll/control response during model creation/inference,
   stage timings, GPU path, artifact leases, and cancellation. Headless-host evidence alone cannot
@@ -63,12 +66,34 @@ migrating any other editor capability. Keep the legacy editor available for comp
   outside the main interaction path. Model preparation is distinct from document commit. Global
   backpressure must keep page scroll and unrelated controls responsive — _Depends on:_ `R2`
 
+### Shared frontend foundation
+
+- [ ] `S1` Refactor the repository-wide `shared/config` boundary into typed `env.ts` and
+  `runtime.ts`, adapted from `patient_tracker/frontend/app/shared/config`. Only these modules may
+  read `import.meta.env`; server/client values are separated and validated, runtime detection is
+  SSR-safe and dynamically testable, server secrets cannot enter client output, and existing
+  legacy imports remain compatible — _Depends on:_ `T1`
+- [ ] `S2` Add v2 `Typography` and `Image` primitives with public APIs and tests. Typography owns a
+  finite semantic/visual variant registry without confusing heading level and appearance. Image
+  owns typed content/hero/preview/thumbnail presets, intrinsic/aspect/object-fit policy, accessible
+  alt/decorative semantics, and deliberate loading/decoding/fetch-priority defaults; object-URL
+  lifetime remains in `ArtifactRepository` — _Depends on:_ `S1`, `R1`
+- [ ] `S3` Inventory the first slice's cross-cutting needs and establish only consumed, tested
+  wrappers/utilities under v2 `shared/lib` or the existing repository-wide public API: class merge,
+  storage/JSON, router, browser capability, image metadata/decode, object URL, abort/error, and
+  worker access. Record reuse versus rewrite; forbid direct platform access outside the owning
+  wrapper and do not create speculative helpers — _Depends on:_ `S1`, `R1`
+- [ ] `S4` Add unit/component tests for every new shared config/runtime/UI/lib public API,
+  including SSR without `window`, client/server env separation and invalid values, semantic
+  Typography output, Image preset/accessibility/loading behavior, and wrapper failure paths. Assert
+  v2 source contains no forbidden direct platform/env/image/worker access — _Depends on:_ `S2`, `S3`
+
 ### Frontend
 
 - [ ] `F1` Add a noindex, separately reachable bilingual v2 surface using the existing design
-  system. Present only one-image upload, truthful progress, cancel/retry, preview, PNG export, and
-  reset. UI sends commands/subscribes through selectors and owns no worker/run/artifact lifetime —
-  _Depends on:_ `D3`, `R3`
+  system through the new v2 Typography/Image/shared primitives. Present only one-image upload,
+  truthful progress, cancel/retry, preview, PNG export, and reset. UI sends commands/subscribes
+  through selectors and owns no worker/run/artifact lifetime — _Depends on:_ `D3`, `R3`, `S4`
 - [ ] `F2` Distinguish preparing, model loading, queued, processing, cancelling, result, and error.
   Cancel reaches a terminal state; stale work cannot flash; scroll/unrelated controls work during
   heavy stages. Render no Cutout, Enhancements, Background, or batch control — _Depends on:_ `F1`
@@ -109,7 +134,12 @@ src/v2/domain/
 src/v2/application/
 src/v2/runtime-browser/
 src/v2/presentation/
+src/v2/shared/ui/
+src/v2/shared/lib/
 src/v2/testing/
+src/shared/config/env.ts
+src/shared/config/runtime.ts
+src/shared/config/index.ts
 src/pages/editor-v2/
 src/routes/dev.editor-v2.tsx
 messages/ru.json
@@ -128,7 +158,7 @@ duplicate model assets; document that exception before touching legacy source.
 ### Do NOT touch
 
 - Legacy behavior/workspace/Cutout/Manual/Enhancements/Background/batch/public routes, except the
-  narrow pure model/config extraction above
+  narrow pure model/config extraction and backward-compatible shared/config refactor above
 - Accounts, auth, entitlements, billing, payments, databases, storage, queues, server uploads,
   remote processing, Python services, generated backgrounds, or public API
 - Production model family/weights/revisions, CDN manifest, quality mapping, or privacy behavior
@@ -199,6 +229,19 @@ interface ProcessingRun {
 interface ProcessingGateway {
   start(request: ProcessingRequest, signal: AbortSignal): ProcessingRun;
 }
+
+type TypographyVariant =
+  | "display"
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "body"
+  | "body-small"
+  | "caption"
+  | "label"
+  | "code";
+
+type ImagePreset = "content" | "hero" | "preview" | "thumbnail";
 ```
 
 `T1` may refine exact unions, but IDs, revision guard, terminal outcomes, no binary actor state, and
@@ -251,6 +294,8 @@ feat(phase-33): establish editor v2 local vertical slice
 - [ ] Scope completed in dependency order
 - [ ] Automated gates, real-model smoke, and target-device evidence green
 - [ ] Architect verifies the affected browser/device without a reproduced freeze
+- [ ] Architect reviews the domain, shared/config, shared UI/utilities, SSR behavior, and
+  `FRONTEND_CONVENTIONS.md` compliance; every review note is resolved
 - [ ] Architect review notes resolved
 - [ ] Run `/context-update 33`
 - [ ] Commit on `feat/phase-33`; tag `v0.33.0` only after merge

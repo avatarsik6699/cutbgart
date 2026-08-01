@@ -167,7 +167,7 @@ Run `/phase-gate 04` before committing.
 - Automated checks are green
 - All architect review items below are resolved (checked off)
 
-Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
+Use the commands in [docs/STACK.md](../../STACK.md#gate-commands) as the source of truth for:
 - infrastructure / bootstrap — Docker confirmed working in this environment as of 2026-07-10; this
   step should actually run, not be skipped
 - migrations — `n/a`, no database in this project

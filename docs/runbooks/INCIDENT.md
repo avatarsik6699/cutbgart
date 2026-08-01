@@ -61,4 +61,4 @@ minimal content.
 
 Within two business days, record timeline, detection, recovery duration, release digest, aggregate
 impact, contributing controls and owned follow-ups. Any unresolved high-severity observation is
-added unchecked to `docs/PHASE_23.md` Architect Review Notes and blocks phase closure.
+added unchecked to `docs/archive/phases/PHASE_23.md` Architect Review Notes and blocks phase closure.

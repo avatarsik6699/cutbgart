@@ -10,8 +10,9 @@ been implemented.
 
 ## 1. Executive decision
 
-The existing application remains a recoverable legacy implementation. New editor work proceeds as
-a parallel v2 path and migrates one complete user outcome at a time. The first v2 slice is only:
+The existing application remains a recoverable legacy implementation. New editor work—including
+presentation components and shared frontend infrastructure—proceeds as a parallel v2 path and
+migrates one complete user outcome at a time. The first v2 slice is only:
 
 ```text
 choose one image -> prepare -> remove background locally -> preview -> export PNG
@@ -25,6 +26,11 @@ The central architectural rule is **one authoritative document actor per image**
 snapshots and sends commands; it does not coordinate workers, own operation identity, or hold large
 image buffers. Local browser processing and future paid server processing implement the same
 application port but have different privacy, capability, and lifecycle policies.
+
+V2 does not inherit the legacy component tree by default. It builds a small, reviewed UI foundation
+for the first slice—Typography, optimized Image, status/progress composition, and SSR-safe config/
+runtime wrappers—then grows it only from concrete consumers. Every new file follows
+`docs/FRONTEND_CONVENTIONS.md`; architect review is a blocking phase gate.
 
 ## 2. Current system — factual map
 
@@ -315,6 +321,33 @@ interface ProcessingGateway {
 observes server jobs. UI and document actors select a backend through capabilities/entitlements;
 they do not branch on HTTP or model-provider details.
 
+### 5.5 V2 presentation and shared foundation
+
+V2 owns `src/v2/shared/ui` and `src/v2/shared/lib` instead of composing the legacy editor's bespoke
+components. It may reuse stable repository-wide primitives (for example `Button`) only after a
+Phase-33 compliance inventory confirms their API and implementation satisfy
+`FRONTEND_CONVENTIONS.md`. Reuse happens through the module public API; legacy feature hooks and
+state never cross into v2.
+
+The first foundation includes:
+
+- `Typography`: typed semantic element plus a finite visual-variant registry; no page-local
+  recreation of heading/body/caption/label classes;
+- `Image`: typed display presets and safe defaults for `alt`, dimensions/aspect ratio, object fit,
+  `loading`, `decoding`, and fetch priority. It renders an already leased URL and never creates or
+  revokes blob URLs itself;
+- SSR-safe `env.ts` and `runtime.ts`, adapted from
+  `patient_tracker/frontend/app/shared/config`: typed client/server namespaces, validation and URL
+  normalization in config, and dynamic server/client/window detection in runtime;
+- public-indexed browser/storage/router/image utilities only where the first slice has a real
+  consumer and test. Direct `window`, `localStorage`, raw persisted JSON, `import.meta.env`, worker,
+  object-URL, and image-decode access outside the owning wrapper is forbidden.
+
+`src/shared/config` remains the single repository-wide environment boundary because two modules
+reading `import.meta.env` would create divergent build contracts. Phase 33 may refactor it into the
+typed `env.ts` + `runtime.ts` shape with backward-compatible legacy exports; v2 consumes only the
+new namespaced API. Secrets are never exposed through client config.
+
 ## 6. Stack decision
 
 ### 6.1 Keep
@@ -338,6 +371,8 @@ they do not branch on HTTP or model-provider details.
 | framework-free domain/application modules | commands, events, reducers, ports, policies |
 | unified typed worker protocol | correlation, cancellation, transfer ownership, terminal outcomes |
 | explicit artifact repository | binary ownership, memory budget, URLs, cleanup |
+| v2 Typography/Image primitives | consistent semantics, rendering presets, and image-loading policy |
+| typed `env.ts` + `runtime.ts` boundary | validated environment access and SSR/browser capability checks |
 | browser performance harness | long tasks, interaction latency, stage timing, resource leases |
 
 ### 6.3 Reserve for paid backend; do not implement in Phase 33
@@ -409,7 +444,10 @@ src/v2/domain/             # pure entities, value objects, commands, events, inv
 src/v2/application/        # actors/use cases, ports, policies, selectors
 src/v2/runtime-browser/    # worker pool, local processing adapter, artifact repository adapters
 src/v2/presentation/       # React bindings and v2 UI composition
+src/v2/shared/ui/          # v2 Typography, Image, and reviewed generic primitives
+src/v2/shared/lib/         # consumer-driven browser/image/general utilities
 src/v2/testing/            # deterministic fakes, model-based test helpers
+src/shared/config/         # one repository-wide SSR-safe env/runtime boundary
 ```
 
 Legacy FSD slices may be called through adapters, but v2 modules must not import legacy hooks or use
@@ -421,6 +459,8 @@ to workspace packages without changing their public contracts.
 ### Phase 33 — v2 foundation and first vertical slice
 
 - Freeze the v2 commands/events/invariants and actor hierarchy.
+- Establish the reviewed v2 shared UI/util/config foundation, including Typography, Image, and
+  typed SSR-safe environment/runtime access.
 - Add artifact repository and unified worker protocol with deterministic fakes.
 - Implement a separately reachable v2 single-image flow: import, local automatic removal, preview,
   PNG export.

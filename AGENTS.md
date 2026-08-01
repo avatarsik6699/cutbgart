@@ -72,8 +72,12 @@ Rules:
 
 Keep lightweight long-lived project memory in `docs/`:
 
-- `docs/STATE.md` § Project Log — ADR-style technical decisions (`Type: decision`) alongside spec
-  changes, phase completions, feedback, and rollbacks
+- `docs/README.md` — active documentation index; start here and do not treat archived material as
+  current scope
+
+- `docs/STATE.md` § Current decisions and project log — concise ADR-style current memory. Before an
+  approved compaction, preserve the complete prior file under `docs/archive/contracts/`; never
+  remove the only copy of an entry
 - `docs/KNOWN_GOTCHAS.md` — recurring pitfalls, symptoms, and fixes
 
 Consult and update these files as part of normal development.
@@ -148,5 +152,6 @@ exists only for what git can't tell you.
 | `docs/SPEC.md` | Strategic product and system intent | Rarely; architect-approved |
 | `docs/PHASE_XX.md` | Human-facing phase contract: scope, files, contracts, gate checks, review notes, implementation notes | Per phase |
 | `docs/STACK.md` | Stack-specific commands, layout, and conventions | When tooling changes |
-| `docs/STATE.md` | Phase tracker, current technical contract, and append-only project log (spec changes, phase completions, decisions, feedback, rollbacks) | During phase lifecycle |
+| `docs/STATE.md` | Compact phase tracker, current technical contract, blockers, and current decisions; full rotated history lives in `docs/archive/contracts/` | During phase lifecycle |
 | `docs/KNOWN_GOTCHAS.md` | Recurring pitfall log | When new traps are discovered |
+| `docs/archive/` | Immutable contract snapshots, historical phases, superseded plans, and audit/research/legal/design evidence; never active scope by itself | Append/move only during approved cleanup |

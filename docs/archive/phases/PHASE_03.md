@@ -138,7 +138,7 @@ Run `/phase-gate 03` before committing.
 - Automated checks are green
 - All architect review items below are resolved (checked off)
 
-Use the commands in [docs/STACK.md](./STACK.md#gate-commands) as the source of truth for:
+Use the commands in [docs/STACK.md](../../STACK.md#gate-commands) as the source of truth for:
 - infrastructure / bootstrap
 - migrations — `n/a`, no database in this project
 - backend / unit tests — `n/a`, folded into frontend unit tests (single TS/React codebase)

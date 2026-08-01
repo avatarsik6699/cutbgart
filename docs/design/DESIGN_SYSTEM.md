@@ -1,6 +1,6 @@
 # Design System — BG Remove App
 
-Living record for Phase 30 (`docs/PHASE_30.md`). Sections are filled in as their Scope task
+Living record for Phase 30 (`docs/archive/phases/PHASE_30.md`). Sections are filled in as their Scope task
 completes; unfinished sections are marked `_Pending T[N]_`. No external design tool — see
 `docs/STACK.md` § Design system.
 
@@ -37,7 +37,7 @@ through the redesign.
 
 ## 2. Design Tokens (`T3`)
 
-No color values changed — SPEC.md and `docs/PHASE_30.md` both require the existing palette stay
+No color values changed — SPEC.md and `docs/archive/phases/PHASE_30.md` both require the existing palette stay
 unchanged unless the architect explicitly approves a change. This section documents the tokens as
 formalized in `src/app/styles/globals.css`, which is now the source-of-truth comment block.
 
@@ -210,7 +210,8 @@ duplicate or late-adoption adapter to remove.**
   shared `commitProcessedImage`/`undoEdit`/`redoEdit` implementation
   (`features/editor-history/model/editor-history.ts`) — parallel paths, not duplicates.
 - No `adapter`/`bridge`/`compat`/`legacy` marker exists anywhere in the document/history/artifact
-  code. The one Phase-26 "temporary adapter" mentioned in `docs/PHASE_26.md` (panel-slot wiring
+  code. The one Phase-26 "temporary adapter" mentioned in
+  `docs/archive/phases/PHASE_26.md` (panel-slot wiring
   during the shell migration) was already fully cleaned up before Phase 30 — no trace remains in
   `src/widgets/tool-workspace`.
 
@@ -363,7 +364,7 @@ and the final reset zeroes everything. `pnpm vitest run` (347/347), `pnpm tsc --
 
 ## 6. Accessibility Evidence (`T16`)
 
-Checklist from `docs/PHASE_30.md` `T16`, each verified against current code/tests:
+Checklist from `docs/archive/phases/PHASE_30.md` `T16`, each verified against current code/tests:
 
 - **Stable stage/panel geometry**: `--spacing-stage`/`--spacing-stage-lg` (§2) keep `EditorStage` and
   `ToolPanelSlot` at the same fixed footprint regardless of tool/content — unchanged by this phase's
@@ -408,7 +409,7 @@ warning in `shared/ui/button.tsx`), and the full deterministic `pnpm e2e` result
 
 ## 7. Before/After Screenshots
 
-_Pending — see `docs/design/exports/`._
+_Historical Phase-30 evidence: `docs/archive/design-phase-30/exports/`._
 
 ## 8. Architect Approval
 
