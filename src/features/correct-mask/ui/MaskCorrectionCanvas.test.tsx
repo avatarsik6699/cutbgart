@@ -275,7 +275,7 @@ describe("MaskCorrectionCanvas", () => {
     expect(canvas).toBeDefined();
   });
 
-  it("pans with wheel and Shift+wheel in source-pixel space", async () => {
+  it("leaves ordinary wheel and Shift+wheel to page scrolling", async () => {
     const onPanBySourcePixels = vi.fn();
     const { editor } = renderCanvas({
       viewport: { zoom: 2, offsetX: 0, offsetY: 0 },
@@ -286,8 +286,7 @@ describe("MaskCorrectionCanvas", () => {
     fireEvent.wheel(editor, { deltaX: 12, deltaY: 20 });
     fireEvent.wheel(editor, { deltaY: 30, shiftKey: true });
 
-    expect(onPanBySourcePixels).toHaveBeenNthCalledWith(1, 6, 10);
-    expect(onPanBySourcePixels).toHaveBeenNthCalledWith(2, 15, 0);
+    expect(onPanBySourcePixels).not.toHaveBeenCalled();
   });
 
   it("pans with Space+drag instead of painting", async () => {

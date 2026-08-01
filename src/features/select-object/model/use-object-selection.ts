@@ -40,6 +40,7 @@ import type {
   GuidedBox,
   GuidedBrushMode,
   GuidedBrushSession,
+  GuidedBrushStroke,
   GuidedBrushStatus,
   GuidedPoint,
   ObjectSelectionStatus,
@@ -123,6 +124,7 @@ export function useObjectSelection(workerFactory = createDefaultSelectObjectWork
           fail(message.message);
           return;
         }
+        if (message.type === "guided-candidates") return;
         const current = stateRef.current.session;
         if (!current) return;
         const nextSession = setLayerCandidates(
@@ -409,6 +411,45 @@ const initialBrushState: GuidedBrushSelectionState = {
   baseMatteRevision: null,
 };
 
+function createLightweightGuidedPoints(
+  strokes: readonly GuidedBrushStroke[],
+): GuidedPoint[] {
+  const pointsByMode = {
+    keep: strokes
+      .filter((stroke) => stroke.mode === "keep")
+      .flatMap((stroke) => stroke.points),
+    remove: strokes
+      .filter((stroke) => stroke.mode === "remove")
+      .flatMap((stroke) => stroke.points),
+  };
+  function sample(
+    mode: GuidedBrushMode,
+    points: readonly { x: number; y: number }[],
+    count: number,
+  ): GuidedPoint[] {
+    return Array.from({ length: Math.min(points.length, count) }, (_, index) => {
+      const sourceIndex = Math.min(
+        points.length - 1,
+        Math.floor(((index + 0.5) * points.length) / Math.min(points.length, count)),
+      );
+      const point = points[sourceIndex]!;
+      return {
+        id: `brush-preview-${mode}-${String(index)}`,
+        x: point.x,
+        y: point.y,
+        label: mode === "keep" ? 1 : 0,
+      };
+    });
+  }
+  const hasBoth = pointsByMode.keep.length > 0 && pointsByMode.remove.length > 0;
+  const keepLimit = hasBoth ? 16 : 32;
+  const removeLimit = hasBoth ? 16 : 32;
+  return [
+    ...sample("keep", pointsByMode.keep, keepLimit),
+    ...sample("remove", pointsByMode.remove, removeLimit),
+  ];
+}
+
 /**
  * Phase-21 primary guided flow. Phase-17's `useObjectSelection` remains above
  * as compatibility source, while this orchestrator makes inference an
@@ -427,6 +468,7 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingApplyRef = useRef<{
     revision: number;
+    promise: Promise<AlphaMatte>;
     resolve: (matte: AlphaMatte) => void;
     reject: (error: Error) => void;
   } | null>(null);
@@ -541,23 +583,32 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
           return;
         }
         try {
-          const consolidated = consolidateGuidedBrushStrokes(
-            session.strokes,
-            session.source.width,
-            session.source.height,
-          );
-          const editRegion = consolidated.editRegion;
+          const fallbackConsolidated =
+            message.type === "candidates"
+              ? consolidateGuidedBrushStrokes(
+                  session.strokes,
+                  session.source.width,
+                  session.source.height,
+                )
+              : null;
+          const editRegion =
+            message.type === "guided-candidates"
+              ? message.editRegion
+              : fallbackConsolidated?.editRegion;
           if (!editRegion) {
             fail("Add a brush marking before recomputing", "marking-required");
             return;
           }
-          const rankedCandidates = rankGuidedBrushCandidates(
-            message.candidates,
-            consolidated.constraints,
-            editRegion,
-            session.baseMatte,
-            consolidated.influence,
-          );
+          const rankedCandidates =
+            message.type === "guided-candidates"
+              ? message.candidates
+              : rankGuidedBrushCandidates(
+                  message.candidates,
+                  fallbackConsolidated!.constraints,
+                  editRegion,
+                  session.baseMatte,
+                  fallbackConsolidated!.influence,
+                );
           if (!rankedCandidates.length) {
             fail("SlimSAM returned no usable mask candidates");
             return;
@@ -670,6 +721,69 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
     [commitState, finishRelease, post],
   );
 
+  const hydrate = useCallback(
+    (source: SourceImage, baseMatte: AlphaMatte | null = null) => {
+      if (releaseWorkerRef.current) finishRelease(releaseWorkerRef.current);
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      revisionRef.current += 1;
+      const status: GuidedBrushStatus = baseMatte ? "preview" : "ready";
+      const session = {
+        ...createGuidedBrushSession(source, baseMatte),
+        revision: revisionRef.current,
+        computedRevision: baseMatte ? revisionRef.current : null,
+        status,
+      };
+      commitState({
+        status,
+        session,
+        matte: baseMatte,
+        error: null,
+        errorCode: null,
+        progress: null,
+        lastPromptCount: null,
+        lastPromptKeepCount: null,
+        lastPromptRemoveCount: null,
+        baseMatteRevision: baseMatte ? session.revision : null,
+      });
+    },
+    [commitState, finishRelease],
+  );
+
+  const replaceBase = useCallback(
+    (baseMatte: AlphaMatte | null) => {
+      const current = stateRef.current;
+      const currentSession = current.session;
+      if (!currentSession) return;
+      pendingApplyRef.current?.reject(
+        new Error("Cutout apply was superseded by document history"),
+      );
+      pendingApplyRef.current = null;
+      revisionRef.current += 1;
+      const session = {
+        ...createGuidedBrushSession(currentSession.source, baseMatte),
+        brushRadius: currentSession.brushRadius,
+        revision: revisionRef.current,
+        computedRevision: baseMatte ? revisionRef.current : null,
+        status: baseMatte ? ("preview" as const) : ("ready" as const),
+      };
+      commitState({
+        ...current,
+        status: session.status,
+        session,
+        matte: baseMatte,
+        error: null,
+        errorCode: null,
+        progress: null,
+        lastPromptCount: null,
+        lastPromptKeepCount: null,
+        lastPromptRemoveCount: null,
+        baseMatteRevision: baseMatte ? session.revision : null,
+      });
+    },
+    [commitState],
+  );
+
   const updateMarkings = useCallback(
     (update: (session: GuidedBrushSession) => GuidedBrushSession) => {
       const current = stateRef.current;
@@ -710,8 +824,16 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
           radius: stroke.radius ?? current.brushRadius,
         }),
       );
+      const updatedSession = stateRef.current.session;
+      if (updatedSession && !workerRef.current) {
+        post({
+          type: "encode",
+          revision: updatedSession.revision,
+          source: updatedSession.source,
+        });
+      }
     },
-    [updateMarkings],
+    [post, updateMarkings],
   );
 
   const setBrushRadius = useCallback(
@@ -732,17 +854,14 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
   );
 
   const apply = useCallback((): Promise<AlphaMatte> => {
+    const pendingApply = pendingApplyRef.current;
+    if (pendingApply) return pendingApply.promise;
     const current = stateRef.current;
     const session = current.session;
     if (!session || current.status === "predicting") {
       return Promise.reject(new Error("No visible Cutout change is ready to apply"));
     }
-    const consolidated = consolidateGuidedBrushStrokes(
-      session.strokes,
-      session.source.width,
-      session.source.height,
-    );
-    if (!consolidated.points.length || !consolidated.editRegion) {
+    if (!session.strokes.length) {
       if (
         session.baseMatte &&
         session.strokes.length === 0 &&
@@ -767,7 +886,7 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
       }
       return Promise.reject(new Error("Add a brush marking before applying"));
     }
-    if (!session.baseMatte && consolidated.keepCount === 0) {
+    if (!session.baseMatte && !session.strokes.some((stroke) => stroke.mode === "keep")) {
       fail(
         "Add at least one Keep marking before applying a direct selection",
         "keep-required",
@@ -776,36 +895,50 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
         new Error("Add at least one Keep marking before applying a direct selection"),
       );
     }
-    return new Promise<AlphaMatte>((resolve, reject) => {
-      pendingApplyRef.current = {
-        revision: session.revision,
-        resolve,
-        reject,
-      };
-      const predicting = { ...session, status: "predicting" as const };
-      commitState({
-        ...current,
-        status: "predicting",
-        session: predicting,
-        error: null,
-        errorCode: null,
-        progress: null,
-        lastPromptCount: consolidated.points.length,
-        lastPromptKeepCount: consolidated.points.filter((point) => point.label === 1)
-          .length,
-        lastPromptRemoveCount: consolidated.points.filter((point) => point.label === 0)
-          .length,
-      });
-      post({
-        type: "prompt",
-        prompt: {
-          revision: session.revision,
-          points: consolidated.points,
-          box: null,
-          previousMask: null,
-        },
-      });
+    let resolveApply!: (matte: AlphaMatte) => void;
+    let rejectApply!: (error: Error) => void;
+    const promise = new Promise<AlphaMatte>((resolve, reject) => {
+      resolveApply = resolve;
+      rejectApply = reject;
     });
+    pendingApplyRef.current = {
+      revision: session.revision,
+      promise,
+      resolve: resolveApply,
+      reject: rejectApply,
+    };
+    const predicting = { ...session, status: "predicting" as const };
+    const promptPoints = createLightweightGuidedPoints(session.strokes);
+    commitState({
+      ...current,
+      status: "predicting",
+      session: predicting,
+      error: null,
+      errorCode: null,
+      progress: null,
+      lastPromptCount: promptPoints.length,
+      lastPromptKeepCount: promptPoints.filter((point) => point.label === 1).length,
+      lastPromptRemoveCount: promptPoints.filter((point) => point.label === 0).length,
+    });
+    if (!workerRef.current) {
+      post({ type: "encode", revision: session.revision, source: session.source });
+    }
+    post({
+      type: "prompt",
+      prompt: {
+        revision: session.revision,
+        points: promptPoints,
+        box: null,
+        previousMask: null,
+      },
+      guided: {
+        strokes: session.strokes,
+        width: session.source.width,
+        height: session.source.height,
+        baseMatte: session.baseMatte,
+      },
+    });
+    return promise;
   }, [commitState, fail, post]);
 
   const cancelDraft = useCallback(() => {
@@ -859,12 +992,7 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
     const current = stateRef.current;
     const session = current.session;
     if (!session || current.status === "predicting") return;
-    const consolidated = consolidateGuidedBrushStrokes(
-      session.strokes,
-      session.source.width,
-      session.source.height,
-    );
-    if (!consolidated.points.length || !consolidated.editRegion) {
+    if (!session.strokes.length) {
       if (session.baseMatte && session.strokes.length === 0) {
         const restored = restoreGuidedBrushBase(session);
         revisionRef.current = restored.revision;
@@ -886,7 +1014,7 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
       fail("Add a brush marking before recomputing", "marking-required");
       return;
     }
-    if (!session.baseMatte && consolidated.keepCount === 0) {
+    if (!session.baseMatte && !session.strokes.some((stroke) => stroke.mode === "keep")) {
       fail(
         "Add at least one Keep marking before recomputing a direct selection",
         "keep-required",
@@ -894,6 +1022,7 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
       return;
     }
     const predicting = { ...session, status: "predicting" as const };
+    const promptPoints = createLightweightGuidedPoints(session.strokes);
     commitState({
       ...current,
       status: "predicting",
@@ -901,19 +1030,26 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
       error: null,
       errorCode: null,
       progress: null,
-      lastPromptCount: consolidated.points.length,
-      lastPromptKeepCount: consolidated.points.filter((point) => point.label === 1)
-        .length,
-      lastPromptRemoveCount: consolidated.points.filter((point) => point.label === 0)
-        .length,
+      lastPromptCount: promptPoints.length,
+      lastPromptKeepCount: promptPoints.filter((point) => point.label === 1).length,
+      lastPromptRemoveCount: promptPoints.filter((point) => point.label === 0).length,
     });
+    if (!workerRef.current) {
+      post({ type: "encode", revision: session.revision, source: session.source });
+    }
     post({
       type: "prompt",
       prompt: {
         revision: session.revision,
-        points: consolidated.points,
+        points: promptPoints,
         box: null,
         previousMask: null,
+      },
+      guided: {
+        strokes: session.strokes,
+        width: session.source.width,
+        height: session.source.height,
+        baseMatte: session.baseMatte,
       },
     });
   }, [commitState, fail, post]);
@@ -1006,6 +1142,8 @@ export function useGuidedBrushSelection(workerFactory = createDefaultSelectObjec
     matteRef,
     baseMatteRef,
     start,
+    hydrate,
+    replaceBase,
     addStroke,
     setBrushRadius,
     undo,

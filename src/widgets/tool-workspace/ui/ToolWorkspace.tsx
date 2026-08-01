@@ -120,6 +120,8 @@ export function ToolWorkspace({
     handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
+    synchronizeSingleGuidedTarget,
+    synchronizeBatchGuidedTarget,
     applySingleEnhancements,
     applyBatchEnhancements,
     cancelEnhancements,
@@ -146,6 +148,9 @@ export function ToolWorkspace({
     activeEditDocument?.document.id ??
     selectedBatchItem?.id ??
     (state.status === "result" || state.status === "correcting" ? "single-result" : null);
+  const activeDocumentVersion = activeDocumentId
+    ? `${activeDocumentId}:${String(activeEditDocument?.document.revision ?? 0)}`
+    : null;
   const documentUiState = useDocumentUiState(activeDocumentId);
   const [magicIntent, setMagicIntent] = useState<CutoutIntent>("keep");
   const [magicPreviewKey, setMagicPreviewKey] = useState(0);
@@ -222,26 +227,34 @@ export function ToolWorkspace({
   });
   useEffect(() => {
     if (
-      !activeDocumentId ||
+      !activeDocumentVersion ||
       documentUiState.activeTool !== "cutout" ||
       documentUiState.cutoutMode !== "magic" ||
-      guided.state.session ||
       extractingMatte ||
-      initializedMagicDocumentRef.current === activeDocumentId
+      initializedMagicDocumentRef.current === activeDocumentVersion
     )
       return;
+    initializedMagicDocumentRef.current = activeDocumentVersion;
+    if (guided.state.session) {
+      if (selectedBatchItem?.processedImage && selectedBatchItem.editDocument)
+        synchronizeBatchGuidedTarget(selectedBatchItem);
+      else if (
+        (state.status === "result" || state.status === "correcting") &&
+        activeEditDocument
+      )
+        synchronizeSingleGuidedTarget(state.result, activeEditDocument);
+      return;
+    }
     if (selectedBatchItem?.processedImage && selectedBatchItem.status === "result") {
-      initializedMagicDocumentRef.current = activeDocumentId;
       handleGuideBatchResult();
     } else if (state.status === "result") {
-      initializedMagicDocumentRef.current = activeDocumentId;
       handleGuideAutomaticResult();
     }
     // The controller handlers intentionally capture the current document
     // target; document identity is the effect's lifecycle key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeDocumentId,
+    activeDocumentVersion,
     documentUiState.activeTool,
     documentUiState.cutoutMode,
     extractingMatte,
@@ -252,21 +265,20 @@ export function ToolWorkspace({
 
   useEffect(() => {
     if (
-      !activeDocumentId ||
+      !activeDocumentVersion ||
       documentUiState.activeTool !== "cutout" ||
       documentUiState.cutoutMode !== "manual" ||
-      originalMatte ||
       extractingMatte ||
-      initializedManualDocumentRef.current === activeDocumentId
+      initializedManualDocumentRef.current === activeDocumentVersion
     )
       return;
-    initializedManualDocumentRef.current = activeDocumentId;
+    initializedManualDocumentRef.current = activeDocumentVersion;
     if (selectedBatchItem?.processedImage) handleBatchEditMask();
-    else if (state.status === "result") handleEditMask();
+    else if (state.status === "result" || state.status === "correcting") handleEditMask();
     // As above, the active document identity owns this transition.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeDocumentId,
+    activeDocumentVersion,
     documentUiState.activeTool,
     documentUiState.cutoutMode,
     extractingMatte,
@@ -293,6 +305,11 @@ export function ToolWorkspace({
       handleCancelCorrection();
     }
     documentUiState.setCutoutMode(mode);
+  }
+
+  function cancelMagicDraft(): void {
+    guided.cancelDraft();
+    setCorrectionViewAnnouncement(m.cutoutDraftCancelled());
   }
 
   function downloadBatchItem(item: BatchItem) {
@@ -326,11 +343,6 @@ export function ToolWorkspace({
 
   function cancelEnhancementDraft() {
     cancelEnhancements();
-    if (!activeDocumentId) return;
-    setEnhancementDraftByDocument((current) => ({
-      ...current,
-      [activeDocumentId]: defaultEnhancementDraft,
-    }));
   }
 
   function markEnhancementDraftApplied() {
@@ -461,7 +473,7 @@ export function ToolWorkspace({
         onBrushRadiusChange={guided.setBrushRadius}
         onBrushSizeInteraction={() => setMagicPreviewKey((current) => current + 1)}
         onApply={() => void handleApplyGuided()}
-        onCancel={guided.cancelDraft}
+        onCancel={cancelMagicDraft}
         onRetry={guided.retry}
       />
     ) : extractingMatte ? (
@@ -912,7 +924,9 @@ export function ToolWorkspace({
             <div className="[grid-area:surface]">
               <EditorStage
                 documentId={activeDocumentId ?? "single-correction"}
-                overlaySlot={canvasViewControls}
+                overlaySlot={
+                  documentUiState.activeTool === "cutout" ? canvasViewControls : undefined
+                }
               >
                 <PersistentPreviewLayers
                   activeLayer={
@@ -996,7 +1010,9 @@ export function ToolWorkspace({
             <div className="[grid-area:surface]">
               <EditorStage
                 documentId={activeDocumentId ?? "batch-correction"}
-                overlaySlot={canvasViewControls}
+                overlaySlot={
+                  documentUiState.activeTool === "cutout" ? canvasViewControls : undefined
+                }
               >
                 <PersistentPreviewLayers
                   activeLayer={
@@ -1181,9 +1197,7 @@ export function ToolWorkspace({
                     failed: batch.snapshot.failedCount,
                   })
                 : describeState(state, uploadError)}
-          {state.status === "correcting" && correctionViewAnnouncement
-            ? `. ${correctionViewAnnouncement}.`
-            : ""}
+          {correctionViewAnnouncement ? `. ${correctionViewAnnouncement}.` : ""}
         </div>
 
         {showEmptyComposition && emptyIntroSlot && (

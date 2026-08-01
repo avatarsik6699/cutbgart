@@ -16,6 +16,9 @@ class FakeWorker extends EventTarget {
   emit(data: unknown) {
     this.dispatchEvent(new MessageEvent("message", { data }));
   }
+  crash() {
+    this.dispatchEvent(new ErrorEvent("error", { message: "batch worker crashed" }));
+  }
 }
 
 const source = {
@@ -145,6 +148,96 @@ describe("useBatchProcessing", () => {
     expect(result.current.session.selectedItemId).toBeNull();
   });
 
+  it("ignores a stale process result after that item starts a retry run", async () => {
+    const worker = new FakeWorker();
+    const hook = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+    act(() => hook.result.current.enqueue([{ fileName: "retry.jpg", source }]));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        dtype: "mock",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        1,
+      ),
+    );
+    const staleRequest = worker.posted.find((message) => message.type === "process")!;
+    const itemId = hook.result.current.session.items[0]!.id;
+    act(() => hook.result.current.retryItem(itemId));
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: staleRequest.requestId,
+        result: new Blob(["stale"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+      }),
+    );
+
+    expect(hook.result.current.session.items[0]?.status).not.toBe("result");
+    hook.unmount();
+  });
+
+  it("terminalizes active items when the batch worker crashes", async () => {
+    const worker = new FakeWorker();
+    const hook = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+    act(() => hook.result.current.enqueue([{ fileName: "active.jpg", source }]));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+
+    act(() => worker.crash());
+
+    await waitFor(() =>
+      expect(hook.result.current.session.items[0]?.status).toBe("error"),
+    );
+    hook.unmount();
+  });
+
+  it("rejects pending auxiliary work on unmount", async () => {
+    const worker = new FakeWorker();
+    const hook = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+    const image = {
+      source,
+      result: new Blob(["result"]),
+      qualityMode: "fast" as const,
+      alphaMatte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+    };
+    act(() => hook.result.current.enqueue([{ fileName: "auxiliary.jpg", source }]));
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    const pending = hook.result.current.recomposite(image, image.alphaMatte);
+    hook.unmount();
+
+    await expect(pending).rejects.toThrow(/disposed|unmounted|cancelled/i);
+  });
+
   it.each([
     ["wasm", 1],
     ["webgpu", 2],
@@ -204,6 +297,120 @@ describe("useBatchProcessing", () => {
       expect(result.current.snapshot.activeCount).toBeLessThanOrEqual(limit);
     },
   );
+
+  it("isolates add, failure detail, and retry while preserving completed siblings", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useBatchProcessing({
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        workerFactory: () => worker as unknown as Worker,
+      }),
+    );
+    act(() =>
+      result.current.enqueue([
+        { fileName: "first.jpg", source },
+        { fileName: "second.jpg", source: { ...source, blob: new Blob(["second"]) } },
+      ]),
+    );
+    await waitFor(() =>
+      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    );
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "fast",
+        inferencePath: "wasm",
+        dtype: "mock",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        1,
+      ),
+    );
+    const firstRequest = worker.posted.find((message) => message.type === "process")!;
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: firstRequest.requestId,
+        result: new Blob(["first-result"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        2,
+      ),
+    );
+    const firstItem = result.current.session.items[0]!;
+    const firstScope = firstItem.editDocument;
+    act(() =>
+      result.current.enqueue([
+        { fileName: "added.jpg", source: { ...source, blob: new Blob(["added"]) } },
+      ]),
+    );
+    expect(result.current.session.items).toHaveLength(3);
+    const secondRequest = worker.posted.filter(
+      (message) => message.type === "process",
+    )[1]!;
+    act(() =>
+      worker.emit({
+        type: "error",
+        requestId: secondRequest.requestId,
+        code: "processing-failed",
+        message: "/private/path/secret-image.jpg exploded",
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        3,
+      ),
+    );
+    const failed = result.current.session.items[1]!;
+    expect(failed.error).toMatchObject({
+      code: "processing-failed",
+      retryable: true,
+    });
+    expect(JSON.stringify(failed.error)).not.toContain("private/path");
+    expect(result.current.session.items[0]?.editDocument).toBe(firstScope);
+
+    act(() => result.current.retryItem(failed.id));
+    const addedRequest = worker.posted.filter(
+      (message) => message.type === "process",
+    )[2]!;
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: addedRequest.requestId,
+        result: new Blob(["added-result"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        4,
+      ),
+    );
+    const retryRequest = worker.posted.filter(
+      (message) => message.type === "process",
+    )[3]!;
+    expect(retryRequest.requestId).not.toBe(secondRequest.requestId);
+    act(() =>
+      worker.emit({
+        type: "process-result",
+        requestId: retryRequest.requestId,
+        result: new Blob(["retry-result"]),
+        matte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+        durationMs: 1,
+      }),
+    );
+    await waitFor(() => expect(result.current.snapshot.completedCount).toBe(3));
+    expect(result.current.snapshot.failedCount).toBe(0);
+    expect(result.current.session.items[0]?.editDocument).toBe(firstScope);
+  });
 
   it("owns and releases independent edit documents per completed batch item", async () => {
     const worker = new FakeWorker();

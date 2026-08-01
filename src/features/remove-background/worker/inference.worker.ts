@@ -1,13 +1,15 @@
 import { env, pipeline, type ImageSegmentationPipeline } from "@huggingface/transformers";
 
 import type {
-  AlphaMatte,
   AutomaticModelMode,
-  BackgroundFill,
+  ExtractAlphaMatteRequest,
   InferencePath,
-  ProcessedImage,
+  InferenceWorkerRequest as WorkerRequest,
+  InferenceWorkerResponse as WorkerResponse,
+  LoadModelRequest,
+  ProcessRequest,
   QualityMode,
-  SourceImage,
+  RecompositeRequest,
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
 import {
@@ -26,13 +28,13 @@ import { getProductionModel, normalizeModelMode } from "../model/model-info";
 // `self` types as `Window` — whose `postMessage` overloads don't match a
 // worker's. Scope to exactly the two members used here instead of pulling in
 // the `WebWorker` lib, which would conflict with `DOM`'s duplicate globals.
-interface WorkerScope {
+type WorkerScope = {
   postMessage(message: unknown, transfer?: Transferable[]): void;
   addEventListener(
     type: "message",
     listener: (event: MessageEvent<WorkerRequest>) => void,
   ): void;
-}
+};
 const workerScope = globalThis as unknown as WorkerScope;
 
 // Mandatory — otherwise ONNX Runtime Web's WASM binaries re-download on every
@@ -81,139 +83,10 @@ const modelSourceLoader = createModelSourceLoader({
 // `_lite`/full files used to provide. `MODEL_ID`/`DTYPES` live in
 // `../model/model-info` (not here) so the UI can display them too.
 
-export interface LoadModelRequest {
-  type: "load-model";
-  qualityMode: QualityMode;
-  inferencePath: InferencePath;
-}
-
-export interface ProcessRequest {
-  type: "process";
-  requestId: string;
-  qualityMode: QualityMode;
-  inferencePath: InferencePath;
-  source: SourceImage;
-}
-
-export interface ExtractAlphaMatteRequest {
-  type: "extract-alpha-matte";
-  requestId: string;
-  result: Blob;
-}
-
-export interface RecompositeRequest {
-  type: "recomposite";
-  requestId: string;
-  image: ProcessedImage;
-  matte: AlphaMatte;
-  backgroundFill?: BackgroundFill;
-}
-
-export interface DisposeRequest {
-  type: "dispose";
-  requestId: string;
-}
-
-export type WorkerRequest =
-  | LoadModelRequest
-  | ProcessRequest
-  | ExtractAlphaMatteRequest
-  | RecompositeRequest
-  | DisposeRequest;
-
-export interface ModelProgressResponse {
-  type: "model-progress";
-  qualityMode: QualityMode;
-  percent: number;
-  loaded: number;
-  total: number;
-}
-
-// Granular per-file loading events (initiate/download/done — the aggregate
-// download percent already has its own `ModelProgressResponse` channel).
-// Purely informational, for the UI's optional log panel.
-export interface WorkerLogResponse {
-  type: "log";
-  qualityMode: QualityMode;
-  message: string;
-}
-
-export interface ModelReadyResponse {
-  type: "model-ready";
-  qualityMode: QualityMode;
-  inferencePath: InferencePath;
-  dtype: string;
-}
-
-export interface FallbackToWasmResponse {
-  type: "fallback-to-wasm";
-  qualityMode: QualityMode;
-}
-
-export interface FallbackToIsnetResponse {
-  type: "fallback-to-isnet";
-  qualityMode: QualityMode;
-  reason: "webgpu-unavailable" | "model-failed" | "device-out-of-memory";
-}
-
-export interface ProcessResultResponse {
-  type: "process-result";
-  requestId: string;
-  result: Blob;
-  matte: AlphaMatte;
-  durationMs: number;
-  actualMode?: AutomaticModelMode;
-}
-
-export interface AlphaMatteResultResponse {
-  type: "alpha-matte-result";
-  requestId: string;
-  matte: AlphaMatte;
-  durationMs: number;
-}
-
-export interface RecompositeResultResponse {
-  type: "recomposite-result";
-  requestId: string;
-  result: ProcessedImage;
-  durationMs: number;
-}
-
-export interface DisposedResponse {
-  type: "disposed";
-  requestId: string;
-}
-
-export type WorkerErrorCode =
-  | "model-load-failed"
-  | "device-out-of-memory"
-  | "processing-failed"
-  | "compositing-failed";
-
-export interface WorkerErrorResponse {
-  type: "error";
-  code: WorkerErrorCode;
-  message: string;
-  requestId?: string;
-  qualityMode?: QualityMode;
-}
-
-export type WorkerResponse =
-  | ModelProgressResponse
-  | WorkerLogResponse
-  | ModelReadyResponse
-  | FallbackToWasmResponse
-  | FallbackToIsnetResponse
-  | ProcessResultResponse
-  | AlphaMatteResultResponse
-  | RecompositeResultResponse
-  | DisposedResponse
-  | WorkerErrorResponse;
-
-interface ActiveSegmenter {
+type ActiveSegmenter = {
   key: string;
   segmenter: ImageSegmentationPipeline;
-}
+};
 
 // One automatic ONNX session at a time. Repeated work in the same mode is
 // warm; switching awaits disposal before constructing the next session.
@@ -235,6 +108,7 @@ async function disposeActiveSegmenter(): Promise<void> {
 async function loadSegmenter(
   qualityMode: QualityMode,
   inferencePath: InferencePath,
+  requestId: string,
 ): Promise<ImageSegmentationPipeline> {
   const profile = getProductionModel(qualityMode);
   const cacheKey = `${profile.id}:${inferencePath}`;
@@ -259,6 +133,7 @@ async function loadSegmenter(
           if (info.status === "progress_total") {
             post({
               type: "model-progress",
+              requestId,
               qualityMode,
               percent: info.progress,
               loaded: info.loaded,
@@ -267,6 +142,7 @@ async function loadSegmenter(
           } else if (info.status === "initiate" || info.status === "done") {
             post({
               type: "log",
+              requestId,
               qualityMode,
               message: `${info.status} ${info.file}`,
             });
@@ -296,6 +172,7 @@ async function loadSegmenter(
       onFallback: (cdnError) => {
         post({
           type: "log",
+          requestId,
           qualityMode,
           message: `model CDN unavailable; retrying pinned revision upstream (${toErrorMessage(cdnError)})`,
         });
@@ -351,12 +228,13 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
       ben2FallbackMode = actualPath;
       post({
         type: "fallback-to-isnet",
+        requestId: request.requestId,
         qualityMode: request.qualityMode,
         reason: "webgpu-unavailable",
       });
     }
     try {
-      await loadSegmenter(actualMode, actualPath);
+      await loadSegmenter(actualMode, actualPath, request.requestId);
     } catch (error) {
       if (requestedMode !== "ben2-fp16") throw error;
       await disposeActiveSegmenter();
@@ -365,18 +243,21 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
       ben2FallbackMode = actualPath;
       post({
         type: "fallback-to-isnet",
+        requestId: request.requestId,
         qualityMode: request.qualityMode,
         reason: isOutOfMemoryError(error) ? "device-out-of-memory" : "model-failed",
       });
-      await loadSegmenter(actualMode, actualPath);
+      await loadSegmenter(actualMode, actualPath, request.requestId);
     }
     post({
       type: "log",
+      requestId: request.requestId,
       qualityMode: request.qualityMode,
       message: "building ONNX session",
     });
     post({
       type: "model-ready",
+      requestId: request.requestId,
       qualityMode: request.qualityMode,
       inferencePath: actualPath,
       dtype: getProductionModel(actualMode).dtype,
@@ -387,6 +268,7 @@ async function handleLoadModel(request: LoadModelRequest): Promise<void> {
       code: "model-load-failed",
       message: toErrorMessage(error),
       qualityMode: request.qualityMode,
+      requestId: request.requestId,
     });
   }
 }
@@ -397,11 +279,19 @@ async function segmentWithWebGpuFallback(request: ProcessRequest): Promise<{
 }> {
   const requestedMode = normalizeModelMode(request.qualityMode);
   if (requestedMode === "ben2-fp16" && ben2FallbackMode) {
-    const segmenter = await loadSegmenter("isnet-fp32", ben2FallbackMode);
+    const segmenter = await loadSegmenter(
+      "isnet-fp32",
+      ben2FallbackMode,
+      request.requestId,
+    );
     return { output: await segmenter(request.source.blob), actualMode: "isnet-fp32" };
   }
   try {
-    const segmenter = await loadSegmenter(request.qualityMode, request.inferencePath);
+    const segmenter = await loadSegmenter(
+      request.qualityMode,
+      request.inferencePath,
+      request.requestId,
+    );
     return {
       output: await segmenter(request.source.blob),
       actualMode: requestedMode,
@@ -413,17 +303,26 @@ async function segmentWithWebGpuFallback(request: ProcessRequest): Promise<{
       ben2FallbackMode = path;
       post({
         type: "fallback-to-isnet",
+        requestId: request.requestId,
         qualityMode: request.qualityMode,
         reason: isOutOfMemoryError(error) ? "device-out-of-memory" : "model-failed",
       });
-      const fallback = await loadSegmenter("isnet-fp32", path);
+      const fallback = await loadSegmenter("isnet-fp32", path, request.requestId);
       return { output: await fallback(request.source.blob), actualMode: "isnet-fp32" };
     }
     if (request.inferencePath !== "webgpu" || !isWebGpuExecutionError(error)) {
       throw error;
     }
-    post({ type: "fallback-to-wasm", qualityMode: request.qualityMode });
-    const wasmSegmenter = await loadSegmenter(request.qualityMode, "wasm");
+    post({
+      type: "fallback-to-wasm",
+      requestId: request.requestId,
+      qualityMode: request.qualityMode,
+    });
+    const wasmSegmenter = await loadSegmenter(
+      request.qualityMode,
+      "wasm",
+      request.requestId,
+    );
     return {
       output: await wasmSegmenter(request.source.blob),
       actualMode: requestedMode,
@@ -447,14 +346,18 @@ async function handleProcess(request: ProcessRequest): Promise<void> {
       { width, height, data: matteData },
       actualMode,
     );
-    post({
-      type: "process-result",
-      requestId: request.requestId,
-      result: processedImage.result,
-      matte: processedImage.alphaMatte!,
-      durationMs: Math.round(performance.now() - startedAt),
-      actualMode,
-    });
+    const matte = processedImage.alphaMatte!;
+    post(
+      {
+        type: "process-result",
+        requestId: request.requestId,
+        result: processedImage.result,
+        matte,
+        durationMs: Math.round(performance.now() - startedAt),
+        actualMode,
+      },
+      [matte.data.buffer],
+    );
   } catch (error) {
     post({
       type: "error",
@@ -469,12 +372,15 @@ async function handleExtractAlphaMatte(request: ExtractAlphaMatteRequest): Promi
   const startedAt = performance.now();
   try {
     const matte = await extractAlphaMatte(request.result);
-    post({
-      type: "alpha-matte-result",
-      requestId: request.requestId,
-      matte,
-      durationMs: Math.round(performance.now() - startedAt),
-    });
+    post(
+      {
+        type: "alpha-matte-result",
+        requestId: request.requestId,
+        matte,
+        durationMs: Math.round(performance.now() - startedAt),
+      },
+      [matte.data.buffer],
+    );
   } catch (error) {
     post({
       type: "error",
@@ -493,12 +399,15 @@ async function handleRecomposite(request: RecompositeRequest): Promise<void> {
       request.matte,
       request.backgroundFill,
     );
-    post({
-      type: "recomposite-result",
-      requestId: request.requestId,
-      result,
-      durationMs: Math.round(performance.now() - startedAt),
-    });
+    post(
+      {
+        type: "recomposite-result",
+        requestId: request.requestId,
+        result,
+        durationMs: Math.round(performance.now() - startedAt),
+      },
+      result.alphaMatte ? [result.alphaMatte.data.buffer] : undefined,
+    );
   } catch (error) {
     post({
       type: "error",

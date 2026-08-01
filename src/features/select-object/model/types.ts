@@ -185,7 +185,16 @@ export const GUIDED_MODEL: GuidedModelProfile = {
 
 export type SelectObjectWorkerRequest =
   | { type: "encode"; revision: number; source: SourceImage }
-  | { type: "prompt"; prompt: IterativeSelectionPrompt }
+  | {
+      type: "prompt";
+      prompt: IterativeSelectionPrompt;
+      guided?: {
+        strokes: readonly GuidedBrushStroke[];
+        width: number;
+        height: number;
+        baseMatte: AlphaMatte | null;
+      };
+    }
   | { type: "reset"; revision: number }
   | { type: "dispose"; revision: number };
 
@@ -197,5 +206,11 @@ export type SelectObjectWorkerResponse =
       progress?: number;
     }
   | { type: "candidates"; revision: number; candidates: GuidedMaskCandidate[] }
+  | {
+      type: "guided-candidates";
+      revision: number;
+      editRegion: PixelRect;
+      candidates: GuidedBrushCandidate[];
+    }
   | { type: "disposed"; revision: number }
   | { type: "error"; revision: number; message: string };

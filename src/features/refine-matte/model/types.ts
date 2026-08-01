@@ -1,10 +1,8 @@
 import type {
   AlphaMatte,
   InferencePath,
-  PixelRect,
   RefinementConstraintMap,
   SourceImage,
-  Trimap,
 } from "../../../entities/processed-image";
 
 export type MattingRefinementMode = "balanced" | "maximum";
@@ -39,9 +37,6 @@ export interface MatteRefinementRequest {
   priorMatte: AlphaMatte;
   guidedMatte: AlphaMatte | null;
   constraints: RefinementConstraintMap | null;
-  trimap: Trimap;
-  crop: PixelRect;
-  inputSize: MattingInputSize;
   requestedMode: MattingRefinementMode;
   requestedPath: InferencePath;
 }
@@ -60,6 +55,8 @@ export interface MattingRefinementResult {
   actualPath: InferencePath | null;
   inputSize: MattingInputSize;
   fallback: MattingFallback;
+  /** Computed beside the matte in the worker to avoid a full-resolution main-thread scan. */
+  changed?: boolean;
   fallbackReason?: string;
 }
 

@@ -207,6 +207,8 @@ export function MaskCorrectionCanvas({
   const [pointerInside, setPointerInside] = useState(false);
   const [spacePanning, setSpacePanning] = useState(false);
   const [panning, setPanning] = useState(false);
+  const [scrollCaptured, setScrollCaptured] = useState(false);
+  const scrollCaptureTimerRef = useRef<number | null>(null);
   const spacePanningRef = useRef(false);
   // Persistent working buffer — source RGB, kept in sync with the current
   // alpha channel. Reused directly from `getImageData` (never reconstructed
@@ -530,32 +532,19 @@ export function MaskCorrectionCanvas({
   }
 
   function handleWheel(event: globalThis.WheelEvent): void {
+    if (!event.ctrlKey && !event.metaKey) return;
     if (!rgbaRef.current) return;
     const geometry = readCanvasGeometry();
     if (!geometry) return;
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey) {
-      onWheelZoom(event.deltaY, toMattePoint(event.clientX, event.clientY, geometry));
-      return;
-    }
-
-    const lineHeight = 16;
-    const pageSize = geometry.viewportRect.height;
-    const unit =
-      event.deltaMode === WheelEvent.DOM_DELTA_LINE
-        ? lineHeight
-        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-          ? pageSize
-          : 1;
-    const deltaX = event.deltaX * unit;
-    const deltaY = event.deltaY * unit;
-
-    if (event.shiftKey) {
-      onPanBySourcePixels((deltaX || deltaY) * geometry.scaleX, 0);
-      return;
-    }
-
-    onPanBySourcePixels(deltaX * geometry.scaleX, deltaY * geometry.scaleY);
+    setScrollCaptured(true);
+    if (scrollCaptureTimerRef.current !== null)
+      window.clearTimeout(scrollCaptureTimerRef.current);
+    scrollCaptureTimerRef.current = window.setTimeout(
+      () => setScrollCaptured(false),
+      180,
+    );
+    onWheelZoom(event.deltaY, toMattePoint(event.clientX, event.clientY, geometry));
   }
 
   // `handleKeyboardNavigation`/`handleWheel` are plain functions redefined
@@ -615,6 +604,13 @@ export function MaskCorrectionCanvas({
       editor.removeEventListener("wheel", handleWheelEvent);
     };
   }, [interactionEnabled]);
+
+  useEffect(function clearScrollCaptureTimerFx() {
+    return function clearScrollCaptureTimerCleanupFx() {
+      if (scrollCaptureTimerRef.current !== null)
+        window.clearTimeout(scrollCaptureTimerRef.current);
+    };
+  }, []);
 
   function updateCursor(
     clientX: number,
@@ -676,11 +672,12 @@ export function MaskCorrectionCanvas({
       role="application"
       aria-label={m.maskEditor()}
       tabIndex={0}
-      className="transparency-grid relative overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className={`transparency-grid relative overflow-hidden rounded-xl transition-shadow ${scrollCaptured ? "ring-3 ring-primary/60" : ""} focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50`}
       data-testid="mask-correction-viewport"
       data-zoom={Math.round(viewport.zoom * 100)}
       data-offset-x={viewport.offsetX}
       data-offset-y={viewport.offsetY}
+      data-scroll-captured={scrollCaptured}
     >
       <canvas
         ref={setCanvasRef}
@@ -818,6 +815,11 @@ export function MaskCorrectionCanvas({
           vectorEffect="non-scaling-stroke"
         />
       </svg>
+      {scrollCaptured && (
+        <p role="status" className="sr-only">
+          {m.canvasScrollCaptured()}
+        </p>
+      )}
     </div>
   );
 }

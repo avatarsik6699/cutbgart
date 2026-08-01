@@ -86,14 +86,28 @@ export function useMaskCorrectionFlow(deps: MaskCorrectionFlowDeps) {
 
   const [originalMatte, setOriginalMatte] = useState<AlphaMatte | null>(null);
   const correctionRunRef = useRef(0);
+  const correctionApplyRef = useRef<Promise<boolean> | null>(null);
+
+  function startCorrectionApply(run: () => Promise<boolean>): Promise<boolean> {
+    const active = correctionApplyRef.current;
+    if (active) return active;
+    const promise = run();
+    correctionApplyRef.current = promise;
+    function releaseApplyOwnership(): void {
+      if (correctionApplyRef.current === promise) correctionApplyRef.current = null;
+    }
+    void promise.then(releaseApplyOwnership, releaseApplyOwnership);
+    return promise;
+  }
 
   function handleEditMask() {
-    if (removalState.status !== "result") return;
+    if (removalState.status !== "result" && removalState.status !== "correcting") return;
     const image = removalState.result;
     const runId = correctionRunRef.current + 1;
     correctionRunRef.current = runId;
     retryCorrectionRef.current = () => {
-      if (removalState.status === "result") handleEditMask();
+      if (removalState.status === "result" || removalState.status === "correcting")
+        handleEditMask();
     };
     setCorrectionError(null);
     if (image.alphaMatte) {
@@ -181,7 +195,9 @@ export function useMaskCorrectionFlow(deps: MaskCorrectionFlowDeps) {
       });
   }
 
-  async function handleBatchDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
+  async function performBatchDoneCorrecting(
+    correctedMatte: AlphaMatte,
+  ): Promise<boolean> {
     const target = refinementTargetRef.current;
     if (
       !selectedBatchItem?.processedImage ||
@@ -228,7 +244,11 @@ export function useMaskCorrectionFlow(deps: MaskCorrectionFlowDeps) {
     }
   }
 
-  async function handleDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
+  function handleBatchDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
+    return startCorrectionApply(() => performBatchDoneCorrecting(correctedMatte));
+  }
+
+  async function performDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
     if (removalState.status !== "correcting") return false;
     const target = refinementTargetRef.current;
     if (!target || target.kind !== "single") return false;
@@ -274,8 +294,13 @@ export function useMaskCorrectionFlow(deps: MaskCorrectionFlowDeps) {
     }
   }
 
+  function handleDoneCorrecting(correctedMatte: AlphaMatte): Promise<boolean> {
+    return startCorrectionApply(() => performDoneCorrecting(correctedMatte));
+  }
+
   function handleCancelCorrection() {
     correctionRunRef.current += 1;
+    correctionApplyRef.current = null;
     setOriginalMatte(null);
     setExtractingMatte(false);
     setFinalizingCorrection(false);
@@ -286,6 +311,7 @@ export function useMaskCorrectionFlow(deps: MaskCorrectionFlowDeps) {
 
   const bumpCorrectionRun = useCallback((): number => {
     correctionRunRef.current += 1;
+    correctionApplyRef.current = null;
     return correctionRunRef.current;
   }, []);
 

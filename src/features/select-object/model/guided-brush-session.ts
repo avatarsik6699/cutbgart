@@ -238,12 +238,6 @@ export function canApplyGuidedBrushSession(session: GuidedBrushSession): boolean
 }
 
 export function cancelGuidedBrushDraft(session: GuidedBrushSession): GuidedBrushSession {
-  if (
-    session.strokes.length === 0 &&
-    session.candidates.length === 0 &&
-    session.status !== "error"
-  )
-    return session;
   const revision = session.revision + 1;
   return {
     ...session,

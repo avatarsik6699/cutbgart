@@ -26,6 +26,27 @@
 
 ---
 
+## Planned editor v2 stack (not yet installed)
+
+Phase 33 is governed by [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md). Until that phase implements
+and gates the first vertical slice, the table above remains the deployed/current stack.
+
+| Area | Planned direction | Phase-33 boundary |
+|------|-------------------|-------------------|
+| Workflow state | XState v5 + `@xstate/react`; one actor per image, selector-only React bindings | Add for local single-image workflow only |
+| Domain/application | Framework-free TypeScript commands, events, transitions, ports, policies | No React, worker, HTTP, provider, or binary values |
+| Binary ownership | Explicit artifact repository with opaque IDs and leases | Browser-tab memory only |
+| Local runtime | Unified typed protocol and bounded browser worker gateway | Existing model/assets; no remote processing |
+| Server state | TanStack Query v5 | Reserved for a future paid backend; not a local editor store and not added in Phase 33 |
+| Public paid API | Fastify-based TypeScript modular monolith is the current candidate | Research direction only; no API/dependency in Phase 33 |
+| GPU service | Isolated Python worker/container behind a job port | Future paid phase only |
+| Durable state | PostgreSQL + short-lived S3-compatible artifacts; queue implementation deferred | Future paid phase only |
+
+Exact backend, auth, payment, queue, storage, and server-model choices remain open until their own
+phase can evaluate security, data retention, commercial licensing, and operational cost.
+
+---
+
 ## Prerequisites
 
 ```bash

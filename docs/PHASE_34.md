@@ -12,12 +12,11 @@
 | Tag | `v0.34.0` |
 | Depends on | PHASE_33 gate passing; Phase-24 audit retained as the baseline input |
 
-> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-07-31.
-> Check `SPEC.md §7.4` against the updated `docs/SPEC.md` — the configured Playwright gate is now
-> Chromium-only (Firefox/WebKit/Mobile Safari dropped). Re-validate `F9`'s "bilingual cross-browser
-> Playwright request/storage inspection" wording before implementation.
-
 ---
+
+> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-08-01.
+> This legal/release contract depends on the superseded legacy roadmap. Preserve it as future input,
+> but renumber and re-scope it only after Phase 33 v2 evidence.
 
 ## Phase Goal
 
@@ -37,7 +36,7 @@ governance is ready (SPEC.md §3, §5.1–§5.2, §5.4–§5.5, §7.2, §7.5–�
 - [ ] `L1` Re-inspect the Phase-33 product and deployed provider configuration. Refresh
   `DATA_INVENTORY.md`, `PROPOSED_METADATA.md`, the storage/request evidence, processor/transfer
   register, retention/deletion rules, localization/notification duties, and rights/security
-  procedures. Explicitly cover all storage, help/onboarding state, editor/export behavior,
+  procedures. Explicitly cover all storage, editor/export behavior and Phase-32 runtime/error state,
   analytics requests, logs, support paths, and providers added or changed since Phase 24 —
   _Depends on:_ —
 - [ ] `L2` Re-evaluate jurisdiction, target-market, minors, controller identity/contact, legal
@@ -68,7 +67,7 @@ governance is ready (SPEC.md §3, §5.1–§5.2, §5.4–§5.5, §7.2, §7.5–�
   `F1`
 - [ ] `F4` Gate each non-essential integration/storage operation before its script/request/write,
   including the matrix's decision for Cloudflare Web Analytics and Umami. Necessary
-  quality/help/model-cache functionality remains available and documented; rejection never blocks
+  quality/editor/model-cache functionality remains available and documented; rejection never blocks
   upload/edit/download — _Depends on:_ `F3`
 - [ ] `F5` Store only the approved minimal, versioned choice evidence with no random/user ID.
   Apply the reviewed expiry/re-prompt rule, migrate invalid/old versions safely, and expose an
@@ -86,7 +85,7 @@ governance is ready (SPEC.md §3, §5.1–§5.2, §5.4–§5.5, §7.2, §7.5–�
   granular/change/withdraw, no-ID evidence, invalid/expired state, analytics disabled/enabled
   branches, core-service availability, footer/routes/locales, and accessible interactions —
   _Depends on:_ `F1`–`F7`
-- [ ] `F9` Add bilingual cross-browser Playwright request/storage inspection: before choice, after
+- [ ] `F9` Add bilingual configured-Chromium Playwright request/storage inspection: before choice, after
   Reject, Accept, granular settings, withdrawal, and notice-version change. Assert only approved
   cookies/storage/analytics requests occur and complete single plus multiple-upload edit/download
   flows after rejection — _Depends on:_ `F8`

@@ -33,3 +33,12 @@ export type {
 } from "./model/mask-correction";
 export { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 export type { BeforeAfterSliderProps } from "./ui/BeforeAfterSlider";
+export type {
+  ExtractAlphaMatteRequest,
+  LoadModelRequest,
+  ProcessRequest,
+  RecompositeRequest,
+  WorkerErrorResponse,
+  WorkerRequest as InferenceWorkerRequest,
+  WorkerResponse as InferenceWorkerResponse,
+} from "./model/inference-worker-protocol";

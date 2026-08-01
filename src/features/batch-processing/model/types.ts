@@ -27,6 +27,13 @@ export interface ItemProcessingProgress {
   percent: null;
 }
 
+export type BatchItemError = {
+  code: string;
+  message: string;
+  detail: string;
+  retryable: boolean;
+};
+
 export interface BatchItem {
   id: string;
   originalFileName: string;
@@ -37,7 +44,7 @@ export interface BatchItem {
   /** Allocated only after a successful result; never shared between items. */
   editDocument?: EditDocumentScope;
   status: BatchItemStatus;
-  error?: string;
+  error?: BatchItemError;
   enqueuedAt: number;
   startedAt?: number;
   completedAt?: number;

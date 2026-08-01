@@ -40,7 +40,7 @@ describe("BackgroundFillSelector", () => {
     expect(screen.getByLabelText("Background color")).toBeDefined();
     expect(screen.getByLabelText("Custom background image")).toBeDefined();
     expect(screen.getByRole("group", { name: "Background" }).className).toContain(
-      "overflow-hidden",
+      "overflow-y-auto",
     );
     expect(screen.getByLabelText("Custom background image").className).toContain(
       "min-w-0",

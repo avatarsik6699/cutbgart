@@ -119,6 +119,77 @@ afterEach(() => {
 });
 
 describe("useToolWorkspaceController", () => {
+  it("keeps Manual Apply single-flight and commits exactly once", async () => {
+    const { result } = renderHook(() => useToolWorkspaceController());
+    const worker = await completeAutomaticRun(result, source("manual-single-flight"));
+    act(() => result.current.handleEditMask());
+    expect(result.current.state.status).toBe("correcting");
+    const correctedMatte = {
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray([255, 0, 255, 0]),
+    };
+
+    let first!: Promise<boolean>;
+    let second!: Promise<boolean>;
+    act(() => {
+      first = result.current.handleDoneCorrecting(correctedMatte);
+      second = result.current.handleDoneCorrecting(correctedMatte);
+    });
+    const requests = worker.posted.filter((message) => message.type === "recomposite");
+    expect(requests).toHaveLength(1);
+    act(() =>
+      worker.emit({
+        type: "recomposite-result",
+        requestId: requests[0]?.requestId,
+        result: {
+          source: source("manual-single-flight"),
+          result: new Blob(["manual"]),
+          qualityMode: "fast",
+          alphaMatte: correctedMatte,
+        },
+        durationMs: 1,
+      }),
+    );
+
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    await waitFor(() =>
+      expect(result.current.singleDocument?.history.past).toHaveLength(1),
+    );
+    act(() => result.current.handleEditMask());
+    expect(result.current.originalMatte?.data).toEqual(correctedMatte.data);
+  });
+
+  it("restores document history without re-encoding the guided model", async () => {
+    const { result } = renderHook(() => useToolWorkspaceController());
+    const automaticWorker = await completeAutomaticRun(result, source("history"));
+    act(() => result.current.handleGuideAutomaticResult());
+    await settleLatestDispose(automaticWorker);
+    await waitFor(() => expect(result.current.guided.state.session).not.toBeNull());
+    if (result.current.state.status !== "result")
+      throw new Error("Expected an active guided session");
+    const currentImage = result.current.state.result;
+    const encodeCount = MockWorker.instances
+      .flatMap((candidate) => candidate.posted)
+      .filter((message) => message.type === "encode").length;
+    act(() =>
+      result.current.commitSingleBackground({
+        ...currentImage,
+        result: new Blob(["background"]),
+        backgroundFill: { type: "color", value: "#ffffff" },
+      }),
+    );
+
+    act(() => result.current.handleUndoDocument());
+
+    expect(
+      MockWorker.instances
+        .flatMap((candidate) => candidate.posted)
+        .filter((message) => message.type === "encode"),
+    ).toHaveLength(encodeCount);
+  });
+
   it("adopts a successful result, commits a background operation, and releases on reset", async () => {
     const { result } = renderHook(() => useToolWorkspaceController());
     await completeAutomaticRun(result, source("first"));
@@ -164,7 +235,7 @@ describe("useToolWorkspaceController", () => {
     expect(scope.artifacts.stats().artifactCount).toBe(0);
   });
 
-  it("aborts a multi-file batch upload entirely when one file is invalid (PHASE_31 T8/F7)", () => {
+  it("enqueues valid siblings while reporting an invalid batch file", async () => {
     const { result } = renderHook(() => useToolWorkspaceController());
 
     act(() =>
@@ -185,9 +256,10 @@ describe("useToolWorkspaceController", () => {
     );
 
     expect(result.current.uploadError).toMatchObject({ code: "unsupported-format" });
-    // No file from the batch is enqueued — the whole attempt aborts rather
-    // than silently dropping the invalid file and processing the rest.
-    expect(result.current.batch.session.items).toHaveLength(0);
+    await waitFor(() => expect(result.current.batch.session.items).toHaveLength(2));
+    expect(
+      result.current.batch.session.items.map((item) => item.originalFileName),
+    ).toEqual(["a.jpg", "c.jpg"]);
 
     act(() => result.current.handleDismissUploadError());
     expect(result.current.uploadError).toBeNull();
@@ -216,15 +288,18 @@ describe("useToolWorkspaceController", () => {
     if (result.current.state.status !== "result")
       throw new Error("Expected a completed automatic result");
 
-    act(() =>
-      result.current.applySingleEnhancements(
-        result.current.state.status === "result"
-          ? result.current.state.result
-          : (null as never),
-        ["fine-detail", "colour-halo"],
-        "Enhancements",
-      ),
-    );
+    act(() => {
+      const apply = () =>
+        result.current.applySingleEnhancements(
+          result.current.state.status === "result"
+            ? result.current.state.result
+            : (null as never),
+          ["fine-detail", "colour-halo"],
+          "Enhancements",
+        );
+      apply();
+      apply();
+    });
     await settleLatestDispose(automaticWorker);
 
     await waitFor(() =>
@@ -237,6 +312,11 @@ describe("useToolWorkspaceController", () => {
     const matteWorker = MockWorker.instances.find((worker) =>
       worker.posted.some((message) => message.type === "refine"),
     )!;
+    expect(
+      MockWorker.instances
+        .flatMap((worker) => worker.posted)
+        .filter((message) => message.type === "refine"),
+    ).toHaveLength(1);
     const matteRequest = matteWorker.posted.find((message) => message.type === "refine")
       ?.request as
       | {
@@ -266,6 +346,7 @@ describe("useToolWorkspaceController", () => {
           actualPath: matteRequest.requestedPath,
           inputSize: matteRequest.inputSize,
           fallback: "none",
+          changed: false,
         },
       }),
     );
@@ -397,6 +478,7 @@ describe("useToolWorkspaceController", () => {
           actualPath: request.requestedPath,
           inputSize: request.inputSize,
           fallback: "none",
+          changed: false,
         },
       }),
     );
@@ -439,6 +521,6 @@ describe("useToolWorkspaceController", () => {
       }),
     );
     expect(result.current.singleDocument?.history.past).toHaveLength(0);
-    expect(result.current.enhancementState.outcome).toBe("kept-current");
+    expect(result.current.enhancementState.outcome).toBe("cancelled");
   });
 });

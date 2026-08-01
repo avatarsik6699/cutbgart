@@ -372,15 +372,7 @@ export function useToolWorkspaceController() {
 
   function handleUploads(results: Array<{ fileName: string; result: UploadResult }>) {
     const invalid = results.find(({ result }) => !result.ok);
-    if (invalid && !invalid.result.ok) {
-      // One predictable policy for the whole batch (PHASE_31 T8/F7): a single
-      // invalid file aborts the entire attempt instead of silently dropping
-      // it and enqueuing the valid ones, which left processed items behind
-      // an error screen with no way to tell what happened.
-      setUploadError(invalid.result.error);
-      return;
-    }
-    setUploadError(null);
+    setUploadError(invalid && !invalid.result.ok ? invalid.result.error : null);
     const valid = results.flatMap(({ fileName, result }) =>
       result.ok ? [{ fileName, source: result.image }] : [],
     );
@@ -558,7 +550,7 @@ export function useToolWorkspaceController() {
         entryKind: "processed",
         resultColorSource: image.foreground ?? image.source.blob,
       });
-      guided.start(image.source, image.alphaMatte ?? null);
+      guided.replaceBase(image.alphaMatte ?? null);
     }
   }
 
@@ -587,7 +579,7 @@ export function useToolWorkspaceController() {
         entryKind: "processed",
         resultColorSource: image.foreground ?? image.source.blob,
       });
-      guided.start(image.source, image.alphaMatte ?? null);
+      guided.replaceBase(image.alphaMatte ?? null);
     }
   }
 
@@ -665,6 +657,8 @@ export function useToolWorkspaceController() {
     handleApplyGuided: guidedCutout.handleApplyGuided,
     handleGuideAutomaticResult: guidedCutout.handleGuideAutomaticResult,
     handleGuideBatchResult: guidedCutout.handleGuideBatchResult,
+    synchronizeSingleGuidedTarget: guidedCutout.synchronizeSingleGuidedTarget,
+    synchronizeBatchGuidedTarget: guidedCutout.synchronizeBatchGuidedTarget,
     applySingleEnhancements,
     applyBatchEnhancements,
     cancelEnhancements: enhancementRunner.cancel,

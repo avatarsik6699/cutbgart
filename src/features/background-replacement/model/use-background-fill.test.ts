@@ -75,13 +75,9 @@ describe("background fill model", () => {
     expect(result.current.saving).toBe(false);
   });
 
-  it("ignores an older save() result that resolves after a newer save() started", async () => {
+  it("coalesces repeated save() calls while preserving a newer draft", async () => {
     const first = deferred<ProcessedImage>();
-    const second = deferred<ProcessedImage>();
-    const onApply = vi
-      .fn()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise);
+    const onApply = vi.fn().mockReturnValueOnce(first.promise);
     const onResult = vi.fn();
     const { result } = renderHook(() =>
       useBackgroundFill({ image, onPreview: vi.fn(), onApply, onResult }),
@@ -98,22 +94,15 @@ describe("background fill model", () => {
       secondSave = result.current.save();
     });
 
+    expect(secondSave).toBe(firstSave);
+    expect(onApply).toHaveBeenCalledOnce();
     await act(async () => {
       first.resolve({ ...image, backgroundFill: { type: "color", value: "#FF0000" } });
       await firstSave;
     });
     expect(onResult).not.toHaveBeenCalled();
-
-    await act(async () => {
-      second.resolve({ ...image, backgroundFill: { type: "color", value: "#0000FF" } });
-      await secondSave;
-    });
-    expect(onResult).toHaveBeenCalledOnce();
-    expect(onResult).toHaveBeenCalledWith(
-      expect.objectContaining({
-        backgroundFill: { type: "color", value: "#0000FF" },
-      }),
-    );
+    expect(result.current.dirty).toBe(true);
+    expect(result.current.saving).toBe(false);
   });
 
   it("keeps the pending fill and dirty state after a failed save so it can be retried", async () => {

@@ -145,6 +145,119 @@ describe("useObjectSelection", () => {
 });
 
 describe("useGuidedBrushSelection", () => {
+  it("hydrates a completed document without encoding until the first marking", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useGuidedBrushSelection(() => worker as unknown as Worker),
+    );
+
+    act(() => result.current.hydrate(source, matte(40)));
+    expect(result.current.state.status).toBe("preview");
+    expect(worker.posted).toHaveLength(0);
+
+    act(() =>
+      result.current.addStroke({
+        mode: "keep",
+        points: [{ x: 0.5, y: 0.5 }],
+        radius: 2,
+      }),
+    );
+    expect(worker.posted).toEqual([expect.objectContaining({ type: "encode", source })]);
+    let applied!: Promise<AlphaMatte>;
+    act(() => {
+      applied = result.current.apply();
+    });
+    expect(worker.posted.map((message) => (message as { type: string }).type)).toEqual([
+      "encode",
+      "prompt",
+    ]);
+    const prompt = worker.posted[1] as { prompt: { revision: number } };
+    act(() =>
+      worker.emit({
+        type: "guided-candidates",
+        revision: prompt.prompt.revision,
+        editRegion: { x: 3, y: 1, width: 4, height: 3 },
+        candidates: [
+          {
+            id: "lazy",
+            matte: matte(255),
+            modelRankScore: 1,
+            intentScore: 1,
+            differenceRatio: 0,
+            foregroundRatio: 1,
+          },
+        ],
+      }),
+    );
+    await expect(applied).resolves.toMatchObject({ width: 10, height: 5 });
+  });
+
+  it("keeps Apply single-flight when invoked twice before React rerenders", async () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useGuidedBrushSelection(() => worker as unknown as Worker),
+    );
+    act(() => result.current.start(source, matte(40)));
+    const revision = (worker.posted[0] as { revision: number }).revision;
+    act(() => worker.emit({ type: "status", revision, status: "ready-for-prompt" }));
+    act(() =>
+      result.current.addStroke({
+        mode: "keep",
+        points: [{ x: 0.5, y: 0.5 }],
+        radius: 2,
+      }),
+    );
+
+    let first!: Promise<AlphaMatte>;
+    let second!: Promise<AlphaMatte>;
+    act(() => {
+      first = result.current.apply();
+      second = result.current.apply();
+    });
+
+    expect(second).toBe(first);
+    expect(
+      worker.posted.filter((message) => (message as { type: string }).type === "prompt"),
+    ).toHaveLength(1);
+    const prompt = worker.posted.at(-1) as {
+      prompt: { revision: number };
+      guided?: unknown;
+    };
+    expect(prompt.guided).toBeDefined();
+    act(() =>
+      worker.emit({
+        type: "guided-candidates",
+        revision: prompt.prompt.revision,
+        editRegion: { x: 3, y: 1, width: 4, height: 3 },
+        candidates: [
+          {
+            id: "single-flight",
+            matte: matte(255),
+            modelRankScore: 1,
+            intentScore: 1,
+            differenceRatio: 0,
+            foregroundRatio: 1,
+          },
+        ],
+      }),
+    );
+    await expect(first).resolves.toMatchObject({ width: 10, height: 5 });
+  });
+
+  it("terminalizes Cancel even when the current draft has no strokes", () => {
+    const worker = new FakeWorker();
+    const { result } = renderHook(() =>
+      useGuidedBrushSelection(() => worker as unknown as Worker),
+    );
+    act(() => result.current.start(source, matte(40)));
+    const beforeRevision = result.current.state.session?.revision;
+
+    act(() => result.current.cancelDraft());
+
+    expect(result.current.state.session?.revision).toBe((beforeRevision ?? 0) + 1);
+    expect(result.current.state).toMatchObject({ status: "preview", error: null });
+  });
+
   it("applies an adversarial Keep candidate without losing existing foreground", async () => {
     const worker = new FakeWorker();
     const { result } = renderHook(() =>

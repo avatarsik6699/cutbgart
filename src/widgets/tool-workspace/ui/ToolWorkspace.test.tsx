@@ -22,6 +22,32 @@ class MockWorker extends EventTarget {
 
   postMessage(message: PostedMessage): void {
     this.posted.push(message);
+    if (message.type !== "prepare") return;
+    const file = message.file as File;
+    queueMicrotask(() =>
+      this.emit({
+        type: "prepared",
+        requestId: message.requestId,
+        result:
+          file.type === "image/jpeg" || file.type === "image/png"
+            ? {
+                ok: true,
+                image: {
+                  blob: file,
+                  width: 800,
+                  height: 600,
+                  format: file.type,
+                },
+              }
+            : {
+                ok: false,
+                error: {
+                  code: "unsupported-format",
+                  message: `Unsupported format "${file.type}"`,
+                },
+              },
+      }),
+    );
   }
 
   terminate(): void {
@@ -49,11 +75,17 @@ async function completeAutomaticWorkspace(): Promise<MockWorker> {
   fireEvent.change(screen.getByLabelText("Upload an image"), {
     target: { files: [makeFile()] },
   });
-  await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-  const worker = MockWorker.instances[0]!;
   await waitFor(() =>
-    expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+    expect(
+      MockWorker.instances.some((candidate) =>
+        candidate.posted.some((message) => message.type === "load-model"),
+      ),
+    ).toBe(true),
   );
+  const worker = MockWorker.instances.find((candidate) =>
+    candidate.posted.some((message) => message.type === "load-model"),
+  );
+  if (!worker) throw new Error("Expected automatic inference worker");
   act(() =>
     worker.emit({
       type: "model-ready",
@@ -100,16 +132,6 @@ async function enterMagicDraft(): Promise<{
       requestId: dispose?.requestId,
     }),
   );
-  await waitFor(() => expect(MockWorker.instances).toHaveLength(2));
-  const magicWorker = MockWorker.instances[1]!;
-  const encode = magicWorker.posted.find((message) => message.type === "encode");
-  act(() =>
-    magicWorker.emit({
-      type: "status",
-      revision: encode?.revision,
-      status: "ready-for-prompt",
-    }),
-  );
   const image = await screen.findByRole("img", {
     name: /brush-guided object correction/i,
   });
@@ -122,6 +144,25 @@ async function enterMagicDraft(): Promise<{
     clientY: 10,
   });
   fireEvent.pointerUp(image, { pointerId: 1, clientX: 20, clientY: 20 });
+  await waitFor(() =>
+    expect(
+      MockWorker.instances.some((candidate) =>
+        candidate.posted.some((message) => message.type === "encode"),
+      ),
+    ).toBe(true),
+  );
+  const magicWorker = MockWorker.instances.find((candidate) =>
+    candidate.posted.some((message) => message.type === "encode"),
+  );
+  if (!magicWorker) throw new Error("Expected guided inference worker");
+  const encode = magicWorker.posted.find((message) => message.type === "encode");
+  act(() =>
+    magicWorker.emit({
+      type: "status",
+      revision: encode?.revision,
+      status: "ready-for-prompt",
+    }),
+  );
   await waitFor(() =>
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: /^apply$/i }).disabled,
@@ -201,7 +242,11 @@ describe("ToolWorkspace", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
     expect(screen.getByRole("alert").textContent).toMatch(/unsupported/i);
-    expect(MockWorker.instances).toHaveLength(0);
+    expect(
+      MockWorker.instances.some((worker) =>
+        worker.posted.some((message) => message.type === "load-model"),
+      ),
+    ).toBe(false);
   });
 
   it("keeps the upload surface visible in place next to the error, with no layout shift (PHASE_31 T8/F7)", async () => {
@@ -222,7 +267,7 @@ describe("ToolWorkspace", () => {
     expect(screen.getByLabelText("Upload an image")).toBeDefined();
   });
 
-  it("aborts the whole batch when one of several files is invalid, instead of silently dropping it", async () => {
+  it("reports an invalid batch file while valid siblings continue", async () => {
     render(<ToolWorkspace />);
 
     fireEvent.change(screen.getByLabelText("Upload an image"), {
@@ -233,10 +278,14 @@ describe("ToolWorkspace", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
     expect(screen.getByRole("alert").textContent).toMatch(/unsupported/i);
-    // None of the batch is enqueued — the whole attempt aborts predictably
-    // rather than processing the valid files behind the error.
-    expect(MockWorker.instances).toHaveLength(0);
-    expect(screen.queryByTestId("batch-overview")).toBeNull();
+    await waitFor(() =>
+      expect(
+        MockWorker.instances.some((worker) =>
+          worker.posted.some((message) => message.type === "load-model"),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByTestId("batch-overview")).toBeDefined();
   });
 
   it("starts automatic processing from the single upload surface", async () => {
@@ -245,11 +294,16 @@ describe("ToolWorkspace", () => {
     fireEvent.change(screen.getByLabelText("Upload an image"), {
       target: { files: [makeFile()] },
     });
-    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-    const worker = MockWorker.instances[0]!;
     await waitFor(() =>
-      expect(worker.posted.some((message) => message.type === "load-model")).toBe(true),
+      expect(
+        MockWorker.instances.some((candidate) =>
+          candidate.posted.some((message) => message.type === "load-model"),
+        ),
+      ).toBe(true),
     );
+    const worker = MockWorker.instances.find((candidate) =>
+      candidate.posted.some((message) => message.type === "load-model"),
+    )!;
     expect(worker.posted.some((message) => message.type === "encode")).toBe(false);
   });
 
@@ -321,6 +375,30 @@ describe("ToolWorkspace", () => {
     ).toHaveLength(promptCount);
   });
 
+  it("acknowledges no-stroke Cancel and keeps Cutout controls populated after tool churn", async () => {
+    render(<ToolWorkspace />);
+    await enterMagicDraft();
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole("status")
+          .some((status) => /cutout draft cleared/i.test(status.textContent ?? "")),
+      ).toBe(true),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Background$/ }));
+    expect(screen.queryByTestId("canvas-view-controls")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Enhancements$/ }));
+    expect(screen.queryByTestId("canvas-view-controls")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Cutout$/ }));
+
+    expect(screen.getByTestId("guided-brush-controls")).toBeDefined();
+    expect(screen.getByTestId("canvas-view-controls")).toBeDefined();
+    expect(screen.getByRole("slider", { name: /brush size/i })).toBeDefined();
+  });
+
   it("opens one automatic-result Cutout panel without separate correction entry points", async () => {
     render(<ToolWorkspace />);
     await completeAutomaticWorkspace();
@@ -339,11 +417,16 @@ describe("ToolWorkspace", () => {
       target: { files: [makeFile()] },
     });
 
-    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-    const worker = MockWorker.instances[0]!;
     await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+      expect(
+        MockWorker.instances.some((candidate) =>
+          candidate.posted.some((message) => message.type === "load-model"),
+        ),
+      ).toBe(true),
     );
+    const worker = MockWorker.instances.find((candidate) =>
+      candidate.posted.some((message) => message.type === "load-model"),
+    )!;
 
     act(() => {
       worker.emit({ type: "model-ready", qualityMode: "fast" });
@@ -546,11 +629,16 @@ describe("ToolWorkspace", () => {
       target: { files: [makeFile()] },
     });
 
-    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
-    const worker = MockWorker.instances[0]!;
     await waitFor(() =>
-      expect(worker.posted.some((m) => m.type === "load-model")).toBe(true),
+      expect(
+        MockWorker.instances.some((candidate) =>
+          candidate.posted.some((message) => message.type === "load-model"),
+        ),
+      ).toBe(true),
     );
+    const worker = MockWorker.instances.find((candidate) =>
+      candidate.posted.some((message) => message.type === "load-model"),
+    )!;
     act(() => {
       worker.emit({ type: "model-ready", qualityMode: "fast" });
     });

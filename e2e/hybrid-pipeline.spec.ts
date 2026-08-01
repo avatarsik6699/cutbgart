@@ -318,7 +318,9 @@ test("Cancel and retry keep the last committed document until one atomic Apply s
   ).toBeEnabled();
   await panel.getByRole("button", { name: /^(?:Stop|Остановить)$/ }).click();
   await expect(
-    panel.getByText(/current result was kept|текущий результат сохранён/i),
+    panel.getByText(
+      /Enhancement stopped\. No partial result was saved|Улучшение остановлено\. Частичный результат не сохранён/i,
+    ),
   ).toBeVisible();
   await expect.poll(() => documentRevision(page)).toBe(0);
 

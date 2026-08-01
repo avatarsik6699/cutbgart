@@ -26,7 +26,7 @@ export type ResultTarget =
 export interface EnhancementControllerState {
   status: "idle" | "applying" | "error";
   activeOperationId: EnhancementOperationId | null;
-  outcome: "applied" | "unchanged" | "kept-current" | null;
+  outcome: "applied" | "unchanged" | "kept-current" | "cancelled" | null;
   errorCode: "out-of-memory" | "failed" | null;
   documentId: string | null;
 }
@@ -56,16 +56,6 @@ const initialEnhancementState: EnhancementControllerState = {
   errorCode: null,
   documentId: null,
 };
-
-function sameAlphaMatte(left: AlphaMatte, right: AlphaMatte): boolean {
-  if (
-    left.width !== right.width ||
-    left.height !== right.height ||
-    left.data.length !== right.data.length
-  )
-    return false;
-  return left.data.every((value, index) => value === right.data[index]);
-}
 
 export interface EnhancementRunnerDeps {
   recompositeSingle: (
@@ -237,7 +227,12 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
   }
 
   function beginRun(request: EnhancementRequest) {
-    if (!request.operationIds.length || !request.target.image.alphaMatte) return;
+    if (
+      runRef.current ||
+      !request.operationIds.length ||
+      !request.target.image.alphaMatte
+    )
+      return;
     const id = sequenceRef.current + 1;
     sequenceRef.current = id;
     const run: EnhancementRun = {
@@ -282,9 +277,15 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
     foregroundTargetRef.current = null;
     refinement.cancel();
     foregroundRefinement.cancel();
+    const cancelledSequence = sequenceRef.current;
+    void Promise.all([refinement.release(), foregroundRefinement.release()]).then(() => {
+      if (sequenceRef.current !== cancelledSequence) return;
+      refinement.reset();
+      foregroundRefinement.reset();
+    });
     setState({
       ...initialEnhancementState,
-      outcome: hadRun ? "kept-current" : null,
+      outcome: hadRun ? "cancelled" : null,
       documentId: state.documentId,
     });
   }
@@ -344,7 +345,7 @@ export function useEnhancementRunner(deps: EnhancementRunnerDeps) {
       )
         return;
       appliedRefinementRef.current = result.matte;
-      if (!run.image.alphaMatte || sameAlphaMatte(run.image.alphaMatte, result.matte)) {
+      if (!run.image.alphaMatte || result.changed === false) {
         finishRefinementApplying();
         continueRun(run);
         return;

@@ -21,7 +21,10 @@ import {
   type RemoveBackgroundErrorCode,
   type RemoveBackgroundState,
 } from "./state-machine";
-import type { WorkerRequest, WorkerResponse } from "../worker/inference.worker";
+import type {
+  InferenceWorkerRequest as WorkerRequest,
+  InferenceWorkerResponse as WorkerResponse,
+} from "../../../entities/processed-image";
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_DIMENSION_PX = 4096;
@@ -30,21 +33,21 @@ const ACCEPTED_FORMATS = ["image/jpeg", "image/png", "image/webp"] as const;
 // retries/quality-mode switches) — oldest entries drop off first.
 const MAX_LOG_ENTRIES = 200;
 
-interface PendingWorkerRequest<T> {
+type PendingWorkerRequest<T> = {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
-}
+};
 
-export interface LogEntry {
+export type LogEntry = {
   id: number;
   timestamp: number;
   message: string;
-}
+};
 
-export interface RunInfo {
+export type RunInfo = {
   inferencePath: InferencePath;
   dtype: string;
-}
+};
 
 function isAcceptedFormat(type: string): type is SourceImage["format"] {
   return (ACCEPTED_FORMATS as readonly string[]).includes(type);
@@ -137,7 +140,7 @@ export async function buildSourceImage(file: File): Promise<BuildSourceImageResu
   return { ok: true, source: { blob: file, width, height, format: file.type } };
 }
 
-export interface UseBackgroundRemovalResult {
+export type UseBackgroundRemovalResult = {
   state: RemoveBackgroundState;
   deviceCapabilities: DeviceCapabilities | null;
   lightweightMode: boolean;
@@ -168,7 +171,7 @@ export interface UseBackgroundRemovalResult {
   adoptResult: (image: ProcessedImage) => void;
   /** Disposes the active automatic ONNX session before another heavy stage starts. */
   releaseInference: () => Promise<void>;
-}
+};
 
 /**
  * @param qualityMode Overrides the device-detected default quality mode for new
@@ -206,6 +209,12 @@ export function useBackgroundRemoval(
   const mountedRef = useRef(true);
   const capabilitiesPromiseRef = useRef<Promise<DeviceCapabilities> | null>(null);
   const requestCounterRef = useRef(0);
+  const activeRunIdRef = useRef<string | null>(null);
+  const selectionRunRef = useRef(0);
+  const modelProgressFrameRef = useRef<number | null>(null);
+  const queuedModelProgressRef = useRef<
+    Extract<WorkerResponse, { type: "model-progress" }> | undefined
+  >(undefined);
   const pendingRequestIdRef = useRef<string | null>(null);
   const pendingAlphaMatteRequestsRef = useRef(
     new Map<string, PendingWorkerRequest<AlphaMatte>>(),
@@ -215,6 +224,7 @@ export function useBackgroundRemoval(
   );
   const pendingDisposeRequestsRef = useRef(new Map<string, () => void>());
   const lastAttemptRef = useRef<{
+    runId: string;
     source: SourceImage;
     qualityMode: QualityMode;
     inferencePath: InferencePath;
@@ -231,6 +241,17 @@ export function useBackgroundRemoval(
     const requestId = String(requestCounterRef.current + 1);
     requestCounterRef.current += 1;
     return requestId;
+  }, []);
+
+  const rejectPendingRequests = useCallback((reason: Error) => {
+    for (const pending of pendingAlphaMatteRequestsRef.current.values())
+      pending.reject(reason);
+    pendingAlphaMatteRequestsRef.current.clear();
+    for (const pending of pendingRecompositeRequestsRef.current.values())
+      pending.reject(reason);
+    pendingRecompositeRequestsRef.current.clear();
+    for (const resolve of pendingDisposeRequestsRef.current.values()) resolve();
+    pendingDisposeRequestsRef.current.clear();
   }, []);
 
   const getDeviceCapabilities = useCallback((): Promise<DeviceCapabilities> => {
@@ -252,6 +273,16 @@ export function useBackgroundRemoval(
 
   const handleWorkerMessage = useCallback(
     (message: WorkerResponse) => {
+      if (
+        (message.type === "model-progress" ||
+          message.type === "log" ||
+          message.type === "model-ready" ||
+          message.type === "fallback-to-wasm" ||
+          message.type === "fallback-to-isnet") &&
+        message.requestId &&
+        message.requestId !== activeRunIdRef.current
+      )
+        return;
       switch (message.type) {
         case "model-progress": {
           const attempt = lastAttemptRef.current;
@@ -260,10 +291,19 @@ export function useBackgroundRemoval(
             normalizeModelMode(attempt.qualityMode) ===
               normalizeModelMode(message.qualityMode)
           ) {
-            dispatch({ type: "MODEL_PROGRESS", percent: message.percent });
-            setModelLoadBytes({
-              loaded: message.loaded,
-              total: message.total > 0 ? message.total : null,
+            queuedModelProgressRef.current = message.requestId
+              ? message
+              : { ...message, requestId: activeRunIdRef.current ?? "legacy" };
+            modelProgressFrameRef.current ??= window.requestAnimationFrame(() => {
+              modelProgressFrameRef.current = null;
+              const progress = queuedModelProgressRef.current;
+              queuedModelProgressRef.current = undefined;
+              if (!progress || progress.requestId !== activeRunIdRef.current) return;
+              dispatch({ type: "MODEL_PROGRESS", percent: progress.percent });
+              setModelLoadBytes({
+                loaded: progress.loaded,
+                total: progress.total > 0 ? progress.total : null,
+              });
             });
           }
           break;
@@ -325,6 +365,7 @@ export function useBackgroundRemoval(
         }
         case "process-result": {
           if (message.requestId !== pendingRequestIdRef.current) break;
+          pendingRequestIdRef.current = null;
           const attempt = lastAttemptRef.current;
           if (!attempt) break;
           const result: ProcessedImage = {
@@ -383,6 +424,11 @@ export function useBackgroundRemoval(
               recompositePending.reject(new Error(message.message));
               break;
             }
+            if (
+              message.requestId !== pendingRequestIdRef.current &&
+              message.requestId !== activeRunIdRef.current
+            )
+              break;
           }
           if (message.code === "compositing-failed") {
             appendLog(`Ignored stale correction compositing error: ${message.message}`);
@@ -393,6 +439,7 @@ export function useBackgroundRemoval(
             awaitingModelLoadRef.current ? "model_load_failed" : "processing_failed",
           );
           const errorCode = message.code;
+          pendingRequestIdRef.current = null;
           dispatch({
             type: "FAILED",
             error: {
@@ -414,25 +461,60 @@ export function useBackgroundRemoval(
       worker = new Worker(new URL("../worker/inference.worker.ts", import.meta.url), {
         type: "module",
       });
-      worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
+      const createdWorker = worker;
+      createdWorker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
         handleWorkerMessage(event.data);
       });
-      workerRef.current = worker;
+      function handleWorkerFailure(message: string) {
+        if (workerRef.current !== createdWorker) return;
+        createdWorker.terminate();
+        workerRef.current = null;
+        activeRunIdRef.current = null;
+        pendingRequestIdRef.current = null;
+        rejectPendingRequests(new Error(message));
+        if (!mountedRef.current) return;
+        dispatch({
+          type: "FAILED",
+          error: { code: "processing-failed", message, action: "retry" },
+        });
+      }
+      createdWorker.addEventListener("error", (event) => {
+        event.preventDefault();
+        handleWorkerFailure(
+          event instanceof ErrorEvent && event.message
+            ? event.message
+            : "Inference worker stopped unexpectedly",
+        );
+      });
+      createdWorker.addEventListener("messageerror", () => {
+        handleWorkerFailure("Inference worker returned an unreadable response");
+      });
+      workerRef.current = createdWorker;
     }
     return worker;
-  }, [handleWorkerMessage]);
+  }, [handleWorkerMessage, rejectPendingRequests]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      activeRunIdRef.current = null;
+      selectionRunRef.current += 1;
+      if (modelProgressFrameRef.current !== null)
+        window.cancelAnimationFrame(modelProgressFrameRef.current);
+      modelProgressFrameRef.current = null;
+      queuedModelProgressRef.current = undefined;
+      rejectPendingRequests(new Error("Inference run was disposed on unmount"));
       workerRef.current?.terminate();
       workerRef.current = null;
     };
-  }, []);
+  }, [rejectPendingRequests]);
 
   const startAttempt = useCallback(
     (source: SourceImage, qualityMode: QualityMode) => {
+      const runId = nextRequestId();
+      activeRunIdRef.current = runId;
+      pendingRequestIdRef.current = null;
       // Only the idle/error -> model-loading transition counts as a fresh
       // model-load funnel event (SPEC.md §7.6) — not "recompute in max
       // quality", which re-enters from `result` with the same source.
@@ -444,8 +526,9 @@ export function useBackgroundRemoval(
       setRunInfo(null);
       dispatch({ type: "SELECT_FILE", qualityMode });
       void getDeviceCapabilities().then((capabilities) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || activeRunIdRef.current !== runId) return;
         lastAttemptRef.current = {
+          runId,
           source,
           qualityMode,
           inferencePath: capabilities.inferencePath,
@@ -454,26 +537,29 @@ export function useBackgroundRemoval(
         const worker = getWorker();
         const request: WorkerRequest = {
           type: "load-model",
+          requestId: runId,
           qualityMode,
           inferencePath: capabilities.inferencePath,
         };
         worker.postMessage(request);
       });
     },
-    [appendLog, getDeviceCapabilities, getWorker, state.status],
+    [appendLog, getDeviceCapabilities, getWorker, nextRequestId, state.status],
   );
 
   const selectFile = useCallback(
     (file: File) => {
+      selectionRunRef.current += 1;
+      const selectionRun = selectionRunRef.current;
       void buildSourceImage(file).then((result) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || selectionRunRef.current !== selectionRun) return;
         if (!result.ok) {
           appendLog(`Upload rejected: ${result.error.message}`);
           dispatch({ type: "FAILED", error: result.error });
           return;
         }
         void getDeviceCapabilities().then((capabilities) => {
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || selectionRunRef.current !== selectionRun) return;
           startAttempt(result.source, qualityMode ?? capabilities.defaultQualityMode);
         });
       });
@@ -500,12 +586,15 @@ export function useBackgroundRemoval(
   }, [startAttempt]);
 
   const reset = useCallback(() => {
+    selectionRunRef.current += 1;
+    activeRunIdRef.current = null;
     lastAttemptRef.current = null;
     pendingRequestIdRef.current = null;
+    rejectPendingRequests(new Error("Inference run was reset"));
     setRunInfo(null);
     setBen2FallbackNotice(false);
     dispatch({ type: "RESET" });
-  }, []);
+  }, [rejectPendingRequests]);
 
   const enterCorrecting = useCallback(() => {
     dispatch({ type: "ENTER_CORRECTING" });
@@ -564,7 +653,7 @@ export function useBackgroundRemoval(
         getWorker().postMessage({
           type: "recomposite",
           requestId,
-          image,
+          image: { ...image, alphaMatte: undefined },
           matte,
           backgroundFill,
         } satisfies WorkerRequest);

@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 /**
- * Replaces only the ML worker boundary. Browser rendering, uploads, state
+ * Replaces worker boundaries. Browser rendering, upload controls, state
  * transitions, canvas correction, downloads, and responsive layouts remain
  * real. The external model/CDN path is covered separately by real-model.spec.
  */
@@ -38,6 +38,7 @@ export async function installMockInference(page: Page): Promise<void> {
       postMessage(message: {
         type: string;
         requestId?: string;
+        file?: File;
         qualityMode?: string;
         inferencePath?: string;
         source?: { blob: Blob; width: number; height: number; format: string };
@@ -56,6 +57,13 @@ export async function installMockInference(page: Page): Promise<void> {
           revision: number;
           points: Array<{ x: number; y: number; label: number }>;
           box: unknown;
+        };
+        guided?: {
+          baseMatte: {
+            width: number;
+            height: number;
+            data: Uint8ClampedArray;
+          } | null;
         };
         request?: {
           requestId: string;
@@ -136,6 +144,68 @@ export async function installMockInference(page: Page): Promise<void> {
         );
         // eslint-disable-next-line @typescript-eslint/no-misused-promises -- one async mock-worker turn; failures become worker error messages below.
         queueMicrotask(async () => {
+          if (message.type === "prepare" && message.file && message.requestId) {
+            try {
+              const header = new Uint8Array(
+                await message.file.slice(0, 24).arrayBuffer(),
+              );
+              const isPng = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every(
+                (value, index) => header[index] === value,
+              );
+              if (isPng && header.length >= 24) {
+                const view = new DataView(
+                  header.buffer,
+                  header.byteOffset,
+                  header.byteLength,
+                );
+                const width = view.getUint32(16);
+                const height = view.getUint32(20);
+                if (width * height > 40_000_000) {
+                  this.emit({
+                    type: "prepared",
+                    requestId: message.requestId,
+                    result: {
+                      ok: false,
+                      error: {
+                        code: "exceeds-resolution-limit",
+                        message: `Encoded image dimensions (${String(width)}x${String(height)}) exceed the safe decode limit.`,
+                      },
+                    },
+                  });
+                  return;
+                }
+              }
+              const bitmap = await createImageBitmap(message.file);
+              const result = {
+                ok: true as const,
+                image: {
+                  blob: message.file,
+                  width: bitmap.width,
+                  height: bitmap.height,
+                  format: message.file.type,
+                },
+              };
+              bitmap.close();
+              this.emit({
+                type: "prepared",
+                requestId: message.requestId,
+                result,
+              });
+            } catch {
+              this.emit({
+                type: "prepared",
+                requestId: message.requestId,
+                result: {
+                  ok: false,
+                  error: {
+                    code: "unsupported-format",
+                    message: "The image is malformed and could not be decoded.",
+                  },
+                },
+              });
+            }
+            return;
+          }
           if (message.type === "load-model") {
             if (
               (window as unknown as { __mockModelAssetFailureOnce?: boolean })
@@ -147,6 +217,7 @@ export async function installMockInference(page: Page): Promise<void> {
               this.emit({
                 type: "error",
                 code: "model-load-failed",
+                requestId: message.requestId,
                 qualityMode: message.qualityMode,
                 message: "verified model asset unavailable or corrupt",
               });
@@ -158,6 +229,7 @@ export async function installMockInference(page: Page): Promise<void> {
                 message.inferencePath === "wasm");
             this.emit({
               type: "model-progress",
+              requestId: message.requestId,
               qualityMode: message.qualityMode,
               percent: 50,
               loaded: 5_242_880,
@@ -166,6 +238,7 @@ export async function installMockInference(page: Page): Promise<void> {
             if (ben2Fallback) {
               this.emit({
                 type: "fallback-to-isnet",
+                requestId: message.requestId,
                 qualityMode: message.qualityMode,
                 reason: (window as unknown as { __mockBen2Failure?: boolean })
                   .__mockBen2Failure
@@ -175,6 +248,7 @@ export async function installMockInference(page: Page): Promise<void> {
             }
             this.emit({
               type: "model-ready",
+              requestId: message.requestId,
               qualityMode: message.qualityMode,
               inferencePath: message.inferencePath ?? "wasm",
               dtype: "e2e-mock",
@@ -228,64 +302,113 @@ export async function installMockInference(page: Page): Promise<void> {
             const source = this.source;
             const respond = () => {
               this.emit({ type: "status", revision, status: "predicting-mask" });
-              this.emit({
-                type: "candidates",
-                revision,
-                candidates: [0.92, 0.78, 0.61].map((score, index) => {
-                  const pixelCount = source.width * source.height;
-                  const collapsed = Boolean(
-                    (
-                      window as unknown as {
-                        __mockCollapseGuidedCandidates?: boolean;
-                      }
-                    ).__mockCollapseGuidedCandidates,
-                  );
-                  const boundaryTolerant = Boolean(
-                    (
-                      window as unknown as {
-                        __mockBoundaryTolerantGuidedCandidate?: boolean;
-                      }
-                    ).__mockBoundaryTolerantGuidedCandidate,
-                  );
-                  const data = new Uint8ClampedArray(pixelCount);
-                  const destructiveKeep = Boolean(
+              const candidates = [0.92, 0.78, 0.61].map((score, index) => {
+                const pixelCount = source.width * source.height;
+                const collapsed = Boolean(
+                  (
+                    window as unknown as {
+                      __mockCollapseGuidedCandidates?: boolean;
+                    }
+                  ).__mockCollapseGuidedCandidates,
+                );
+                const boundaryTolerant = Boolean(
+                  (
+                    window as unknown as {
+                      __mockBoundaryTolerantGuidedCandidate?: boolean;
+                    }
+                  ).__mockBoundaryTolerantGuidedCandidate,
+                );
+                const data = new Uint8ClampedArray(pixelCount);
+                const destructiveKeep = Boolean(
+                  (
+                    window as unknown as {
+                      __mockDestructiveGuidedCandidate?: boolean;
+                    }
+                  ).__mockDestructiveGuidedCandidate,
+                );
+                if (destructiveKeep && index === 0) {
+                  data.fill(255);
+                  for (const point of message.prompt!.points) {
+                    if (point.label !== 1) continue;
+                    const centreX = Math.round(point.x * source.width);
+                    const centreY = Math.round(point.y * source.height);
+                    for (let y = centreY - 1; y <= centreY + 1; y += 1)
+                      for (let x = centreX + 9; x <= centreX + 11; x += 1)
+                        if (x >= 0 && x < source.width && y >= 0 && y < source.height)
+                          data[y * source.width + x] = 0;
+                  }
+                } else if (collapsed) data.fill(255);
+                else if (boundaryTolerant && index === 0)
+                  for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                    data[pixel] =
+                      pixel % source.width >= Math.floor(source.width / 2) ? 255 : 0;
+                else if (index === 0) data.fill(255);
+                else if (index === 2)
+                  for (let pixel = 0; pixel < pixelCount; pixel += 1)
+                    data[pixel] = pixel % 2 ? 255 : 0;
+                return {
+                  id: `mock-${String(promptSequence)}-${String(revision)}-${String(index)}`,
+                  score: (window as unknown as { __mockInvalidGuidedScores?: boolean })
+                    .__mockInvalidGuidedScores
+                    ? null
+                    : score,
+                  differenceRatio: index === 0 ? 0 : 1,
+                  matte: { width: source.width, height: source.height, data },
+                };
+              });
+              if (message.guided) {
+                const guidedCandidates = candidates.map((candidate) => {
+                  const data = message.guided?.baseMatte
+                    ? message.guided.baseMatte.data.slice()
+                    : candidate.matte.data.slice();
+                  for (const point of message.prompt!.points) {
+                    const x = Math.max(
+                      0,
+                      Math.min(source.width - 1, Math.floor(point.x * source.width)),
+                    );
+                    const y = Math.max(
+                      0,
+                      Math.min(source.height - 1, Math.floor(point.y * source.height)),
+                    );
+                    data[y * source.width + x] = point.label === 1 ? 255 : 0;
+                  }
+                  if (
                     (
                       window as unknown as {
                         __mockDestructiveGuidedCandidate?: boolean;
                       }
-                    ).__mockDestructiveGuidedCandidate,
-                  );
-                  if (destructiveKeep && index === 0) {
-                    data.fill(255);
-                    for (const point of message.prompt!.points) {
-                      if (point.label !== 1) continue;
-                      const centreX = Math.round(point.x * source.width);
-                      const centreY = Math.round(point.y * source.height);
-                      for (let y = centreY - 1; y <= centreY + 1; y += 1)
-                        for (let x = centreX + 9; x <= centreX + 11; x += 1)
-                          if (x >= 0 && x < source.width && y >= 0 && y < source.height)
-                            data[y * source.width + x] = 0;
-                    }
-                  } else if (collapsed) data.fill(255);
-                  else if (boundaryTolerant && index === 0)
-                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
-                      data[pixel] =
-                        pixel % source.width >= Math.floor(source.width / 2) ? 255 : 0;
-                  else if (index === 0) data.fill(255);
-                  else if (index === 2)
-                    for (let pixel = 0; pixel < pixelCount; pixel += 1)
-                      data[pixel] = pixel % 2 ? 255 : 0;
+                    ).__mockDestructiveGuidedCandidate
+                  ) {
+                    let restored = 0;
+                    for (let index = 0; index < data.length && restored < 25; index += 1)
+                      if (data[index]! < 255) {
+                        data[index] = 255;
+                        restored += 1;
+                      }
+                  }
                   return {
-                    id: `mock-${String(promptSequence)}-${String(revision)}-${String(index)}`,
-                    score: (window as unknown as { __mockInvalidGuidedScores?: boolean })
-                      .__mockInvalidGuidedScores
-                      ? null
-                      : score,
-                    differenceRatio: index === 0 ? 0 : 1,
+                    id: candidate.id,
                     matte: { width: source.width, height: source.height, data },
+                    modelRankScore: candidate.score,
+                    intentScore: 1,
+                    differenceRatio: candidate.differenceRatio,
+                    foregroundRatio: 0.5,
                   };
-                }),
-              });
+                });
+                this.emit({
+                  type: "guided-candidates",
+                  revision,
+                  editRegion: {
+                    x: 0,
+                    y: 0,
+                    width: source.width,
+                    height: source.height,
+                  },
+                  candidates: guidedCandidates,
+                });
+              } else {
+                this.emit({ type: "candidates", revision, candidates });
+              }
             };
             const delayFirst =
               (window as unknown as { __mockDelayFirstGuidedResponse?: boolean })
@@ -383,6 +506,7 @@ export async function installMockInference(page: Page): Promise<void> {
                       : balancedWebGpuFailure
                         ? "wasm"
                         : "none",
+                  changed: false,
                 },
               });
             const emitWhenReleased = () => {
@@ -458,6 +582,25 @@ export async function installMockInference(page: Page): Promise<void> {
             (
               window as unknown as { __mockOriginalSourceBlob?: Blob }
             ).__mockOriginalSourceBlob = message.source.blob;
+            const failuresRemaining =
+              (window as unknown as { __mockBatchFailuresRemaining?: number })
+                .__mockBatchFailuresRemaining ?? 0;
+            if (failuresRemaining > 0) {
+              (
+                window as unknown as { __mockBatchFailuresRemaining: number }
+              ).__mockBatchFailuresRemaining = failuresRemaining - 1;
+              window.setTimeout(
+                () =>
+                  this.emit({
+                    type: "error",
+                    requestId: message.requestId,
+                    code: "processing-failed",
+                    message: "/private/mock/path must never reach the UI",
+                  }),
+                PROCESS_DELAY_MS,
+              );
+              return;
+            }
             const emitResult = () => {
               const canvas = document.createElement("canvas");
               canvas.width = message.source!.width;

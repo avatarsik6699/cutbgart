@@ -95,6 +95,8 @@ export function GuidedBrushCanvas({
   const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
   const [spacePanning, setSpacePanning] = useState(false);
   const [panning, setPanning] = useState(false);
+  const [scrollCaptured, setScrollCaptured] = useState(false);
+  const scrollCaptureTimerRef = useRef<number | null>(null);
   const busy =
     applying ||
     status === "loading-model" ||
@@ -105,10 +107,18 @@ export function GuidedBrushCanvas({
   const processedBase = props.entryKind === "processed" && session.hasBaseMatte;
 
   useEffect(() => {
-    if (active && interactionMode === "brush" && !busy) return;
+    if (active && interactionMode === "brush" && !busy && !spacePanning && !panning)
+      return;
     if (cursorRef.current) cursorRef.current.style.opacity = "0";
     if (coreCursorRef.current) coreCursorRef.current.style.opacity = "0";
-  }, [active, busy, interactionMode]);
+  }, [active, busy, interactionMode, panning, spacePanning]);
+
+  useEffect(function clearScrollCaptureTimerFx() {
+    return function clearScrollCaptureTimerCleanupFx() {
+      if (scrollCaptureTimerRef.current !== null)
+        window.clearTimeout(scrollCaptureTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -318,23 +328,24 @@ export function GuidedBrushCanvas({
       if (event.key === " ") releaseHand();
     };
     const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
       const surface = surfaceRef.current;
       if (!surface) return;
       const rect = surface.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
       event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        const point = displayPointToNormalized(event.clientX, event.clientY, rect);
-        viewportControls.zoomByWheel(event.deltaY, {
-          x: point.x * session.source.width,
-          y: point.y * session.source.height,
-        });
-      } else {
-        viewportControls.panBySourcePixels(
-          (event.deltaX / rect.width) * session.source.width,
-          (event.deltaY / rect.height) * session.source.height,
-        );
-      }
+      setScrollCaptured(true);
+      if (scrollCaptureTimerRef.current !== null)
+        window.clearTimeout(scrollCaptureTimerRef.current);
+      scrollCaptureTimerRef.current = window.setTimeout(
+        () => setScrollCaptured(false),
+        180,
+      );
+      const point = displayPointToNormalized(event.clientX, event.clientY, rect);
+      viewportControls.zoomByWheel(event.deltaY, {
+        x: point.x * session.source.width,
+        y: point.y * session.source.height,
+      });
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
@@ -415,7 +426,7 @@ export function GuidedBrushCanvas({
       ref={viewportRef}
       role="application"
       aria-label={m.cutoutMagicStage()}
-      className="relative size-full min-h-72 overflow-hidden rounded-xl bg-muted/40 focus-within:ring-3 focus-within:ring-ring/50"
+      className={`relative size-full min-h-72 overflow-hidden rounded-xl bg-muted/40 transition-shadow ${scrollCaptured ? "ring-3 ring-primary/60" : ""} focus-within:ring-3 focus-within:ring-ring/50`}
       data-testid="guided-brush-selection"
       data-stroke-count={session.strokes.length}
       data-keep-stroke-count={
@@ -426,6 +437,7 @@ export function GuidedBrushCanvas({
       data-prompt-remove-count={props.promptCounts?.remove ?? undefined}
       data-zoom={viewportControls.zoomPercent}
       data-interaction-mode={interactionMode}
+      data-scroll-captured={scrollCaptured}
     >
       <div
         className="grid size-full place-items-center"
@@ -534,7 +546,11 @@ export function GuidedBrushCanvas({
         </GuidedBrushBasePreview>
       </div>
       <p id="guided-brush-status" role="status" className="sr-only">
-        {busy ? m.cutoutApplying() : m.cutoutMagicReady()}
+        {scrollCaptured
+          ? m.canvasScrollCaptured()
+          : busy
+            ? m.cutoutApplying()
+            : m.cutoutMagicReady()}
       </p>
     </section>
   );

@@ -8,12 +8,12 @@
 
 | Field | Value |
 |-------|-------|
-| Document Version | `v1.24` |
-| Date | `2026-07-29` |
+| Document Version | `v1.26` |
+| Date | `2026-08-01` |
 | Architect / Owner | `v.godlevskiy` |
 | Contract Version | `v1.0` (see `docs/STATE.md` § Current Contract) |
 | Stack | See [docs/STACK.md](./STACK.md) |
-| Domain | Client-side (in-browser) image background removal. Free, anonymous, no-account tool — ML inference runs entirely on the user's device via WebGPU (WASM fallback), the server never receives or processes the user's image. Domain: `cutbg.art`. |
+| Domain | Hybrid image background removal. The free tier remains anonymous and browser-local via WebGPU/WASM; a future, explicitly selected paid tier may send images to a controlled server-processing pipeline for faster or more capable models. Domain: `cutbg.art`. |
 | Public brand name | `cutbg` — wordmark-only logo (no pictorial icon), set in the app's existing Geist Variable font. This is the user-facing brand (site `<title>`, header/footer, `site.webmanifest`, OG tags); it does not rename the repo or `package.json`, which stay `bg_remove_app` / "BG Remove App" as internal project identifiers. |
 | Feedback channel | Telegram: `https://t.me/+HaqBWI1A3vg4MWJi` for voluntary product feedback; `avatarsik6699@gmail.com` is the dedicated privacy/legal request channel approved in Phase 24 (§5.1) |
 
@@ -31,28 +31,30 @@ user's device.
 
 Three invariants govern every decision in this spec (source: architect brief, non-negotiable):
 
-1. **Inference is client-side only.** The server never receives or processes the user's image. This
-   is an architectural invariant, not a configuration option — it drives both the privacy story and
-   the infrastructure cost model (no GPU servers to run or pay for).
-2. **The product is free, with no accounts and no payments.** Donations live separately on a future
-   portfolio site and are not technically embedded in this product.
+1. **The free tier is client-side and private by default.** Its images and derived pixels never
+   leave the device. Any future remote processing is a separately disclosed, explicit paid action;
+   it can never be silently substituted for local processing.
+2. **Accounts, payments, and server image processing are future paid-tier capabilities, not current
+   behavior.** They require dedicated security, legal/data, retention, entitlement, and operational
+   contracts before implementation.
 3. **SEO and performance are functional requirements**, not post-launch polish. Every architectural
    decision is checked against "does this hurt indexability or Core Web Vitals?"
 
 ### 1.2 Goal and Success Metrics
 
-Goal: ship a free, anonymous, fully client-side background-removal web app that is fast enough to
-retain search-driven, one-shot visitors, and that is cheap to operate at scale because it does no
-server-side inference.
+Goal: rebuild the editor around a deterministic, testable domain model so the free browser-local
+workflow is genuinely responsive and reliable, while preserving a clean processing boundary for a
+later paid server tier with faster/more capable models.
 
 | Metric | Target |
 |--------|--------|
-| Image ever leaves the user's device | Never |
+| Image leaves the user's device in free/local mode | Never |
+| Remote processing | Only after an explicit paid action and approved disclosure/retention contract |
 | Time to Interactive (TTI), home page | < 2.5 s on average 4G |
 | LCP | < 2.5 s |
 | INP | < 200 ms |
 | Time to first processed result after model load | < 2 s on a WebGPU-capable device, < 8 s on the WASM fallback |
-| Infrastructure cost at 50k visits/month | No higher than a single VPS + negligible CDN egress |
+| Free-tier infrastructure cost at 50k visits/month | No higher than a single VPS + negligible CDN egress |
 
 Product funnel metrics tracked post-launch (see §7 Observability): model load completion rate,
 processing completion rate, download-click conversion, WASM-fallback rate.
@@ -61,17 +63,17 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 
 | Included (MVP) | Excluded |
 |-----------------|----------|
-| Drag-and-drop / click-to-browse / clipboard-paste image upload | Accounts, processing history, cloud storage of results (backlog v2) |
-| JPEG / PNG / WebP input, 20 MB hard limit, client-side downscale above 4096px per side | Public API (backlog v2) |
+| Drag-and-drop / click-to-browse / clipboard-paste image upload | Accounts, processing history, cloud storage, payments, and public API in the first v2 local slice |
+| JPEG / PNG / WebP input, 20 MB hard limit, client-side downscale above 4096px per side | Server image processing before its dedicated paid-tier security/legal phases |
 | Single-image processing with cancel/retry | Mobile app (backlog v2) |
-| Explicit "fast" vs "max quality" model switch, persisted in `localStorage` | Any server endpoint that accepts uploaded images (never — architectural invariant) |
+| Explicit "fast" vs "max quality" model switch, persisted in `localStorage` | Any server endpoint that accepts images without explicit paid-mode selection and an approved data contract (never) |
 | Model evaluation lab: compare IS-Net q8/fp32, BEN2 fp16, and MVANet q4 in the browser on the same local images before selecting a new production automatic model (Phase 15) | Domain-specific model training/fine-tuning |
 | Guided object selection with SlimSAM: Phase-16 point/box behavior remains internal/legacy compatibility; from Phase 27 the public entry is automatic result → Cutout → Magic brush, not a pre-upload guided choice | |
 | Iterative guided correction: cumulative positive/negative points, target boxes, semantic keep/remove strokes, multiple object layers, mask alternatives, and local correction of an existing automatic matte (Phase 17) | |
 | Brush-guided correction: Phase 21 supplies the translucent `keep`/`remove` semantic engine; Phase 27 reuses it as Cutout `Magic`, automatically selects the intent-best result, and removes public candidate navigation/continuation while Phase-17 controls remain legacy code | |
 | Optional client-side trimap/alpha refinement with `balanced` q8 and `maximum` fp32 modes, plus foreground-edge decontamination, selected only after browser model evaluation and capability checks (Phases 18–20) | |
 | Before/after slider result view, PNG-with-alpha download | Advertising on this domain (never — product decision) |
-| WebGPU with automatic, transparent WASM fallback | Donation/payment on this domain (never — lives on a separate portfolio project) |
+| WebGPU with automatic, transparent WASM fallback | Payment UI in the v2 local-editor foundation phase |
 | Explicit error handling for every documented failure mode (§7 NFR) | |
 | SEO-optimized scenario landing pages (product photo, documents, logo, avatar) | |
 | Analytics (Cloudflare Web Analytics + self-hosted Umami; no image/content/custom visitor identifier is intentionally sent, while Phase 24 verifies actual request fields, configuration, legal classification, and retention) | |
@@ -88,8 +90,9 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 | Design system formalization & redesign: an in-repo, iterative pass — no external design tool — that upgrades `shadcn/ui` to its current version, maximizes use of its stock components, formalizes the existing color palette and typography into documented Tailwind `@theme` tokens, adds `Skeleton`-based loading states, reworks the home-page layout (including relocating the floating "uploaded models storage" utility), and adds a subtle background grid pattern; implemented and hardens the single/selected-batch contract from Phases 25–29 in the same pass that removes superseded legacy controls. Explicitly allowed to propose bounded UX/IA deltas against §5.3 where the iteration finds a materially better flow, but never Studio-scope capability (layers/transforms/templates, §9) (Phase 30) | |
 | Batch-first feature parity: every editor capability introduced in Phases 25–29 works for a single upload and for the selected completed item from a multiple upload in the same phase; Phase 30 consolidates and stress-tests that shared contract (alongside the redesign) rather than adding delayed parity | |
 | Whole-project architecture, performance, render, and resource-lifecycle audit with evidence-based refactoring after the redesigned workflow is stable, including test-suite reliability/speed and a consistent empty/error/warning/loading state pattern for interactive components (Phase 31) | |
-| Contextual help and onboarding: research-backed animated/static instructions, replayable contextual guidance, reduced-motion support, and bilingual help surfaces (Phase 32) | |
-| Pre-legal product validation: manual WCAG 2.2 AA/assistive-technology audit, representative physical-device matrix, browser-support policy, usability sessions, bilingual editorial QA, visual/performance evidence, and a truthful accessibility statement (Phase 33); final release readiness remains conditional on Phase 34 | |
+| Critical editor stability and responsiveness: remove reproducible main-thread stalls and state divergence across upload/model initialization, Cutout, Enhancements, Background, viewport controls, batch upload/retry, and cached item switching; every fix must cover single and multiple uploads and land in tested implementation waves (Phase 32) | |
+| Architecture-led editor v2: a parallel, separately reachable implementation whose first slice is single-image import → local automatic removal → preview → PNG export, backed by one document actor, an artifact repository, and a unified worker protocol (Phase 33) | |
+| Future paid processing direction: faster/higher-quality server models and AI-generated backgrounds by prompt or subject context, behind explicit remote-mode selection, accounts/entitlements, billing, short-lived storage, and dedicated legal/security phases | Advertising on this domain (never — product decision) |
 
 ---
 
@@ -97,16 +100,21 @@ processing completion rate, download-click conversion, WASM-fallback rate.
 
 ### 2.1 Roles and Permissions
 
-There is no account system and no server-side authorization surface. The only "roles" are:
+The deployed legacy/local editor has no account system or server-side authorization surface.
+Future paid roles below are planned contracts, not implemented capabilities:
 
 | Role | Capabilities | Restrictions |
 |------|-------------|--------------|
-| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose a user-facing automatic quality mode, then use Cutout `Magic`/`Manual`, Enhancements, Background, committed undo/redo, contextual help, and PNG download(s)/ZIP; internal model alternatives are selected automatically | No accounts, no persistence of image results beyond the browser session; non-essential storage/metadata collection is governed by §7.2 |
+| `Visitor` (anonymous, unauthenticated) | Upload one or many images, choose a user-facing automatic quality mode, then use Cutout `Magic`/`Manual`, Enhancements, Background, committed undo/redo, and PNG download(s)/ZIP; internal model alternatives are selected automatically | No accounts, no persistence of image results beyond the browser session; non-essential storage/metadata collection is governed by §7.2 |
+| `PaidUser` (future) | Explicitly choose eligible remote-processing capabilities, including faster/higher-quality removal and approved generated-background jobs | Requires authentication, entitlement, billing, quota, retention/deletion, and remote-processing disclosure contracts before implementation |
+| `Operator` (future) | Administer models, pricing/entitlements, job health, abuse controls, and support operations | Least privilege, audited actions, no routine access to image content; exact role matrix belongs to the backend phase |
 | `AI_Agent` | Implements phases, runs gate checks | No push to main/develop |
 
 ### 2.2 Key Entities
 
-These are **client-side runtime entities only** — nothing here is persisted server-side (see §3).
+The legacy entities below are **client-side runtime entities only**. Phase 33 introduces the v2
+domain terms and invariants from [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md); future paid entities
+remain conceptual until a dedicated backend phase defines persistence and APIs.
 
 ```
 DeviceCapabilities → (detected once) informs → QualityMode (default) & InferencePath (WebGPU | WASM)
@@ -150,7 +158,12 @@ EditDocument + committed EditOperation ledger → undoable/redoable rendered res
   `BatchItem` from the grid overview enters the same single-image `result`⇄`correcting` flow
   (§5.3) already used outside batch mode — no parallel/duplicate state machine. Download is
   per-item or all items as a client-generated ZIP; nothing in a `BatchSession` is ever uploaded to a
-  server (§1.1 invariant).
+  server (§1.1 invariant). Phase 32 makes a failed item diagnosable through a localized structured
+  error (`code`, user message, technical detail safe for display, retryability) and makes retry
+  start a fresh bounded run without discarding unrelated successful items. A completed item's
+  `EditDocument`, committed history, tool drafts/settings and preview artifacts remain item-owned
+  and reusable while that item stays in the session; selecting it again never restarts automatic
+  inference merely to reconstruct the editor.
 - **BackgroundFill** (Phase 11) — `{ type: "transparent" } | { type: "color"; value } | { type:
   "gradient"; kind: "linear" | "radial"; stops } | { type: "image"; blob }`. Applied at compositing
   time in place of (or in addition to, for preview) the transparent PNG output. A user-uploaded
@@ -210,22 +223,23 @@ EditDocument + committed EditOperation ledger → undoable/redoable rendered res
 
 ## 3. Data Model
 
-There is **no server-side persistent data store** — no database, no accounts, no stored images. This
-is a direct consequence of the "inference is client-side only, no accounts" invariant (§1.1).
+The current deployed/local application has **no product server-side persistent data store** — no
+accounts or stored images. Phase 33 does not change that. Future paid processing will introduce a
+separate, explicitly approved schema for accounts, entitlements, billing records, job metadata, and
+short-lived object artifacts; none of those tables or retention rules is authorized by this section.
 
 ```text
 # No server-side entities. All state below is transient, in-memory, and scoped to a single
-# browser tab/session, with one exception:
+# browser tab/session, except for the explicitly listed browser-local preferences:
 
 localStorage:
   qualityMode: "fast" | "max"     # existing functional preference
-  helpState                       # Phase 32: versioned viewed/dismissed guidance preferences
   privacyChoices                 # Phase 34 only if required by the Phase-24 legal matrix
 
 In-memory session state (Phase 19):
   mattingRefinementMode: "balanced" | "maximum"  # never persisted; capability-aware initial value
 
-In-memory editor state (Phases 25–29, 32):
+In-memory editor state (Phases 25–29):
   EditDocument                              # one per single image / BatchItem
   EditHistory                               # bounded committed operations, never persisted
   activeTool: "cutout" | "enhance" | "background" | null
@@ -241,7 +255,8 @@ Model-lab exports (Phase 15, explicit user download only):
   no source/result image bytes and no filename
 ```
 
-No image data or processing history is stored anywhere — client or server. A `BatchSession`
+In the current local mode, no image data or processing history is stored persistently anywhere —
+client or server. A `BatchSession`
 (Phase 10) and any custom background image (Phase 11) are in-memory only, scoped to the browser tab,
 discarded on reload — same as every other entity in §2.2. The "download all" ZIP (Phase 10) is
 assembled client-side (a small JS zip library) and streamed to disk via the browser's normal
@@ -251,11 +266,9 @@ The application must not expand the existing metadata/analytics footprint merely
 storage is anticipated. Any new server-side, recipient-bearing or non-essential metadata field,
 purpose, recipient, retention period, or storage location requires the Phase-24 inventory and
 legal-basis review plus the Phase-34 transparency/choice controls before collection is enabled. The
-single interim exception is Phase 32's explicitly bounded local-only functional `helpState`
-contract: no identifier, timestamp, image/action data, server recipient or analytics linkage, with
-final inventory/notice review in Phase 34. The authoritative inventory must distinguish browser-
-local functional state, model caches, ordinary server/CDN logs, analytics payloads, consent
-evidence, and future server-side metadata instead of describing all of them loosely as “cookies”.
+authoritative inventory must distinguish browser-local functional state, model caches, ordinary
+server/CDN logs, analytics payloads, consent evidence, and future server-side metadata instead of
+describing all of them loosely as “cookies”.
 
 Editor history is not "processing history" in the account/cloud sense: it exists only for the
 current tab and document, has both entry and estimated-byte bounds, and is destroyed on document
@@ -268,9 +281,10 @@ serialization, accounts, a generic layer stack, or speculative transform/effect 
 
 ## 4. API / Backend Contract
 
-**Architectural invariant: no API endpoint anywhere in this system accepts an uploaded image.** The
-absence of such a route is deliberate — it eliminates an entire class of risk (malicious file
-uploads, storage of sensitive data) by construction, not by validation.
+**Current contract:** no product API endpoint accepts an uploaded image. The free/local mode keeps
+this guarantee. A future paid remote mode may add a versioned job/upload API only after its
+authentication, authorization, entitlement, idempotency, validation, object-storage, retention,
+deletion, abuse, billing, privacy, and model-license contracts are approved.
 
 The only server-side component is TanStack Start's Nitro SSR server, and its sole job is to render
 static/marketing page shells:
@@ -294,6 +308,11 @@ Batch processing (Phase 10) increases the number of images held in memory at onc
 server endpoint — every `BatchItem` is processed and composited entirely client-side, same as the
 single-image flow. Background replacement (Phase 11) with a user-uploaded background image follows
 the same rule: the background file never leaves the device either.
+
+The v2 application boundary reserves a `ProcessingGateway` implemented first by a local browser
+adapter. A future remote adapter may create and observe paid processing jobs without exposing HTTP,
+storage, or provider details to the editor domain. Conceptual remote operations and data flows are
+documented in `docs/ARCHITECTURE_V2.md`; they are not active API endpoints.
 
 ---
 
@@ -370,11 +389,13 @@ need or the product model changes.
 | `features/background-replacement` | `features` | Transparent/color/gradient/uploaded-image `BackgroundFill`; Phase 29 gives it a tool-local live draft whose Apply commits one document operation and whose Cancel restores the committed fill |
 | `entities/edit-document` | `entities` | (Phase 25) Browser-memory identity and immutable artifact references for one editable result: source/baseline, current subject matte and foreground, background, composite, processing provenance, and revision. Contains pure model contracts only; orchestration remains in features/widgets. |
 | `features/editor-history` | `features` | (Phase 25) Bounded commit/undo/redo ledger over `EditDocument` artifacts with explicit reachability and cleanup. Owns committed document history only; Cutout/Manual markings that have not been applied remain tool-local drafts. |
-| `features/guided-help` | `features` | (Phase 32) Versioned, contextual, replayable guidance definitions and progress; presents animated instruction assets only where they materially clarify an interaction and always supplies localized static/text alternatives and reduced-motion behavior |
 | `features/privacy-choices` | `features` | (Phase 34, if required by the Phase-24 decision matrix) Inventory-driven privacy/storage choices, consent evidence and withdrawal; it must block non-essential integrations until the applicable choice exists and must not claim that all browser storage is a cookie |
 | `entities/processed-image` | `entities` | Domain type (source + result + metadata) and the `BeforeAfterSlider` display component |
 | `shared/ui` | `shared` | shadcn/ui components (Base UI engine), copied into the repo, not an npm black box; also `site-header`, `site-footer`, `site-shell` (Phase 12) — presentational sitewide chrome, no business logic |
 | `widgets/tool-workspace` | `widgets` | (Phase 12; reorganized in Phases 25–29, restyled/hardened in Phase 30) Composes the shared upload/processing/editor experience. The Phase-25 controller split removes domain orchestration from the 1,500-line visual component; Phase 26 adds a stable stage, icon+label tool toolbar, tool panel slot, document undo/redo, and download slot; Phase 30 applies the formalized design system without reintroducing domain orchestration. It coordinates features only through public APIs and does not become a second domain store. |
+| `v2/domain`, `v2/application` | framework-free core | (Phase 33) Commands, events, document invariants, one actor per image, processing/artifact ports, and selectors. No React, canvas, worker, HTTP, provider, or binary values in actor snapshots. |
+| `v2/runtime-browser` | browser adapter | (Phase 33) Artifact repository, unified typed worker protocol, bounded local processing gateway, transfer ownership, cancellation, and performance instrumentation. |
+| `v2/presentation` | React UI adapter | (Phase 33) Separately reachable first vertical slice; sends commands and subscribes through narrow actor selectors, never coordinates worker lifecycle. |
 | `pages/privacy`, `pages/terms`, `pages/cookies` | `pages` | (Phase 34) Approved bilingual legal/transparency content composed with `site-shell`; no policy decisions or consent business logic in page components |
 | `pages/accessibility` | `pages` | (Phase 33) Bilingual evidence-based accessibility statement; no unsupported compliance claim or product logic |
 
@@ -643,10 +664,6 @@ settings remain isolated; batch processing, cleanup and ZIP failures remain isol
   than a fade animation.
 - A dirty tool draft cannot be lost on tool switch, reset, batch-item switch, or new upload without
   an accessible apply/discard decision.
-- Phase-31 animated instructions are contextual, dismissible, replayable from Help, and never the
-  only source of task-critical information. They expose pause/replay controls when movement
-  continues, provide localized text/static alternatives, avoid flashing, and honor
-  `prefers-reduced-motion`; onboarding never blocks the automatic first result.
 - Phase 33 applies WCAG-EM to a representative RU/EN sample and evaluates WCAG 2.2 AA with
   keyboard, 200%/400% zoom/reflow, forced colors, reduced motion, NVDA and VoiceOver evidence.
   Automated scanners support but never replace manual and assistive-technology verification.
@@ -695,7 +712,7 @@ be fully bilingual, not translated as an afterthought.
 | Server runtime | Nitro, `node-server` preset | Produces the Docker-deployable Node bundle |
 | Language | TypeScript, strict mode | Mandatory |
 | UI | React 19, Tailwind CSS, shadcn/ui on Base UI | Base UI became shadcn/ui's default primitive layer (replacing Radix) as of July 2026; components are copied into the repo, not installed as a black-box dependency |
-| Architecture | Feature-Sliced Design (flexible mode): `app / pages / widgets / features / entities / shared` | `processes` remains omitted — officially excluded from FSD. `widgets/tool-workspace` composes the product flow but may not own a parallel image-domain model. Phase 25 moves the stable document contract to `entities/edit-document`, committed history to `features/editor-history`, and orchestration into a controller with feature public APIs; visual stage/toolbar/tool panels stay separately testable. Future Studio capability must not turn `ToolWorkspace.tsx` into a generic god component or create same-layer feature imports. |
+| Architecture | Legacy UI: Feature-Sliced Design. Editor v2: framework-free domain/application modules, XState v5 document actors, artifact repository, typed processing ports, browser runtime adapter, and selector-only React bindings; see `docs/ARCHITECTURE_V2.md`. | FSD remains the presentation/source-layout boundary. React hooks/components cannot own processing lifecycle or binary artifacts. Future local/remote processing adapters share one application port. |
 | i18n | Paraglide JS (`@inlang/paraglide-js`) | Compiler-based message catalogs (`messages/ru.json`, `messages/en.json`); URL-based locale strategy via TanStack Router's `rewrite.input`/`rewrite.output`; see §5.5 |
 | ML inference | `@huggingface/transformers` (Transformers.js) v4, ONNX Runtime Web | WebGPU execution provider with automatic WASM fallback (`isWebGpuExecutionError` mid-session catch in `inference.worker.ts`); runs inside a Web Worker, never the main thread |
 | Model | `onnx-community/ISNet-ONNX`, one model for both quality tiers, differentiated by dtype: `q8` (fast/default), `fp32` (max quality) | Replaces the originally-shipped BiRefNet (`onnx-community/BiRefNet_lite-ONNX` / `BiRefNet-ONNX`), which turned out unusable on both WebGPU (onnxruntime-web storage-buffer shader limit, microsoft/onnxruntime#21968) and WASM (`std::bad_alloc` under the fp32 model's memory footprint) — confirmed via real-browser reproduction, not just the headless-e2e gap noted in Phase 04. AGPL-3.0-licensed; accepted knowingly for this non-commercial project (architect decision) — revisit before any commercial use |
@@ -836,6 +853,27 @@ silently dropping invalid files). Both follow the same evidence/characterization
 approval discipline as the rest of this phase — no rewrite of the test suite or a blanket new status
 component without a finding and sign-off.
 
+Phase 32 closes the concrete responsiveness and stability defects reported after that audit. Work
+lands in ordered waves (measurement/lifecycle, Cutout, Enhancements/Background/viewport, then batch
+and item switching); the focused unit/integration/E2E and performance checks for one wave must pass
+before the next begins. On the reproducible Phase-32 profiling host and deterministic fixtures,
+upload/model initialization, tool Apply/Stop/Cancel, undo/redo, tool switching, canvas navigation,
+batch scheduling/retry, and selection of an already-completed item must introduce no
+application-attributable main-thread long task (`>=50 ms`). Pointer/scroll feedback and cached-item
+selection target event-to-next-paint `p95 <100 ms`; selecting an already-completed item must not
+issue a new automatic-inference request. Heavy inference, compositing, PNG encoding and
+full-resolution pixel transforms stay off the main thread or are cooperatively chunked where a
+worker boundary is impossible. These are repeatable host budgets, not universal hardware claims;
+Phase 33 repeats the finished flows on its physical-device sample.
+
+Every asynchronous editor operation has one owner, one active run identity, and an explicit
+success/cancel/stale/error terminal path. Apply is single-flight and cannot commit twice; a stale,
+cancelled or failed run cannot update the visible document or history. Enhancement Stop cancels
+the active run, preserves the last committed result and the user's current checkbox selection, and
+must not claim that a partial result was saved. Tool/route/item changes abort or detach active work
+and release run-owned workers, listeners, bitmaps, buffers and object URLs without erasing the
+last committed item state.
+
 Phase 33 repeats the representative flows on the documented physical-device/browser sample and
 freezes an evidence-based support/degradation matrix. A P0/P1 freeze, crash, leak, task blocker or
 budget regression is release-blocking; missing hardware remains explicitly unverified rather than
@@ -918,6 +956,7 @@ being converted into a universal compatibility claim.
 | Model load failure (no network on first visit, CDN 404/CORS) | Retry with a "try again" button |
 | Device out-of-memory during inference | Caught explicitly; clear message suggesting a lower resolution |
 | One `BatchItem` fails during batch processing (Phase 10) | Isolated per-item error state in the grid tile; does not cancel or block the rest of the batch |
+| A batch item upload/processing run fails or is retried (Phase 32) | Its tile exposes localized summary and expandable safe details plus a retry action when retryable. Retry creates a fresh run from the retained source, clears only that item's prior error/transient work, obeys bounded concurrency, and never requeues successful siblings. |
 | Interactive prompt/refinement request is superseded | Ignore or cancel the stale result; only the latest prompt revision may update the visible mask |
 | Brush-guided recompute has no green intent and no automatic base | Keep the session and markings, do not call SlimSAM, and explain that at least one green `keep` stroke is required to identify an object |
 | SlimSAM candidate scores are non-finite, outside `0..1`, or absent | Never show an "estimate unavailable" message or invent a percentage. Use any finite raw value only as an internal ranking signal; otherwise rank deterministically by pre-constraint agreement with green/red markings and continuity with the base inside the edit region |
@@ -927,6 +966,7 @@ being converted into a universal compatibility claim.
 | Balanced q8 matting is unsupported, fails, or exhausts memory | Dispose q8, preserve source/prompts/trimap/prior matte, and continue with deterministic guided fusion plus the existing pixel brush |
 | Maximum-quality automatic mode cannot start | Preserve the upload, explain in user language that the mode is unavailable on this device, and offer/perform the documented one-time fallback to `Optimal`; never expose BEN2/WebGPU exception text as the primary message |
 | A tool operation fails after a committed document exists | Preserve the last committed document and the recoverable draft where safe; offer retry/cancel/keep-current-result. A failed or stale async operation creates no history entry. |
+| Enhancement Stop is requested | Cancel/mark the active run stale, keep the last committed image and current checkbox selection, release run-owned resources, and report cancellation truthfully; no partial result or history entry is implied. |
 | Export/downscale fails | Preserve the document and settings, report that the file could not be prepared, and allow retry or Original-size PNG; never upload the image as fallback |
 
 ### 7.4 Cross-Browser and Runtime Validation
@@ -1033,9 +1073,9 @@ data or source URLs.
 | E2E (document history) | Commit Cutout, Enhancements, and Background operations; toolbar undo/redo traverses committed visible changes in order, never consumes an unapplied brush draft, ignores stale/failed async work, and keeps per-batch-item histories isolated | Playwright |
 | E2E (Enhancements + export) | For a single image and a selected batch item, run selected result enhancements with plain-language controls, undo/redo the result, then download Original/2048/1024 PNG as applicable; dimensions never upscale and preview/download remain consistent | Playwright |
 | E2E (redesigned workspace) | Every existing single/batch/tool/export/undo-redo journey from Phases 25–29 continues to pass unchanged under the Phase-30 design system; any approved IA delta gets updated flow coverage; no superseded legacy control remains reachable | Playwright |
-| E2E (guided help/onboarding) | First-run and contextual help never block automatic processing; animated and reduced-motion/static variants explain the actual current controls; dismiss/replay/version reset, keyboard/focus/pause behavior, localization, and single/batch contexts remain correct | Playwright + accessibility checks |
+| E2E/performance (Phase-32 stability) | Single and multiple uploads cover responsive model initialization; Cutout Magic/Manual Apply, Cancel and committed undo/redo; Enhancement Apply/Stop/navigation cleanup; Background Apply and unclipped custom-colour controls; Cutout-only viewport controls, pan cursor/brush alignment and wheel ownership indication; batch add/failure/details/retry; cached item switching without reinference. Deterministic traces enforce the Phase-32 main-thread/event-to-paint budgets; the serialized real-model smoke verifies the worker boundary and cleanup on the available host. | Vitest + Playwright + CDP performance traces |
 | E2E (privacy/legal surfaces) | Approved footer links/routes exist in both locales; storage/analytics behavior matches the published inventory; where consent is required, reject is first-layer/easy, non-essential integrations are blocked before choice, choices can be changed, and core editing works after refusal | Playwright + request/storage inspection |
-| Performance/lifecycle audit | Repeatable single/batch scenarios record bundle/startup/Web Vitals, React commits, interaction latency/long tasks, worker/main-thread work, heap/resource growth, and cleanup under item/tool/upload churn before and after Phase-32 changes | Build stats + React Profiler + browser traces/heap + Vitest/Playwright |
+| Performance/lifecycle audit | Repeatable single/batch scenarios record bundle/startup/Web Vitals, React commits, interaction latency/long tasks, worker/main-thread work, heap/resource growth, and cleanup under item/tool/upload churn before and after Phase-31 changes | Build stats + React Profiler + browser traces/heap + Vitest/Playwright |
 | E2E (matting refinement) | Before any refiner fetch, choose capability-recommended or explicit `balanced`/`maximum`; verify q8/fp32 graph selection, no eager/concurrent dual load, fp32 → q8 → deterministic fallback, warm cache/session reuse, hard trimap constraints, and continuation through correction/background/download | Playwright + focused worker/hook tests |
 | Quality corpus (interactive/matting) | Licensed/synthetic local fixtures covering hair/fur, transparent and thin objects, holes, shadows, light-on-light, multiple objects, motion blur, and high-resolution small targets; measure IoU/boundary IoU, alpha SAD/MSE/Gradient/Connectivity, interactions-to-accept, latency, and peak memory without committing private user images | Vitest/model-lab + host-only real browsers |
 | Cross-browser matrix | WebGPU/fallback behavior across configured Chromium, Firefox, and WebKit projects; WebKit coverage is not presented as physical Safari/iOS evidence | Playwright projects per browser |
@@ -1102,18 +1142,21 @@ or a paid APM is not required without evidence that the current single-VPS produ
 | `28` | Enhancements Tool & Committed History | Group optional result-finishing operations under a clear, extensible user concept and make applied changes safely reversible | One `Улучшения` / `Enhancements` panel whose first actions improve fine details and remove colour halo; implementation-neutral registry for later local model/algorithm operations; no model/provider/size/skip-to-brush copy; one serialized `enhance` commit; Cutout/Manual/Enhancements toolbar undo/redo for single and selected batch documents; artifact cleanup verification |
 | `29` | Background & Export Tools | Finish the result toolbar with focused background editing and a scalable download contract | Background draft/apply/undo and sized PNG export for single and selected batch documents; primary Download + settings menu; Original/2048/1024 downscale-only PNG; item-local settings and bulk-ZIP compatibility; extensible `ExportSettings` without fake future formats; client-only privacy guarantees |
 | `30` | Design System & Redesign | Formalize and iterate the design system directly in the codebase — no external design tool, after two rejected attempts (Pencil, then Claude Design) — implementing it across the app in the same pass that removes superseded legacy UI and hardens the Phase-25–29 single/selected-batch contract, rather than doing visual and structural cleanup in two separate passes over the same components | Current-UI pain-point inventory; `shadcn/ui` upgraded to its current version with maximum use of its stock components; the existing color palette and typography formalized as documented Tailwind `@theme` tokens (WCAG AA contrast checked); `Skeleton`-based loading states; reworked home-page layout, including relocating the floating "uploaded models storage" utility out of the main flow; a subtle, low-opacity, fading engineering-grid background pattern (`prefers-reduced-motion` safe); any proposed UX/IA delta documented against SPEC.md §5.3 with rationale (no Studio scope, §9); restyled `shared/ui`/`site-header`/`site-footer`/`site-shell`/`widgets/tool-workspace`; removed superseded public UI/copy from the pre-redesign candidate/technical-panel era; validated one `EditDocument`/history per item and existing Cutout/Enhancements/Background/export parity; bulk ZIP; safe dirty-draft item switching; re-verified TTI/LCP/INP (§1.2) and WCAG AA contrast/motion; accessibility, localization, memory/lifecycle, layout-shift, and full single/batch regression gate; a dated `docs/design/DESIGN_SYSTEM.md` record |
-| `31` | Guided Help & Onboarding | Research, produce, and integrate useful animated/contextual instructions without slowing or blocking the core task | Interaction inventory and user-risk hypotheses; asset-format/build-vs-library decision with size/accessibility/localization criteria; a small production asset pipeline; versioned `features/guided-help`; contextual first-use cards and compact tool demos matching the Phase-30 redesigned UI; dismiss/replay from Help; reduced-motion static alternative; single/batch context, bilingual, cross-browser, performance, and E2E validation |
-| `32` | Whole-Project Audit & Refactor | Reduce verified architectural duplication and UI/runtime cost after the redesigned feature contracts stabilize, without a rewrite or behavior drift | Baseline inventory; dead/duplicate code and FSD/public-API audit; React StrictMode/Profiler rerender/effect review; worker/canvas/blob/object-URL/tensor/cache lifecycle and batch-churn memory audit; bundle/lazy-load and long-task/INP profiling; prioritized findings ledger; small reversible refactors with characterization tests; before/after evidence and full gates |
-| `33` | Accessibility, Device & Product Validation | Validate the functionally complete, redesigned focused editor with people, assistive technology and representative hardware before the final legal phase | WCAG-EM/WCAG 2.2 AA audit; keyboard/zoom/forced-colors/reduced-motion; NVDA/VoiceOver; iPhone/Android/macOS/Windows/no-WebGPU sample; supported-browser/degradation policy; constrained-device performance; visual regression baselined against the Phase-30 redesigned UI; RU/EN usability/editorial review; accessibility statement; evidence-linked pre-legal readiness report and P0/P1 closure |
-| `34` | Final Legal, Consent & Release Readiness | Re-audit the finished product and implement the approved transparency and choice contract without dark patterns or false compliance claims | Refreshed final-product data flow, storage/request evidence, applicability/processor/retention/metadata matrices and drafts; explicit re-approval; versioned legal-content manifest; revised Privacy plus approved Terms/Cookie-storage/conditional legal pages; bilingual footer/operator/contact links; accessible first-layer Accept/Reject/settings only where required; non-essential integration gating, change/withdraw controls, minimal consent evidence, SSR/SEO, E2E, and final release-readiness sign-off |
+| `31` | Whole-Project Audit & Refactor | Reduce verified architectural duplication and UI/runtime cost after the redesigned feature contracts stabilize, without a rewrite or behavior drift | Baseline inventory; dead/duplicate code and FSD/public-API audit; React StrictMode/Profiler rerender/effect review; worker/canvas/blob/object-URL/tensor/cache lifecycle and batch-churn memory audit; bundle/lazy-load and long-task/INP profiling; prioritized findings ledger; small reversible refactors with characterization tests; before/after evidence and full gates |
+| `32` | Critical Bugs, Performance & Stability | Closed as an architect-accepted incomplete legacy stabilization attempt; the real-browser responsiveness goal was not achieved | Local lifecycle/state fixes and evidence remain in the legacy implementation, but manual verification still reproduces model-load and Magic Apply freezes plus first-stroke busy behavior. Gate was explicitly waived; unresolved experience is carried into the architecture-led v2 program rather than represented as fixed. |
+| `33` | Editor v2 Foundation & First Vertical Slice | Establish the new domain/runtime architecture and prove one responsive end-to-end local workflow before migrating editor breadth | `docs/ARCHITECTURE_V2.md`; framework-free domain/application modules; XState document/workspace actors; artifact repository; unified worker protocol and bounded local processing gateway; separately reachable single-image import → local automatic removal → preview → PNG export; deterministic contract/model tests, bilingual E2E, real-model smoke, artifact audit, and architect-device responsiveness trace; legacy route retained; no Cutout, Enhancements, Background, batch, accounts, payments, or remote API in this phase |
+| `34+` | Incremental v2 migration (numbers reserved) | Restore capabilities only as independently proven vertical slices, then add paid infrastructure behind stable ports | Planned order: document history + Manual Cutout; Magic Cutout with strict draft/preview/apply separation; Background + Enhancements; batch as child document actors; accessibility/device/product validation; paid backend foundation; generated-background capability; refreshed legal/release gate. Exact phase numbers and contracts are intentionally deferred until Phase 33 evidence. |
 
 ---
 
 ## 9. Out of Scope
 
-**Backlog v2+ (deliberately deferred, not rejected):**
-- Accounts, processing history, cloud storage of results
-- Public API
+**Deferred beyond the Phase-33 local v2 foundation (not rejected):**
+- Accounts, entitlements, billing, processing history, and cloud storage of results
+- Paid remote-processing API and isolated GPU workers
+- Faster/higher-quality commercial server models
+- AI-generated backgrounds from a prompt or subject/context analysis
+- Public developer API
 - Mobile app
 
 Batch processing and background replacement remain in MVP scope (Phases 10-11, §8). Point-prompt /
@@ -1123,24 +1166,25 @@ Its iterative multi-prompt, semantic-brush, trimap/matting, and foreground-decon
 is approved as Phases 17–20. Phase 21 supersedes only the public guided-editor interaction with a
 brush-only semantic workflow: the Phase-17 point/box/manual-layer implementation is retained as
 legacy compatibility source, while reused internal worker/session contracts remain active. These
-phases may evaluate third-party pretrained models but do not authorize domain-specific
-training/fine-tuning or any server-side inference.
+legacy phases may evaluate third-party pretrained models but do not authorize
+domain-specific training/fine-tuning. Server-side inference is authorized only as a future paid
+direction and still requires dedicated implementation, security, commercial-license, data, and
+legal phase contracts.
 
-**Focused-product boundary after Phase 34:**
+**Focused-product boundary during the v2 migration:**
 
 `cutbg.art` remains a fast background-removal and background-finishing product. Layers, free object
-movement, shadows, perspective, text, templates, and marketplace-card composition are not added to
-the Phase-22–35 product cycle and must not increase the initial bundle or time-to-first-result.
+movement, shadows, perspective, text, templates, and marketplace-card composition are not added
+during the focused-editor v2 migration and must not increase the initial bundle or
+time-to-first-result.
 
 If that richer direction is approved later, treat it as a separate **Studio** surface (a separately
 loaded route/bundle, and potentially a separate application if product/SEO/deployment needs
 diverge). Reuse the Phase-25 browser-memory document/artifact/history kernel only where the
 contracts genuinely match. Do not force the focused remover and a Canva-like editor into one
 always-loaded state machine.
-
-Phases 30–35 complete the visual redesign, guidance, implementation quality, product validation and
-final legal readiness without adding Studio editing capabilities. The unnumbered discovery order for
-that future track is:
+The architecture-led v2 phases restore the focused workflow before adding Studio capabilities. The
+unnumbered discovery order for that future track is:
 
 1. canvas/output-size contract plus one subject transform (move/scale/rotate) with touch handles;
 2. explicit background + subject layer stack and selection model;
@@ -1153,9 +1197,9 @@ research, a separate SPEC change, bundle/performance budgets, and its own number
 code is written.
 
 **Never (product decision, not a phasing choice):**
-- Any server endpoint that accepts uploaded images, in any form
+- Silently sending a free/local-mode image or derived pixels to a server
+- Enabling remote processing without explicit mode choice and approved privacy/retention terms
 - Advertising on this domain
-- Donations/payments on this domain (lives on a separate portfolio project)
 
 ---
 
@@ -1180,12 +1224,17 @@ code is written.
 - “Future metadata” is not yet a defined data category. Before implementation, the owner must name
   each proposed field and product purpose; image pixels, mattes, filenames, prompt coordinates, and
   image-derived embeddings remain prohibited from storage/analytics regardless.
-- Before Phase 33, the owner must secure access to the minimum physical-device/assistive-technology
-  sample and representative consented research participants. Unavailable environments remain
-  explicitly unverified; they cannot be replaced by unsupported compatibility claims.
-- Before Phase 34 implementation, the owner must refresh the Phase-24 operator, jurisdiction,
+- Phase 33 requires architect-device/browser responsiveness evidence for its one vertical slice;
+  headless timing cannot substitute for reproducing the original freeze environment.
+- Before the later accessibility/product-validation phase, the owner must secure access to the
+  minimum physical-device/assistive-technology sample and representative consented research
+  participants. Unavailable environments remain explicitly unverified.
+- Before the later final legal implementation, the owner must refresh the Phase-24 operator, jurisdiction,
   market, processor, storage-location and retention facts against the finished product and either
   obtain qualified review or record a new dated residual-risk acceptance for the final texts.
+- Before any paid/server phase, choose auth/payment/storage providers, deployment region, job queue,
+  retention/deletion policy, charging/cancellation semantics, and commercially compatible model
+  licenses. These decisions are intentionally not invented in Phase 33.
 - Phase 30 has no external-design-tool precondition: it iterates directly in the codebase against
   the existing implementation. Any proposed UX/IA delta from that iteration is a candidate change,
   not an approved one, until the owner signs off in `docs/design/DESIGN_SYSTEM.md` and it is synced

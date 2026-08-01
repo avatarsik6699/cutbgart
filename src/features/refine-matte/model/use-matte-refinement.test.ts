@@ -49,10 +49,7 @@ describe("useMatteRefinement", () => {
         path: "webgpu",
       }),
     );
-    const first = worker.posted[0] as {
-      request: { requestId: string; inputSize: { width: number; height: number } };
-    };
-    expect(first.request.inputSize).toEqual({ width: 3, height: 1 });
+    const first = worker.posted[0] as { request: { requestId: string } };
     act(() =>
       result.current.start({
         source,
@@ -108,7 +105,7 @@ describe("useMatteRefinement", () => {
     expect(result.current.state.status).toBe("result");
   });
 
-  it("skips worker creation when no unknown region exists", () => {
+  it("delegates deterministic no-unknown-region handling to the worker", () => {
     const factory = vi.fn(() => new MockWorker() as unknown as Worker);
     const { result } = renderHook(() => useMatteRefinement(factory));
     act(() =>
@@ -119,9 +116,8 @@ describe("useMatteRefinement", () => {
         path: "wasm",
       }),
     );
-    expect(factory).not.toHaveBeenCalled();
-    expect(result.current.state.result?.actualMode).toBe("deterministic");
-    expect(result.current.state.status).toBe("applying");
+    expect(factory).toHaveBeenCalledOnce();
+    expect(result.current.state.status).toBe("preparing");
   });
 
   it("waits for an explicit disposal acknowledgement", async () => {

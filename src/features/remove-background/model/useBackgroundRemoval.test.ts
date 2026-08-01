@@ -33,12 +33,14 @@ class MockWorker extends EventTarget {
     this.posted.push(message);
   }
 
-  terminate(): void {
-    // no-op
-  }
+  terminate = vi.fn();
 
   emit(data: unknown): void {
     this.dispatchEvent(new MessageEvent("message", { data }));
+  }
+
+  crash(message = "worker crashed"): void {
+    this.dispatchEvent(new ErrorEvent("error", { message }));
   }
 }
 
@@ -73,6 +75,88 @@ afterEach(() => {
 });
 
 describe("useBackgroundRemoval", () => {
+  it("ignores a stale same-mode model-ready response after a newer run starts", async () => {
+    const hook = renderHook(() => useBackgroundRemoval());
+    act(() => hook.result.current.selectFile(makeFile()));
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+    await waitFor(() =>
+      expect(
+        worker.posted.filter((message) => message.type === "load-model"),
+      ).toHaveLength(1),
+    );
+    const firstLoad = worker.posted.find((message) => message.type === "load-model")!;
+
+    act(() => hook.result.current.retry());
+    await waitFor(() =>
+      expect(
+        worker.posted.filter((message) => message.type === "load-model"),
+      ).toHaveLength(2),
+    );
+    const secondLoad = worker.posted.filter(
+      (message) => message.type === "load-model",
+    )[1]!;
+
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "fast",
+        requestId: firstLoad.requestId,
+      }),
+    );
+    expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(0);
+
+    act(() =>
+      worker.emit({
+        type: "model-ready",
+        qualityMode: "fast",
+        requestId: secondLoad.requestId,
+      }),
+    );
+    await waitFor(() =>
+      expect(worker.posted.filter((message) => message.type === "process")).toHaveLength(
+        1,
+      ),
+    );
+    hook.unmount();
+  });
+
+  it("rejects a pending recomposite and terminates its worker on unmount", async () => {
+    const hook = renderHook(() => useBackgroundRemoval());
+    const image = {
+      source: {
+        blob: makeFile(),
+        width: 1,
+        height: 1,
+        format: "image/jpeg" as const,
+      },
+      result: new Blob(["result"]),
+      qualityMode: "fast" as const,
+      alphaMatte: { width: 1, height: 1, data: new Uint8ClampedArray([255]) },
+    };
+    const pending = hook.result.current.recomposite(image, image.alphaMatte);
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+
+    hook.unmount();
+
+    await expect(pending).rejects.toThrow(/disposed|unmounted|cancelled/i);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves the active run to an error terminal when its worker crashes", async () => {
+    const hook = renderHook(() => useBackgroundRemoval());
+    act(() => hook.result.current.selectFile(makeFile()));
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+
+    act(() => worker.crash());
+
+    await waitFor(() => expect(hook.result.current.state.status).toBe("error"));
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    hook.unmount();
+  });
+
   it("waits for automatic model disposal acknowledgement", async () => {
     const { result } = renderHook(() => useBackgroundRemoval());
     act(() => result.current.selectFile(makeFile()));

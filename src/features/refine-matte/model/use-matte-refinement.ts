@@ -7,9 +7,6 @@ import type {
   RefinementConstraintMap,
   SourceImage,
 } from "../../../entities/processed-image";
-import { deterministicRefinement } from "./deterministic-fusion";
-import { computeMattingInputSize, computeRefinementCrop } from "./focus-crop";
-import { buildRefinementTrimap } from "./trimap";
 import type {
   MatteRefinementRequest,
   MatteRefinementWorkerResponse,
@@ -107,42 +104,12 @@ export function useMatteRefinement(
       worker.setActiveRequest(requestId);
       setState({ ...initialState, status: "preparing" });
       try {
-        const trimap = buildRefinementTrimap({
-          automaticMatte: input.priorMatte,
-          guidedMatte: input.guidedMatte ?? null,
-          constraints: input.constraints ?? null,
-        });
-        const crop = computeRefinementCrop(trimap);
-        if (!crop) {
-          setState({
-            ...initialState,
-            status: "applying",
-            result: {
-              matte: deterministicRefinement({
-                priorMatte: input.priorMatte,
-                guidedMatte: input.guidedMatte ?? null,
-                trimap,
-                constraints: input.constraints ?? null,
-              }),
-              requestedMode: input.mode,
-              actualMode: "deterministic",
-              actualPath: null,
-              inputSize: { width: 0, height: 0 },
-              fallback: "deterministic",
-            },
-            fallback: "deterministic",
-          });
-          return;
-        }
         const request: MatteRefinementRequest = {
           requestId,
           source: input.source,
           priorMatte: input.priorMatte,
           guidedMatte: input.guidedMatte ?? null,
           constraints: input.constraints ?? null,
-          trimap,
-          crop,
-          inputSize: computeMattingInputSize(crop),
           requestedMode: input.mode,
           requestedPath: input.path,
         };

@@ -8,6 +8,7 @@
 > `⏳ pending` — not started
 > `🔄 in-progress` — agent implementation in progress
 > `✅ done` — gate checks passed, committed, merged
+> `⏹ closed-incomplete` — architect accepted closure with known failures and an explicitly waived gate
 > `⚠️ NEEDS_REVIEW` — spec changed, phase scope may be stale
 > `❌ blocked` — cannot proceed, see Blockers section
 >
@@ -50,9 +51,9 @@
 | PHASE_29 | ✅ done | v0.29.0 | ✅ | 🤖 agent | Background & Export Tools |
 | PHASE_30 | ✅ done | v0.30.0 | ⬜ | 🤖 agent | Design System & Redesign — T19–T21 deferred by architect decision 2026-07-30; `/phase-gate 30` not run |
 | PHASE_31 | ✅ done | v0.31.0 | ✅ | 🤖 agent | Whole-Project Audit & Refactor |
-| PHASE_32 | ⚠️ NEEDS_REVIEW | v0.32.0 | ⬜ | — | Guided Help & Onboarding |
-| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Accessibility, Device & Product Validation |
-| PHASE_34 | ⚠️ NEEDS_REVIEW | v0.34.0 | ⬜ | — | Final Legal, Consent & Release Readiness |
+| PHASE_32 | ⏹ closed-incomplete | — | ⚠️ waived | 🤖 agent | Legacy stabilization accepted with unresolved real-browser freezes; no release tag |
+| PHASE_33 | ⏳ pending | v0.33.0 | ⬜ | — | Editor v2 Foundation & First Vertical Slice |
+| PHASE_34 | ⚠️ NEEDS_REVIEW | v0.34.0 | ⬜ | — | Prior legal phase number superseded by incremental v2 roadmap; renumber after Phase 33 evidence |
 
 <!-- Add new rows here via /phase-init N -->
 
@@ -64,7 +65,7 @@
 > `SPEC.md` explicitly removes it (via `/spec-sync`). Updated by `/spec-sync` (on contract-changing
 > spec edits) and `/context-update` (on phase completion).
 
-**Phase completed:** `29` · **Phase in progress:** `30`
+**Phase completed:** `32` (accepted incomplete) · **Phase in progress:** `—`
 
 **Stack:** see [docs/STACK.md](./STACK.md)
 
@@ -230,6 +231,13 @@ interface ItemProcessingProgress {
   percent: null;
 }
 
+interface BatchItemError {
+  code: string;
+  message: string;
+  detail: string;        // safe diagnostic detail; never image data
+  retryable: boolean;
+}
+
 interface BatchItem {
   id: string;
   originalFileName: string;
@@ -238,7 +246,7 @@ interface BatchItem {
   alphaMatte?: AlphaMatte;
   processedImage?: ProcessedImage;
   status: BatchItemStatus;
-  error?: string;
+  error?: BatchItemError;
   enqueuedAt: number;
   startedAt?: number;
   completedAt?: number;
@@ -792,6 +800,28 @@ Individual export settings remain session-only and item-local. PNG export is dow
 preserves aspect ratio and the committed alpha/background, runs off the main interaction path with
 cancellation/latest-request guards, and leaves bulk ZIP export at committed original size.
 
+```ts
+// Phase 32 — localized, item-scoped batch failure and retained edit scope
+type BatchItemError = {
+  code: string;
+  message: string;
+  detail: string;
+  retryable: boolean;
+};
+
+type BatchItem = {
+  // prior fields unchanged
+  error?: BatchItemError;
+  editDocument?: EditDocumentScope;
+};
+```
+
+Phase 32 added structured per-item batch errors, item-owned edit scopes, additional worker run
+guards, upload preparation, and related legacy runtime changes. These are part of the current code
+contract, but they do **not** imply that the phase's responsiveness goal passed: architect manual
+verification still reproduces model-load and Magic Apply freezes. The phase gate was explicitly
+waived and no v0.32.0 release tag is authorized.
+
 ### Analytics Events
 
 > Umami custom events (SPEC.md §7.6), client-fired only — not part of this app's own server
@@ -940,12 +970,8 @@ None yet.
 
 <!-- Format: PHASE_XX [YYYY-MM-DD]: description — who must resolve it -->
 
-- PHASE_32 [2026-07-31]: needs review after spec change — `F7` still names "bilingual cross-browser
-  Playwright coverage," but `SPEC.md §7.4` now scopes the configured Playwright gate to Chromium
-  only (Firefox/WebKit/Mobile Safari dropped). Resolve before implementing.
-- PHASE_34 [2026-07-31]: needs review after spec change — `F9` still names "bilingual cross-browser
-  Playwright request/storage inspection," but `SPEC.md §7.4` now scopes the configured Playwright
-  gate to Chromium only (Firefox/WebKit/Mobile Safari dropped). Resolve before implementing.
+PHASE_34 [2026-08-01]: needs review after spec change — the former final-legal contract depends on
+the legacy roadmap and must be renumbered/re-scoped after Phase 33 evidence.
 
 ---
 
@@ -955,6 +981,97 @@ None yet.
 > `CHANGELOG.md` entries, `DECISIONS.md` ADRs, and the old "Expert Feedback Log" / "Rollback
 > Notes" sections. Never delete an entry — if a decision is superseded, add a new entry that says
 > so and leave the old one in place.
+
+## 2026-08-01 — Phase 32 closed incomplete by architect exception
+
+**Type**: phase-completion-exception
+**Author**: architect (via AI context-update)
+**Triggered by**: explicit direction to close Phase 32 as-is without another test run or
+`/phase-gate`, accept the legacy changes, and continue through an architecture-led rebuild.
+
+### Changes / Decision
+- Current code includes Phase-32 upload preparation, worker lifecycle/run guards, structured batch
+  errors, retained item edit scopes, and associated UI/test changes.
+- Manual product verification overrides the earlier host-specific automated acceptance claim:
+  image/model processing and Magic Apply still freeze the browser, and first-stroke preparation can
+  appear to apply automatically.
+- Phase 32 is `closed-incomplete`, its gate is `waived`, and no v0.32.0 release tag is created. This
+  is an explicit risk acceptance and roadmap transition, not a PASS result.
+
+### Affected Phases / Consequences
+- PHASE_33 — must prove the first v2 vertical slice on the architect's affected browser/device
+  before any additional editor feature is migrated.
+
+## 2026-08-01 — Architecture-led v2 and future paid processing approved
+
+**Type**: spec-change
+**Author**: AI (spec-sync), architect decision
+**Triggered by**: architect manual verification still reproducing model-load and Magic Cutout
+freezes after Phase 32, followed by a request to define the domain/architecture before continuing.
+
+### Changes / Decision
+- `docs/ARCHITECTURE_V2.md` records the current domain/data-flow map, structural failure analysis,
+  target document-actor model, artifact ownership, unified worker runtime, stack decisions, paid
+  backend boundary, and vertical-slice migration.
+- The free tier remains anonymous and browser-local. Future remote processing is permitted only as
+  an explicit paid capability with separate account, entitlement, billing, security, data,
+  retention, deletion, operational, and commercial-model-license contracts.
+- Phase 32 is accepted as an incomplete legacy stabilization attempt. Phase 33 is replaced by the
+  v2 foundation and single-image import → local removal → preview → PNG export slice. Later feature,
+  validation, paid-backend, and legal phases are intentionally renumbered only after Phase 33
+  evidence.
+- This spec change adds no deployed API, database, account, payment, remote upload, or runtime
+  dependency. `docs/STATE.md` § Current Contract therefore remains unchanged until v2 code lands.
+
+### Affected Phases / Consequences
+- PHASE_32 — closes with an explicitly waived gate and known unresolved responsiveness defects.
+- PHASE_33 — prior accessibility contract is superseded and must be replaced before implementation.
+- PHASE_34 — prior legal/release contract is stale and must be renumbered after the v2 migration
+  roadmap is evidence-based.
+
+## 2026-08-01 — Phase 32 replaced with critical stability work
+
+**Type**: spec-change
+**Author**: AI (spec-sync), architect decision
+**Triggered by**: architect brief covering critical freezes, state defects, batch failures and
+reprocessing during item switching.
+
+### Changes / Decision
+- `SPEC.md` §1.3, §2.2, §7.1, §7.3, §7.7 and §8 now define Phase 32 as Critical Bugs,
+  Performance & Stability, replacing the reserved placeholder left after onboarding was archived.
+- Phase 32 is delivered in tested waves and covers both single and multiple uploads. Heavy work
+  must not block the main thread; editor operations are single-flight with explicit cancel/stale/
+  error cleanup; completed batch documents remain item-owned and are selected without reinference.
+- `BatchItem.error` becomes a structured, localized, safe-to-display diagnostic with retryability.
+  No server API, persistence, analytics event, model asset or environment variable is introduced.
+
+### Affected Phases / Consequences
+- PHASE_32 — new active phase contract is scaffolded from the approved brief.
+- PHASE_33 — audit sample and performance validation now consume the Phase-32 hardened flows;
+  prior onboarding references are removed, so review status is resolved.
+- PHASE_34 — final inventory now covers actual editor/runtime storage only, and its Playwright
+  wording matches the configured Chromium gate; prior onboarding review status is resolved.
+
+## 2026-07-31 — Phase-32 onboarding direction archived
+
+**Type**: decision
+**Author**: architect (via AI)
+**Triggered by**: architect rejection of the in-progress onboarding direction and request to reuse
+the Phase-32 number for a new brief.
+
+### Changes / Decision
+- The unfinished Guided Help & Onboarding implementation is withdrawn from the active product plan.
+  Its phase contract is retained under `docs/archive/`; the prototype remains recoverable from the
+  local `archive/phase-32-guided-help` branch and its named Git stash.
+- `SPEC.md` no longer promises `features/guided-help`, `helpState`, onboarding UI, or its dedicated
+  E2E contract. Phase 32 is reserved pending a replacement architect brief.
+- This is a future-plan change only: no completed runtime contract or shipped code was removed.
+
+### Affected Phases / Consequences
+- PHASE_32 — prior scope archived; no implementation may start until the replacement brief is
+  approved and a new active phase contract is created.
+- PHASE_33 — marked `NEEDS_REVIEW` because its audit sample and dependency assumed onboarding.
+- PHASE_34 — remains `NEEDS_REVIEW`; its final inventory assumed onboarding/help state.
 
 ## 2026-07-31 — Configured Playwright gate scoped to Chromium-only
 

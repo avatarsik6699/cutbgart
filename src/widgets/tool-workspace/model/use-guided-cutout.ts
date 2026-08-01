@@ -133,8 +133,9 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
 
   const guidedRunRef = useRef(0);
   const guidedTargetRef = useRef<GuidedTarget | null>(null);
+  const guidedApplyRef = useRef<Promise<boolean> | null>(null);
 
-  async function handleApplyGuided(): Promise<boolean> {
+  async function performApplyGuided(): Promise<boolean> {
     const session = guided.state.session;
     const target = guidedTargetRef.current;
     if (!session || !target || !guided.canApply) return false;
@@ -260,6 +261,18 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
     return commitGuidedMatte();
   }
 
+  function handleApplyGuided(): Promise<boolean> {
+    const active = guidedApplyRef.current;
+    if (active) return active;
+    const promise = performApplyGuided();
+    guidedApplyRef.current = promise;
+    function releaseApplyOwnership(): void {
+      if (guidedApplyRef.current === promise) guidedApplyRef.current = null;
+    }
+    void promise.then(releaseApplyOwnership, releaseApplyOwnership);
+    return promise;
+  }
+
   function handleGuideAutomaticResult() {
     if (removalState.status !== "result") return;
     const image = removalState.result;
@@ -296,7 +309,7 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
           entryKind: "processed",
           resultColorSource: image.foreground ?? image.source.blob,
         });
-        guided.start(image.source, matte);
+        guided.hydrate(image.source, matte);
         retryCorrectionRef.current = null;
       } catch (error: unknown) {
         if (guidedRunRef.current !== guidedRunId) return;
@@ -347,7 +360,7 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
           entryKind: "processed",
           resultColorSource: processedImage.foreground ?? processedImage.source.blob,
         });
-        guided.start(processedImage.source, matte);
+        guided.hydrate(processedImage.source, matte);
         retryCorrectionRef.current = null;
       } catch (error: unknown) {
         if (guidedRunRef.current !== guidedRunId) return;
@@ -360,8 +373,48 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
     })();
   }
 
+  function synchronizeSingleGuidedTarget(
+    image: ProcessedImage,
+    document: EditDocumentScope,
+  ): void {
+    if (!guided.state.session || !image.alphaMatte) return;
+    guidedRunRef.current += 1;
+    guidedApplyRef.current = null;
+    guidedTargetRef.current = {
+      kind: "single",
+      image,
+      documentRevision: document.document.revision,
+    };
+    setGuidedVisualContext({
+      entryKind: "processed",
+      resultColorSource: image.foreground ?? image.source.blob,
+    });
+    guided.replaceBase(image.alphaMatte);
+  }
+
+  function synchronizeBatchGuidedTarget(item: BatchItem): void {
+    if (!guided.state.session || !item.processedImage?.alphaMatte || !item.editDocument)
+      return;
+    guidedRunRef.current += 1;
+    guidedApplyRef.current = null;
+    guidedTargetRef.current = {
+      kind: "batch",
+      itemId: item.id,
+      image: item.processedImage,
+      documentRevision: item.editDocument.document.revision,
+      workerOwnerId: item.editDocument.workerOwnerId,
+    };
+    setGuidedVisualContext({
+      entryKind: "processed",
+      resultColorSource:
+        item.processedImage.foreground ?? item.processedImage.source.blob,
+    });
+    guided.replaceBase(item.processedImage.alphaMatte);
+  }
+
   function cancelGuided() {
     guidedRunRef.current += 1;
+    guidedApplyRef.current = null;
     guided.reset();
     guidedTargetRef.current = null;
     setGuidedVisualContext(null);
@@ -374,6 +427,7 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
 
   const bumpGuidedRun = useCallback((): number => {
     guidedRunRef.current += 1;
+    guidedApplyRef.current = null;
     return guidedRunRef.current;
   }, []);
 
@@ -393,6 +447,8 @@ export function useGuidedCutout(deps: GuidedCutoutDeps) {
     handleApplyGuided,
     handleGuideAutomaticResult,
     handleGuideBatchResult,
+    synchronizeSingleGuidedTarget,
+    synchronizeBatchGuidedTarget,
     cancelGuided,
   };
 }

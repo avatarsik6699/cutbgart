@@ -1,4 +1,4 @@
-# PHASE 32 — Guided Help & Onboarding
+# PHASE 32 — Critical Bugs, Performance & Stability
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,33 +7,21 @@
 | Field | Value |
 |-------|-------|
 | Phase | `32` |
-| Title | Guided Help & Onboarding |
-| Status | `⏳ pending` |
+| Title | Critical Bugs, Performance & Stability |
+| Status | `⏹ closed — accepted incomplete` |
 | Tag | `v0.32.0` |
 | Depends on | PHASE_31 gate passing |
-
-> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-07-31.
-> Check `SPEC.md §7.4` against the updated `docs/SPEC.md` — the configured Playwright gate is now
-> Chromium-only (Firefox/WebKit/Mobile Safari dropped). Re-validate `F7`'s "bilingual cross-browser
-> Playwright coverage" wording before implementation.
 
 ---
 
 ## Phase Goal
 
-Research how short animated demonstrations and contextual onboarding can clarify the redesigned
-workflow, then ship a small, replayable, accessible help system. Guidance must explain the real
-current controls for both single and selected-batch workflows without blocking the automatic first
-result, bloating the initial bundle, or becoming the only source of required information
-(SPEC.md §5.2–§5.4, §7.1, §7.7–§8).
-
-## Design References
-
-- [remove.bg Magic Brush help](https://www.remove.bg/uk/help/a/how-to-use-magic-brush) — reference
-  for compact visual instruction tied to a tool, not a pixel-identical implementation.
-- [WCAG 2.2: Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)
-  and [Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) —
-  reduced-motion and user-control acceptance criteria.
+Remove the reported freezes, state loss and batch failures so the existing editor remains responsive
+from upload/model initialization through export. Every correction must work for one upload and for
+the selected item in a multiple-upload session, preserve the user's last committed document, and
+leave no active work or resources behind after cancel, navigation or item switching. Delivery is
+wave-gated: a wave's focused tests and measurements pass before implementation moves to the next
+wave (SPEC.md §2.2, §7.1, §7.3, §7.7).
 
 ---
 
@@ -41,54 +29,78 @@ result, bloating the initial bundle, or becoming the only source of required inf
 
 ### Other
 
-- [ ] `T1` Inventory every point where users may need help: one/many upload and modes, first result,
-  Cutout Magic/Manual, brush size/zoom, Enhancements, Background, undo/redo, individual download,
-  ZIP, dirty-draft switching, and recoverable errors. Rank by observed confusion and define one
-  measurable learning goal per retained item; do not create a tour for self-explanatory controls —
-  _Depends on:_ —
-- [ ] `T2` Research and record the delivery decision in `docs/research/GUIDED_HELP.md`: authored
-  video/animated WebP/AVIF, CSS/canvas, and a code animation runtime are compared for file size,
-  transparency, crispness, localization, reduced motion, pause/replay, CSP, cacheability,
-  maintainability, and creation workflow. Include a representative prototype and measured build/
-  network/decode cost before selecting a format or dependency — _Depends on:_ `T1`
-- [ ] `T3` Define a repeatable content pipeline: capture/source ownership, safe fixture images,
-  crop/dimensions, duration/looping, compression, poster/static alternative, RU/EN text/transcript,
-  naming/versioning, review checklist, and how a designer or agent updates an instruction without
-  editing orchestration code — _Depends on:_ `T2`
+- [x] `T1` Build `docs/audits/PHASE_32_BASELINE.md`: reproduce every 1.1–1.7 symptom with
+  deterministic fixtures and an available-host real-model run for both single and multiple uploads.
+  Capture browser/build/hardware, exact steps, main-thread tasks, event-to-next-paint, worker traffic,
+  React commits, memory/resources and state transitions; map each symptom to its root cause before
+  selecting a fix — _Depends on:_ —
+- [x] `T2` Freeze the acceptance matrix in that baseline: no application-attributable main-thread
+  task `>=50 ms`, event-to-next-paint `p95 <100 ms` for pointer/scroll/cached-item selection, no
+  reinference when selecting a completed item, no duplicate commit, and no resource growth after
+  repeated cancel/navigation/item churn. Record measurement caveats; do not claim universal device
+  performance from one host — _Depends on:_ `T1`
+- [x] `T3` Implement in four ordered waves and append focused before/after evidence to
+  `docs/audits/PHASE_32_RESULTS.md` after each wave. Do not begin the next wave until the current
+  wave's affected unit/integration/E2E/performance checks pass: W1 lifecycle+initialization (`F1`–`F2`),
+  W2 Cutout (`F3`–`F4`), W3 Enhancements+Background+viewport (`F5`–`F7`), W4 batch+cache (`F8`–`F10`) —
+  _Depends on:_ `T2`
 
 ### Frontend
 
-- [ ] `F1` Add `features/guided-help` with a typed, versioned registry keyed by user task and
-  context (`single` or `batch-selected`). Definitions reference lazy instruction assets, localized
-  title/body/accessible description, eligibility, placement, and completion/dismiss rules; no
-  editor business logic is duplicated in help definitions — _Depends on:_ `T2`, `T3`
-- [ ] `F2` Add unobtrusive contextual help cards/popovers for only the retained high-risk
-  interactions and a persistent toolbar/site Help entry that reopens the complete task list.
-  First-use guidance never interrupts upload, processing, or download and never uses a forced
-  modal carousel — _Depends on:_ `F1`
-- [ ] `F3` Produce the approved small instruction set for upload/modes, Magic vs Manual and brush
-  size, Enhancements, Background/download, and batch item switching/ZIP. Each demonstration must
-  match the implemented UI and have localized text plus a static poster/step alternative —
-  _Depends on:_ `F1`, `F2`
-- [ ] `F4` Persist only versioned viewed/dismissed task IDs in `helpState`; allow dismiss, replay,
-  and reset. A content-version bump reopens only materially changed guidance. Never store image,
-  filename, action coordinates, or a behavioral profile — _Depends on:_ `F1`
-- [ ] `F5` Honor `prefers-reduced-motion`, never flash, expose pause/replay for continuing motion,
-  make every trigger/control keyboard and screen-reader operable, preserve focus, and ensure the
-  static/text path completes the same learning goal — _Depends on:_ `F2`, `F3`
-- [ ] `F6` Lazy-load help code/assets only after editor intent or explicit Help activation. Record
-  and enforce the asset/initial-bundle budgets selected by `T2`; failed asset loading falls back to
-  static/text guidance without affecting editing — _Depends on:_ `F1`–`F5`
-- [ ] `F7` Add unit/component tests for eligibility, version migration, dismiss/replay/reset,
-  single/batch context, missing-asset fallback, localization, focus, and reduced motion. Add
-  bilingual cross-browser Playwright coverage proving guidance never blocks the core flow and
-  accurately targets the visible controls — _Depends on:_ `F1`–`F6`
+- [x] `F1` Establish explicit run ownership for the affected async paths: one active run identity,
+  single-flight Apply, abort/stale/error terminals, and cleanup on tool/item/route change or unmount.
+  A cancelled, stale or failed run cannot mutate the visible document/history; reuse existing shared
+  worker lifecycle helpers only where their protocol genuinely matches — _Depends on:_ `T2`
+- [x] `F2` Remove upload/model-initialization blocking for single and multiple uploads. Keep model
+  fetch/session creation, inference, full-resolution transforms, compositing and PNG encoding off the
+  main thread (or cooperatively chunked only where a worker is impossible); keep progress, navigation
+  and editor controls responsive while bounded work continues — _Depends on:_ `F1`
+- [x] `F3` Fix Cutout Magic and committed history: Apply is single-flight and produces exactly one
+  current-document commit; Cancel always gives visible feedback and exits/clears the draft even when
+  there are no strokes; undo/redo never performs synchronous full-image copies and preserves coherent
+  base/current artifacts across repeated passes — _Depends on:_ `F2`
+- [x] `F4` Fix Cutout Manual and tool synchronization: Magic and Manual always render the selected
+  item's latest committed document; Manual Apply cannot be invoked repeatedly while pending, commits
+  durably, clears the dirty guard on success, and survives tool/item switching. Brush controls and
+  size slider remain mounted/populated after any Background → Enhancements → Cutout sequence —
+  _Depends on:_ `F3`
+- [x] `F5` Make Enhancement Apply non-blocking and single-flight. Stop cancels/invalidates the active
+  run, preserves the last committed result and the user's current checkbox selection, releases
+  run-owned resources, and reports cancellation truthfully without claiming a partial result was
+  saved. Tool/route/item navigation during a run cannot leak or publish stale output — _Depends on:_ `F4`
+- [x] `F6` Make Background Apply non-blocking and single-flight. Fix the custom-colour popover so the
+  palette and Done action are never clipped or overlaid at supported breakpoints/zoom: collision-aware
+  placement plus a bounded scrollable content area keeps every control reachable — _Depends on:_ `F5`
+- [x] `F7` Show view controls only in Cutout. While Space-pan is active render only the hand cursor;
+  update brush position through the imperative canvas/pointer path so it remains cursor-aligned during
+  zoom/pan. Plain wheel continues page scrolling; explicit canvas zoom (Ctrl/Meta+wheel) captures the
+  gesture and visibly highlights/labels the stage boundary while capture is active — _Depends on:_ `F6`
+- [x] `F8` Stabilize multiple-file enqueue/add scheduling so every valid image reaches an independent
+  terminal result/error under bounded WebGPU/WASM concurrency. Adding files while a batch exists must
+  not corrupt queues, worker requests, selection or completed siblings — _Depends on:_ `F7`
+- [x] `F9` Replace `BatchItem.error?: string` with `BatchItemError`; expose a localized per-tile
+  summary and expandable safe detail. Retry starts a fresh bounded run from the retained source,
+  clears only that item's transient error/work, works after both initial and add-image failures, and
+  never requeues or discards successful siblings — _Depends on:_ `F8`
+- [x] `F10` Retain each completed item's `EditDocument`, committed history, tool-local draft/settings,
+  viewport and preview artifacts for the session. Selecting a completed item restores them immediately
+  without upload/decode/automatic reinference; eviction/removal/reset releases only unreachable
+  artifacts. Prove isolation and parity across at least three items with edits in different tools —
+  _Depends on:_ `F9`
 
 ### Infra
 
-- [ ] `I1` Add a runtime/package only if `T2` demonstrates a net advantage over native assets/CSS.
-  Pin and document any dependency/license in `docs/STACK.md`; keep instruction assets self-hosted,
-  immutable, and absent from the initial critical path — _Depends on:_ `T2`, `F7`
+- [x] `I1` Add characterization/unit/integration tests before each behavior change, including worker
+  crash/stale/cancel/unmount, Apply re-entry, no-stroke Cancel, history integrity, route/tool/item churn,
+  batch add/retry/error details and item-owned cache eviction — _Depends on:_ `T2`
+- [x] `I2` Add/extend bilingual Playwright flows for every reported behavior in both single and
+  multiple-upload modes. Instrument deterministic inference request counts and CDP traces so tests
+  assert no completed-item reinference and the Phase-32 responsiveness budgets, not only final DOM —
+  _Depends on:_ `I1`, `F10`
+- [x] `I3` Run the complete host gate and serialized real-model smoke after the four waves; repeat the
+  baseline churn and record final task/paint/memory/resource evidence. No listed 1.1–1.7 defect may be
+  deferred to Phase 33; a failing budget or unresolved architect note blocks Phase 32 —
+  _Depends on:_ `T3`, `I2`
 
 ---
 
@@ -97,32 +109,37 @@ result, bloating the initial bundle, or becoming the only source of required inf
 ### Create / modify
 
 ~~~
-docs/research/GUIDED_HELP.md
-src/features/guided-help/model/types.ts
-src/features/guided-help/model/help-registry.ts
-src/features/guided-help/model/use-guided-help.ts
-src/features/guided-help/model/*.test.ts
-src/features/guided-help/ui/ContextualHelp.tsx
-src/features/guided-help/ui/HelpCenter.tsx
-src/features/guided-help/ui/*.test.tsx
-src/features/guided-help/index.ts
-src/widgets/tool-workspace/ui/EditorToolbar.tsx
-src/widgets/tool-workspace/ui/ToolWorkspace.tsx
-src/shared/ui/site-header/
-public/help/
+docs/audits/PHASE_32_BASELINE.md
+docs/audits/PHASE_32_RESULTS.md
+src/features/remove-background/
+src/features/upload-image/
+src/features/batch-processing/
+src/features/select-object/
+src/features/correct-mask/
+src/features/editor-history/
+src/features/refine-matte/
+src/features/refine-foreground/
+src/features/background-replacement/
+src/entities/edit-document/
+src/widgets/tool-workspace/
+src/shared/lib/ (only an evidence-justified reusable lifecycle/performance primitive)
 messages/ru.json
 messages/en.json
-e2e/guided-help.spec.ts
-docs/STACK.md
+e2e/phase-32-stability.spec.ts
+e2e/support/
+scripts/profiling/
 docs/PHASE_32.md
 ~~~
 
+Only files tied to a reproduced root cause may be changed; this list is an ownership boundary, not
+authorization for a blanket rewrite.
+
 ### Do NOT touch
 
-- Editor processing, model, matte, compositing, history, or export semantics
-- Add product analytics for tutorial views/completion or store interaction-level behavior
-- Add a third-party hosted media/tracking embed, forced tour, autoplay audio, or image upload
-- Studio layers/transforms/effects, accounts, backend persistence, or future metadata collection
+- Model families, weights, revisions, inference quality or privacy/client-only invariants
+- Server APIs, analytics events, persistence, env vars, accounts, payments or Studio capability
+- Phase-33 accessibility/device research or Phase-34 legal/consent implementation
+- Unrelated FSD/style cleanup, package churn or speculative worker abstraction
 
 ---
 
@@ -130,17 +147,8 @@ docs/PHASE_32.md
 
 ### New persistent data (tables / collections / files)
 
-```text
-localStorage.helpState = {
-  schemaVersion: 1,
-  contentVersion: string,
-  viewedTaskIds: string[],
-  dismissedTaskIds: string[]
-}
-```
-
-Only bounded allow-listed task IDs are accepted. Invalid/old state is discarded safely. No server
-storage, identifier, timestamp trail, source image, filename, or action telemetry is added.
+Repository-only baseline/results evidence. No runtime persistence is added; image/document caches
+remain bounded browser-memory session state.
 
 ### New API endpoints / RPC methods / events
 
@@ -149,18 +157,24 @@ None.
 ### New types / models / shared interfaces
 
 ```ts
-type HelpContext = "single" | "batch-selected";
+type BatchItemError = {
+  code: string;
+  message: string;
+  detail: string;
+  retryable: boolean;
+};
 
-interface GuidedHelpDefinition {
-  id: string;
-  contentVersion: string;
-  contexts: readonly HelpContext[];
-  asset: { animated: string; poster: string };
-  title: string;
-  body: string;
-  accessibleDescription: string;
-}
+type BatchItem = {
+  // existing fields unchanged
+  error?: BatchItemError;
+  editDocument?: EditDocumentScope;
+};
 ```
+
+`detail` is localized/safe for user display and never contains image bytes, derived pixels,
+filenames beyond the tile's existing local label, object URLs, stack traces with local paths, or
+analytics-bound identifiers. Tool-run identities and abort handles stay internal to their owning
+slice unless root-cause evidence proves one genuinely shared contract.
 
 ### New env vars
 
@@ -170,41 +184,61 @@ None.
 
 ## Gate Checks
 
-Run `/phase-gate 32`; standard commands plus:
+Run targeted checks after every wave, then `/phase-gate 32` before committing. The complete
+`docs/STACK.md` gate applies; Playwright remains host-only.
 
 ```bash
-pnpm vitest run src/features/guided-help src/widgets/tool-workspace
-pnpm e2e e2e/guided-help.spec.ts e2e/home.spec.ts
-pnpm build
+pnpm lint
 pnpm tsc --noEmit
+pnpm vitest run
 pnpm exec steiger ./src
+pnpm e2e e2e/phase-32-stability.spec.ts --project=chromium --workers=1
+pnpm profile:baseline
+pnpm e2e:full
 ```
 
-Fail if onboarding blocks the first result, assets enter the initial critical path, motion cannot
-be reduced/paused where required, static/text alternatives are missing, content shows stale
-controls, help state captures behavior/image data, or single and selected-batch guidance diverge.
+Attach `PHASE_32_RESULTS.md` evidence for all four waves and both single/multiple upload scenarios.
+Fail the gate on any reproduced 1.1–1.7 defect, application-attributable task `>=50 ms`, interaction
+`p95 >=100 ms`, reinference on completed-item selection, duplicate/stale commit, lost item state,
+unexplained batch failure, or resource growth after repeated cancel/navigation/item churn.
 
 ---
 
 ## Architect Review Notes
 
-- [x] No architect review issues recorded
+- [x] Manual verification on 2026-08-01 still reproduces UI freezes during image/model processing
+  and Magic Apply. The first Magic stroke can enter a busy encode/preparation state that appears to
+  apply automatically. Architect explicitly accepted closing the legacy phase without another test
+  run or gate; these defects move to the architecture-led v2 program and are not represented as
+  fixed.
+
+---
 
 ## Implementation Notes
 
-- Reordered after the original Phase-32 (Whole-Project Audit & Refactor) at the architect's request
-  (2026-07-30): help now ships after the audit/refactor pass instead of before it, so it can build
-  on any consolidated shared/ui primitives or hook decomposition the audit lands. See
-  `docs/STATE.md` § Project Log.
+- Phase 32 delivered local lifecycle and state changes, but its principal responsiveness goal was
+  not achieved on the architect's real browser/device. Automated evidence in
+  `docs/audits/PHASE_32_RESULTS.md` is host-specific and is superseded for product acceptance by the
+  failed manual verification above.
+- Closure is a deliberate roadmap transition, not a successful stability claim. `/phase-gate 32`
+  was waived by explicit architect direction on 2026-08-01; no release tag should be created for
+  this phase.
+
+---
 
 ## Atomic Commit Message
 
 ```text
-feat(phase-32): add contextual help and onboarding
+chore(phase-32): close incomplete legacy stabilization
 ```
+
+---
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
-- [ ] Run `/context-update 32`
-- [ ] Commit on `feat/phase-32`; tag `v0.32.0` after merge
+- [x] All Scope checkboxes checked; every wave's focused checks recorded before the next wave
+- [x] Closing gate explicitly waived by architect on 2026-08-01; no final test run performed
+- [x] All architect review notes resolved
+- [x] `docs/STATE.md` updated — `/context-update 32` with accepted-incomplete exception
+- [ ] Committed atomically on `feat/phase-32`
+- [x] No `v0.32.0` tag by architect-approved exception: the phase did not pass product acceptance

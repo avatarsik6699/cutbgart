@@ -94,6 +94,7 @@ export function useBackgroundFill({
   const revisionRef = useRef(0);
   const sourceRef = useRef(image.source.blob);
   const committedFillRef = useRef(initialSavedFill);
+  const savePromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -165,32 +166,40 @@ export function useBackgroundFill({
 
   const dirty = !sameFill(fill, savedFill);
 
-  const save = useCallback(async () => {
+  const save = useCallback((): Promise<void> => {
+    if (savePromiseRef.current) return savePromiseRef.current;
     const revision = revisionRef.current + 1;
     revisionRef.current = revision;
     const nextFill = fill;
     setSaving(true);
     setError(null);
-    try {
-      const updated = await onApply(nextFill);
-      if (mountedRef.current && revisionRef.current === revision) {
-        const nextSavedFill = updated.backgroundFill ?? TRANSPARENT_FILL;
-        committedFillRef.current = nextSavedFill;
-        setFill(nextSavedFill);
-        setSavedFill(nextSavedFill);
-        onResult(updated);
-      }
-    } catch (reason) {
-      if (mountedRef.current && revisionRef.current === revision) {
-        setError(reason instanceof Error ? reason.message : String(reason));
-      }
-    } finally {
-      if (mountedRef.current && revisionRef.current === revision) setSaving(false);
-    }
+    const promise = onApply(nextFill)
+      .then((updated) => {
+        if (mountedRef.current && revisionRef.current === revision) {
+          const nextSavedFill = updated.backgroundFill ?? TRANSPARENT_FILL;
+          committedFillRef.current = nextSavedFill;
+          setFill(nextSavedFill);
+          setSavedFill(nextSavedFill);
+          onResult(updated);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (mountedRef.current && revisionRef.current === revision)
+          setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (savePromiseRef.current === promise) {
+          savePromiseRef.current = null;
+          if (mountedRef.current) setSaving(false);
+        }
+      });
+    savePromiseRef.current = promise;
+    return promise;
   }, [fill, onApply, onResult]);
 
   const cancel = useCallback(() => {
     revisionRef.current += 1;
+    savePromiseRef.current = null;
     const committedFill = committedFillRef.current;
     setFill(committedFill);
     setSavedFill(committedFill);

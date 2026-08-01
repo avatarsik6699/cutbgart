@@ -77,7 +77,7 @@ function itemStatusText(item: BatchItem): string {
     return m.batchRemoving({ elapsed });
   }
   if (item.status === "model-loading") return m.batchPreparingModel({ elapsed });
-  if (item.status === "error") return item.error ?? m.batchProcessingFailed();
+  if (item.status === "error") return item.error?.message ?? m.batchProcessingFailed();
   if (item.status === "result") return m.batchReadyElapsed({ elapsed });
   return statusLabel(item.status);
 }
@@ -175,6 +175,16 @@ export function BatchGrid({
                   </span>
                 </span>
               </button>
+              {item.status === "error" && item.error && (
+                <details className="border-t border-border px-2 py-1.5 text-xs">
+                  <summary className="cursor-pointer font-medium text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+                    {m.batchErrorDetails()}
+                  </summary>
+                  <p className="mt-1 break-words text-muted-foreground">
+                    {item.error.detail}
+                  </p>
+                </details>
+              )}
               <Menu.Root>
                 <Menu.Trigger
                   render={
@@ -224,7 +234,7 @@ export function BatchGrid({
                           </Menu.Item>
                         </>
                       )}
-                      {item.status === "error" && (
+                      {item.status === "error" && item.error?.retryable !== false && (
                         <Menu.Item
                           onClick={() => {
                             const trigger = itemMenuTriggers.current[item.id];

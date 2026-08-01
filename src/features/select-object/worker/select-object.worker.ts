@@ -7,13 +7,15 @@ import {
   type SamProcessor,
 } from "@huggingface/transformers";
 
-import type { SourceImage } from "../../../entities/processed-image";
+import type { AlphaMatte, SourceImage } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
 import {
   maskCandidates,
   normalizedBoxToPixels,
   normalizedPointToPixels,
 } from "../model/prompt-coordinates";
+import { rankGuidedBrushCandidates } from "../model/candidate-ranking";
+import { consolidateGuidedBrushStrokes } from "../model/guided-brush-sampling";
 import {
   GUIDED_MODEL,
   type SelectObjectWorkerRequest,
@@ -65,8 +67,8 @@ let model: Model | null = null;
 let processor: Processor | null = null;
 let encoding: Encoding | null = null;
 
-function post(message: SelectObjectWorkerResponse): void {
-  scope.postMessage(message);
+function post(message: SelectObjectWorkerResponse, transfer?: Transferable[]): void {
+  scope.postMessage(message, transfer);
 }
 
 function disposeEncoding(): void {
@@ -189,7 +191,13 @@ function promptInputs(
   return tensors;
 }
 
-async function predict(prompt: IterativeSelectionPrompt): Promise<void> {
+async function predict(
+  prompt: IterativeSelectionPrompt,
+  guided?: {
+    baseMatte: AlphaMatte | null;
+    consolidated: ReturnType<typeof consolidateGuidedBrushStrokes>;
+  },
+): Promise<void> {
   if (!encoding || !model || !processor)
     throw new Error("Encode an image before prompting");
   post({ type: "status", revision: prompt.revision, status: "predicting-mask" });
@@ -221,10 +229,55 @@ async function predict(prompt: IterativeSelectionPrompt): Promise<void> {
     outputs.pred_masks.dispose();
     outputs.iou_scores.dispose();
     first.dispose();
-    post({ type: "candidates", revision: prompt.revision, candidates });
+    if (guided) {
+      const editRegion = guided.consolidated.editRegion;
+      if (!editRegion) throw new Error("Add a brush marking before applying");
+      const ranked = rankGuidedBrushCandidates(
+        candidates,
+        guided.consolidated.constraints,
+        editRegion,
+        guided.baseMatte,
+        guided.consolidated.influence,
+      );
+      post(
+        {
+          type: "guided-candidates",
+          revision: prompt.revision,
+          editRegion,
+          candidates: ranked,
+        },
+        ranked.map((candidate) => candidate.matte.data.buffer),
+      );
+    } else {
+      post(
+        { type: "candidates", revision: prompt.revision, candidates },
+        candidates.map((candidate) => candidate.matte.data.buffer),
+      );
+    }
   } finally {
     Object.values(promptTensors).forEach((tensor) => tensor.dispose());
   }
+}
+
+async function predictGuided(
+  request: Extract<SelectObjectWorkerRequest, { type: "prompt" }>,
+): Promise<void> {
+  const guided = request.guided;
+  if (!guided) throw new Error("Guided prompt metadata is unavailable");
+  const consolidated = consolidateGuidedBrushStrokes(
+    guided.strokes,
+    guided.width,
+    guided.height,
+  );
+  await predict(
+    {
+      revision: request.prompt.revision,
+      points: consolidated.points,
+      box: null,
+      previousMask: null,
+    },
+    { baseMatte: guided.baseMatte, consolidated },
+  );
 }
 
 scope.addEventListener("message", (event) => {
@@ -239,14 +292,16 @@ scope.addEventListener("message", (event) => {
     );
     return;
   }
-  void (
+  const work =
     request.type === "encode"
       ? encode(request.source, request.revision)
-      : predict(request.prompt)
-  ).catch((error: unknown) => {
+      : request.guided
+        ? predictGuided(request)
+        : predict(request.prompt);
+  void work.catch((error: unknown) => {
     post({
       type: "error",
-      revision: request.type === "encode" ? request.revision : request.prompt.revision,
+      revision: request.type === "prompt" ? request.prompt.revision : request.revision,
       message: error instanceof Error ? error.message : String(error),
     });
   });

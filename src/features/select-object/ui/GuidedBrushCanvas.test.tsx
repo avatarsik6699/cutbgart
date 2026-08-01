@@ -162,6 +162,41 @@ describe("GuidedBrushCanvas", () => {
     expect(controls.panView).toHaveBeenCalledWith(1, 0, "normal");
   });
 
+  it("keeps page wheel scrolling free and captures only explicit canvas zoom", () => {
+    const controls = { ...viewportControls, zoomByWheel: vi.fn() };
+    render(<GuidedBrushCanvas {...props} viewportControls={controls} />);
+    const editor = screen.getByRole("application", { name: /magic cutout editor/i });
+
+    const pageWheel = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+    fireEvent(editor, pageWheel);
+    expect(pageWheel.defaultPrevented).toBe(false);
+    expect(controls.zoomByWheel).not.toHaveBeenCalled();
+
+    const zoomWheel = new WheelEvent("wheel", {
+      clientX: 110,
+      clientY: 70,
+      deltaY: -40,
+      ctrlKey: true,
+      cancelable: true,
+    });
+    fireEvent(editor, zoomWheel);
+    expect(zoomWheel.defaultPrevented).toBe(true);
+    expect(controls.zoomByWheel).toHaveBeenCalledOnce();
+    expect(editor.getAttribute("data-scroll-captured")).toBe("true");
+  });
+
+  it("hides both brush rings while Space-pan is active", () => {
+    render(<GuidedBrushCanvas {...props} />);
+    const image = screen.getByTestId("guided-brush-edit-image");
+    fireEvent.pointerEnter(image, { clientX: 100, clientY: 60 });
+    expect(screen.getByTestId("guided-brush-cursor").style.opacity).toBe("1");
+
+    fireEvent.keyDown(window, { key: " " });
+    expect(screen.getByTestId("guided-brush-cursor").style.opacity).toBe("0");
+    expect(screen.getByTestId("guided-brush-core-cursor").style.opacity).toBe("0");
+    expect(screen.getByTestId("guided-brush-edit-image").style.cursor).toBe("grab");
+  });
+
   it("keeps draft undo/redo shortcuts scoped to the mounted Magic editor", () => {
     const onUndo = vi.fn();
     const dirty = {

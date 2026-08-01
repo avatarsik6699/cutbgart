@@ -6,7 +6,8 @@ import type {
   EnhancementOperationId,
 } from "../model/enhancement-operation-registry";
 
-export type EnhancementPanelOutcome = "applied" | "unchanged" | "kept-current" | null;
+export type EnhancementPanelOutcome =
+  "applied" | "unchanged" | "kept-current" | "cancelled" | null;
 
 export interface EnhancementsToolPanelProps {
   registry: readonly EnhancementOperationDefinition[];
@@ -117,7 +118,9 @@ export function EnhancementsToolPanel({
             ? m.enhancementsApplied()
             : outcome === "unchanged"
               ? m.enhancementsUnchanged()
-              : m.enhancementsCurrentKept()}
+              : outcome === "cancelled"
+                ? m.enhancementsCancelled()
+                : m.enhancementsCurrentKept()}
         </p>
       )}
 

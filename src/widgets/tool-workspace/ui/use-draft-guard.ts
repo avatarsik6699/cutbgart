@@ -168,8 +168,14 @@ export function useDraftGuard(deps: DraftGuardDeps) {
   }
 
   function clearActiveDraftState() {
-    if (deps.guided.state.session) deps.cancelGuided();
-    if (deps.originalMatte) deps.handleCancelCorrection();
+    if (deps.guided.state.session) {
+      deps.cancelGuided();
+      initializedMagicDocumentRef.current = null;
+    }
+    if (deps.originalMatte) {
+      deps.handleCancelCorrection();
+      initializedManualDocumentRef.current = null;
+    }
     if (deps.activeDocumentId && deps.backgroundDraftDirty) {
       const appliedFill = deps.selectedBatchItem?.processedImage?.backgroundFill ??
         (deps.state.status === "result" || deps.state.status === "correcting"

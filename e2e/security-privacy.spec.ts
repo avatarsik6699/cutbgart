@@ -162,6 +162,7 @@ test.describe("Phase 22 security and privacy", () => {
     await page.goto("/en");
     const bomb = Buffer.alloc(24);
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bomb);
+    Buffer.from("IHDR").copy(bomb, 12);
     bomb.writeUInt32BE(65_535, 16);
     bomb.writeUInt32BE(65_535, 20);
     const upload = page.getByLabel("Upload an image");
@@ -179,7 +180,7 @@ test.describe("Phase 22 security and privacy", () => {
             window as unknown as {
               __mockInferencePosts: Array<{ type: string }>;
             }
-          ).__mockInferencePosts.length,
+          ).__mockInferencePosts.filter((message) => message.type !== "prepare").length,
       ),
     ).toBe(0);
 
@@ -199,7 +200,7 @@ test.describe("Phase 22 security and privacy", () => {
             window as unknown as {
               __mockInferencePosts: Array<{ type: string }>;
             }
-          ).__mockInferencePosts.length,
+          ).__mockInferencePosts.filter((message) => message.type !== "prepare").length,
       ),
     ).toBe(0);
   });

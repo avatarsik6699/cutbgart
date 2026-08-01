@@ -70,7 +70,7 @@ export function BackgroundFillSelector({
   }, [dirty]);
   return (
     <fieldset
-      className="flex h-full min-w-0 max-w-full flex-col gap-5 overflow-hidden"
+      className="flex h-full min-h-0 min-w-0 max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
       aria-busy={saving}
     >
       <legend className="sr-only">{m.background()}</legend>
@@ -143,7 +143,10 @@ export function BackgroundFillSelector({
           ))}
         </div>
         {colorPickerOpen && (
-          <div id="background-color-picker" className="flex flex-col items-start gap-2">
+          <div
+            id="background-color-picker"
+            className="flex min-w-0 max-w-full flex-col items-start gap-2 pb-1"
+          >
             <InlineColorPicker color={currentColor} onChange={selectColor} />
             <Button
               type="button"

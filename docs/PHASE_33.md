@@ -1,104 +1,99 @@
-# PHASE 33 — Accessibility, Device & Product Validation
-
-<!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
+# PHASE 33 — Editor v2 Foundation & First Vertical Slice
 
 ## Phase Metadata
 
 | Field | Value |
 |-------|-------|
 | Phase | `33` |
-| Title | Accessibility, Device & Product Validation |
+| Title | Editor v2 Foundation & First Vertical Slice |
 | Status | `⏳ pending` |
 | Tag | `v0.33.0` |
-| Depends on | PHASE_32 gate passing |
+| Depends on | PHASE_32 closed-incomplete by architect exception; no gate dependency |
 
 ---
 
 ## Phase Goal
 
-Validate the functionally complete focused background editor as a product, not only as a passing
-test suite. This is the final product/accessibility/device gate before Phase 33 refreshes and
-implements the legal/data contract; it does not pre-implement or claim approval of those surfaces.
-This phase combines a manual WCAG 2.2 AA audit, assistive-technology and physical-device evidence,
-RU/EN editorial review, focused usability sessions, visual/performance regression coverage, and a
-public accessibility statement. It fixes product-blocking findings while keeping the product
-boundary focused on background removal and related editing (SPEC.md §5, §7–§9).
-
-## Research References
-
-- [WCAG 2.2](https://www.w3.org/TR/WCAG22/)
-- [W3C Evaluating Web Accessibility Overview](https://www.w3.org/WAI/test-evaluate/)
-- [W3C WCAG-EM 1.0](https://www.w3.org/TR/WCAG-EM/)
-- [web.dev Baseline](https://web.dev/baseline)
-- [Core Web Vitals](https://web.dev/articles/vitals)
-- [Nielsen Norman Group — Usability Testing 101](https://www.nngroup.com/articles/usability-testing-101/)
+Implement `docs/ARCHITECTURE_V2.md` as one separately reachable, fully tested local slice: choose
+one image → prepare → remove background → preview → export PNG. Prove workflow ownership, artifact
+lifetime, worker isolation, and responsiveness on the architect's affected browser/device before
+migrating any other editor capability. Keep the legacy editor available for comparison/rollback.
 
 ---
 
 ## Scope
 
-### Accessibility
+### Other
 
-- [ ] `A1` Freeze representative pages, locales, breakpoints and states—including upload,
-  processing, failure, single/batch editing, Cutout Magic/Manual, Enhancements, Background,
-  Download, dialogs, onboarding, Help, the existing privacy route and other current controls—and
-  audit them with WCAG-EM against WCAG 2.2 AA. Future Phase-33 legal/privacy-choice controls are
-  out of this sample. Automated results are supporting evidence, not the audit conclusion —
-  _Depends on:_ —
-- [ ] `A2` Manually verify full keyboard and visible focus, focus order/restoration, pointer
-  alternatives, zoom/reflow at 200% and 400%, text spacing, contrast, forced colors, reduced
-  motion, announcements and error recovery. Canvas editing must have an operable non-pointer
-  path or a documented equivalent workflow — _Depends on:_ `A1`
-- [ ] `A3` Test at minimum NVDA with current supported Windows browser and VoiceOver with Safari;
-  include browser/AT versions and limitations. Validate names, roles, states, live regions,
-  dialogs, tool selection, batch status, history and download without relying on icon, color or
-  canvas pixels alone — _Depends on:_ `A1`
-- [ ] `A4` Remediate all reproducible P0/P1 accessibility findings and add regression coverage.
-  P2/P3 findings need owner, rationale and target phase/date; unverifiable claims are removed —
-  _Depends on:_ `A2`, `A3`
-- [ ] `A5` Publish localized `/accessibility` and `/en/accessibility` pages with evaluated scope,
-  standard/target, tested technologies, known limitations, owned contact, effective date and
-  review cadence. Do not claim universal compliance — _Depends on:_ `A4`
+- [ ] `T1` Freeze the Phase-33 actor hierarchy, commands/events, legal transitions, artifact
+  ownership, processing port, worker protocol, performance marks, and exclusions from
+  `ARCHITECTURE_V2.md`. Record any evidence-driven deviation before implementation — _Depends on:_ —
+- [ ] `T2` Baseline the legacy single-image flow on the architect's affected browser/device:
+  import event-to-next-paint, long tasks, scroll/control response during model creation/inference,
+  stage timings, GPU path, artifact leases, and cancellation. Headless-host evidence alone cannot
+  satisfy this task — _Depends on:_ `T1`
 
-### Device, browser and performance validation
+### Domain and application
 
-- [ ] `D1` Freeze a supported-browser policy and degradation matrix using current Baseline evidence:
-  full support, supported fallback, and unsupported. Cover WebGPU absent/denied, low memory,
-  storage quota, offline/interrupted CDN, touch/pointer differences and reduced motion —
-  _Depends on:_ `A1`
-- [ ] `D2` Run the core single and batch journeys on a small physical-device matrix: iPhone/Safari,
-  Android/Chrome including one constrained device, macOS/Safari, Windows Chromium on integrated
-  graphics, and a no-WebGPU path. Record exact hardware/OS/browser, outcome, thermal/memory notes
-  and gaps; a cloud device may supplement but not replace both mobile physical checks —
-  _Depends on:_ `D1`
-- [ ] `D3` Re-run measured Core Web Vitals, interaction latency, long tasks, memory growth and batch
-  limits on representative devices after Phase 32. Fix P0/P1 freezes, crashes, leaks or budget
-  regressions; document evidence-based supported limits rather than promising every device —
-  _Depends on:_ `D2`
-- [ ] `D4` Add stable screenshot/visual-regression coverage for representative RU/EN desktop/mobile
-  states in the deterministic CI browser. Review intentional baselines; exclude nondeterministic
-  model pixels and animation frames rather than masking structural regressions — _Depends on:_
-  `A1`, `D1`
+- [ ] `D1` Add framework-free v2 IDs, snapshots, commands, events, processing contracts, artifact
+  metadata, and capability types. Actor/domain snapshots contain IDs and small metadata only—never
+  blobs, bitmaps, pixel/tensor buffers, object URLs, React values, workers, HTTP clients, or model-
+  provider values — _Depends on:_ `T1`
+- [ ] `D2` Implement pure document transitions: one writer, one active commit, `{ documentId,
+  runId, expectedRevision }` correlation, stale/cancel rejection, explicit terminal outcomes, and
+  deterministic cleanup. Reject illegal commands as typed outcomes — _Depends on:_ `D1`
+- [ ] `D3` Implement XState v5 workspace/document actors and narrow React selectors. Workspace owns
+  session selection and spawns one actor per image; each document actor owns import/removal state.
+  React lifecycle is an adapter signal, not workflow truth — _Depends on:_ `D2`
+- [ ] `D4` Define a backend-neutral `ProcessingGateway` with progress, abort/cancel, terminal result,
+  and release semantics. Implement only the local gateway; add no account, payment, upload, HTTP,
+  remote job, or provider code — _Depends on:_ `D2`
 
-### Product and content validation
+### Browser runtime
 
-- [ ] `P1` Run moderated task-based sessions with representative novice users for: first
-  single-image result, fixing an edge, replacing background, downloading, processing several
-  images, recovering from an error, and finding privacy/help controls. Obtain consent, use
-  synthetic/user-owned images, collect no production telemetry, and record observations without
-  unnecessary personal data — _Depends on:_ `A1`
-- [ ] `P2` Prioritize findings by severity/frequency. Fix all reproducible task blockers and
-  misleading labels/instructions; unresolved findings require owner, rationale and target. Do not
-  expand into a general design suite to address a focused-editor finding — _Depends on:_ `P1`
-- [ ] `P3` Perform native-speaker RU/EN editorial QA across primary UI, errors, onboarding,
-  accessibility and the existing privacy surface: terminology, tone, pluralization, truncation and
-  semantic parity. Final legal pages and translations are refreshed and reviewed in Phase 33 —
-  _Depends on:_ `P2`
-- [ ] `P4` Produce a pre-legal product-readiness report linking audit evidence, supported matrix,
-  performance results, known limitations and remaining risk. Functional readiness cannot be marked
-  PASS with an unresolved P0/P1 accessibility, device, privacy, security or core-task finding, and
-  final release readiness remains explicitly conditional on the Phase-33 gate — _Depends on:_ `A5`,
-  `D2`–`D4`, `P2`, `P3`
+- [ ] `R1` Implement `ArtifactRepository`: opaque IDs, run/document leases, centralized object URLs,
+  deterministic disposal, memory statistics/budget, and development assertions for leaks, double
+  release, and access after release — _Depends on:_ `D1`
+- [ ] `R2` Implement one typed Phase-33 worker protocol and bounded local gateway for prepare →
+  automatic removal → composite/encode. Correlate messages, transfer eligible buffers, expose stage
+  timings, cancel between stages, recover from worker crash, and default to one heavy GPU job. Reuse
+  immutable model configuration through a pure boundary, never legacy React hooks/state —
+  _Depends on:_ `D4`, `R1`
+- [ ] `R3` Keep full-resolution decode, transforms, post-processing, compositing, and PNG encoding
+  outside the main interaction path. Model preparation is distinct from document commit. Global
+  backpressure must keep page scroll and unrelated controls responsive — _Depends on:_ `R2`
+
+### Frontend
+
+- [ ] `F1` Add a noindex, separately reachable bilingual v2 surface using the existing design
+  system. Present only one-image upload, truthful progress, cancel/retry, preview, PNG export, and
+  reset. UI sends commands/subscribes through selectors and owns no worker/run/artifact lifetime —
+  _Depends on:_ `D3`, `R3`
+- [ ] `F2` Distinguish preparing, model loading, queued, processing, cancelling, result, and error.
+  Cancel reaches a terminal state; stale work cannot flash; scroll/unrelated controls work during
+  heavy stages. Render no Cutout, Enhancements, Background, or batch control — _Depends on:_ `F1`
+- [ ] `F3` Export the committed composite through `ArtifactRepository` without reinference or a
+  synchronous full-image reconstruction. Reset/remove releases all document/run/preview/export
+  leases and retains a warm runtime only according to explicit policy — _Depends on:_ `F2`
+
+### Verification and infrastructure
+
+- [ ] `I1` Add pure transition/invariant and model-based actor tests for all legal/illegal Phase-33
+  paths: duplicate start, cancel at every stage, stale result, crash, retry, reset, unmount/remount,
+  and release, using deterministic fake time/adapters — _Depends on:_ `D3`, `D4`, `R1`
+- [ ] `I2` Add worker/browser-adapter contract tests for correlation, transfer ownership, progress
+  order, cancellation acknowledgement, crash recovery, exactly-one result, and zero reachable
+  leases after repeated churn — _Depends on:_ `R3`
+- [ ] `I3` Add bilingual deterministic Playwright plus serialized real-model smoke. Assert one
+  automatic run, no duplicate export/inference, truthful cancel/retry, working scroll/unrelated
+  controls during every heavy stage, and cleanup after churn — _Depends on:_ `F3`, `I1`, `I2`
+- [ ] `I4` Capture final target-device evidence: zero application-attributable main-thread tasks
+  `>=50 ms`, pointer/scroll/control event-to-next-paint p95 `<100 ms`, no missed action, bounded
+  artifact/resource counts after ten import/cancel/reset cycles, and no preview/export reinference.
+  A failing budget or reproduced freeze blocks migration — _Depends on:_ `I3`
+- [ ] `I5` Run `/phase-gate 33`, production build/container smoke, dependency/license/model/security
+  checks, and Phase-33 suites. Record versions, device/browser/GPU, limitations, and results; skipped
+  target-device or real-model evidence is not PASS — _Depends on:_ `I4`
 
 ---
 
@@ -107,25 +102,38 @@ boundary focused on background removal and related editing (SPEC.md §5, §7–�
 ### Create / modify
 
 ~~~
-docs/audits/PHASE_33_ACCESSIBILITY.md
-docs/audits/PHASE_33_DEVICES.md
-docs/audits/PHASE_33_USABILITY.md
-docs/audits/PHASE_33_CONTENT.md
-docs/audits/PHASE_33_READINESS.md
+docs/ARCHITECTURE_V2.md
+docs/audits/PHASE_33_BASELINE.md
+docs/audits/PHASE_33_RESULTS.md
+src/v2/domain/
+src/v2/application/
+src/v2/runtime-browser/
+src/v2/presentation/
+src/v2/testing/
+src/pages/editor-v2/
+src/routes/dev.editor-v2.tsx
+messages/ru.json
+messages/en.json
+e2e/phase-33-editor-v2.spec.ts
+e2e/phase-33-editor-v2.real.spec.ts
+package.json
+pnpm-lock.yaml
 docs/STACK.md
-src/
-locales/
-tests/
-e2e/
 docs/PHASE_33.md
 ~~~
 
+A minimal pure model/config module may be extracted from legacy inference code only to avoid
+duplicate model assets; document that exception before touching legacy source.
+
 ### Do NOT touch
 
-- Add general-purpose layers, product-card design, collaboration, accounts, billing or cloud files
-- Replace manual/assistive/physical evidence with Lighthouse, axe or emulation alone
-- Use production user images, session replay, undisclosed research recording or unnecessary PII
-- Publish “fully accessible”, “all devices” or legal-compliance claims unsupported by the audit
+- Legacy behavior/workspace/Cutout/Manual/Enhancements/Background/batch/public routes, except the
+  narrow pure model/config extraction above
+- Accounts, auth, entitlements, billing, payments, databases, storage, queues, server uploads,
+  remote processing, Python services, generated backgrounds, or public API
+- Production model family/weights/revisions, CDN manifest, quality mapping, or privacy behavior
+- Former Phase-33/34 accessibility/legal implementation
+- Broad monorepo conversion, canvas framework, generic event bus, or legacy cleanup
 
 ---
 
@@ -133,45 +141,93 @@ docs/PHASE_33.md
 
 ### New persistent data (tables / collections / files)
 
-Versioned audit reports and approved deterministic screenshot baselines only. Research notes must be
-minimized/de-identified with owner-approved access, retention and deletion from Phase 24. No new
-application persistence or production telemetry.
+Repository architecture/baseline/results documentation only. V2 document, actor, artifact, and
+processing state is browser-tab memory only. No database, IndexedDB, image storage, account,
+payment, remote job, or new localStorage key.
 
 ### New API endpoints / RPC methods / events
 
-| Method | Path | Auth | Response |
-|--------|------|------|----------|
-| `GET` | `/accessibility` | public | RU accessibility statement |
-| `GET` | `/en/accessibility` | public | EN accessibility statement |
+No server API/RPC endpoint. New commands/events are in-process only:
+
+```ts
+type EditorCommand =
+  | { type: "IMPORT_IMAGE"; file: File }
+  | { type: "START_AUTOMATIC_REMOVAL"; documentId: DocumentId; backend: "local" }
+  | { type: "CANCEL_ACTIVE_RUN"; documentId: DocumentId }
+  | { type: "EXPORT_PNG"; documentId: DocumentId }
+  | { type: "RESET_DOCUMENT"; documentId: DocumentId };
+
+type ProcessingTerminalEvent =
+  | { type: "PROCESSING_SUCCEEDED"; documentId: DocumentId; runId: RunId;
+      expectedRevision: Revision; snapshot: DocumentSnapshot }
+  | { type: "PROCESSING_FAILED"; documentId: DocumentId; runId: RunId;
+      error: ProcessingError }
+  | { type: "PROCESSING_CANCELLED"; documentId: DocumentId; runId: RunId };
+```
 
 ### New types / models / shared interfaces
 
-None.
+```ts
+type DocumentId = string;
+type ArtifactId = string;
+type RunId = string;
+type Revision = number;
+type ProcessingBackend = "local" | "remote"; // remote reserved, not implemented
+
+type DocumentSnapshot = {
+  matte: ArtifactId;
+  foreground: ArtifactId | null;
+  composite: ArtifactId;
+};
+
+type ProcessingRequest = {
+  documentId: DocumentId;
+  runId: RunId;
+  expectedRevision: Revision;
+  operation: "prepare" | "automatic-remove" | "composite" | "encode-png";
+  inputs: readonly ArtifactId[];
+};
+
+type ProcessingError = { code: string; message: string; retryable: boolean };
+
+interface ProcessingRun {
+  readonly runId: RunId;
+  readonly result: Promise<DocumentSnapshot>;
+  cancel(): void;
+}
+
+interface ProcessingGateway {
+  start(request: ProcessingRequest, signal: AbortSignal): ProcessingRun;
+}
+```
+
+`T1` may refine exact unions, but IDs, revision guard, terminal outcomes, no binary actor state, and
+local-only Phase-33 execution are invariant.
 
 ### New env vars
 
-None.
+None. Reuse current public model/CDN configuration; add no backend/provider flag.
 
 ---
 
 ## Gate Checks
 
-Run `/phase-gate 33`; the complete `docs/STACK.md` gate and all Phase-33 targeted suites apply:
+Run focused checks after each dependency-complete group, then `/phase-gate 33`. The complete
+`docs/STACK.md` gate applies, plus:
 
 ```bash
 pnpm lint
 pnpm typecheck
-pnpm test:unit
+pnpm test
+pnpm arch:lint
+pnpm e2e e2e/phase-33-editor-v2.spec.ts --project=chromium --workers=1
+pnpm e2e e2e/phase-33-editor-v2.real.spec.ts --project=chromium --workers=1
 pnpm build
-pnpm e2e:ci-critical
-pnpm e2e
 ```
 
-Attach manual WCAG-EM, NVDA/VoiceOver, physical-device, performance, visual, usability and bilingual
-editorial evidence. Verify both accessibility routes and owned contact. Fail if a P0/P1 is open,
-mandatory evidence is emulation-only, browser/device support is overstated, research data lacks
-retention, the report cannot trace each conclusion to evidence, or it represents pre-legal
-validation as final release approval.
+Attach `I4` target-device trace and artifact audit. Fail on a freeze, missed action, timing-budget
+failure, duplicate/stale result, binary actor/React state, leaked lease, skipped real-model smoke,
+or missing target-device evidence.
 
 ---
 
@@ -181,16 +237,20 @@ validation as final release approval.
 
 ## Implementation Notes
 
-None
+- Phase 32's host-specific timing did not predict the architect's browser. Target-environment
+  evidence is therefore required product acceptance, not optional support.
 
 ## Atomic Commit Message
 
 ```text
-feat(phase-33): validate accessibility devices and product readiness
+feat(phase-33): establish editor v2 local vertical slice
 ```
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
+- [ ] Scope completed in dependency order
+- [ ] Automated gates, real-model smoke, and target-device evidence green
+- [ ] Architect verifies the affected browser/device without a reproduced freeze
+- [ ] Architect review notes resolved
 - [ ] Run `/context-update 33`
-- [ ] Commit on `feat/phase-33`; tag `v0.33.0` after merge
+- [ ] Commit on `feat/phase-33`; tag `v0.33.0` only after merge

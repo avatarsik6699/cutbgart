@@ -7,10 +7,10 @@ export type UploadErrorCode =
 // downscale failure; normal >4096px uploads are downscaled by
 // `validateAndPrepareUpload`, not rejected (see its doc comment).
 
-export interface UploadValidationError {
+export type UploadValidationError = {
   code: UploadErrorCode;
   message: string;
-}
+};
 
 export type UploadResult =
   { ok: true; image: SourceImage } | { ok: false; error: UploadValidationError };

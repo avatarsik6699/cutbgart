@@ -1,4 +1,5 @@
 export { validateAndPrepareUpload } from "./model/validate-and-prepare-upload";
+export { useUploadPreparation } from "./model/use-upload-preparation";
 export type { UploadErrorCode, UploadValidationError, UploadResult } from "./model/types";
 export { UploadDropzone } from "./ui/UploadDropzone";
 export type { UploadDropzoneProps } from "./ui/UploadDropzone";

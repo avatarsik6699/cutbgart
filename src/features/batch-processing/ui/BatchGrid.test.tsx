@@ -166,7 +166,17 @@ describe("BatchGrid", () => {
     const onRetry = vi.fn();
     render(
       <BatchGrid
-        items={[makeItem({ status: "error", error: "failed" })]}
+        items={[
+          makeItem({
+            status: "error",
+            error: {
+              code: "processing-failed",
+              message: "Image processing failed.",
+              detail: "This image could not be processed locally.",
+              retryable: true,
+            },
+          }),
+        ]}
         selectedItemId={null}
         snapshot={{ ...snapshot, queuedCount: 0, failedCount: 1 }}
         onSelect={vi.fn()}
@@ -177,6 +187,8 @@ describe("BatchGrid", () => {
     );
 
     const trigger = screen.getByTestId("batch-item-actions");
+    fireEvent.click(screen.getByText(/error details/i));
+    expect(screen.getByText(/could not be processed locally/i)).toBeDefined();
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole("menuitem", { name: /try again/i }));
     expect(onRetry).toHaveBeenCalledWith("item-1", trigger);

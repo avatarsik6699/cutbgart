@@ -9,6 +9,7 @@ import {
 import type {
   AlphaMatte,
   InferencePath,
+  PixelRect,
   Trimap,
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
@@ -18,10 +19,13 @@ import {
 } from "../../../shared/lib/model-source-loader";
 import { deterministicRefinement } from "../model/deterministic-fusion";
 import {
+  computeMattingInputSize,
+  computeRefinementCrop,
   MAX_MATTING_INPUT_PIXELS,
   MAX_MATTING_INPUT_SIDE,
   restoreRefinedCrop,
 } from "../model/focus-crop";
+import { buildRefinementTrimap } from "../model/trimap";
 import { getMattingModel } from "../model/model-registry";
 import { nextMattingAttempt } from "../model/runtime-policy";
 import type {
@@ -63,6 +67,12 @@ let pinnedRemotePathTemplate = "{model}/resolve/main/";
 let activeModel: ActiveModel | null = null;
 let activeRequestId: string | null = null;
 
+type PreparedMatteRefinementRequest = MatteRefinementRequest & {
+  trimap: Trimap;
+  crop: PixelRect;
+  inputSize: { width: number; height: number };
+};
+
 env.useWasmCache = true;
 
 function selectModelSource(source: ModelSource): void {
@@ -87,6 +97,16 @@ function post(message: MatteRefinementWorkerResponse): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sameAlphaMatte(left: AlphaMatte, right: AlphaMatte): boolean {
+  if (
+    left.width !== right.width ||
+    left.height !== right.height ||
+    left.data.length !== right.data.length
+  )
+    return false;
+  return left.data.every((value, index) => value === right.data[index]);
 }
 
 function isDisposable(value: unknown): value is { dispose: () => void } {
@@ -195,7 +215,7 @@ function alphaToRawImage(matte: AlphaMatte | Trimap): RawImage {
   );
 }
 
-async function cropSource(request: MatteRefinementRequest): Promise<Blob> {
+async function cropSource(request: PreparedMatteRefinementRequest): Promise<Blob> {
   const bitmap = await createImageBitmap(request.source.blob);
   try {
     const canvas = new OffscreenCanvas(request.inputSize.width, request.inputSize.height);
@@ -218,7 +238,7 @@ async function cropSource(request: MatteRefinementRequest): Promise<Blob> {
   }
 }
 
-function cropTrimap(request: MatteRefinementRequest): Trimap {
+function cropTrimap(request: PreparedMatteRefinementRequest): Trimap {
   const { width, height } = request.inputSize;
   const data = new Uint8ClampedArray(width * height);
   for (let y = 0; y < height; y += 1) {
@@ -245,7 +265,7 @@ function cropTrimap(request: MatteRefinementRequest): Trimap {
   };
 }
 
-function validateInputSize(request: MatteRefinementRequest): void {
+function validateInputSize(request: PreparedMatteRefinementRequest): void {
   const { width, height } = request.inputSize;
   if (
     !Number.isInteger(width) ||
@@ -277,7 +297,7 @@ function predictedAlpha(alphas: Tensor): AlphaMatte {
 }
 
 async function infer(
-  request: MatteRefinementRequest,
+  request: PreparedMatteRefinementRequest,
   mode: MattingRefinementMode,
   path: InferencePath,
 ): Promise<AlphaMatte> {
@@ -314,7 +334,7 @@ async function infer(
   }
 }
 
-function deterministicResult(request: MatteRefinementRequest) {
+function deterministicResult(request: PreparedMatteRefinementRequest) {
   return deterministicRefinement({
     priorMatte: request.priorMatte,
     guidedMatte: request.guidedMatte,
@@ -325,6 +345,40 @@ function deterministicResult(request: MatteRefinementRequest) {
 
 async function handleRefine(request: MatteRefinementRequest): Promise<void> {
   activeRequestId = request.requestId;
+  const trimap = buildRefinementTrimap({
+    automaticMatte: request.priorMatte,
+    guidedMatte: request.guidedMatte,
+    constraints: request.constraints,
+  });
+  const crop = computeRefinementCrop(trimap);
+  if (!crop) {
+    const matte = deterministicRefinement({
+      priorMatte: request.priorMatte,
+      guidedMatte: request.guidedMatte,
+      trimap,
+      constraints: request.constraints,
+    });
+    post({
+      type: "result",
+      requestId: request.requestId,
+      result: {
+        matte,
+        requestedMode: request.requestedMode,
+        actualMode: "deterministic",
+        actualPath: null,
+        inputSize: { width: 0, height: 0 },
+        fallback: "deterministic",
+        changed: !sameAlphaMatte(request.priorMatte, matte),
+      },
+    });
+    return;
+  }
+  const preparedRequest: PreparedMatteRefinementRequest = {
+    ...request,
+    trimap,
+    crop,
+    inputSize: computeMattingInputSize(crop),
+  };
   let mode = request.requestedMode;
   let path = request.requestedPath;
   let fallback: "none" | "balanced" | "wasm" = "none";
@@ -332,7 +386,7 @@ async function handleRefine(request: MatteRefinementRequest): Promise<void> {
     let matte: AlphaMatte | null = null;
     while (!matte) {
       try {
-        matte = await infer(request, mode, path);
+        matte = await infer(preparedRequest, mode, path);
       } catch (attemptError) {
         if (errorMessage(attemptError) === "cancelled") throw attemptError;
         const fromMode = mode;
@@ -364,25 +418,28 @@ async function handleRefine(request: MatteRefinementRequest): Promise<void> {
         requestedMode: request.requestedMode,
         actualMode: mode,
         actualPath: path,
-        inputSize: request.inputSize,
+        inputSize: preparedRequest.inputSize,
         fallback,
+        changed: !sameAlphaMatte(request.priorMatte, matte),
       },
     });
   } catch (error) {
     if (activeRequestId !== request.requestId || errorMessage(error) === "cancelled")
       return;
     await disposeActive();
+    const matte = deterministicResult(preparedRequest);
     post({
       type: "result",
       requestId: request.requestId,
       result: {
-        matte: deterministicResult(request),
+        matte,
         requestedMode: request.requestedMode,
         actualMode: "deterministic",
         actualPath: null,
-        inputSize: request.inputSize,
+        inputSize: preparedRequest.inputSize,
         fallback: "deterministic",
         fallbackReason: errorMessage(error),
+        changed: !sameAlphaMatte(request.priorMatte, matte),
       },
     });
   }

@@ -1,5 +1,17 @@
 # Known Gotchas
 
+### `tsx` IPC sockets can be blocked by the managed sandbox
+
+- **Symptoms**: a repository command that invokes `tsx` fails before the script runs with
+  `listen EPERM: operation not permitted /tmp/tsx-<uid>/<id>.pipe`.
+- **Root cause**: `tsx` creates a local IPC socket for its process coordination; a managed sandbox
+  may allow ordinary `/tmp` file writes while still denying Unix-domain socket creation.
+- **Fix**: rerun the exact repository command outside the managed sandbox after explicit approval.
+  Do not replace the repository's script runner or change permissions inside `/tmp`.
+- **Prevention**: treat this exact `/tmp/tsx-*/<id>.pipe` error as an execution-profile limitation,
+  not a project defect. A second failure outside the sandbox is a real environment issue and must
+  be investigated separately.
+
 > Project memory file. Capture recurring pitfalls that repeatedly waste time during coding,
 > testing, or deploys.
 
