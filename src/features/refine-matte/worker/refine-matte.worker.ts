@@ -13,10 +13,7 @@ import type {
   Trimap,
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
-import {
-  createModelSourceLoader,
-  type ModelSource,
-} from "../../../shared/lib/model-source-loader";
+import { createModelSourceLoader, type ModelSource } from "../../../shared/lib";
 import { deterministicRefinement } from "../model/deterministic-fusion";
 import {
   computeMattingInputSize,

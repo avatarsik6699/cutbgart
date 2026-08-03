@@ -18,12 +18,13 @@
 | 30 | ✅ historical done | `v0.30.0`; gate not run by architect decision | Design system/redesign; T19–T21 deferred |
 | 31 | ✅ historical done | `v0.31.0`; gate passed | Whole-project audit/refactor |
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
-| 33 | ⏳ pending | planned `v0.33.0`; gate not run | Active editor v2 contract: [`PHASE_33.md`](./PHASE_33.md) |
+| 33 | 🔄 in-progress | gate passed; manual architect device acceptance pending | Active editor v2 contract: [`PHASE_33.md`](./PHASE_33.md) |
 | 34 | ⚠️ NEEDS_REVIEW | stale planned number | Former legal phase archived; re-scope after Phase-33 evidence |
 
 **Latest closed phase:** `32` (architect exception)
 
-**Implementation in progress:** none
+**Implementation in progress:** `PHASE_33` — implementation and automated gate complete; manual
+architect device acceptance remains before `/context-update 33`
 
 **Only active implementation scope:** `PHASE_33`
 
@@ -145,6 +146,13 @@ The planned v2 contract is intentionally isolated and local-only:
 - backend-neutral `ProcessingGateway`, with only a bounded local worker adapter implemented;
 - rewritten Typography/Image primitives and tested platform/config wrappers;
 - one-image import → local automatic removal → preview → PNG export;
+- fixture-driven modular Vitest/Playwright architecture with a fast deterministic lane, a small
+  serialized real-model lane, and zero tolerance for retry-masked flakes or arbitrary sleeps;
+- a typed reusable performance collector/report contract, with v1 profiling retained only after
+  signal-by-signal validation;
+- native typed Dedicated Worker/Canvas adapters as the Phase-33 implementation; OffscreenCanvas is
+  capability-gated, while Comlink, worker-pool, and canvas libraries remain untested future
+  candidates with no Phase-33 dependency or evaluation work;
 - no Cutout, Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 

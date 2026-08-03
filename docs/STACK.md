@@ -40,6 +40,10 @@ and gates the first vertical slice, the table above remains the deployed/current
 | V2 shared UI | Rewritten Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; no blanket legacy component import |
 | SSR/config | Typed `shared/config/env.ts` + `runtime.ts`, adapted from `patient_tracker` | Sole environment/runtime boundary; backward-compatible legacy exports during migration |
 | V2 utilities | `src/v2/shared/lib` plus reviewed repository-wide public APIs | Only utilities with a concrete Phase-33 consumer and tests; direct platform access forbidden |
+| Test architecture | Vitest contract/model tests + Playwright typed fixtures and narrow component/page objects | Fast deterministic lane is parallel-safe; real-model lane is small and serialized; no sleeps/retry-masked flakes |
+| Performance evidence | Typed v2 User Timing/PerformanceObserver/resource collector and versioned reports | Rebuild useful v1 probes behind shared contracts; target-device evidence remains mandatory |
+| Worker/canvas tooling | Native typed Dedicated Worker protocol, imperative Canvas 2D, and capability-gated OffscreenCanvas | Comlink, workerpool/threads.js, and canvas frameworks are documented future candidates only; no Phase-33 evaluation or dependency |
+| Service Worker | Model/network asset caching only | Never owns editor workflow or inference jobs |
 | Server state | TanStack Query v5 | Reserved for a future paid backend; not a local editor store and not added in Phase 33 |
 | Public paid API | Fastify-based TypeScript modular monolith is the current candidate | Research direction only; no API/dependency in Phase 33 |
 | GPU service | Isolated Python worker/container behind a job port | Future paid phase only |
@@ -47,6 +51,21 @@ and gates the first vertical slice, the table above remains the deployed/current
 
 Exact backend, auth, payment, queue, storage, and server-model choices remain open until their own
 phase can evaluate security, data retention, commercial licensing, and operational cost.
+
+### Phase-33 test budgets and diagnostics
+
+- Focused v2 unit/contract runs target 5 seconds total; any individual deterministic test over
+  500 ms is a slow-test finding to investigate before the phase gate.
+- The mocked Phase-33 Chromium spec targets 30 seconds total and 10 seconds per test. It is fully
+  parallel-safe and forces zero retries locally and in CI.
+- The serialized real-model smoke has a six-minute test ceiling because model/CDN cold start is
+  device- and cache-dependent; it does not duplicate deterministic UI coverage.
+- Phase-33 mocked E2E retains traces only on failure. Real/target profiling retains the protocol,
+  performance and resource report on success because that report is the required evidence; heavy
+  Playwright traces remain failure-only unless I4 explicitly requests a target trace. Target-device
+  capture uses an isolated browser owned by Playwright MCP, never `connectOverCDP` to a user profile.
+- Arbitrary sleeps, order dependence, global mutable scenario state, hidden component-object
+  assertions, and retry-dependent passes are gate failures.
 
 ---
 
@@ -293,6 +312,17 @@ directly for a longer/shorter run) — default is enough to see a growth-rate tr
 final leak/no-leak call; bump to 100+ when investigating a specific suspected leak. See
 `docs/archive/audits/phase-31/PHASE_31_T2_MEASUREMENTS.md` for the historical captured baseline run
 and how to read the output.
+
+### Phase-33 performance reports
+
+```bash
+pnpm profile:phase-33     # validates the stored fake + cold/warm real-model
+                          # phase-33.performance.v1 reports and recalculates budgets
+```
+
+The physical-target capture itself is driven by the configured Playwright MCP in a managed,
+isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS.md` and
+`PHASE_33_REPORTS.json`; repository scripts do not attach to a personal browser or debugging port.
 
 ---
 

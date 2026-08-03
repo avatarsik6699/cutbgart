@@ -12,10 +12,7 @@ import type {
   RecompositeRequest,
 } from "../../../entities/processed-image";
 import { env as appEnv } from "../../../shared/config";
-import {
-  createModelSourceLoader,
-  type ModelSource,
-} from "../../../shared/lib/model-source-loader";
+import { createModelSourceLoader, type ModelSource } from "../../../shared/lib";
 import {
   compositeProcessedImage,
   extractAlphaMatte,

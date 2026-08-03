@@ -118,13 +118,31 @@ exception. Canvas drawing surfaces are not images and are unaffected.
 ## 3. Module Structure
 
 Each feature/widget slice follows FSD (`model/`, `ui/`, `lib/`, `worker/` — create only what's
-needed) plus these module-local conventions:
+needed). V2 core code uses the same cohesion rule without pretending that application/runtime
+modules are UI slices: top-level folders name an architectural role, while subdirectories name a
+business capability or owned resource (`application/document/`, `runtime-browser/artifacts/`).
+Avoid generic catch-all directories such as `types/`, `utils/`, or `services/`; a segment must say
+what it owns. Every semantic module exposes an `index.ts` public API, and callers outside that
+module import through it.
+
+Use the lightest construct that expresses the ownership:
+
+- pure functions for deterministic domain decisions and transformations;
+- XState actor logic for event-driven workflow and transition orchestration;
+- classes for resources with identity, mutable state, or an explicit lifecycle;
+- composed services/facades when a use case coordinates several collaborators.
+
+A service is not permission to create a god object. The facade owns coordination and delegates
+focused work to collaborators; prefer composition over inheritance. Do not wrap stateless helpers
+in classes solely for visual uniformity.
+
+Feature/widget example:
 
 ```
 features/correct-mask/
   model/
     use-mask-correction.ts   # primary hook — compose smaller hooks, don't inline everything
-    correct-mask.types.ts    # namespace CorrectMaskTypes { ... } for module-local shared types
+    correct-mask.types.ts    # shared module types; ordinary ES module exports
   ui/
   worker/
   index.ts                   # public API — the only import surface other layers may use
@@ -135,17 +153,26 @@ Types reused **across slices** belong in:
   `entities/processed-image`)
 - `shared/lib/` or a dedicated `shared/types` module for cross-cutting non-domain types
 
-### 3.1 Namespaced module types
+### 3.1 Shared module types
+
+Keep a type next to its only consumer. Create `<module-name>.types.ts` only when several files in
+the same semantic module share the contract. Export ordinary TypeScript types from that file;
+TypeScript `namespace` wrappers are forbidden in module code because the file/module boundary
+already provides namespacing and namespace merging obscures dependency ownership.
 
 ```ts
 // features/correct-mask/model/correct-mask.types.ts
-export namespace CorrectMaskTypes {
-  export type BrushStroke = { x: number; y: number; pressure: number };
-  export type ToolState = { brushSize: number; strokes: BrushStroke[] };
-}
+export type BrushStroke = { x: number; y: number; pressure: number };
+export type ToolState = { brushSize: number; strokes: BrushStroke[] };
 ```
 
-Consume via dot notation: `CorrectMaskTypes.BrushStroke`.
+When dot-qualified ownership materially improves a large consumer, use an ES-module namespace
+import: `import type * as CorrectMaskTypes from "./correct-mask.types"`, then
+`CorrectMaskTypes.BrushStroke`. This preserves standard module semantics and tree-safe imports.
+
+Use semantic suffixes where they make a role clearer: `.types.ts` for shared type contracts,
+`.config.ts` for declarative configuration, and `.policy.ts` for domain decisions. Do not add
+`.utils.ts` or `.lib.ts` as a substitute for naming the capability.
 
 ---
 

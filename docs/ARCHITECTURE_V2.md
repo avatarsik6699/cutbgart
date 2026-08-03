@@ -1,6 +1,6 @@
 # BG Remove App v2 — Domain Model and Target Architecture
 
-**Status:** proposed target, approved direction pending Phase 33 implementation
+**Status:** approved direction; Phase-33 implementation contract frozen by `T1`
 
 **Date:** 2026-08-01
 **Purpose:** replace incremental repairs of the current editor with an architecture-led, testable
@@ -367,7 +367,7 @@ new namespaced API. Secrets are never exposed through client config.
 
 | Technology/pattern | Purpose |
 |--------------------|---------|
-| XState v5 + `@xstate/react` | deterministic workspace/document/tool actors and selectors |
+| XState `5.32.5` + `@xstate/react` `6.1.0` | deterministic workspace/document actors and selector-only React bindings |
 | framework-free domain/application modules | commands, events, reducers, ports, policies |
 | unified typed worker protocol | correlation, cancellation, transfer ownership, terminal outcomes |
 | explicit artifact repository | binary ownership, memory budget, URLs, cleanup |
@@ -400,6 +400,31 @@ locking the choice.
 - Binary payloads in XState, React, TanStack Query, logs, analytics, or persisted snapshots.
 - Accounts/payment/provider SDKs before product, legal, data-retention, and threat-model contracts
   are approved.
+
+### 6.5 Browser runtime platform-first decision
+
+Phase 33 uses small, domain-specific adapters over browser primitives. It does not install,
+prototype, benchmark, or integrate third-party worker/RPC/pool/canvas libraries. Candidate names are
+retained only so a later phase can revisit them if the native implementation exposes a measured,
+specific deficiency.
+
+| Concern | Phase-33 direction | Candidate/tool decision |
+|---------|--------------------|-------------------------|
+| Compute isolation | Dedicated module Workers | Correct lifecycle for page-owned image jobs; do not use Service Worker for inference |
+| Model asset caching | Existing Service Worker + Cache Storage | Keep network/cache responsibility isolated from editor compute and state |
+| Message/RPC ergonomics | Explicit discriminated native protocol | Comlink is a deferred candidate only; no Phase-33 dependency, prototype, or comparison |
+| Worker pool | Small processing coordinator around the typed protocol | workerpool and threads.js are deferred candidates only; no Phase-33 dependency, prototype, or comparison |
+| Binary transfer | Native transferable `ArrayBuffer`, `ImageBitmap`, and capability-gated `OffscreenCanvas` | Ownership transfer is represented in protocol/artifact leases; structured clone of full-resolution buffers fails the contract |
+| Canvas | Imperative Canvas 2D adapter; native OffscreenCanvas where required and supported | Keep pointer sampling and lightweight overlay on the interaction path; capability/fallback behavior is tested as our adapter contract, not as a library comparison |
+| Canvas framework | None | Konva, Fabric, and Pixi remain deferred candidates until a later phase records a concrete missing capability |
+| Shared memory | No `SharedArrayBuffer` initially | Add only with a proven copy bottleneck and an approved COOP/COEP, security, determinism, and fallback design |
+
+The candidate registry is informational, not Phase-33 work. Comlink may reduce RPC boilerplate;
+workerpool/threads.js may provide generic pooling; canvas frameworks may provide richer scene
+management. None currently justifies the integration, abstraction, bundle, lifecycle, and test cost.
+OffscreenCanvas is a browser API rather than a library: the native adapter may use it when the first
+slice requires off-thread render/encode and supplies a tested fallback, but it does not remove
+GPU/driver contention.
 
 ## 7. Paid/server capability boundary
 
@@ -482,7 +507,9 @@ to workspace packages without changing their public contracts.
 The old editor is removed only after the replacement has feature parity and the architect has
 verified the target-device experience.
 
-## 10. Test strategy and release gates
+## 10. Test and performance architecture
+
+### 10.1 Test portfolio
 
 Each vertical slice must pass before the next begins:
 
@@ -490,17 +517,490 @@ Each vertical slice must pass before the next begins:
 2. model-based actor tests, including cancel/stale/retry/unmount and illegal commands;
 3. worker protocol contract tests with transferable ownership and crash recovery;
 4. adapter integration tests using deterministic inference fakes;
-5. bilingual Playwright for the exact user journey;
-6. serialized real-model browser smoke;
-7. target-device manual trace with scroll and unrelated controls exercised during every heavy stage;
-8. memory/artifact lease audit after repeated import/cancel/remove;
-9. production build/container smoke and existing security gates when release scope requires them.
+5. component tests for semantic rendering and UI-to-command translation;
+6. bilingual deterministic Playwright for the exact user journey;
+7. a small serialized real-model browser smoke;
+8. target-device manual trace with scroll and unrelated controls exercised during every heavy stage;
+9. memory/artifact lease audit after repeated import/cancel/remove;
+10. production build/container smoke and existing security gates when release scope requires them.
+
+Test boundaries mirror production boundaries. A fake `ProcessingGateway`, fake clock/ID source,
+in-memory `ArtifactRepository`, and worker-protocol harness implement the same public contracts as
+real adapters. Tests do not patch private hooks or reproduce the production state machine in a
+second mock implementation.
+
+### 10.2 Playwright architecture
+
+Use a small test kit under `e2e/support/v2/`:
+
+```text
+fixtures/        typed test extension, isolated scenario state, automatic cleanup
+drivers/         worker/model/artifact/network controls through supported test ports
+components/      reusable component objects for upload, progress, preview, export
+journeys/        business-level compositions only when shared by multiple specs
+assertions/      domain-aware observable outcomes and resource invariants
+assets/          minimal deterministic image corpus with declared purpose
+```
+
+Playwright's per-test browser context remains the isolation boundary. Typed fixtures install a
+scenario before navigation and remove listeners/routes/storage/resources afterward. Component
+objects or narrowly scoped Page Objects are used only when they own stable selectors and repeated
+user operations; they must not become a giant application API or hide assertions/waits. Prefer role,
+label, and stable contract test IDs, Playwright auto-waiting, and web-first assertions. Forbid
+`waitForTimeout`, test-order dependence, conditional assertions, broad CSS/XPath, and retries used to
+mask flakiness.
+
+The fast lane replaces the local gateway/worker boundary with deterministic scenarios for progress,
+failure, crash, cancel, and stale completion while retaining real routing, rendering, input,
+selectors, and downloads. It is parallel-safe. The real-model lane is deliberately small,
+serialized, separately reported, and never the source of ordinary UI coverage. Traces, screenshots,
+console, protocol transcript, marks, and resource counts are retained on first retry/failure rather
+than collected expensively for every passing test.
+
+MSW is a deferred candidate for a future HTTP backend or true network-level integration cases. It is
+not installed or evaluated in Phase 33 and does not mock the local worker protocol. Existing
+Playwright routing remains sufficient for the few current network assertions.
+
+### 10.3 Unit and contract test architecture
+
+Vitest tests are colocated with their owned module unless a cross-module contract requires
+`src/v2/testing/`. Use typed builders with minimal valid defaults, explicit scenario overrides,
+table-driven transitions, model-based actor paths, and deterministic fake time/IDs. Reusable fixtures
+must declare test/file/worker scope and cleanup; global mocks, timers, observers, listeners, object
+URLs, workers, and repositories are restored after each test. Prefer state/output/event assertions
+over call-order assertions. Snapshot tests are limited to stable serialized contracts where a diff is
+the intended review surface.
+
+The suite has a speed budget and reports slow files/tests. Expensive shared setup may use a longer-
+lived read-only fixture only when isolation is proved; mutable domain state is test-scoped. Tests run
+independently, in random order where supported, and repeated stress runs must have zero retries and
+zero seed-dependent failures.
+
+### 10.4 Performance evidence architecture
+
+The useful ideas in the v1 profiling scripts are retained—Long Tasks observation, next-paint probes,
+heap/trace diagnostics, worker-message counts, churn, and production-build execution—but the scripts are
+duplicated, Chromium-specific, partially mock-only, and not one reusable measurement contract. They
+are historical evidence, not a v2 library.
+
+V2 establishes:
+
+```text
+src/v2/testing/performance/
+  contracts.ts       metric names, units, samples, budgets, environment metadata
+  marks.ts           typed User Timing stages; no free-form mark strings
+  browser-collector  Long Tasks/Event Timing/paint/resource observation + support flags
+  resource-probe     artifact leases, URLs, workers, sessions, listeners
+  report             versioned JSON and percentile/budget evaluation
+  test-adapter       deterministic clock and synthetic samples
+scripts/profiling/v2/
+  one orchestration shell over the same collector/report contracts
+```
+
+Use platform `PerformanceObserver`/User Timing for Phase-33 editor-stage evidence. `web-vitals`
+remains a deferred candidate for field LCP/INP/CLS attribution when production telemetry is later in
+scope; it is not installed or evaluated in Phase 33. A managed Playwright browser supplies target
+trace diagnostics, not a cross-browser truth; attaching to a personal browser over CDP is excluded.
+Lighthouse remains useful for navigation/SEO and page-level
+audits, but is not the critical interaction oracle for local inference. Every report states browser,
+device, GPU/runtime/model, cold/warm cache, support gaps, sample count, percentiles, and whether the
+gateway was fake or real.
 
 Automated headless timing is regression evidence, not proof of target-device smoothness. A phase
 cannot claim responsiveness until the architect reproduces the measurement on the device/browser
 where the original freeze occurs.
 
-## 11. Decision log and research basis
+## 11. Phase-33 frozen implementation contract
+
+This section is the normative `T1` boundary for Phase 33. Earlier examples describe the longer-term
+editor; where their vocabulary is broader, this section's one-image subset wins for this phase.
+Changes to these tables require an evidence entry in §11.9 before implementation continues.
+
+### 11.1 Actor hierarchy and ownership
+
+```text
+editorV2WorkspaceActor (one root actor for the mounted v2 surface)
+  +-- editorV2DocumentActor:<documentId> (exactly one per imported image; Phase 33 caps this at one)
+  |     `-- processingRunActor:<runId> (invoked only while one run is active)
+  `-- ProcessingCoordinator (application service, not an actor snapshot)
+         `-- LocalProcessingGateway
+                `-- one replaceable Dedicated Worker; one heavy job globally
+```
+
+- Machines use XState v5 `setup()` with declared actor/action/guard implementations. The workspace
+  creates document children with `spawnChild` and removes them with `stopChild`; child refs are
+  application values and are never serialized as domain snapshots.
+- The workspace owns only the selected document ID, ordered document IDs, and child refs. Phase 33
+  rejects a second import while a document exists rather than silently becoming batch mode.
+- The document actor is the sole writer of its `DocumentState`; it owns revision, current committed
+  snapshot IDs, active run metadata, progress metadata, and the last typed error/outcome.
+- `processingRunActor` is a callback actor around `ProcessingGateway`. Its cleanup aborts the
+  request and sends protocol cancellation. A Promise resolving late is still checked by correlation;
+  stopping an actor alone is never treated as proof that external work stopped.
+- `ProcessingCoordinator`, gateway, repository, worker, URLs, files, buffers, model handles, clocks,
+  and ID generators are injected dependencies. None appears in serializable machine context.
+- React creates/subscribes to the root actor through the presentation adapter, sends commands to an
+  actor ref, and reads only primitive/ID/status view selectors with `useSelector`. React unmount is a
+  disposal signal to the root actor, not a workflow transition or cancellation decision.
+
+### 11.2 Phase-33 commands, events, outcomes, and snapshots
+
+`IMPORT_IMAGE` is an application-edge command: its `File` is handed immediately to the importer and
+artifact repository and is never forwarded to the pure domain reducer or stored in actor context.
+All subsequent domain inputs contain IDs and small metadata only.
+
+```ts
+type EditorV2Command =
+  | { type: "IMPORT_IMAGE"; file: File }
+  | { type: "START_AUTOMATIC_REMOVAL"; documentId: DocumentId; backend: "local" }
+  | { type: "CANCEL_ACTIVE_RUN"; documentId: DocumentId }
+  | { type: "EXPORT_PNG"; documentId: DocumentId }
+  | { type: "RESET_DOCUMENT"; documentId: DocumentId };
+
+type DocumentCommand = Exclude<EditorV2Command, { type: "IMPORT_IMAGE" }>;
+
+type CommandOutcome =
+  | { status: "accepted"; command: EditorV2Command["type"] }
+  | { status: "rejected"; command: EditorV2Command["type"]; reason:
+      | "document-exists" | "document-not-found" | "not-ready" | "run-active"
+      | "no-active-run" | "no-result" | "stale-revision" | "disposed" };
+
+type DocumentState = {
+  documentId: DocumentId;
+  source: ArtifactId;
+  revision: Revision;
+  committed: DocumentSnapshot | null;
+  activeRun: { runId: RunId; expectedRevision: Revision } | null;
+  stage: ProcessingStage | null;
+  progress: number | null;
+  error: ProcessingError | null;
+};
+```
+
+The application/domain event union is metadata-only:
+
+```text
+SOURCE_REGISTERED
+PREPARATION_STARTED / PREPARATION_SUCCEEDED / PREPARATION_FAILED
+PROCESSING_QUEUED / PROCESSING_STARTED / PROCESSING_PROGRESS
+PROCESSING_SUCCEEDED / PROCESSING_FAILED / PROCESSING_CANCEL_REQUESTED / PROCESSING_CANCELLED
+COMMIT_ACCEPTED / COMMIT_REJECTED_STALE
+EXPORT_REQUESTED / EXPORT_SUCCEEDED / EXPORT_FAILED
+DOCUMENT_RESET / DOCUMENT_DISPOSED
+```
+
+Every run event carries `{ documentId, runId }`; success and commit events also carry
+`expectedRevision`. Progress contains a typed stage, normalized fraction, and optional small timing
+metadata. Exactly one of succeeded, failed, or cancelled is accepted as the run's terminal outcome.
+
+### 11.3 Legal document transitions
+
+The document actor uses these user-visible states; internal substates may split an implementation
+stage but may not add a user-visible semantic state without updating this table.
+
+| From | Input | Guard / action | To | Rejection or stale behavior |
+|------|-------|----------------|----|-----------------------------|
+| `preparing` | preparation progress | matching document | `preparing` | wrong document ignored and diagnosed in development |
+| `preparing` | `PREPARATION_SUCCEEDED` | source lease exists; enqueue exactly one automatic run | `queued` | released/missing source -> `error` |
+| `preparing` | `PREPARATION_FAILED` | typed error | `error` | — |
+| `preparing` | cancel/reset | release import/run leases | `cancelling`/disposed | terminal cancel must follow before disposal completes |
+| `ready` | `START_AUTOMATIC_REMOVAL` | no run; revision captured | `queued` | duplicate -> `run-active` |
+| `queued` | gateway accepted | same run/revision | `model-loading` or `processing` | stale event releases its payload/leases |
+| `queued` | cancel | send cancel once | `cancelling` | second cancel -> `no-active-run` |
+| `model-loading` | progress/model ready | same run | `model-loading`/`processing` | progress never commits |
+| `processing` | stage progress | same run; monotonic stage/fraction | `processing` | regressive/foreign progress ignored and diagnosed |
+| `model-loading`/`processing` | cancel | send cancel once; retain run lease until terminal ack | `cancelling` | no optimistic result/error flash |
+| `queued`/`model-loading`/`processing` | success | run and expected revision match | `committing` | stale/cancelled success releases all returned artifacts |
+| `committing` | commit accepted | atomically promote run artifacts to document leases; increment revision | `result` | only writer performs promotion |
+| `committing` | stale commit | release all run artifacts | prior stable state or `error` | returns `stale-revision` |
+| active run state | failure | same run; release transient outputs | `error` | later terminal events ignored/released |
+| `cancelling` | cancelled acknowledgement/failure | same run; release run leases | `ready` | late success is stale and released |
+| `error` | retry/start | retryable; no active run | `queued` | non-retryable -> `not-ready` |
+| `result` | export | committed composite and PNG lease exist/are derivable without processing | `result` | duplicate export may reuse bytes; never starts inference |
+| `result`/`error`/`ready` | reset | release document/run/preview/export leases and stop child | disposed | repeated reset -> `disposed` |
+| any | event for other run/revision/document | correlation mismatch | unchanged | no state mutation; owned payload is released |
+
+Import automatically advances from preparation to one automatic removal. `ready` exists for a
+cancelled or retryable document; it does not cause processing on remount or selection. `model-loading`
+is model/session preparation, not a document commit. `cancelling` cannot transition directly to
+`result`.
+
+### 11.4 Artifact ownership and deterministic cleanup
+
+`ArtifactRepository` is the only owner of binary values and object URLs. Its public application
+surface accepts/returns opaque IDs, metadata, and explicit leases:
+
+```ts
+type ArtifactLeaseOwner =
+  | { kind: "document"; documentId: DocumentId }
+  | { kind: "run"; documentId: DocumentId; runId: RunId }
+  | { kind: "preview"; documentId: DocumentId }
+  | { kind: "export"; documentId: DocumentId };
+
+type ArtifactStats = {
+  artifacts: number;
+  leases: number;
+  objectUrls: number;
+  estimatedBytes: number;
+};
+```
+
+- Import stores the source under a document lease. Gateway inputs receive a run lease, not a copy
+  in actor state. Worker transfers are checked out through a runtime-only adapter.
+- Successful commit promotes matte/foreground/composite/PNG output from the run lease to the
+  document lease atomically; failure, cancellation, crash, or stale completion releases the run.
+- Preview and export URLs are repository-created leased views. Replacing/resetting/removing a
+  document revokes those URLs before releasing their backing artifact.
+- Export reuses the committed PNG/composite artifact. It may create a download URL/lease but must
+  not invoke the gateway, decode, composite, or encode synchronously on the interaction path.
+- Zero refcount makes an artifact unreachable and deterministically disposable. Development mode
+  throws typed assertions for unknown ID, access after release, double release, invalid promotion,
+  leaked URL, and budget overflow; production returns typed failures and performs safe cleanup.
+- Warm model/runtime ownership belongs to `LocalProcessingGateway`, not a document lease. Reset may
+  keep one warm runtime under the explicit one-worker memory policy; route disposal terminates it.
+
+### 11.5 Processing port and local scheduling policy
+
+```ts
+type ProcessingStage =
+  | "queued" | "model-loading" | "decode" | "automatic-remove"
+  | "post-process" | "composite" | "encode-png";
+
+type ProcessingRequest = {
+  documentId: DocumentId;
+  runId: RunId;
+  expectedRevision: Revision;
+  operation: "automatic-remove";
+  source: ArtifactId;
+};
+
+type ProcessingProgress = {
+  documentId: DocumentId;
+  runId: RunId;
+  stage: ProcessingStage;
+  fraction: number | null;
+};
+
+type ProcessingRun = {
+  runId: RunId;
+  result: Promise<DocumentSnapshot>;
+  subscribe(listener: (progress: ProcessingProgress) => void): () => void;
+  cancel(): void;
+  release(): void;
+};
+
+interface ProcessingGateway {
+  start(request: ProcessingRequest, signal: AbortSignal): ProcessingRun;
+  dispose(): Promise<void>;
+}
+```
+
+The single application request represents the full automatic-removal transaction. Internal worker
+stages are not separately commit-capable gateway operations. The local coordinator queues at most
+one heavy job, reports queue time truthfully, never initializes two models concurrently, checks
+cancellation between all stages, and replaces a crashed worker. A crash fails the active run once
+with a retryable typed error; it does not silently repeat inference. User retry creates a new run ID.
+
+### 11.6 Worker protocol and transfer rules
+
+Only `src/v2/runtime-browser/worker/processing.worker.ts` and its gateway/client adapter may use the
+native Worker messaging API. Protocol messages are discriminated and versioned:
+
+```ts
+type WorkerCommand =
+  | { protocol: 1; type: "RUN"; correlation: RunCorrelation;
+      source: TransferableArtifact; model: LocalModelConfig }
+  | { protocol: 1; type: "CANCEL"; correlation: RunCorrelation }
+  | { protocol: 1; type: "DISPOSE_RUNTIME" };
+
+type WorkerEvent =
+  | { protocol: 1; type: "ACCEPTED"; correlation: RunCorrelation }
+  | { protocol: 1; type: "PROGRESS"; correlation: RunCorrelation;
+      stage: ProcessingStage; fraction: number | null; timing: StageTiming | null }
+  | { protocol: 1; type: "CANCELLED"; correlation: RunCorrelation }
+  | { protocol: 1; type: "SUCCEEDED"; correlation: RunCorrelation;
+      outputs: TransferableArtifactSet; timings: readonly StageTiming[] }
+  | { protocol: 1; type: "FAILED"; correlation: RunCorrelation;
+      error: ProcessingError; timings: readonly StageTiming[] };
+```
+
+`RunCorrelation` always contains document, run, and expected revision. Eligible `ArrayBuffer` and
+`ImageBitmap` values travel in transfer lists; a sender relinquishes ownership immediately and the
+repository records the checkout/return. The worker emits monotonic progress and exactly one terminal
+message. `CANCELLED` is an acknowledgement, not merely a request. Unknown protocol versions,
+duplicate terminals, foreign correlations, invalid progress order, and worker `error`/`messageerror`
+become typed gateway failures. Full-resolution decode, transforms, post-processing, compositing, and
+PNG encode remain inside the worker; capability-gated `OffscreenCanvas` has a tested worker fallback.
+
+### 11.7 Shared/config/UI boundaries
+
+| Boundary | Sole owner | Forbidden elsewhere |
+|----------|------------|---------------------|
+| Vite env parsing and validation | `src/shared/config/env.ts` | `import.meta.env`, client exposure of server-only values |
+| SSR/client/window/mode detection | `src/shared/config/runtime.ts` | scattered `typeof window`, `process.env`, mode checks |
+| Object URL creation/revocation | runtime artifact URL adapter | direct `URL.createObjectURL`/`revokeObjectURL` |
+| Worker creation/messaging/termination | v2 worker factory/client/gateway | direct `new Worker`, `postMessage`, `terminate` in React/domain |
+| Decode and image metadata | v2 image adapter | raw image-element/createImageBitmap decode in UI/application |
+| Capability observation | v2 browser-capability adapter | direct `navigator.gpu`, `OffscreenCanvas`, observer probing |
+| Persisted JSON/storage | existing `@/shared/lib/storage` public API | direct localStorage/raw persisted JSON; v2 adds no key |
+| Routing | existing `@/shared/lib/use-router` | direct TanStack routing hooks in page/feature code |
+| Typography styles | `src/v2/shared/ui/typography.tsx` | repeated text-style clusters in v2 presentation |
+| Content images | `src/v2/shared/ui/image.tsx` | raw `<img>` in v2 presentation; object-URL ownership in Image |
+| Performance APIs | v2 performance collector/mark adapter | free-form marks or observer setup in pages/tests |
+
+`src/shared/config/index.ts` keeps current legacy exports while adding typed `env` and `runtime`.
+V2 imports the new namespaced API only. No env key, persistence key, API endpoint, or server secret is
+added.
+
+### 11.8 File-by-file `FRONTEND_CONVENTIONS.md` compliance matrix
+
+The matrix is a pre-implementation manifest. If a consumer proves another file necessary, add its
+row and review the boundary before creating it; do not create a speculative helper.
+
+| File | Profile | File-specific review |
+|------|---------|----------------------|
+| `src/v2/domain/ids.ts` | D | branded opaque IDs and injected generation contract only |
+| `src/v2/domain/artifacts.ts` | D | artifact metadata/lease types contain no binary value |
+| `src/v2/domain/document.ts` | D | snapshot/revision types contain IDs and small metadata only |
+| `src/v2/domain/commands.ts` | D | pure document commands; browser `File` excluded |
+| `src/v2/domain/events.ts` | D | metadata-only discriminated events and terminal outcomes |
+| `src/v2/domain/processing.ts` | D | processing correlation, progress, errors, and terminal contracts |
+| `src/v2/domain/capabilities.ts` | D | small browser-processing support metadata only |
+| `src/v2/domain/transitions.ts` | D | pure legal transition and typed rejection function |
+| `src/v2/domain/index.ts` | D | explicit domain public API only |
+| `src/v2/application/workspace-machine.ts` | A | `setup()` parent and `spawnChild`/`stopChild`; one document cap |
+| `src/v2/application/document-machine.ts` | A | sole document writer; injected processing actor; ID-only context |
+| `src/v2/application/processing-gateway.ts` | A | backend-neutral port with progress/cancel/release/dispose |
+| `src/v2/application/selectors.ts` | A | narrow primitive/ID/status selectors; no binary/actor internals |
+| `src/v2/application/index.ts` | A | explicit application public API only |
+| `src/v2/runtime-browser/artifact-repository.ts` | B | deterministic leases, promotion, stats, budget, assertions |
+| `src/v2/runtime-browser/artifact-id-source.ts` | B | sole browser randomness owner for opaque artifact IDs |
+| `src/v2/runtime-browser/artifact-url-adapter.ts` | B | sole object URL creation/revocation owner |
+| `src/v2/runtime-browser/browser-capabilities.ts` | B | sole dynamic browser/GPU/OffscreenCanvas capability owner |
+| `src/v2/runtime-browser/local-processing-gateway.ts` | B | one-heavy-job queue and warm-runtime policy |
+| `src/v2/runtime-browser/processing-cancellation.ts` | B | sole actor-facing AbortController factory; application receives a typed cancellation port |
+| `src/v2/runtime-browser/editor-id-source.ts` | B | sole session/document/image/run randomness adapter |
+| `src/v2/runtime-browser/download-adapter.ts` | B | sole native download interaction; URL lifetime stays in repository |
+| `src/v2/runtime-browser/editor-session.ts` | B | workspace composition root; import, preview/export lease, and route-disposal ownership |
+| `src/v2/runtime-browser/worker-client.ts` | B | correlation, progress order, terminal/crash/transfer enforcement |
+| `src/v2/runtime-browser/worker-factory.ts` | B | sole `new Worker`/termination owner outside the worker global |
+| `src/v2/runtime-browser/worker-protocol.ts` | D | pure versioned discriminated message/transfer types |
+| `src/v2/runtime-browser/model-config.ts` | D | immutable existing model asset configuration only |
+| `src/v2/runtime-browser/worker/processing.worker.ts` | W | sole worker implementation and full-resolution compute owner |
+| `src/v2/runtime-browser/index.ts` | B | explicit runtime public API; no leaked native worker/repository internals |
+| `src/v2/shared/ui/typography.tsx` | U | one function component, finite variants, explicit semantics/ref/attributes |
+| `src/v2/shared/ui/typography.test.tsx` | X | semantic element/variant/ref/attribute behavior |
+| `src/v2/shared/ui/image.tsx` | U | one function component, sole raw `<img>`, no URL lifetime |
+| `src/v2/shared/ui/image.test.tsx` | X | preset/accessibility/loading/decoding/fetch-priority behavior |
+| `src/v2/shared/ui/index.ts` | U | explicit v2 UI public API only |
+| `src/shared/config/env.ts` | C | sole Vite env parser; typed client/server separation; no secret export |
+| `src/shared/config/env.test.ts` | X | valid/invalid values and client/server separation |
+| `src/shared/config/runtime.ts` | C | sole dynamic SSR/client/window/mode detection owner |
+| `src/shared/config/runtime.test.ts` | X | SSR without window and dynamically changed globals |
+| `src/shared/config/index.ts` | C | typed API plus backward-compatible legacy exports |
+| `src/v2/presentation/use-document-actor-selectors.ts` | P | selector-only `@xstate/react` binding over narrow application selectors |
+| `src/v2/presentation/use-editor-session.ts` | P | React route-lifetime signal plus external-store subscription; runtime remains owner |
+| `src/v2/presentation/index.ts` | P | explicit presentation public API only |
+| `src/pages/editor-v2/ui/editor-v2-page.tsx` | P | page composition, bilingual copy, and unrelated grid control only |
+| `src/pages/editor-v2/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
+| `src/pages/editor-v2/ui/editor-v2-status-rail.tsx` | P | truthful finite stage presentation only |
+| `src/pages/editor-v2/ui/editor-v2-document-panel.tsx` | P | narrow actor selectors and command translation only |
+| `src/routes/editor-v2.tsx` | R | TanStack filename exception; Russian noindex route delegation only |
+| `src/routes/en/editor-v2.tsx` | R | TanStack filename exception; English noindex route delegation only |
+| `src/v2/testing/builders.ts` | T | minimal valid typed values and explicit overrides |
+| `src/v2/testing/fake-clock.ts` | T | deterministic application clock, no ambient fake timer leak |
+| `src/v2/testing/fake-ids.ts` | T | deterministic ID source, reset per test |
+| `src/v2/testing/fake-processing-gateway.ts` | T | implements production port, not a second state machine |
+| `src/v2/testing/worker-scenario-driver.ts` | T | drives production protocol and observable scenarios |
+| `src/v2/testing/index.ts` | T | test-only public API with explicit cleanup contracts |
+| `src/v2/testing/performance/contracts.ts` | M | typed signals, support flags, budgets, versioned report schema |
+| `src/v2/testing/performance/marks.ts` | M | finite mark registry and injected performance adapter |
+| `src/v2/testing/performance/browser-collector.ts` | M | sole observer/Event Timing/User Timing collector owner |
+| `src/v2/testing/performance/resource-probe.ts` | M | repository/worker/session/listener counts only |
+| `src/v2/testing/performance/report.ts` | M | percentile and unsupported-aware budget evaluator |
+| `src/v2/testing/performance/test-adapter.ts` | T | deterministic samples/clock without browser globals |
+| `e2e/support/v2/fixtures.ts` | E | typed context-isolated setup and automatic cleanup |
+| `e2e/support/v2/scenario-driver.ts` | E | supported test port; no direct private hook patching |
+| `e2e/support/v2/upload.ts` | E | narrow upload component object; actions only |
+| `e2e/support/v2/progress.ts` | E | narrow progress component object; no hidden assertions |
+| `e2e/support/v2/preview.ts` | E | narrow preview component object; no CSS/XPath |
+| `e2e/support/v2/export.ts` | E | narrow export component object; observable download action |
+| `e2e/phase-33-editor-v2.spec.ts` | E | bilingual deterministic parallel-safe journey |
+| `e2e/support/mock-editor-v2-worker.ts` | E | deterministic production-protocol adapter; no model/CDN/GPU dependency |
+| `e2e/phase-33-editor-v2.real.spec.ts` | E | one serialized real boundary smoke; no duplicate UI coverage |
+| `scripts/profiling/v2/run-phase-33.mjs` | M | one report-contract orchestration shell; no product logic |
+
+Profiles expand to mandatory rules: **D** framework-free pure TypeScript, kebab-case, type aliases,
+no React/browser/worker/provider/binary values; **A** D plus injected ports and XState ID-only
+context; **B** tested browser adapter with one platform owner and deterministic cleanup/failures;
+**W** typed protocol, transferable ownership, no React/DOM UI/env access; **U/P** one function
+component per file, local `Props` type, no prop/hook destructuring or inline JSX variables, named
+`useEffect` callbacks, and v2 Typography/Image use; **C/L** SSR-safe typed public boundary with no
+direct consumer platform access; **T/X** observable behavior, isolated fakes/globals, fake time/IDs
+where applicable, complete cleanup; **M** typed support-aware measurement with no free-form marks;
+**E** role/label locators, web-first assertions, no hidden assertions/sleeps/global state/retries;
+**R** the framework-authorized route naming exception only.
+
+The manifest does not require speculative files: helpers such as `class-names.ts` and
+`abort-error.ts` are created only if a Phase-33 consumer exists. Tests for domain/application/runtime
+modules are colocated as `<module>.test.ts` and inherit profile X in addition to the source profile.
+
+### 11.9 Performance signals, marks, and evidence-driven deviations
+
+Typed marks are limited to `v2:<runId>:{queued,worker-transfer,decode,model-load,inference,
+post-process,composite,encode,commit,preview-paint}:start|end`. Collector code maps them to the
+following version-1 report inventory:
+
+| Signal | Source / support rule | Claim and Phase-33 budget |
+|--------|-----------------------|---------------------------|
+| stage duration and queue delay | typed User Timing measures; always supported when runtime runs | report cold/warm samples and percentiles; no hidden merged stages |
+| long task count/duration | `PerformanceObserver("longtask")`; explicit unsupported flag outside supporting engines | zero application-attributable tasks `>=50 ms` on target evidence |
+| interaction event-to-next-paint | Event Timing when supported plus controlled next-paint probe | target p95 `<100 ms`; unsupported is `null`, never zero |
+| scroll/control action result | Playwright/manual action timestamp + next observable paint/state | zero missed actions during every heavy stage |
+| resource/lease counts | `ArtifactRepository.stats()` plus worker/session/listener probe | bounded counts and zero reachable document/run leases after ten churn cycles |
+| worker protocol traffic | gateway diagnostic adapter | one run, ordered progress, exactly one terminal, no preview/export reinference |
+| heap/trace diagnostics | managed Playwright browser on Chromium only | diagnostic evidence only; never a cross-browser budget claim |
+| browser/device/GPU/model/cache | capability reporter and run metadata | mandatory environment metadata; unsupported capabilities explicit |
+
+Evidence-driven deviations and rejected upgrades:
+
+| Decision | Evidence and consequence |
+|----------|--------------------------|
+| `File` exists only in the application-edge import command | Browser import necessarily begins with a `File`; it is stored immediately and never enters domain/actor snapshots, preserving the no-binary-state invariant |
+| Routes are `/editor-v2` and `/en/editor-v2` | both are separately reachable and noindex; TanStack file-route naming remains the documented kebab-case exception |
+| Presentation is split between a thin hook and page-owned components | the runtime composition root proved to be browser infrastructure rather than a React provider; one component per file and selector-only workflow reads remain intact |
+| Raw `<img>` exists only in `image.tsx` | `FRONTEND_CONVENTIONS.md` explicitly reserves this implementation exception for the Image primitive |
+| Platform globals exist only in named adapters | Worker, object URL, decode, capability, env, and performance access require real browser boundaries; callers consume typed ports |
+| XState upgraded from the earlier research snapshot | npm stable versions `xstate@5.32.5` and `@xstate/react@6.1.0` are mutually compatible and support React 19; implementation follows current `setup()`/selector APIs |
+| TypeScript 7 deferred | npm stable is `7.0.2`, but current `typescript-eslint@8.65.0` and its canary require TypeScript `<6.1.0`; Phase 33 keeps `6.0.3` rather than putting mandatory lint outside its supported peer contract |
+| Comlink, workerpool/threads.js, Konva/Fabric/Pixi, MSW, and web-vitals deferred | no measured Phase-33 deficiency justifies dependency/prototype cost; they are not installed, benchmarked, or compared |
+
+No other deviation from `FRONTEND_CONVENTIONS.md` is approved. OffscreenCanvas,
+PerformanceObserver, User Timing, Playwright, and Vitest are selected platform/existing-tool
+boundaries rather than candidates.
+
+### 11.10 First-slice shared utility inventory
+
+The inventory is consumer-led. “R2 owner” means the capability is part of the production worker
+adapter and must not be pre-created as a generic helper in `shared/lib`.
+
+| Concern | Decision | Public owner / evidence |
+|---------|----------|-------------------------|
+| class merge | reuse | repository-wide `@/shared/lib` exports the existing `cn` (`clsx` + `tailwind-merge`); v2 Typography/Image consume it and conflict behavior is tested |
+| storage / persisted JSON | reuse when needed, not consumed in Phase 33 | existing `@/shared/lib/storage` owns SSR-safe localStorage and guarded JSON with tests; v2 adds no persistence key and therefore imports neither |
+| router | reuse when a v2 consumer needs imperative route state | existing `@/shared/lib` exports `useRouter`; the file route itself needs no router hook, so no v2 wrapper is added |
+| browser capability | R2 owner | `runtime-browser/browser-capabilities.ts` reports Worker, OffscreenCanvas, WebGPU/WASM and support flags through one tested adapter; no component probes globals |
+| encoded image metadata | reuse | `@/shared/lib` exports tested `inspectEncodedImageDimensions`; import validation may consume it without decoding pixels |
+| full image decode/transform | R2 owner | full-resolution decode and transform stay in the production worker adapter; no main-thread decode helper is created |
+| object URL | v2-owned complete | `artifact-url-adapter.ts` is the sole native URL owner; `ArtifactRepository` owns URL leases/revocation and tests all cleanup paths |
+| abort/error | v2-owned complete | `LocalProcessingGateway` owns AbortController linkage and normalizes typed processing terminal outcomes; no generic error-catcher utility is introduced |
+| worker access | rewrite in R2 | legacy `useWorkerLifecycle` is React/request-ID specific and is not reused; v2 uses one native typed worker factory/client behind `ProcessingGateway` |
+
+Direct `import.meta.env`, runtime globals, object URLs, worker construction/messaging, decode, and
+performance observation remain forbidden outside the named owners. This table authorizes no blanket
+legacy migration: existing legacy call sites remain governed by the prospective-only convention.
+
+## 12. Decision log and research basis
 
 | Decision | Basis |
 |----------|-------|
@@ -509,17 +1009,28 @@ where the original freeze occurs.
 | Fastify as backend candidate | Current Fastify guidance supports encapsulated plugins, schema-based typed routes, lifecycle hooks, and injection testing. GPU inference remains a separate internal worker. |
 | No binary state in state managers | avoids accidental cloning, serialization, broad subscriptions, and unbounded cache retention |
 | Parallel vertical-slice migration | preserves a working fallback and makes each domain boundary testable before feature breadth returns |
+| Native typed Worker protocol as Phase-33 choice | preserves explicit correlation, progress, transfer, cancellation, terminal outcomes, and resource ownership without spending the foundation phase on library prototypes |
+| Isolated fixture-driven tests | Playwright browser contexts and typed fixtures provide deterministic setup/teardown; component/page objects are used narrowly to remove stable duplication |
+| Rebuilt v2 performance harness | current scripts contain useful probes but duplicate orchestration and mix mock/real/host-specific claims; shared typed collectors/reports make evidence comparable |
 
-Primary references:
+Primary references (package versions are verified against npm at implementation time):
 
-- [XState actors and invoked services](https://github.com/statelyai/xstate/blob/xstate@5.20.1/docs/guides/actors.md)
+- [XState actors and invoked services](https://github.com/statelyai/xstate/blob/xstate@5.32.5/docs/guides/actors.md)
 - [XState React actor-selector tests](https://github.com/statelyai/xstate/blob/main/packages/xstate-react/test/useActorRef.test.tsx)
 - [TanStack Query cancellation](https://github.com/TanStack/query/blob/v5.90.3/docs/framework/react/guides/query-cancellation.md)
 - [TanStack Query mutations](https://github.com/TanStack/query/blob/v5.90.3/docs/framework/react/guides/mutations.md)
 - [Fastify encapsulation](https://github.com/fastify/fastify/blob/main/docs/Reference/Encapsulation.md)
 - [Fastify TypeScript](https://github.com/fastify/fastify/blob/main/docs/Reference/TypeScript.md)
+- [Playwright fixtures](https://github.com/microsoft/playwright/blob/v1.61.0/docs/src/test-fixtures-js.md)
+- [Playwright page-object guidance](https://github.com/microsoft/playwright/blob/v1.61.0/docs/src/pom.md)
+- [Web Workers and transferable ownership](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers)
+- [OffscreenCanvas worker rendering](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvasRenderingContext2D)
+- [Comlink RPC and transfer/release semantics](https://github.com/GoogleChromeLabs/comlink)
+- [workerpool cancellation, events, and transfers](https://github.com/josdejong/workerpool)
+- [Vitest test context and fixtures](https://vitest.dev/guide/test-context)
+- [web-vitals measurement API](https://github.com/GoogleChrome/web-vitals)
 
-## 12. Open decisions — deliberately deferred
+## 13. Open decisions — deliberately deferred
 
 - exact backend framework after a focused spike;
 - auth and payment providers;
@@ -529,6 +1040,8 @@ Primary references:
 - server model families and commercial licenses;
 - whether remote job progress needs SSE beyond polling;
 - exact v2 route/feature-flag exposure during migration.
+- whether a later measured deficiency justifies Comlink, workerpool/threads.js, a canvas framework,
+  or another worker/rendering library.
 
 These do not block the first local v2 vertical slice because every future integration sits behind a
 port defined at the application boundary.

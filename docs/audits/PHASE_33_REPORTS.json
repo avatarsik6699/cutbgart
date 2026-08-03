@@ -1,0 +1,216 @@
+[
+  {
+    "schemaVersion": "phase-33.performance.v1",
+    "capturedAt": "2026-08-01T22:04:00.000Z",
+    "run": {
+      "id": "fake-automated",
+      "gateway": "fake",
+      "environmentKind": "automated-host",
+      "cacheState": "not-applicable"
+    },
+    "environment": {
+      "browser": "Playwright Chromium",
+      "platform": "Linux x86_64",
+      "gpuPath": null
+    },
+    "support": {
+      "userTiming": "supported",
+      "longTasks": "supported",
+      "eventTiming": "supported",
+      "resources": "supported"
+    },
+    "stages": [
+      { "runId": "fake-automated", "stage": "queued", "startedAtMs": 0, "durationMs": 1 },
+      { "runId": "fake-automated", "stage": "model-load", "startedAtMs": 1, "durationMs": 2 },
+      { "runId": "fake-automated", "stage": "inference", "startedAtMs": 3, "durationMs": 3 },
+      { "runId": "fake-automated", "stage": "commit", "startedAtMs": 6, "durationMs": 1 }
+    ],
+    "interactions": [
+      { "name": "mock-model-scroll", "kind": "scroll", "eventToNextPaintMs": 16, "missed": false },
+      { "name": "mock-model-control", "kind": "control", "eventToNextPaintMs": 14, "missed": false },
+      { "name": "mock-inference-scroll", "kind": "scroll", "eventToNextPaintMs": 18, "missed": false },
+      { "name": "mock-inference-control", "kind": "control", "eventToNextPaintMs": 15, "missed": false }
+    ],
+    "longTasks": [],
+    "resources": [],
+    "artifacts": [
+      {
+        "point": "after-ten-cycle-reset",
+        "artifactCount": 0,
+        "leaseCount": 0,
+        "byteCount": 0,
+        "objectUrlCount": 0,
+        "workerCount": 1,
+        "sessionCount": 1,
+        "listenerCount": null
+      }
+    ],
+    "evaluation": {
+      "status": "pass",
+      "checks": [
+        { "name": "maximumLongTaskMs", "status": "pass", "observed": 0, "budget": 50 },
+        { "name": "interactionP95Ms", "status": "pass", "observed": 18, "budget": 100 },
+        { "name": "maximumMissedActions", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalArtifactCount", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalLeaseCount", "status": "pass", "observed": 0, "budget": 0 }
+      ]
+    },
+    "limitations": [
+      "Deterministic adapter report; real model and target hardware are covered by separate reports in this bundle."
+    ]
+  },
+  {
+    "schemaVersion": "phase-33.performance.v1",
+    "capturedAt": "2026-08-01T22:04:00.000Z",
+    "run": {
+      "id": "target-real-cold",
+      "gateway": "real-model",
+      "environmentKind": "target-device",
+      "cacheState": "cold"
+    },
+    "environment": {
+      "browser": "Chrome 150.0.0.0",
+      "platform": "Windows 10 Win32",
+      "gpuPath": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11); WebGPU adapter; shader-f16"
+    },
+    "support": {
+      "userTiming": "supported",
+      "longTasks": "supported",
+      "eventTiming": "supported",
+      "resources": "unsupported"
+    },
+    "stages": [
+      { "runId": "target-real-cold", "stage": "model-load", "startedAtMs": 0, "durationMs": 5627.8 },
+      { "runId": "target-real-cold", "stage": "inference", "startedAtMs": 5629.1, "durationMs": 25321.2 },
+      { "runId": "target-real-cold", "stage": "post-process", "startedAtMs": 30949.9, "durationMs": 0.1 },
+      { "runId": "target-real-cold", "stage": "decode", "startedAtMs": 30951.1, "durationMs": 19.9 },
+      { "runId": "target-real-cold", "stage": "composite", "startedAtMs": 30969.4, "durationMs": 22.4 },
+      { "runId": "target-real-cold", "stage": "encode", "startedAtMs": 30992.6, "durationMs": 26.7 },
+      { "runId": "target-real-cold", "stage": "commit", "startedAtMs": 31023.9, "durationMs": 0 }
+    ],
+    "interactions": [
+      { "name": "model-load-scroll-1", "kind": "scroll", "eventToNextPaintMs": 15.3, "missed": false },
+      { "name": "model-load-grid-1", "kind": "control", "eventToNextPaintMs": 10, "missed": false },
+      { "name": "model-load-scroll-2", "kind": "scroll", "eventToNextPaintMs": 60.6, "missed": false },
+      { "name": "model-load-grid-2", "kind": "control", "eventToNextPaintMs": 15.1, "missed": false },
+      { "name": "inference-scroll-1", "kind": "scroll", "eventToNextPaintMs": 31, "missed": false },
+      { "name": "inference-grid-1", "kind": "control", "eventToNextPaintMs": 15.9, "missed": false },
+      { "name": "inference-scroll-2", "kind": "scroll", "eventToNextPaintMs": 20.1, "missed": false },
+      { "name": "inference-grid-2", "kind": "control", "eventToNextPaintMs": 8.9, "missed": false }
+    ],
+    "longTasks": [],
+    "resources": [],
+    "artifacts": [
+      {
+        "point": "result",
+        "artifactCount": 3,
+        "leaseCount": 5,
+        "byteCount": 0,
+        "objectUrlCount": 2,
+        "workerCount": 1,
+        "sessionCount": 1,
+        "listenerCount": null
+      },
+      {
+        "point": "reset",
+        "artifactCount": 0,
+        "leaseCount": 0,
+        "byteCount": 0,
+        "objectUrlCount": 0,
+        "workerCount": 1,
+        "sessionCount": 1,
+        "listenerCount": null
+      }
+    ],
+    "evaluation": {
+      "status": "pass",
+      "checks": [
+        { "name": "maximumLongTaskMs", "status": "pass", "observed": 0, "budget": 50 },
+        { "name": "interactionP95Ms", "status": "pass", "observed": 60.6, "budget": 100 },
+        { "name": "maximumMissedActions", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalArtifactCount", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalLeaseCount", "status": "pass", "observed": 0, "budget": 0 }
+      ]
+    },
+    "limitations": [
+      "The page realm supports Resource Timing, but worker-originated model fetches are not observable there; resource samples are explicitly unsupported rather than reported as zero.",
+      "Event-to-next-paint is measured from the captured event through two animation frames and is not Event Timing API duration."
+    ]
+  },
+  {
+    "schemaVersion": "phase-33.performance.v1",
+    "capturedAt": "2026-08-01T22:04:00.000Z",
+    "run": {
+      "id": "target-real-warm",
+      "gateway": "real-model",
+      "environmentKind": "target-device",
+      "cacheState": "warm"
+    },
+    "environment": {
+      "browser": "Chrome 150.0.0.0",
+      "platform": "Windows 10 Win32",
+      "gpuPath": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11); WebGPU adapter; shader-f16"
+    },
+    "support": {
+      "userTiming": "supported",
+      "longTasks": "supported",
+      "eventTiming": "supported",
+      "resources": "unsupported"
+    },
+    "stages": [
+      { "runId": "target-real-warm", "stage": "model-load", "startedAtMs": 0, "durationMs": 0 },
+      { "runId": "target-real-warm", "stage": "inference", "startedAtMs": 0.8, "durationMs": 24362.9 },
+      { "runId": "target-real-warm", "stage": "post-process", "startedAtMs": 24364.1, "durationMs": 0 },
+      { "runId": "target-real-warm", "stage": "decode", "startedAtMs": 24365.2, "durationMs": 21.9 },
+      { "runId": "target-real-warm", "stage": "composite", "startedAtMs": 24385.8, "durationMs": 14.4 },
+      { "runId": "target-real-warm", "stage": "encode", "startedAtMs": 24400.2, "durationMs": 22.9 },
+      { "runId": "target-real-warm", "stage": "commit", "startedAtMs": 24428, "durationMs": 0 }
+    ],
+    "interactions": [
+      { "name": "warm-model-scroll-1", "kind": "scroll", "eventToNextPaintMs": 16.9, "missed": false },
+      { "name": "warm-model-grid-1", "kind": "control", "eventToNextPaintMs": 8.3, "missed": false },
+      { "name": "warm-inference-scroll-1", "kind": "scroll", "eventToNextPaintMs": 26.3, "missed": false },
+      { "name": "warm-inference-grid-1", "kind": "control", "eventToNextPaintMs": 8.7, "missed": false },
+      { "name": "warm-inference-scroll-2", "kind": "scroll", "eventToNextPaintMs": 27.7, "missed": false },
+      { "name": "warm-inference-grid-2", "kind": "control", "eventToNextPaintMs": 9.1, "missed": false }
+    ],
+    "longTasks": [],
+    "resources": [],
+    "artifacts": [
+      {
+        "point": "result",
+        "artifactCount": 3,
+        "leaseCount": 5,
+        "byteCount": 0,
+        "objectUrlCount": 2,
+        "workerCount": 1,
+        "sessionCount": 1,
+        "listenerCount": null
+      },
+      {
+        "point": "after-ten-cycle-reset",
+        "artifactCount": 0,
+        "leaseCount": 0,
+        "byteCount": 0,
+        "objectUrlCount": 0,
+        "workerCount": 1,
+        "sessionCount": 1,
+        "listenerCount": null
+      }
+    ],
+    "evaluation": {
+      "status": "pass",
+      "checks": [
+        { "name": "maximumLongTaskMs", "status": "pass", "observed": 0, "budget": 50 },
+        { "name": "interactionP95Ms", "status": "pass", "observed": 27.7, "budget": 100 },
+        { "name": "maximumMissedActions", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalArtifactCount", "status": "pass", "observed": 0, "budget": 0 },
+        { "name": "maximumFinalLeaseCount", "status": "pass", "observed": 0, "budget": 0 }
+      ]
+    },
+    "limitations": [
+      "The page realm supports Resource Timing, but worker-originated model fetches are not observable there; resource samples are explicitly unsupported rather than reported as zero.",
+      "Cancellation acknowledgement is cooperative and arrived only after the active WebGPU inference returned; observed cycle durations were 20.6-24.2 seconds."
+    ]
+  }
+]

@@ -38,6 +38,25 @@ export default tseslint.config(
     },
   },
   {
+    // V2 presentation avoids nested conditional expressions: named decisions
+    // are easier to inspect and keep localization/state branches independent.
+    files: ["src/v2/**/*.{ts,tsx}", "src/pages/editor-v2/**/*.tsx"],
+    rules: {
+      "no-nested-ternary": "error",
+    },
+  },
+  {
+    // Primitive prop filters intentionally omit consumed sibling properties
+    // before forwarding the safe remainder to the underlying DOM element.
+    files: ["src/v2/shared/ui/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
+      // React 19 exposes ref as a normal prop. The hooks plugin currently marks
+      // the complete props object as ref-tainted and reports ordinary fields.
+      "react-hooks/refs": "off",
+    },
+  },
+  {
     // TanStack Router's file-based routing convention requires each route
     // file to export both `Route` and its component — incompatible with
     // react-refresh's single-component-export assumption.

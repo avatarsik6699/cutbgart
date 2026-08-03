@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.28` |
+| Version | `v1.29` |
 | Date | `2026-08-01` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -272,6 +272,34 @@ proportional to the boundary:
 - serialized real-model smoke and architect target-device verification;
 - repository lint, typecheck, architecture checks, build, container smoke, dependency/license/model/
   security checks declared by [`STACK.md`](./STACK.md) and the active phase.
+
+Test code is production code and follows the same modularity, naming, ownership, public-API, cleanup,
+and review requirements as runtime code:
+
+- tests assert observable contracts and domain outcomes, not private implementation steps;
+- deterministic fakes use the same typed ports/protocols as production adapters; no global worker,
+  timer, random, clock, storage, network, or browser state may leak between tests;
+- Playwright uses isolated contexts, composable typed fixtures, explicit setup/teardown, reusable
+  journey/component objects where they remove duplication, accessibility-first locators, web-first
+  assertions, and failure-only traces. Monolithic page objects and generic test-helper dumping
+  grounds are forbidden;
+- the fast E2E lane uses deterministic local worker/model doubles and remains parallel-safe; real
+  model/CDN/WebGPU checks are a small, explicitly serialized smoke lane and never get duplicated
+  across ordinary UI scenarios;
+- unit/contract tests use builders and fixtures with safe defaults, fake time/IDs at application
+  ports, table/model-based coverage where appropriate, and mandatory mock/listener/resource cleanup;
+- arbitrary sleeps, order dependence, shared mutable fixtures, retry-as-correctness, broad snapshots,
+  duplicated setup, brittle CSS/XPath selectors, and assertions against incidental copy are not
+  accepted;
+- suite duration, slowest tests, flake/retry count, and deterministic seed/config are recorded as
+  quality signals. A retry can collect diagnostics, but an intermittently passing test is a defect.
+
+Performance verification is a modular product subsystem, not scattered `page.evaluate` snippets.
+V2 must expose typed marks/measurements, a browser collector, deterministic test adapter, report
+schema, budgets, and cleanup. Existing Phase-31/32 scripts are evidence and design input only; reuse
+requires a code-quality and signal-validity review. Field Core Web Vitals, lab interaction/resource
+budgets, and target-device traces are complementary signals and must not be substituted for one
+another.
 
 Automated green does not replace architect review. Phase 33 cannot pass if the affected browser still
 freezes, evidence is skipped, an invariant is violated, or review notes remain unresolved.

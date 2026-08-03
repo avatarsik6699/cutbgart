@@ -4,4 +4,4 @@ export {
   type ModelSource,
   type ModelSourceLoader,
   type ModelSourceLoaderOptions,
-} from "../../../shared/lib/model-source-loader";
+} from "../../../shared/lib";
