@@ -10,8 +10,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.29` |
-| Date | `2026-08-01` |
+| Version | `v1.30` |
+| Date | `2026-08-03` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
 | Internal project | `bg_remove_app` / BG Remove App |
@@ -36,9 +36,9 @@ Three invariants govern every decision:
 3. **Responsiveness, indexability, and accessibility are functionality.** A visually correct result
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
-The first v2 slice is deliberately narrow: select one image, prepare it locally, remove its
-background, preview the committed result, export PNG, cancel/retry/reset safely. It must remain
-responsive throughout and coexist with the legacy editor for comparison and rollback.
+The accepted first v2 slice is deliberately narrow: select one image, prepare it locally, remove
+its background, preview the committed result, export PNG, cancel/retry/reset safely. The next slice
+adds bounded document history and exact Manual Cutout without expanding into other editor tools.
 
 ## 2. Scope and boundaries
 
@@ -59,7 +59,7 @@ Phase 32 added useful legacy guards, item-owned edit state, structured batch fai
 work, but did not eliminate real-browser model-load and Magic Apply freezes. It is closed incomplete,
 not evidence that the legacy editor satisfies the responsiveness contract.
 
-### 2.2 Active v2 scope
+### 2.2 Implemented v2 foundation
 
 Phase 33 builds an isolated implementation under `src/v2/` and a separate noindex route. It includes:
 
@@ -75,7 +75,32 @@ Phase 33 does **not** migrate Cutout, Enhancements, Background, batch, accounts,
 processing, or generated backgrounds. Its exact checklist and acceptance gates live in
 [`PHASE_33.md`](./PHASE_33.md).
 
-### 2.3 Future paid direction
+### 2.3 Active v2 scope — Phase 34
+
+Phase 34 migrates bounded document history and exact Manual Cutout onto the accepted v2 foundation:
+
+- one manual draft belongs to one document and captures the committed baseline revision;
+- Restore and Erase edit alpha deterministically in source-image coordinates; untouched alpha bytes
+  remain bit-exact, and brush falloff never invokes inference or changes pixels outside its footprint;
+- gesture-level draft undo/redo uses bounded dirty-rectangle patches outside React/XState state;
+- Cancel discards the entire draft without changing the document revision or committed artifacts;
+- Apply materializes matte/composite/PNG artifacts outside the interaction path and commits exactly
+  one `manual-cutout` history operation through the document actor;
+- document Undo/Redo moves between committed ID-only snapshots, increments revision, invalidates the
+  redo branch after a new commit, and deterministically retains/releases history artifact leases;
+- history is bounded to 20 committed operations and 96 MiB of retained historical artifacts, pruning
+  the oldest entries without releasing artifacts still reachable from baseline/current/redo;
+- the bilingual v2 route adds accessible Manual, Apply, Cancel, draft Undo/Redo, document Undo/Redo,
+  brush mode/size, zoom/pan/fit, keyboard shortcuts, dirty-draft protection, and truthful status;
+- the existing automatic-removal, preview, export, reset, SSR, responsiveness, and cleanup contracts
+  remain green.
+
+Phase 34 does **not** migrate Magic Cutout, fine-detail/foreground refinement, Enhancements,
+Background, batch/multi-document UI, public routes, accounts, payments, remote processing, or
+generated backgrounds. It may reuse reviewed pure geometry/pixel policies from legacy code but must
+not import legacy React hooks, mutable stores, or editor workflow state.
+
+### 2.4 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -109,6 +134,31 @@ type ProcessingError = {
   message: string;
   retryable: boolean;
 };
+
+type ManualCutoutMode = "restore" | "erase";
+type ManualDraftId = string;
+type EditOperationId = string;
+
+type ManualCutoutDraft = {
+  draftId: ManualDraftId;
+  documentId: DocumentId;
+  baselineRevision: Revision;
+  dirty: boolean;
+};
+
+type DocumentHistoryEntry = {
+  operationId: EditOperationId;
+  kind: "manual-cutout";
+  before: DocumentSnapshot;
+  after: DocumentSnapshot;
+  estimatedHistoricalBytes: number;
+};
+
+type DocumentHistory = {
+  past: readonly DocumentHistoryEntry[];
+  future: readonly DocumentHistoryEntry[];
+  retainedHistoricalBytes: number;
+};
 ```
 
 Core rules:
@@ -129,6 +179,13 @@ Core rules:
   the main interaction path. Global backpressure defaults to one heavy GPU job.
 - Export reads the committed composite. It never triggers inference or synchronous full-image
   reconstruction.
+- A manual draft is runtime-owned mutable state identified in the actor only by `ManualDraftId`,
+  document ID, baseline revision, and dirty metadata. Full alpha planes, dirty-rectangle patches,
+  canvas/image buffers, and object URLs never enter React or actor snapshots.
+- Draft gesture Undo/Redo and committed document Undo/Redo are separate histories. Applying a draft
+  creates one committed operation regardless of gesture count; cancelling creates none.
+- Every manual apply/undo/redo commit increments revision. Commands against a stale baseline are
+  rejected, and a new commit after document Undo releases the unreachable redo branch.
 - React renders narrow selectors and sends commands. Component lifecycle is an adapter signal, not
   workflow truth.
 
@@ -175,7 +232,7 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
 | `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| Phase-33 v2 route | Separate bilingual noindex first-slice surface; final path is frozen in Phase 33 |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 34 adds Manual Cutout and history without changing route identity |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -211,6 +268,12 @@ Public pages remain fully localized in Russian and English, keyboard operable, s
 meaningful, responsive, and SSR-safe. No essential action may depend only on hover, color, pointer
 precision, or an unannounced status change.
 
+For Phase 34, pointer capture/cancel/lost-capture produces at most one deterministic gesture patch;
+brush edits use source-image coordinates across zoom/pan; Ctrl/Cmd+Z and redo variants affect the
+active draft while Manual is open and otherwise affect committed document history. Apply and Cancel
+remain explicit, keyboard reachable actions, and navigation/reset cannot silently discard a dirty
+draft.
+
 ## 6. Stack and runtime configuration
 
 [`STACK.md`](./STACK.md) is authoritative for versions, commands, repository layout, gates, and
@@ -229,7 +292,7 @@ Current environment contract:
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Immutable production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime configuration |
 
-Phase 33 adds no environment variable. Future backend technology is deliberately undecided; current
+Phases 33–34 add no environment variable. Future backend technology is deliberately undecided; current
 candidates and decision criteria are recorded in `ARCHITECTURE_V2.md`, not an implementation mandate.
 
 ## 7. Non-functional acceptance
@@ -304,6 +367,11 @@ another.
 Automated green does not replace architect review. Phase 33 cannot pass if the affected browser still
 freezes, evidence is skipped, an invariant is violated, or review notes remain unresolved.
 
+Phase 34 additionally fails if a brush gesture causes a full-image React/XState update, untouched
+alpha changes, Cancel mutates committed history, Apply creates more than one operation, Undo/Redo
+leaks or resurrects pruned artifacts, export reinfers, a dirty draft is silently lost, or the
+accepted Phase-33 responsiveness/resource budgets regress.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -311,12 +379,11 @@ freezes, evidence is skipped, an invariant is violated, or review notes remain u
 | 01–31 | Complete / historical | Legacy product, operations, editor, design, and audit evolution; contracts archived under `archive/phases/` |
 | 32 | Closed incomplete | Legacy stabilization stopped by architect decision; gate waived, no tag, known freezes remain |
 | 33 | Complete | Editor v2 foundation and first local vertical slice; gate and architect acceptance passed |
-| 34 | Needs review / next candidate | Re-scope as the next v2 capability slice before implementation |
+| 34 | Complete | Bounded document history and exact Manual Cutout on v2; gate and architect acceptance passed |
 | Later | Unscheduled | Migrate capabilities one tested slice at a time, then define paid backend phases explicitly |
 
-No v2 capability is migrated merely because legacy code exists. Phase 33 proved its architecture and
-resource/performance contract on the affected environment; the next slice still requires an explicit
-approved phase contract.
+No v2 capability is migrated merely because legacy code exists. Phase 34 is limited to the explicit
+history/Manual contract above; later tools still require their own approved phase contracts.
 
 ## 9. Deferred decisions
 

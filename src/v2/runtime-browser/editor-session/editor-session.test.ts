@@ -8,7 +8,9 @@ import type {
 import {
   createArtifactId,
   createDocumentId,
+  createEditOperationId,
   createImageId,
+  createManualDraftId,
   createRunId,
   type DocumentSnapshot,
   type ProcessingProgress,
@@ -102,6 +104,8 @@ function createHarness() {
       document: () => createDocumentId("document-1"),
       image: () => createImageId("image-1"),
       run: () => createRunId("run-1"),
+      manualDraft: () => createManualDraftId("draft-1"),
+      editOperation: () => createEditOperationId("operation-1"),
     },
     repository,
   });

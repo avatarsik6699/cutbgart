@@ -18,6 +18,15 @@ export function executeArtifactEffect(
     case "release-run-if-owned":
       dependencies.artifacts.releaseRun(effect);
       return null;
+    case "release-manual-draft":
+      dependencies.artifacts.releaseManualDraft(effect);
+      return null;
+    case "commit-manual-history":
+      dependencies.artifacts.commitManualHistory(effect);
+      return null;
+    case "move-document-history":
+      dependencies.artifacts.moveDocumentHistory(effect);
+      return null;
     case "start-processing":
     case "cancel-processing":
       return null;

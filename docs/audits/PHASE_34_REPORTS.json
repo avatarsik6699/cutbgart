@@ -1,0 +1,47 @@
+[
+  {
+    "schemaVersion": "phase-34.manual-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "mocked-history-churn", "environmentKind": "automated-host" },
+    "automaticInferenceCount": 1,
+    "manualCommitCount": 22,
+    "exportSucceeded": true,
+    "history": { "requestedOperations": 22, "retainedOperations": 20 },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "actionPaintLatency": { "support": "unsupported", "samplesMs": [] },
+    "missedActions": 0,
+    "limitations": [
+      "This deterministic lane verifies action completion and resource bounds, but does not capture browser Event Timing or two-paint latency."
+    ]
+  },
+  {
+    "schemaVersion": "phase-34.manual-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "host-real-model", "environmentKind": "linux-host-real-model" },
+    "automaticInferenceCount": 1,
+    "manualCommitCount": 1,
+    "exportSucceeded": true,
+    "history": { "requestedOperations": 1, "retainedOperations": 1 },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "actionPaintLatency": { "support": "unsupported", "samplesMs": [] },
+    "missedActions": 0,
+    "limitations": [
+      "The serialized real-model smoke proves the worker split and zero reinference, but it does not collect action-to-paint timings."
+    ]
+  },
+  {
+    "schemaVersion": "phase-34.manual-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "windows-target", "environmentKind": "windows-playwright-mcp" },
+    "automaticInferenceCount": 1,
+    "manualCommitCount": 1,
+    "exportSucceeded": null,
+    "history": { "requestedOperations": 1, "retainedOperations": 1 },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "actionPaintLatency": { "support": "unsupported", "samplesMs": [] },
+    "missedActions": 0,
+    "limitations": [
+      "Playwright MCP confirmed every brush, Apply, Undo, Redo, and reset action visually, but precise event-to-paint instrumentation was not installed and export was not repeated in this target capture."
+    ]
+  }
+]

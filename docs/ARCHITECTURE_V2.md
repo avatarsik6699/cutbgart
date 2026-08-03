@@ -1,6 +1,6 @@
 # BG Remove App v2 — Domain Model and Target Architecture
 
-**Status:** approved direction; Phase-33 implementation contract frozen by `T1`
+**Status:** approved direction; Phase-33 foundation accepted; Phase-34 Manual/history contract frozen
 
 **Date:** 2026-08-01
 **Purpose:** replace incremental repairs of the current editor with an architecture-led, testable
@@ -1045,3 +1045,29 @@ Primary references (package versions are verified against npm at implementation 
 
 These do not block the first local v2 vertical slice because every future integration sits behind a
 port defined at the application boundary.
+
+## 14. Phase-34 Manual Cutout and history boundary
+
+Phase 34 preserves the single document actor as the only committed-workflow writer. The actor owns
+one `ManualCutoutDraft` descriptor, the committed `DocumentHistory`, revision checks, and the
+cancellable invoked Apply. It never owns alpha planes, brush patches, blobs, canvas values, or URLs.
+
+The two histories have deliberately different owners:
+
+- `ManualDraftEngine` owns mutable source-space alpha and at most 20 dirty-rectangle gesture patches.
+  Pointer cancel restores the in-progress gesture; draft Undo/Redo never changes document revision.
+- The document actor owns at most 20 atomic operations and 96 MiB of retained historical artifacts.
+  Apply adds exactly one `manual-cutout` operation; Cancel adds none; document Undo/Redo increments
+  revision and invalidates stale work.
+
+`ArtifactRepository` represents baseline/current/preview/export/run/manual-draft/history reachability
+as independent leases. A Manual Apply first registers a draft matte under the draft owner, invokes a
+dedicated `MANUAL_CUTOUT_COMMIT` worker operation, then atomically moves the returned matte/composite
+to document and history ownership. The worker only decodes, composites, and encodes; it has no model
+configuration or inference branch. Pruning and redo invalidation release operation owners only after
+the remaining document/history graph is retained.
+
+Legacy audit outcome: the reusable signal was limited to pure brush geometry, deterministic hardness
+falloff, source-space interpolation, dirty rectangles, and the proven 20-step/96-MiB limits. Those
+policies were rewritten behind v2 module boundaries. No legacy React hook, editor store, worker
+lifecycle, workflow state, or component crosses into v2.

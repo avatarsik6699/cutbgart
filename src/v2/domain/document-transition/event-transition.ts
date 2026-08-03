@@ -9,6 +9,7 @@ import {
   stageStatus,
   staleTerminalTransition,
 } from "./transition-policy";
+import { commitDocumentHistory } from "../document-history";
 
 export function transitionDocument(
   state: DocumentState,
@@ -19,6 +20,89 @@ export function transitionDocument(
   }
 
   switch (event.type) {
+    case "MANUAL_DRAFT_DIRTY_CHANGED": {
+      if (
+        state.manualDraft?.draftId !== event.draftId ||
+        state.status === "manual-applying"
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: { ...state, manualDraft: { ...state.manualDraft, dirty: event.dirty } },
+        effects: [],
+      };
+    }
+    case "MANUAL_COMMIT_SUCCEEDED": {
+      const pending = state.pendingManualCommit;
+      if (
+        state.status !== "manual-applying" ||
+        state.manualDraft?.draftId !== event.draftId ||
+        pending?.draftId !== event.draftId ||
+        event.expectedRevision !== state.revision ||
+        state.committed === null
+      ) {
+        return {
+          outcome: "ignored-stale",
+          state,
+          effects: [
+            {
+              type: "release-manual-draft",
+              documentId: event.documentId,
+              draftId: event.draftId,
+            },
+          ],
+        };
+      }
+      const entry = {
+        operationId: pending.operationId,
+        kind: "manual-cutout" as const,
+        before: state.committed,
+        after: event.snapshot,
+        estimatedHistoricalBytes: event.estimatedHistoricalBytes,
+      };
+      const committedHistory = commitDocumentHistory(state.history, entry);
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          committed: event.snapshot,
+          history: committedHistory.history,
+          manualDraft: null,
+          pendingManualCommit: null,
+          revision: state.revision + 1,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "commit-manual-history",
+            documentId: state.documentId,
+            draftId: event.draftId,
+            entry,
+            released: committedHistory.released,
+          },
+        ],
+      };
+    }
+    case "MANUAL_COMMIT_FAILED": {
+      if (
+        state.pendingManualCommit?.draftId !== event.draftId ||
+        event.expectedRevision !== state.revision
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          pendingManualCommit: null,
+          status: "result",
+          error: event.error,
+        },
+        effects: [],
+      };
+    }
     case "PREPARATION_STARTED":
       return state.status === "preparing"
         ? { outcome: "applied", state, effects: [] }
@@ -173,6 +257,7 @@ export function transitionDocument(
         state: {
           ...clearRun(state, "result", null),
           committed: snapshot,
+          baseline: state.baseline ?? snapshot,
           revision: state.revision + 1,
         },
         effects: [],

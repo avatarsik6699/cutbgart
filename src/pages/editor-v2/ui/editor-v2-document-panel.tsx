@@ -7,6 +7,10 @@ import { Typography } from "@/v2/shared/ui";
 import { EditorV2StatusRail } from "./editor-v2-status-rail";
 
 type Props = {
+  canRedoDocument: boolean;
+  canUndoDocument: boolean;
+  manualOpen: boolean;
+  revision: number;
   progress: number | null;
   session: EditorSession;
   status: DocumentStatus;
@@ -15,13 +19,14 @@ type Props = {
 function statusMessage(status: DocumentStatus): string {
   if (status === "cancelling") return m.editorV2Stopping();
   if (status === "error") return m.editorV2ProcessingFailed();
+  if (status === "manual-applying") return m.editorV2ManualApplying();
   return m.editorV2Privacy();
 }
 
 export function EditorV2DocumentPanel(props: Props) {
   const canCancel = ["queued", "model-loading", "processing"].includes(props.status);
   const canRetry = props.status === "error" || props.status === "ready";
-  const canExport = props.status === "result";
+  const canExport = props.status === "result" && !props.manualOpen;
 
   return (
     <div className="space-y-4">
@@ -39,6 +44,13 @@ export function EditorV2DocumentPanel(props: Props) {
         </Typography>
         <Typography variant="body-small" as="p" className="mt-2">
           {statusMessage(props.status)}
+        </Typography>
+        <Typography
+          variant="caption"
+          as="p"
+          className="text-muted-foreground mt-1 font-mono"
+        >
+          {m.editorV2Revision({ revision: String(props.revision) })}
         </Typography>
         {props.progress !== null ? (
           <div className="mt-4">
@@ -71,10 +83,33 @@ export function EditorV2DocumentPanel(props: Props) {
               {m.editorV2DownloadPng()}
             </Button>
           ) : null}
+          {canExport && !props.manualOpen ? (
+            <Button variant="outline" onClick={() => props.session.beginManual()}>
+              {m.editorV2ManualTitle()}
+            </Button>
+          ) : null}
+          <Button
+            variant="outline"
+            onClick={() => props.session.undoDocument()}
+            disabled={!props.canUndoDocument}
+          >
+            {m.editorV2DocumentUndo()}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => props.session.redoDocument()}
+            disabled={!props.canRedoDocument}
+          >
+            {m.editorV2DocumentRedo()}
+          </Button>
           <Button
             variant="ghost"
             onClick={() => props.session.reset()}
-            disabled={props.status === "cancelling"}
+            disabled={
+              props.status === "cancelling" ||
+              props.status === "manual-applying" ||
+              props.manualOpen
+            }
           >
             {m.editorV2StartOver()}
           </Button>

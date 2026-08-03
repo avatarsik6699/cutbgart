@@ -44,14 +44,24 @@ type UrlEntry = {
 };
 
 function ownerKey(owner: ArtifactLeaseOwner): string {
-  switch (owner.kind) {
-    case "document":
-    case "preview":
-    case "export":
-      return `${owner.kind}:${owner.documentId}`;
-    case "run":
-      return `${owner.kind}:${owner.documentId}:${owner.runId}`;
+  return JSON.stringify(owner);
+}
+
+function ownerDocumentId(key: string): string | null {
+  try {
+    const value: unknown = JSON.parse(key);
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "documentId" in value &&
+      typeof value.documentId === "string"
+    ) {
+      return value.documentId;
+    }
+  } catch {
+    return null;
   }
+  return null;
 }
 
 function disposeValue(value: ArtifactValue): void {
@@ -209,6 +219,26 @@ export class ArtifactRepository {
         released += 1;
         this.#disposeIfUnreachable(id, entry);
       }
+    }
+    return released;
+  }
+
+  releaseDocumentScopes(documentId: ArtifactLeaseOwner["documentId"]): number {
+    const keys = new Set<string>();
+    for (const entry of this.#artifacts.values()) {
+      for (const key of entry.leaseKeys) {
+        if (ownerDocumentId(key) === documentId) keys.add(key);
+      }
+    }
+    let released = 0;
+    for (const [url, entry] of [...this.#urls]) {
+      if (keys.has(entry.ownerKey)) this.#revokeUrl(url, entry);
+    }
+    for (const [id, entry] of [...this.#artifacts]) {
+      for (const key of keys) {
+        if (entry.leaseKeys.delete(key)) released += 1;
+      }
+      this.#disposeIfUnreachable(id, entry);
     }
     return released;
   }

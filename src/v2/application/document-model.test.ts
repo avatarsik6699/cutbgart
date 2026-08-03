@@ -1,7 +1,13 @@
 import { createActor } from "xstate";
 import { describe, expect, it, vi } from "vitest";
 
-import { createRunId, type DocumentState, type ProcessingStage } from "@/v2/domain";
+import {
+  createEditOperationId,
+  createManualDraftId,
+  createRunId,
+  type DocumentState,
+  type ProcessingStage,
+} from "@/v2/domain";
 import {
   buildDocumentSnapshot,
   buildDocumentState,
@@ -27,10 +33,16 @@ function createHarness(ids: string[]) {
   const gateway = new FakeProcessingGateway();
   const runIds = createDeterministicIds(ids.map(createRunId));
   const artifacts = {
+    estimateHistoricalBytes: vi.fn<DocumentArtifactEffects["estimateHistoricalBytes"]>(
+      () => 0,
+    ),
     exportPng: vi.fn<DocumentArtifactEffects["exportPng"]>(),
     promoteRun: vi.fn<DocumentArtifactEffects["promoteRun"]>(() => true),
     releaseDocument: vi.fn<DocumentArtifactEffects["releaseDocument"]>(),
     releaseRun: vi.fn<DocumentArtifactEffects["releaseRun"]>(),
+    releaseManualDraft: vi.fn<DocumentArtifactEffects["releaseManualDraft"]>(),
+    commitManualHistory: vi.fn<DocumentArtifactEffects["commitManualHistory"]>(),
+    moveDocumentHistory: vi.fn<DocumentArtifactEffects["moveDocumentHistory"]>(),
   } satisfies DocumentArtifactEffects;
   const machine = createDocumentMachine({
     artifacts,
@@ -41,6 +53,13 @@ function createHarness(ids: string[]) {
         const controller = new AbortController();
         return { signal: controller.signal, abort: () => controller.abort() };
       },
+    },
+    manualIds: {
+      draft: () => createManualDraftId("draft-1"),
+      operation: () => createEditOperationId("operation-1"),
+    },
+    manualCommitter: {
+      commit: () => Promise.reject(new Error("Unexpected manual commit")),
     },
   });
   return { artifacts, gateway, machine };

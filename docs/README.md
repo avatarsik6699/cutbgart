@@ -10,7 +10,8 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
-| [`PHASE_33.md`](./PHASE_33.md) | Latest completed phase contract; retained until the next phase is initialized |
+| [`PHASE_34.md`](./PHASE_34.md) | Latest completed v2 Manual/history contract and acceptance record |
+| [`PHASE_33.md`](./PHASE_33.md) | Latest completed v2 foundation contract and acceptance record |
 | [`STACK.md`](./STACK.md) | Current/planned technologies, commands, gates, deployment |
 | [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md) | Hard React/TypeScript/frontend requirements |
 | [`KNOWN_GOTCHAS.md`](./KNOWN_GOTCHAS.md) | Recurring project-specific failure modes and fixes |
@@ -21,9 +22,9 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-No implementation phase is active. Phase 34 remains `NEEDS_REVIEW`; initialize it only after its
-next v2 capability slice is explicitly scoped. `audits/` currently retains the accepted Phase-33
-evidence; older Phase-31/32 evidence has moved to the archive.
+No implementation phase is active. Phase 34 and its gate/architect acceptance are complete; Phase
+35 must be explicitly scoped and initialized before further implementation. `audits/` retains the
+accepted Phase-33/34 evidence; older Phase-31/32 evidence has moved to the archive.
 
 ## Archive
 

@@ -6,7 +6,9 @@ import { createDocumentMachine } from "@/v2/application";
 import {
   createArtifactId,
   createDocumentId,
+  createEditOperationId,
   createImageId,
+  createManualDraftId,
   createRunId,
   type DocumentState,
 } from "@/v2/domain";
@@ -22,8 +24,12 @@ function createPreparingDocument(): DocumentState {
     source: createArtifactId("source-1"),
     revision: 0,
     committed: null,
+    baseline: null,
     activeRun: null,
     pendingCommit: null,
+    pendingManualCommit: null,
+    manualDraft: null,
+    history: { past: [], future: [], retainedHistoricalBytes: 0 },
     status: "preparing",
     stage: null,
     progress: null,
@@ -37,6 +43,9 @@ describe("useDocumentActorSelectors", () => {
     const actor = createActor(
       createDocumentMachine({
         artifacts: {
+          estimateHistoricalBytes() {
+            return 0;
+          },
           exportPng() {
             return undefined;
           },
@@ -47,6 +56,9 @@ describe("useDocumentActorSelectors", () => {
           releaseRun() {
             return undefined;
           },
+          releaseManualDraft() {},
+          commitManualHistory() {},
+          moveDocumentHistory() {},
         },
         cancellation: {
           create() {
@@ -63,6 +75,13 @@ describe("useDocumentActorSelectors", () => {
           },
         },
         runIds: { next: () => createRunId("run-1") },
+        manualIds: {
+          draft: () => createManualDraftId("draft-1"),
+          operation: () => createEditOperationId("operation-1"),
+        },
+        manualCommitter: {
+          commit: () => Promise.reject(new Error("Unexpected manual commit")),
+        },
       }),
       { input: { document: createPreparingDocument() } },
     );
@@ -74,6 +93,10 @@ describe("useDocumentActorSelectors", () => {
       progress: null,
       error: null,
       lastCommandOutcome: null,
+      manualDraft: null,
+      canUndoDocument: false,
+      canRedoDocument: false,
+      revision: 0,
     });
 
     act(() => {

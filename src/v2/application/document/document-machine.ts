@@ -1,9 +1,10 @@
-import { fromCallback, setup } from "xstate";
+import { fromCallback, fromPromise, setup } from "xstate";
 
 import {
   decideDocumentCommand,
   transitionDocument,
   type DocumentEffect,
+  type DocumentSnapshot,
   type DocumentState,
   type ProcessingRequest,
 } from "@/v2/domain";
@@ -16,6 +17,14 @@ import type {
   DocumentMachineDependencies,
 } from "./document-machine.types";
 import { createProcessingRunActor } from "./processing-run-actor";
+
+type ManualCommitInput = {
+  documentId: DocumentState["documentId"];
+  draftId: NonNullable<DocumentState["manualDraft"]>["draftId"];
+  expectedRevision: number;
+  source: DocumentState["source"];
+  draftMatte: NonNullable<DocumentState["pendingManualCommit"]>["draftMatte"];
+};
 
 function processingRequestFromState(state: DocumentState): ProcessingRequest {
   if (state.activeRun === null) {
@@ -51,6 +60,9 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         };
       }),
       processingRun: createProcessingRunActor(dependencies),
+      manualCommit: fromPromise<DocumentSnapshot, ManualCommitInput>(
+        async ({ input, signal }) => dependencies.manualCommitter.commit(input, signal),
+      ),
     },
   });
 
@@ -59,10 +71,22 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
       return;
     }
 
-    const envelope =
-      event.command.type === "START_AUTOMATIC_REMOVAL"
-        ? { command: event.command, runId: dependencies.runIds.next() }
-        : { command: event.command };
+    let envelope;
+    if (event.command.type === "START_AUTOMATIC_REMOVAL") {
+      envelope = { command: event.command, runId: dependencies.runIds.next() } as const;
+    } else if (event.command.type === "BEGIN_MANUAL_CUTOUT") {
+      envelope = {
+        command: event.command,
+        draftId: dependencies.manualIds.draft(),
+      } as const;
+    } else if (event.command.type === "APPLY_MANUAL_CUTOUT") {
+      envelope = {
+        command: event.command,
+        operationId: dependencies.manualIds.operation(),
+      } as const;
+    } else {
+      envelope = { command: event.command } as const;
+    }
     const decision = decideDocumentCommand(context.document, envelope);
 
     enqueue.assign({
@@ -144,6 +168,10 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
             guard: ({ context }) => context.document.activeRun !== null,
             target: "running",
           },
+          {
+            guard: ({ context }) => context.document.pendingManualCommit !== null,
+            target: "manualApplying",
+          },
         ],
         on: {
           COMMAND: { actions: applyCommand },
@@ -189,6 +217,80 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         on: {
           COMMAND: { actions: applyCommand },
           DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      manualApplying: {
+        invoke: {
+          id: "manual-commit",
+          src: "manualCommit",
+          input: ({ context }) => {
+            const pending = context.document.pendingManualCommit;
+            if (pending === null) throw new Error("Manual commit input is unavailable");
+            return {
+              documentId: context.document.documentId,
+              draftId: pending.draftId,
+              expectedRevision: pending.expectedRevision,
+              source: context.document.source,
+              draftMatte: pending.draftMatte,
+            };
+          },
+          onDone: {
+            target: "manualSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingManualCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MANUAL_COMMIT_SUCCEEDED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  expectedRevision: pending.expectedRevision,
+                  snapshot: event.output,
+                  estimatedHistoricalBytes:
+                    context.document.committed === null
+                      ? 0
+                      : dependencies.artifacts.estimateHistoricalBytes(
+                          context.document.committed,
+                        ),
+                },
+              });
+            },
+          },
+          onError: {
+            target: "manualSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingManualCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MANUAL_COMMIT_FAILED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  expectedRevision: pending.expectedRevision,
+                  error: {
+                    code: "processing-failed",
+                    message:
+                      event.error instanceof Error
+                        ? event.error.message
+                        : "Manual cutout could not be applied",
+                    retryable: true,
+                  },
+                },
+              });
+            },
+          },
+        },
+        on: {
+          COMMAND: { actions: applyCommand },
+          DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      manualSettling: {
+        on: {
+          DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
+          COMMAND: { actions: applyCommand },
         },
       },
       disposed: { type: "final" },

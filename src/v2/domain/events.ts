@@ -1,4 +1,5 @@
-import type { ArtifactId, DocumentId, Revision, RunId } from "./ids";
+import type { ArtifactId, DocumentId, ManualDraftId, Revision, RunId } from "./ids";
+import type { DocumentSnapshot } from "./artifacts";
 import type {
   ProcessingError,
   ProcessingProgress,
@@ -37,10 +38,34 @@ export type DocumentLifecycleEvent =
   | { type: "DOCUMENT_RESET"; documentId: DocumentId }
   | { type: "DOCUMENT_DISPOSED"; documentId: DocumentId; runId: RunId | null };
 
+export type ManualCutoutEvent =
+  | {
+      type: "MANUAL_DRAFT_DIRTY_CHANGED";
+      documentId: DocumentId;
+      draftId: ManualDraftId;
+      dirty: boolean;
+    }
+  | {
+      type: "MANUAL_COMMIT_SUCCEEDED";
+      documentId: DocumentId;
+      draftId: ManualDraftId;
+      expectedRevision: Revision;
+      snapshot: DocumentSnapshot;
+      estimatedHistoricalBytes: number;
+    }
+  | {
+      type: "MANUAL_COMMIT_FAILED";
+      documentId: DocumentId;
+      draftId: ManualDraftId;
+      expectedRevision: Revision;
+      error: ProcessingError;
+    };
+
 export type DocumentEvent =
   | SourceRegisteredEvent
   | PreparationEvent
   | ProcessingLifecycleEvent
   | CommitEvent
   | ExportEvent
+  | ManualCutoutEvent
   | DocumentLifecycleEvent;

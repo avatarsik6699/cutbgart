@@ -21,6 +21,19 @@ export type {
   EditorSessionSnapshot,
 } from "./editor-session";
 export {
+  MANUAL_DRAFT_PATCH_LIMIT,
+  ManualDraftEngine,
+  ManualDraftRepository,
+  loadManualSourceBitmap,
+  installManualDraftUnloadGuard,
+} from "./manual-cutout";
+export type {
+  ManualCutoutBox,
+  ManualCutoutBrush,
+  ManualCutoutPatch,
+  ManualCutoutPoint,
+} from "./manual-cutout";
+export {
   createNativeDownloadAdapter,
   createNativeEditorIdSource,
   createNativeProcessingCancellationSource,

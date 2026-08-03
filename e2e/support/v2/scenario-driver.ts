@@ -4,6 +4,7 @@ import {
   advanceMockEditorV2Stage,
   completeMockEditorV2Run,
   mockEditorV2RunCount,
+  mockEditorV2ManualCommitCount,
 } from "../mock-editor-v2-worker";
 
 export function editorV2ScenarioDriver(page: Page) {
@@ -12,6 +13,7 @@ export function editorV2ScenarioDriver(page: Page) {
       advanceMockEditorV2Stage(page, stage, fraction),
     completeRun: () => completeMockEditorV2Run(page),
     runCount: () => mockEditorV2RunCount(page),
+    manualCommitCount: () => mockEditorV2ManualCommitCount(page),
     resourceCounts: () =>
       page.locator("main").evaluate((element) => ({
         artifacts: Number(element.getAttribute("data-artifact-count")),

@@ -19,19 +19,20 @@
 | 31 | ✅ historical done | `v0.31.0`; gate passed | Whole-project audit/refactor |
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
 | 33 | ✅ done | gate passed; tag `v0.33.0` after merge | Editor v2 foundation and first local vertical slice |
-| 34 | ⚠️ NEEDS_REVIEW | stale planned number | Former legal phase archived; re-scope after Phase-33 evidence |
+| 34 | ✅ done | gate passed; tag `v0.34.0` after merge | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
 
-**Latest closed phase:** `33`
+**Latest closed phase:** `34`
 
 **Implementation in progress:** none
 
-**Only active implementation scope:** none — Phase 34 must be re-scoped before implementation
+**Only active implementation scope:** none — initialize Phase 35 before further implementation
 
 ## Current contract
 
-This section describes code that exists after Phase 33. The legacy editor remains the public product;
-the separately reachable v2 foundation and first local slice are now shipped code. See
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_33.md`](./PHASE_33.md).
+This section describes code that exists after Phase 34. The legacy editor remains the public product;
+the separately reachable v2 foundation, automatic-removal slice, Manual Cutout, and document history
+are now shipped code. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
+[`PHASE_34.md`](./PHASE_34.md).
 
 ### Runtime status
 
@@ -47,6 +48,8 @@ the separately reachable v2 foundation and first local slice are now shipped cod
 - The noindex v2 surface implements one-image import, local automatic removal, preview, PNG export,
   truthful cancel/retry/reset, and deterministic artifact cleanup. Its gate and architect target-
   device verification passed without reproducing the legacy freeze.
+- The same v2 surface now implements runtime-owned Restore/Erase drafts, local gesture Undo/Redo,
+  atomic Manual Apply/Cancel, and actor-owned committed document Undo/Redo without reinference.
 
 ### Core models
 
@@ -102,6 +105,11 @@ processing events, and a backend-neutral `ProcessingGateway`. XState actors own 
 `ArtifactRepository` owns binary artifacts, leases, object URLs, budgets, and disposal. The only
 implemented gateway is the bounded local browser-worker adapter.
 
+Phase 34 adds `ManualDraftId`, `EditOperationId`, `ManualCutoutDraft`, `DocumentHistoryEntry`, and
+`DocumentHistory`. Actor snapshots retain only IDs and bounded metadata; full alpha planes and
+dirty-rectangle gesture patches remain runtime-owned. Committed history is capped at 20 operations
+and 96 MiB, while draft gesture history is independently capped at 20 patches.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -113,7 +121,7 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic-removal slice |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual Cutout, and document history slice |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
@@ -139,10 +147,10 @@ There is no image-processing API.
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime |
 
-Phase 33 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
+Phases 33–34 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
-### Editor v2 Phase-33 contract
+### Current Editor v2 contract
 
 The implemented v2 foundation is intentionally isolated and local-only:
 
@@ -160,11 +168,27 @@ The implemented v2 foundation is intentionally isolated and local-only:
 - native typed Dedicated Worker/Canvas adapters as the Phase-33 implementation; OffscreenCanvas is
   capability-gated, while Comlink, worker-pool, and canvas libraries remain untested future
   candidates with no Phase-33 dependency or evaluation work;
-- no Cutout, Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
+- Manual Cutout with Restore/Erase, explicit Apply/Cancel, local gesture history, and committed
+  document Undo/Redo;
+- no Magic Cutout, Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-Further capabilities are not implied by this foundation. Manual/History, Magic Cutout, Background,
+Further capabilities are not implied by this foundation. Magic Cutout, Background,
 Enhancements, batch, public-route migration, and legacy removal require later accepted slices.
+
+## Phase-34 contract
+
+The completed isolated v2 slice adds one runtime-owned Manual Cutout draft per document, bounded
+dirty-rectangle gesture history, and actor-owned committed document history. Apply produces one
+`manual-cutout` operation over ID-only snapshots; Cancel produces none. Document Undo/Redo increments
+revision and maintains deterministic artifact leases under limits of 20 operations / 96 MiB.
+
+The existing bilingual noindex route gains Restore/Erase, brush size, zoom/pan/fit, explicit
+Apply/Cancel, draft and document Undo/Redo, shortcuts, dirty-draft protection, and accessible status.
+Full alpha planes, canvas buffers, patches, blobs, and URLs remain outside React/XState. Automatic
+removal/export/reset and Phase-33 responsiveness/resource guarantees must not regress. Magic,
+Enhancements, Background, batch, public-route migration, backend, and paid capabilities remain out
+of scope.
 
 ## Active blockers and residual risks
 
@@ -172,13 +196,57 @@ Enhancements, batch, public-route migration, and legacy removal require later ac
 |-------|-------|
 | Legacy editor | Known main-thread freezes during model load/removal and Magic Apply; retained for comparison, not treated as resolved |
 | Phase 33 | Complete; gate, real-model evidence, and architect target-device acceptance passed |
-| Phase 34 | `NEEDS_REVIEW`: stale legal-phase number and legacy assumptions; do not implement before re-scoping |
+| Phase 34 | Complete; gate, real-model evidence, and architect acceptance passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-03 — Phase 34 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_34 gate passed and architect Manual/history acceptance completed
+
+#### Changes / Decision
+
+- Added bounded committed document history and deterministic runtime-owned Manual Cutout to the
+  isolated bilingual v2 editor route.
+- Added atomic Apply/Cancel, draft and document Undo/Redo, independent artifact leases, a dedicated
+  no-inference commit worker, and 20-operation/96-MiB pruning.
+- Added unit, actor, randomized churn, bilingual browser, serialized real-model, target-device,
+  resource-lifetime, container, and security evidence.
+
+#### Affected Phases / Consequences
+
+- Phase 35 must be explicitly scoped and initialized before another v2 capability is implemented.
+- Magic Cutout, Enhancements, Background, batch, public-route migration, backend, and paid
+  capabilities remain future slices.
+
+### 2026-08-03 — Phase 34 history and Manual Cutout slice approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed the next SDD phase after accepting Phase 33
+
+#### Changes / Decision
+
+- SPEC v1.30 scopes Phase 34 to bounded committed document history and exact Manual Cutout on the
+  existing v2 route.
+- It separates runtime-owned patch/draft buffers from actor-owned ID-only workflow state and defines
+  atomic Apply/Cancel plus artifact-aware Undo/Redo limits.
+
+#### Affected Phases / Consequences
+
+- Phase 34 requires a new phase contract before implementation.
+- Phase 33 remains complete and unchanged; Magic, other editor tools, batch, and public migration
+  remain future slices.
 
 ### 2026-08-03 — Phase 33 complete
 

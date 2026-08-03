@@ -1,4 +1,5 @@
 import { ArtifactRepository } from "../artifacts";
+import { ManualDraftRepository, WorkerManualCutoutCommitter } from "../manual-cutout";
 import { createNativeDownloadAdapter, createNativeEditorIdSource } from "../platform";
 import {
   createLocalModelConfig,
@@ -41,5 +42,8 @@ export function createEditorSessionDependencies(
     gateway,
     ids,
     repository,
+    manualCommitter:
+      options.manualCommitter ?? new WorkerManualCutoutCommitter(repository),
+    manualDrafts: options.manualDrafts ?? new ManualDraftRepository(),
   };
 }

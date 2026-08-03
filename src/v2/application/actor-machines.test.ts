@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createArtifactId,
   createDocumentId,
+  createEditOperationId,
   createImageId,
+  createManualDraftId,
   createRunId,
   type DocumentSnapshot,
   type DocumentState,
@@ -116,10 +118,16 @@ function createGatewayHarness() {
 
 function createArtifactsHarness() {
   return {
+    estimateHistoricalBytes: vi.fn<DocumentArtifactEffects["estimateHistoricalBytes"]>(
+      () => 0,
+    ),
     exportPng: vi.fn<DocumentArtifactEffects["exportPng"]>(),
     promoteRun: vi.fn<DocumentArtifactEffects["promoteRun"]>(() => true),
     releaseDocument: vi.fn<DocumentArtifactEffects["releaseDocument"]>(),
     releaseRun: vi.fn<DocumentArtifactEffects["releaseRun"]>(),
+    releaseManualDraft: vi.fn<DocumentArtifactEffects["releaseManualDraft"]>(),
+    commitManualHistory: vi.fn<DocumentArtifactEffects["commitManualHistory"]>(),
+    moveDocumentHistory: vi.fn<DocumentArtifactEffects["moveDocumentHistory"]>(),
   } satisfies DocumentArtifactEffects;
 }
 
@@ -153,14 +161,28 @@ function createDocumentState(status: DocumentState["status"]): DocumentState {
     source,
     revision: 0,
     committed: null,
+    baseline: null,
     activeRun: null,
     pendingCommit: null,
+    pendingManualCommit: null,
+    manualDraft: null,
+    history: { past: [], future: [], retainedHistoricalBytes: 0 },
     status,
     stage: null,
     progress: null,
     error: null,
   };
 }
+
+const manualDependencies = {
+  manualIds: {
+    draft: () => createManualDraftId("draft-1"),
+    operation: () => createEditOperationId("operation-1"),
+  },
+  manualCommitter: {
+    commit: () => Promise.reject(new Error("Unexpected manual commit")),
+  },
+};
 
 function waitForSnapshot<TSnapshot>(
   actor: {
@@ -190,6 +212,7 @@ describe("editor v2 document actor", () => {
     const artifacts = createArtifactsHarness();
     const runId = createRunId("run-1");
     const machine = createDocumentMachine({
+      ...manualDependencies,
       artifacts,
       cancellation: createCancellationSource(),
       gateway: gateway.gateway,
@@ -244,6 +267,7 @@ describe("editor v2 document actor", () => {
     const gateway = createGatewayHarness();
     const artifacts = createArtifactsHarness();
     const machine = createDocumentMachine({
+      ...manualDependencies,
       artifacts,
       cancellation: createCancellationSource(),
       gateway: gateway.gateway,
@@ -274,6 +298,7 @@ describe("editor v2 document actor", () => {
     const gateway = createGatewayHarness();
     const artifacts = createArtifactsHarness();
     const machine = createDocumentMachine({
+      ...manualDependencies,
       artifacts,
       cancellation: createCancellationSource(),
       gateway: gateway.gateway,
@@ -306,6 +331,7 @@ describe("editor v2 workspace actor", () => {
     const gateway = createGatewayHarness();
     const artifacts = createArtifactsHarness();
     const documentMachine = createDocumentMachine({
+      ...manualDependencies,
       artifacts,
       cancellation: createCancellationSource(),
       gateway: gateway.gateway,

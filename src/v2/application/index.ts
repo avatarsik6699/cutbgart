@@ -16,12 +16,17 @@ export type {
   DocumentMachineDependencies,
   DocumentRunIdSource,
 } from "./document";
+export type { ManualCutoutCommitRequest, ManualCutoutCommitter } from "./document";
 export {
   selectDocumentError,
   selectDocumentProgress,
   selectDocumentState,
   selectDocumentStatus,
   selectLastDocumentCommandOutcome,
+  selectManualDraft,
+  selectCanUndoDocument,
+  selectCanRedoDocument,
+  selectDocumentRevision,
 } from "./document";
 export type { DocumentSnapshotLike } from "./document";
 export {

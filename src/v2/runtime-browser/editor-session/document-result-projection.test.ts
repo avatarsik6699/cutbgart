@@ -23,6 +23,7 @@ describe("DocumentResultProjection", () => {
     } as unknown as DocumentActorRef;
     const repository = {
       createObjectUrl: vi.fn(() => ({ artifactId: composite, url: "blob:result" })),
+      releaseObjectUrl: vi.fn(() => true),
     };
     const publish = vi.fn();
     const projection = new DocumentResultProjection(repository as never);
@@ -32,5 +33,6 @@ describe("DocumentResultProjection", () => {
     expect(publish).toHaveBeenCalledWith("blob:result");
     projection.stop();
     expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(repository.releaseObjectUrl).toHaveBeenCalledWith("blob:result");
   });
 });

@@ -12,14 +12,19 @@ export type {
   LocalInferencePath,
 } from "./capabilities";
 export type {
+  ApplyManualCutoutCommand,
+  BeginManualCutoutCommand,
   CancelActiveRunCommand,
+  CancelManualCutoutCommand,
   CommandOutcome,
   CommandRejectionReason,
   DocumentCommand,
   EditorCommandType,
   ExportPngCommand,
   ResetDocumentCommand,
+  RedoDocumentCommand,
   StartAutomaticRemovalCommand,
+  UndoDocumentCommand,
 } from "./commands";
 export type {
   ActiveRun,
@@ -27,6 +32,7 @@ export type {
   DocumentState,
   DocumentStatus,
   PendingCommit,
+  PendingManualCommit,
 } from "./document";
 export type {
   CommitEvent,
@@ -35,16 +41,44 @@ export type {
   ExportEvent,
   PreparationEvent,
   ProcessingLifecycleEvent,
+  ManualCutoutEvent,
   SourceRegisteredEvent,
 } from "./events";
 export {
   createArtifactId,
   createDocumentId,
+  createEditOperationId,
   createImageId,
+  createManualDraftId,
   createRunId,
   isRevision,
 } from "./ids";
-export type { ArtifactId, DocumentId, ImageId, Revision, RunId } from "./ids";
+export type {
+  ArtifactId,
+  DocumentId,
+  EditOperationId,
+  ImageId,
+  ManualDraftId,
+  Revision,
+  RunId,
+} from "./ids";
+export {
+  clearDocumentHistory,
+  commitDocumentHistory,
+  createEmptyDocumentHistory,
+  DOCUMENT_HISTORY_BYTE_LIMIT,
+  DOCUMENT_HISTORY_ENTRY_LIMIT,
+  redoDocumentHistory,
+  undoDocumentHistory,
+} from "./document-history";
+export type {
+  DocumentHistory,
+  DocumentHistoryChange,
+  DocumentHistoryEntry,
+  DocumentHistoryMove,
+  ManualCutoutDraft,
+  ManualCutoutMode,
+} from "./document-history";
 export { isProcessingTerminalEvent } from "./processing";
 export type {
   ProcessingBackend,

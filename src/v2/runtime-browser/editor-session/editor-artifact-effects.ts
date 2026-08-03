@@ -1,4 +1,5 @@
 import type { DocumentArtifactEffects } from "@/v2/application";
+import type { ArtifactId, DocumentSnapshot } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
 import type { DownloadAdapter } from "../platform";
@@ -8,12 +9,28 @@ function exportName(fileName: string | null): string {
   return `${base}-no-background.png`;
 }
 
+function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
+  return [
+    ...new Set(
+      [snapshot.matte, snapshot.foreground, snapshot.composite].filter(
+        (id): id is ArtifactId => id !== null,
+      ),
+    ),
+  ];
+}
+
 export function createEditorArtifactEffects(options: {
   download: DownloadAdapter;
   fileName(): string | null;
   repository: ArtifactRepository;
 }): DocumentArtifactEffects {
   return {
+    estimateHistoricalBytes(snapshot) {
+      return snapshotIds(snapshot).reduce(
+        (total, id) => total + (options.repository.metadata(id)?.estimatedBytes ?? 0),
+        0,
+      );
+    },
     exportPng(effect) {
       const objectUrl = options.repository.createObjectUrl(effect.artifactId, {
         kind: "export",
@@ -24,25 +41,23 @@ export function createEditorArtifactEffects(options: {
       queueMicrotask(() => options.repository.releaseObjectUrl(objectUrl.url));
     },
     promoteRun(effect) {
-      return options.repository.promote(
+      const promoted = options.repository.promote(
         [effect.snapshot.matte, effect.snapshot.composite],
         { kind: "run", documentId: effect.documentId, runId: effect.runId },
         { kind: "document", documentId: effect.documentId },
       );
+      if (promoted) {
+        for (const id of snapshotIds(effect.snapshot)) {
+          options.repository.retain(id, {
+            kind: "baseline",
+            documentId: effect.documentId,
+          });
+        }
+      }
+      return promoted;
     },
     releaseDocument(effect) {
-      options.repository.releaseOwnerIfPresent({
-        kind: "preview",
-        documentId: effect.documentId,
-      });
-      options.repository.releaseOwnerIfPresent({
-        kind: "export",
-        documentId: effect.documentId,
-      });
-      options.repository.releaseOwnerIfPresent({
-        kind: "document",
-        documentId: effect.documentId,
-      });
+      options.repository.releaseDocumentScopes(effect.documentId);
     },
     releaseRun(effect) {
       options.repository.releaseOwnerIfPresent({
@@ -50,6 +65,64 @@ export function createEditorArtifactEffects(options: {
         documentId: effect.documentId,
         runId: effect.runId,
       });
+    },
+    releaseManualDraft(effect) {
+      options.repository.releaseOwnerIfPresent({
+        kind: "manual-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
+    commitManualHistory(effect) {
+      const historyOwner = {
+        kind: "history",
+        documentId: effect.documentId,
+        operationId: effect.entry.operationId,
+      } as const;
+      for (const id of new Set([
+        ...snapshotIds(effect.entry.before),
+        ...snapshotIds(effect.entry.after),
+      ]))
+        options.repository.retain(id, historyOwner);
+      options.repository.promote(
+        snapshotIds(effect.entry.after),
+        { kind: "manual-draft", documentId: effect.documentId, draftId: effect.draftId },
+        { kind: "document", documentId: effect.documentId },
+      );
+      options.repository.releaseOwnerIfPresent({
+        kind: "manual-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+      const afterIds = new Set(snapshotIds(effect.entry.after));
+      for (const id of snapshotIds(effect.entry.before))
+        if (!afterIds.has(id))
+          options.repository.release(id, {
+            kind: "document",
+            documentId: effect.documentId,
+          });
+      for (const released of effect.released)
+        options.repository.releaseOwnerIfPresent({
+          kind: "history",
+          documentId: effect.documentId,
+          operationId: released.operationId,
+        });
+    },
+    moveDocumentHistory(effect) {
+      const fromIds = new Set(snapshotIds(effect.from));
+      const toIds = new Set(snapshotIds(effect.to));
+      for (const id of toIds)
+        if (!fromIds.has(id))
+          options.repository.retain(id, {
+            kind: "document",
+            documentId: effect.documentId,
+          });
+      for (const id of fromIds)
+        if (!toIds.has(id))
+          options.repository.release(id, {
+            kind: "document",
+            documentId: effect.documentId,
+          });
     },
   };
 }

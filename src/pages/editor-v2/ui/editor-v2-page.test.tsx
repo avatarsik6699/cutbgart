@@ -5,7 +5,9 @@ import type { ProcessingGateway } from "@/v2/application";
 import {
   createArtifactId,
   createDocumentId,
+  createEditOperationId,
   createImageId,
+  createManualDraftId,
   createRunId,
 } from "@/v2/domain";
 import { ArtifactRepository, type EditorSessionOptions } from "@/v2/runtime-browser";
@@ -33,6 +35,8 @@ function sessionOptions(): EditorSessionOptions {
       document: () => createDocumentId("document-1"),
       image: () => createImageId("image-1"),
       run: () => createRunId("run-1"),
+      manualDraft: () => createManualDraftId("draft-1"),
+      editOperation: () => createEditOperationId("operation-1"),
     },
   };
 }

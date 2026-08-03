@@ -2,6 +2,8 @@ import type { DocumentActorRef, ProcessingGateway } from "@/v2/application";
 import type { ArtifactRepositoryStats } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
+import type { ManualDraftEngine, ManualDraftRepository } from "../manual-cutout";
+import type { ManualCutoutCommitter } from "@/v2/application";
 import type { DownloadAdapter, EditorIdSource } from "../platform";
 
 export type EditorImportError =
@@ -46,11 +48,20 @@ export type EditorSessionSnapshot =
   | ActiveEditorSessionSnapshot;
 
 export type EditorSession = {
+  beginManual(): void;
+  applyManual(): void;
+  cancelManual(): void;
   cancel(): void;
   dispose(): Promise<void>;
   exportPng(): void;
   getSnapshot(): EditorSessionSnapshot;
   importImage(file: File): Promise<void>;
+  manualDraft(): ManualDraftEngine | null;
+  notifyManualDirty(): void;
+  undoManual(): void;
+  redoManual(): void;
+  undoDocument(): void;
+  redoDocument(): void;
   resources(): ArtifactRepositoryStats;
   reset(): void;
   retry(): void;
@@ -62,6 +73,8 @@ export type EditorSessionOptions = {
   gateway?: ProcessingGateway;
   ids?: EditorIdSource;
   repository?: ArtifactRepository;
+  manualCommitter?: ManualCutoutCommitter;
+  manualDrafts?: ManualDraftRepository;
 };
 
 export type EditorSessionDependencies = {
@@ -69,4 +82,6 @@ export type EditorSessionDependencies = {
   gateway: ProcessingGateway;
   ids: EditorIdSource;
   repository: ArtifactRepository;
+  manualCommitter: ManualCutoutCommitter;
+  manualDrafts: ManualDraftRepository;
 };

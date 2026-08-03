@@ -1,4 +1,10 @@
-import type { ArtifactId, DocumentId, RunId } from "./ids";
+import type {
+  ArtifactId,
+  DocumentId,
+  EditOperationId,
+  ManualDraftId,
+  RunId,
+} from "./ids";
 
 export type ArtifactKind = "source" | "matte" | "foreground" | "composite" | "png";
 
@@ -16,7 +22,10 @@ export type ArtifactMetadata = {
 
 export type ArtifactLeaseOwner =
   | { kind: "document"; documentId: DocumentId }
+  | { kind: "baseline"; documentId: DocumentId }
   | { kind: "run"; documentId: DocumentId; runId: RunId }
+  | { kind: "manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
+  | { kind: "history"; documentId: DocumentId; operationId: EditOperationId }
   | { kind: "preview"; documentId: DocumentId }
   | { kind: "export"; documentId: DocumentId };
 

@@ -7,11 +7,13 @@ describe("createNativeEditorIdSource", () => {
     let next = 0;
     const ids = createNativeEditorIdSource(() => `uuid-${++next}`);
 
-    expect([ids.artifact(), ids.document(), ids.image(), ids.run()]).toEqual([
-      "uuid-1",
-      "uuid-2",
-      "uuid-3",
-      "uuid-4",
-    ]);
+    expect([
+      ids.artifact(),
+      ids.document(),
+      ids.image(),
+      ids.run(),
+      ids.manualDraft(),
+      ids.editOperation(),
+    ]).toEqual(["uuid-1", "uuid-2", "uuid-3", "uuid-4", "uuid-5", "uuid-6"]);
   });
 });

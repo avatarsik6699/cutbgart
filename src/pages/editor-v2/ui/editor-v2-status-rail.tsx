@@ -24,6 +24,7 @@ function stageLabel(status: DocumentStatus): string {
     processing: m.editorV2StageProcessing,
     cancelling: m.editorV2StageCancelling,
     committing: m.editorV2StageCommitting,
+    "manual-applying": m.editorV2StageCommitting,
     result: m.editorV2StageResult,
     error: m.editorV2StageError,
     disposed: m.editorV2StageDisposed,

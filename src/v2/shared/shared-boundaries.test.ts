@@ -69,7 +69,10 @@ describe("v2 shared platform boundaries", () => {
     {
       title: "native worker construction",
       pattern: /new Worker\s*\(/,
-      allowed: ["src/v2/runtime-browser/processing/worker-factory.ts"],
+      allowed: [
+        "src/v2/runtime-browser/processing/worker-factory.ts",
+        "src/v2/runtime-browser/manual-cutout/worker-manual-cutout-committer.ts",
+      ],
     },
     {
       title: "native worker messaging",
@@ -77,6 +80,8 @@ describe("v2 shared platform boundaries", () => {
       allowed: [
         "src/v2/runtime-browser/processing/worker-client.ts",
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
+        "src/v2/runtime-browser/manual-cutout/worker-manual-cutout-committer.ts",
+        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
       ],
     },
     {
@@ -88,13 +93,21 @@ describe("v2 shared platform boundaries", () => {
       title: "main-thread image decode",
       pattern:
         /(?:createImageBitmap\s*\(|new Image\s*\(|document\.createElement\(["']img["'])/,
-      allowed: ["src/v2/runtime-browser/processing/worker/processing.worker.ts"],
+      allowed: [
+        "src/v2/runtime-browser/processing/worker/processing.worker.ts",
+        "src/v2/runtime-browser/manual-cutout/manual-source-bitmap.ts",
+        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
+      ],
     },
     {
       title: "full-resolution canvas processing",
       pattern:
         /(?:new OffscreenCanvas\s*\(|\.getImageData\s*\(|\.putImageData\s*\(|\.convertToBlob\s*\()/,
-      allowed: ["src/v2/runtime-browser/processing/worker/processing.worker.ts"],
+      allowed: [
+        "src/v2/runtime-browser/processing/worker/processing.worker.ts",
+        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
+        "src/v2/presentation/manual-cutout/manual-cutout-workspace.tsx",
+      ],
     },
     {
       title: "model-provider runtime access",

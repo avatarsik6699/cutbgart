@@ -6,6 +6,7 @@ import type { ArtifactRepository } from "../artifacts";
 export class DocumentResultProjection {
   readonly #repository: ArtifactRepository;
   #resultArtifactId: ArtifactId | null = null;
+  #resultUrl: string | null = null;
   #subscription: { unsubscribe(): void } | null = null;
 
   constructor(repository: ArtifactRepository) {
@@ -29,10 +30,15 @@ export class DocumentResultProjection {
         return;
       }
       this.#resultArtifactId = composite;
+      if (this.#resultUrl !== null) {
+        this.#repository.releaseObjectUrl(this.#resultUrl);
+        this.#resultUrl = null;
+      }
       const objectUrl = this.#repository.createObjectUrl(composite, {
         kind: "preview",
         documentId,
       });
+      this.#resultUrl = objectUrl?.url ?? null;
       publishResultUrl(objectUrl?.url ?? null);
     });
   }
@@ -41,5 +47,9 @@ export class DocumentResultProjection {
     this.#subscription?.unsubscribe();
     this.#subscription = null;
     this.#resultArtifactId = null;
+    if (this.#resultUrl !== null) {
+      this.#repository.releaseObjectUrl(this.#resultUrl);
+      this.#resultUrl = null;
+    }
   }
 }

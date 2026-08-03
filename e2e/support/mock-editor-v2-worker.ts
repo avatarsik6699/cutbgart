@@ -18,6 +18,7 @@ export async function installMockEditorV2Worker(
           fraction: number,
         ) => void;
         __v2RunCount?: number;
+        __v2ManualCommitCount?: number;
       };
 
       const testWindow = window as TestWindow;
@@ -46,6 +47,28 @@ export async function installMockEditorV2Worker(
                 this.progress("automatic-remove", 0.5);
               });
             }
+            return;
+          }
+          if (
+            command.type === "MANUAL_CUTOUT_COMMIT" &&
+            command.correlation !== undefined
+          ) {
+            testWindow.__v2ManualCommitCount =
+              (testWindow.__v2ManualCommitCount ?? 0) + 1;
+            const png = Uint8Array.from([
+              137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+              0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8,
+              215, 99, 96, 96, 96, 0, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69,
+              78, 68, 174, 66, 96, 130,
+            ]);
+            queueMicrotask(() =>
+              this.emit({
+                protocol: 1,
+                type: "SUCCEEDED",
+                correlation: command.correlation,
+                compositePng: png.buffer,
+              }),
+            );
             return;
           }
           if (command.type === "CANCEL" && this.active !== null) {
@@ -156,6 +179,13 @@ export async function mockEditorV2RunCount(page: Page): Promise<number> {
   );
 }
 
+export async function mockEditorV2ManualCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2ManualCommitCount?: number }).__v2ManualCommitCount ?? 0,
+  );
+}
+
 export async function resetMockEditorV2Worker(page: Page): Promise<void> {
   await page
     .evaluate(() => {
@@ -166,10 +196,12 @@ export async function resetMockEditorV2Worker(page: Page): Promise<void> {
           fraction: number,
         ) => void;
         __v2RunCount?: number;
+        __v2ManualCommitCount?: number;
       };
       delete testWindow.__completeV2Run;
       delete testWindow.__advanceV2RunStage;
       delete testWindow.__v2RunCount;
+      delete testWindow.__v2ManualCommitCount;
     })
     .catch(() => undefined);
 }
