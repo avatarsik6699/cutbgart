@@ -2,6 +2,24 @@ export type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
 export type AutomaticQualityMode = "fast" | "max" | AutomaticModelMode;
 export type BrowserInferencePath = "webgpu" | "wasm";
 
+export type GuidedModelProfile = {
+  approximateBytes: 13_840_000;
+  dtype: "q8";
+  license: "Apache-2.0";
+  modelId: "Xenova/slimsam-77-uniform";
+  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4";
+  supportedPaths: readonly ["wasm"];
+};
+
+export const GUIDED_MODEL: GuidedModelProfile = {
+  modelId: "Xenova/slimsam-77-uniform",
+  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4",
+  dtype: "q8",
+  approximateBytes: 13_840_000,
+  supportedPaths: ["wasm"],
+  license: "Apache-2.0",
+};
+
 export type ProductionModelProfile = {
   approximateBytes: number;
   dtype: "q8" | "fp32" | "fp16";

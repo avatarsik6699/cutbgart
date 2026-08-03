@@ -4,6 +4,7 @@ import type { DocumentId, EditOperationId, ManualDraftId, Revision } from "../id
 export type ManualCutoutMode = "restore" | "erase";
 
 export type ManualCutoutDraft = {
+  kind: "manual-cutout";
   draftId: ManualDraftId;
   documentId: DocumentId;
   baselineRevision: Revision;
@@ -12,7 +13,7 @@ export type ManualCutoutDraft = {
 
 export type DocumentHistoryEntry = {
   operationId: EditOperationId;
-  kind: "manual-cutout";
+  kind: "manual-cutout" | "magic-cutout";
   before: DocumentSnapshot;
   after: DocumentSnapshot;
   estimatedHistoricalBytes: number;

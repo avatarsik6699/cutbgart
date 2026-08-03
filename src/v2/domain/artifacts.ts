@@ -3,6 +3,7 @@ import type {
   DocumentId,
   EditOperationId,
   ManualDraftId,
+  MagicDraftId,
   RunId,
 } from "./ids";
 
@@ -25,6 +26,7 @@ export type ArtifactLeaseOwner =
   | { kind: "baseline"; documentId: DocumentId }
   | { kind: "run"; documentId: DocumentId; runId: RunId }
   | { kind: "manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
+  | { kind: "magic-draft"; documentId: DocumentId; draftId: MagicDraftId }
   | { kind: "history"; documentId: DocumentId; operationId: EditOperationId }
   | { kind: "preview"; documentId: DocumentId }
   | { kind: "export"; documentId: DocumentId };

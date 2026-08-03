@@ -3,6 +3,8 @@ import type {
   PixelRect,
   SourceImage,
 } from "../../../entities/processed-image";
+export { GUIDED_MODEL } from "../../../shared/lib/inference/production-model-config";
+export type { GuidedModelProfile } from "../../../shared/lib/inference/production-model-config";
 
 export type GuidedBrushMode = "keep" | "remove";
 
@@ -164,24 +166,6 @@ export type ObjectSelectionStatus =
   | "predicting-mask"
   | "preview"
   | "error";
-
-export interface GuidedModelProfile {
-  modelId: "Xenova/slimsam-77-uniform";
-  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4";
-  dtype: "q8";
-  approximateBytes: 13_840_000;
-  supportedPaths: readonly ["wasm"];
-  license: "Apache-2.0";
-}
-
-export const GUIDED_MODEL: GuidedModelProfile = {
-  modelId: "Xenova/slimsam-77-uniform",
-  revision: "7c8459c48dabad6291b384c97be46c451c25d6c4",
-  dtype: "q8",
-  approximateBytes: 13_840_000,
-  supportedPaths: ["wasm"],
-  license: "Apache-2.0",
-};
 
 export type SelectObjectWorkerRequest =
   | { type: "encode"; revision: number; source: SourceImage }

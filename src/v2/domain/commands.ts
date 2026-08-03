@@ -1,4 +1,12 @@
-import type { ArtifactId, DocumentId, ManualDraftId, Revision } from "./ids";
+import type {
+  ArtifactId,
+  DocumentId,
+  MagicCandidateId,
+  MagicDraftId,
+  ManualDraftId,
+  Revision,
+  RunId,
+} from "./ids";
 
 export type StartAutomaticRemovalCommand = {
   type: "START_AUTOMATIC_REMOVAL";
@@ -42,6 +50,54 @@ export type CancelManualCutoutCommand = {
   draftId: ManualDraftId;
 };
 
+export type BeginMagicCutoutCommand = {
+  type: "BEGIN_MAGIC_CUTOUT";
+  documentId: DocumentId;
+  expectedRevision: Revision;
+};
+
+export type MagicDraftChangedCommand = {
+  type: "MAGIC_DRAFT_CHANGED";
+  documentId: DocumentId;
+  draftId: MagicDraftId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+  dirty: boolean;
+};
+
+export type PredictMagicCutoutCommand = {
+  type: "PREDICT_MAGIC_CUTOUT";
+  documentId: DocumentId;
+  draftId: MagicDraftId;
+  runId: RunId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+};
+
+export type SelectMagicCandidateCommand = {
+  type: "SELECT_MAGIC_CANDIDATE";
+  documentId: DocumentId;
+  draftId: MagicDraftId;
+  candidateId: MagicCandidateId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+};
+
+export type ApplyMagicCutoutCommand = {
+  type: "APPLY_MAGIC_CUTOUT";
+  documentId: DocumentId;
+  draftId: MagicDraftId;
+  candidateId: MagicCandidateId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+};
+
+export type CancelMagicCutoutCommand = {
+  type: "CANCEL_MAGIC_CUTOUT";
+  documentId: DocumentId;
+  draftId: MagicDraftId;
+};
+
 export type UndoDocumentCommand = {
   type: "UNDO_DOCUMENT";
   documentId: DocumentId;
@@ -62,6 +118,12 @@ export type DocumentCommand =
   | BeginManualCutoutCommand
   | ApplyManualCutoutCommand
   | CancelManualCutoutCommand
+  | BeginMagicCutoutCommand
+  | MagicDraftChangedCommand
+  | PredictMagicCutoutCommand
+  | SelectMagicCandidateCommand
+  | ApplyMagicCutoutCommand
+  | CancelMagicCutoutCommand
   | UndoDocumentCommand
   | RedoDocumentCommand;
 
@@ -78,6 +140,9 @@ export type CommandRejectionReason =
   | "draft-active"
   | "no-draft"
   | "draft-not-dirty"
+  | "draft-revision-stale"
+  | "prediction-active"
+  | "no-candidate"
   | "history-boundary"
   | "disposed";
 

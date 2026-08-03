@@ -5,6 +5,8 @@ import {
   completeMockEditorV2Run,
   mockEditorV2RunCount,
   mockEditorV2ManualCommitCount,
+  mockEditorV2MagicCommitCount,
+  mockEditorV2MagicPredictionCount,
 } from "../mock-editor-v2-worker";
 
 export function editorV2ScenarioDriver(page: Page) {
@@ -14,6 +16,8 @@ export function editorV2ScenarioDriver(page: Page) {
     completeRun: () => completeMockEditorV2Run(page),
     runCount: () => mockEditorV2RunCount(page),
     manualCommitCount: () => mockEditorV2ManualCommitCount(page),
+    magicCommitCount: () => mockEditorV2MagicCommitCount(page),
+    magicPredictionCount: () => mockEditorV2MagicPredictionCount(page),
     resourceCounts: () =>
       page.locator("main").evaluate((element) => ({
         artifacts: Number(element.getAttribute("data-artifact-count")),

@@ -10,6 +10,7 @@ import {
   staleTerminalTransition,
 } from "./transition-policy";
 import { commitDocumentHistory } from "../document-history";
+import { matchesMagicPrediction } from "../magic-cutout";
 
 export function transitionDocument(
   state: DocumentState,
@@ -20,16 +21,148 @@ export function transitionDocument(
   }
 
   switch (event.type) {
+    case "MAGIC_PREDICTION_STARTED": {
+      const draft = state.activeDraft;
+      if (
+        draft?.kind !== "magic-cutout" ||
+        state.activeMagicPrediction?.runId !== event.runId ||
+        !matchesMagicPrediction(draft, state.revision, event)
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "predicting" },
+          status: "magic-predicting",
+        },
+        effects: [],
+      };
+    }
+    case "MAGIC_PREVIEW_READY": {
+      const draft = state.activeDraft;
+      if (
+        draft?.kind !== "magic-cutout" ||
+        state.activeMagicPrediction?.runId !== event.runId ||
+        !matchesMagicPrediction(draft, state.revision, event)
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "preview", selectedCandidateId: null },
+          activeMagicPrediction: null,
+          magicCandidates: event.candidates,
+          status: "result",
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "MAGIC_PREDICTION_FAILED": {
+      const draft = state.activeDraft;
+      if (
+        draft?.kind !== "magic-cutout" ||
+        state.activeMagicPrediction?.runId !== event.runId ||
+        !matchesMagicPrediction(draft, state.revision, event)
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "error" },
+          activeMagicPrediction: null,
+          status: "result",
+          error: event.error,
+        },
+        effects: [],
+      };
+    }
+    case "MAGIC_COMMIT_SUCCEEDED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingMagicCommit;
+      if (
+        state.status !== "magic-applying" ||
+        draft?.kind !== "magic-cutout" ||
+        draft.draftId !== event.draftId ||
+        pending?.draftId !== event.draftId ||
+        pending.draftRevision !== event.draftRevision ||
+        event.expectedRevision !== state.revision ||
+        state.committed === null
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      const entry = {
+        operationId: pending.operationId,
+        kind: "magic-cutout" as const,
+        before: state.committed,
+        after: event.snapshot,
+        estimatedHistoricalBytes: event.estimatedHistoricalBytes,
+      };
+      const committedHistory = commitDocumentHistory(state.history, entry);
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          committed: event.snapshot,
+          history: committedHistory.history,
+          activeDraft: null,
+          activeMagicPrediction: null,
+          pendingMagicCommit: null,
+          magicCandidates: [],
+          revision: state.revision + 1,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "commit-magic-history",
+            documentId: state.documentId,
+            draftId: event.draftId,
+            entry,
+            released: committedHistory.released,
+          },
+        ],
+      };
+    }
+    case "MAGIC_COMMIT_FAILED": {
+      const draft = state.activeDraft;
+      if (
+        draft?.kind !== "magic-cutout" ||
+        state.pendingMagicCommit?.draftId !== event.draftId ||
+        state.pendingMagicCommit.draftRevision !== event.draftRevision ||
+        event.expectedRevision !== state.revision
+      ) {
+        return { outcome: "ignored-stale", state, effects: [] };
+      }
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "error" },
+          pendingMagicCommit: null,
+          status: "result",
+          error: event.error,
+        },
+        effects: [],
+      };
+    }
     case "MANUAL_DRAFT_DIRTY_CHANGED": {
       if (
-        state.manualDraft?.draftId !== event.draftId ||
+        state.activeDraft?.kind !== "manual-cutout" ||
+        state.activeDraft.draftId !== event.draftId ||
         state.status === "manual-applying"
       ) {
         return { outcome: "ignored-stale", state, effects: [] };
       }
       return {
         outcome: "applied",
-        state: { ...state, manualDraft: { ...state.manualDraft, dirty: event.dirty } },
+        state: { ...state, activeDraft: { ...state.activeDraft, dirty: event.dirty } },
         effects: [],
       };
     }
@@ -37,7 +170,8 @@ export function transitionDocument(
       const pending = state.pendingManualCommit;
       if (
         state.status !== "manual-applying" ||
-        state.manualDraft?.draftId !== event.draftId ||
+        state.activeDraft?.kind !== "manual-cutout" ||
+        state.activeDraft.draftId !== event.draftId ||
         pending?.draftId !== event.draftId ||
         event.expectedRevision !== state.revision ||
         state.committed === null
@@ -68,7 +202,7 @@ export function transitionDocument(
           ...state,
           committed: event.snapshot,
           history: committedHistory.history,
-          manualDraft: null,
+          activeDraft: null,
           pendingManualCommit: null,
           revision: state.revision + 1,
           status: "result",

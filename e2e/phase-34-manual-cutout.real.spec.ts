@@ -28,7 +28,14 @@ test("real model result accepts one Manual commit without re-running inference",
           testWindow.__phase34InferenceRuns =
             (testWindow.__phase34InferenceRuns ?? 0) + 1;
         }
-        if (message.type === "MANUAL_CUTOUT_COMMIT") {
+        if (
+          message.type === "MATERIALIZE_SNAPSHOT" &&
+          "correlation" in message &&
+          typeof message.correlation === "object" &&
+          message.correlation !== null &&
+          "operation" in message.correlation &&
+          message.correlation.operation === "manual-cutout"
+        ) {
           testWindow.__phase34ManualCommits =
             (testWindow.__phase34ManualCommits ?? 0) + 1;
         }

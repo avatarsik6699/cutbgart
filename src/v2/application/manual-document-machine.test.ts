@@ -80,9 +80,9 @@ describe("manual document actor", () => {
         expectedRevision: 1,
       },
     });
-    const draft = actor.getSnapshot().context.document.manualDraft;
+    const draft = actor.getSnapshot().context.document.activeDraft;
     expect(draft?.dirty).toBe(false);
-    if (draft === null) throw new Error("Expected a manual draft");
+    if (draft?.kind !== "manual-cutout") throw new Error("Expected a manual draft");
     actor.send({
       type: "DOMAIN_EVENT",
       event: {
@@ -106,7 +106,7 @@ describe("manual document actor", () => {
     await vi.waitFor(() => expect(actor.getSnapshot().context.document.revision).toBe(2));
     const applied = actor.getSnapshot().context.document;
     expect(commit).toHaveBeenCalledOnce();
-    expect(applied.manualDraft).toBeNull();
+    expect(applied.activeDraft).toBeNull();
     expect(applied.history.past).toHaveLength(1);
     expect(applied.history.retainedHistoricalBytes).toBe(12);
 
@@ -158,8 +158,8 @@ describe("manual document actor", () => {
         expectedRevision: 7,
       },
     });
-    let draft = actor.getSnapshot().context.document.manualDraft;
-    if (draft === null) throw new Error("Expected a manual draft");
+    let draft = actor.getSnapshot().context.document.activeDraft;
+    if (draft?.kind !== "manual-cutout") throw new Error("Expected a manual draft");
     actor.send({
       type: "COMMAND",
       command: {
@@ -171,7 +171,7 @@ describe("manual document actor", () => {
     expect(actor.getSnapshot().context.document).toMatchObject({
       committed: before,
       revision: 7,
-      manualDraft: null,
+      activeDraft: null,
     });
 
     actor.send({
@@ -182,8 +182,8 @@ describe("manual document actor", () => {
         expectedRevision: 7,
       },
     });
-    draft = actor.getSnapshot().context.document.manualDraft;
-    if (draft === null) throw new Error("Expected retry draft");
+    draft = actor.getSnapshot().context.document.activeDraft;
+    if (draft?.kind !== "manual-cutout") throw new Error("Expected retry draft");
     actor.send({
       type: "DOMAIN_EVENT",
       event: {
@@ -209,7 +209,7 @@ describe("manual document actor", () => {
     expect(actor.getSnapshot().context.document).toMatchObject({
       committed: before,
       revision: 7,
-      manualDraft: { dirty: true },
+      activeDraft: { dirty: true },
     });
     actor.stop();
   });

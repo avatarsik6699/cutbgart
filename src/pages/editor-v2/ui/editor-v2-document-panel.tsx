@@ -10,6 +10,7 @@ type Props = {
   canRedoDocument: boolean;
   canUndoDocument: boolean;
   manualOpen: boolean;
+  magicOpen: boolean;
   revision: number;
   progress: number | null;
   session: EditorSession;
@@ -20,13 +21,16 @@ function statusMessage(status: DocumentStatus): string {
   if (status === "cancelling") return m.editorV2Stopping();
   if (status === "error") return m.editorV2ProcessingFailed();
   if (status === "manual-applying") return m.editorV2ManualApplying();
+  if (status === "magic-applying") return m.editorV2MagicApplying();
+  if (status === "magic-predicting") return m.editorV2MagicPredicting();
   return m.editorV2Privacy();
 }
 
 export function EditorV2DocumentPanel(props: Props) {
   const canCancel = ["queued", "model-loading", "processing"].includes(props.status);
   const canRetry = props.status === "error" || props.status === "ready";
-  const canExport = props.status === "result" && !props.manualOpen;
+  const draftOpen = props.manualOpen || props.magicOpen;
+  const canExport = props.status === "result" && !draftOpen;
 
   return (
     <div className="space-y-4">
@@ -83,9 +87,14 @@ export function EditorV2DocumentPanel(props: Props) {
               {m.editorV2DownloadPng()}
             </Button>
           ) : null}
-          {canExport && !props.manualOpen ? (
+          {canExport ? (
             <Button variant="outline" onClick={() => props.session.beginManual()}>
               {m.editorV2ManualTitle()}
+            </Button>
+          ) : null}
+          {canExport ? (
+            <Button variant="outline" onClick={() => props.session.beginMagic()}>
+              {m.editorV2MagicTitle()}
             </Button>
           ) : null}
           <Button
@@ -108,7 +117,8 @@ export function EditorV2DocumentPanel(props: Props) {
             disabled={
               props.status === "cancelling" ||
               props.status === "manual-applying" ||
-              props.manualOpen
+              props.status === "magic-applying" ||
+              draftOpen
             }
           >
             {m.editorV2StartOver()}

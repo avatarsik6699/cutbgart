@@ -1,5 +1,10 @@
 import type { DocumentArtifactEffects } from "@/v2/application";
-import type { ArtifactId, DocumentSnapshot } from "@/v2/domain";
+import type {
+  ArtifactId,
+  ArtifactLeaseOwner,
+  DocumentEffect,
+  DocumentSnapshot,
+} from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
 import type { DownloadAdapter } from "../platform";
@@ -17,6 +22,47 @@ function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
       ),
     ),
   ];
+}
+
+type DraftHistoryEffect = Extract<
+  DocumentEffect,
+  { type: "commit-manual-history" | "commit-magic-history" }
+>;
+type DraftOwner = Extract<ArtifactLeaseOwner, { kind: "manual-draft" | "magic-draft" }>;
+
+function commitDraftHistory(
+  repository: ArtifactRepository,
+  effect: DraftHistoryEffect,
+  draftOwner: DraftOwner,
+): void {
+  const historyOwner = {
+    kind: "history",
+    documentId: effect.documentId,
+    operationId: effect.entry.operationId,
+  } as const;
+  for (const id of new Set([
+    ...snapshotIds(effect.entry.before),
+    ...snapshotIds(effect.entry.after),
+  ]))
+    repository.retain(id, historyOwner);
+  repository.promote(snapshotIds(effect.entry.after), draftOwner, {
+    kind: "document",
+    documentId: effect.documentId,
+  });
+  repository.releaseOwnerIfPresent(draftOwner);
+  const afterIds = new Set(snapshotIds(effect.entry.after));
+  for (const id of snapshotIds(effect.entry.before))
+    if (!afterIds.has(id))
+      repository.release(id, {
+        kind: "document",
+        documentId: effect.documentId,
+      });
+  for (const released of effect.released)
+    repository.releaseOwnerIfPresent({
+      kind: "history",
+      documentId: effect.documentId,
+      operationId: released.operationId,
+    });
 }
 
 export function createEditorArtifactEffects(options: {
@@ -73,40 +119,26 @@ export function createEditorArtifactEffects(options: {
         draftId: effect.draftId,
       });
     },
-    commitManualHistory(effect) {
-      const historyOwner = {
-        kind: "history",
-        documentId: effect.documentId,
-        operationId: effect.entry.operationId,
-      } as const;
-      for (const id of new Set([
-        ...snapshotIds(effect.entry.before),
-        ...snapshotIds(effect.entry.after),
-      ]))
-        options.repository.retain(id, historyOwner);
-      options.repository.promote(
-        snapshotIds(effect.entry.after),
-        { kind: "manual-draft", documentId: effect.documentId, draftId: effect.draftId },
-        { kind: "document", documentId: effect.documentId },
-      );
+    releaseMagicDraft(effect) {
       options.repository.releaseOwnerIfPresent({
+        kind: "magic-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
+    commitManualHistory(effect) {
+      commitDraftHistory(options.repository, effect, {
         kind: "manual-draft",
         documentId: effect.documentId,
         draftId: effect.draftId,
       });
-      const afterIds = new Set(snapshotIds(effect.entry.after));
-      for (const id of snapshotIds(effect.entry.before))
-        if (!afterIds.has(id))
-          options.repository.release(id, {
-            kind: "document",
-            documentId: effect.documentId,
-          });
-      for (const released of effect.released)
-        options.repository.releaseOwnerIfPresent({
-          kind: "history",
-          documentId: effect.documentId,
-          operationId: released.operationId,
-        });
+    },
+    commitMagicHistory(effect) {
+      commitDraftHistory(options.repository, effect, {
+        kind: "magic-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
     },
     moveDocumentHistory(effect) {
       const fromIds = new Set(snapshotIds(effect.from));

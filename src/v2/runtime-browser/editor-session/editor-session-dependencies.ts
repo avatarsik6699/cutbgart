@@ -1,13 +1,22 @@
 import { ArtifactRepository } from "../artifacts";
 import { ManualDraftRepository, WorkerManualCutoutCommitter } from "../manual-cutout";
+import {
+  createNativeMagicWorkerFactory,
+  MagicCandidateRepository,
+  MagicDraftRepository,
+  MagicWorkerClient,
+  WorkerMagicCutoutCommitter,
+} from "../magic-cutout";
 import { createNativeDownloadAdapter, createNativeEditorIdSource } from "../platform";
 import {
   createLocalModelConfig,
   createNativeProcessingWorkerFactory,
   detectBrowserProcessingCapabilities,
   LocalProcessingGateway,
+  HeavyJobCoordinator,
   WorkerProcessingExecutor,
 } from "../processing";
+import { WorkerSnapshotCommitter } from "../snapshot-commit";
 import type {
   EditorSessionDependencies,
   EditorSessionOptions,
@@ -24,6 +33,9 @@ export function createEditorSessionDependencies(
       idSource: { next: ids.artifact },
       memoryBudgetBytes: 512 * 1024 * 1024,
     });
+  const heavyJobs = new HeavyJobCoordinator();
+  const snapshotCommitter =
+    options.snapshotCommitter ?? new WorkerSnapshotCommitter(repository);
   const gateway =
     options.gateway ??
     new LocalProcessingGateway(
@@ -36,14 +48,36 @@ export function createEditorSessionDependencies(
         ),
         repository,
       }),
+      heavyJobs,
     );
+  const magicCandidates =
+    options.magicCandidates ?? new MagicCandidateRepository(ids.magicCandidate);
   return {
     download: options.download ?? createNativeDownloadAdapter(),
     gateway,
     ids,
     repository,
+    heavyJobs,
+    magicCandidates,
+    magicCommitter:
+      options.magicCommitter ??
+      new WorkerMagicCutoutCommitter({
+        candidates: magicCandidates,
+        repository,
+        snapshots: snapshotCommitter,
+      }),
+    magicDrafts: options.magicDrafts ?? new MagicDraftRepository(),
+    magicWorker:
+      options.magicWorker ??
+      new MagicWorkerClient({
+        coordinator: heavyJobs,
+        factory: createNativeMagicWorkerFactory(),
+        repository,
+      }),
     manualCommitter:
-      options.manualCommitter ?? new WorkerManualCutoutCommitter(repository),
+      options.manualCommitter ??
+      new WorkerManualCutoutCommitter(repository, snapshotCommitter),
     manualDrafts: options.manualDrafts ?? new ManualDraftRepository(),
+    snapshotCommitter,
   };
 }

@@ -9,6 +9,8 @@ import {
 import type { DocumentId, DocumentState } from "@/v2/domain";
 
 import { createNativeProcessingCancellationSource } from "../platform";
+import { MagicCutoutController, MagicPredictionService } from "../magic-cutout";
+import { ManualCutoutController } from "../manual-cutout";
 import { createEditorArtifactEffects } from "./editor-artifact-effects";
 import { DocumentResultProjection } from "./document-result-projection";
 import { createEditorSessionDependencies } from "./editor-session-dependencies";
@@ -21,8 +23,19 @@ import { prepareImageImport } from "./image-import-preparation";
 
 export function createEditorSession(options: EditorSessionOptions = {}): EditorSession {
   const dependencies = createEditorSessionDependencies(options);
-  const { download, gateway, ids, manualCommitter, manualDrafts, repository } =
-    dependencies;
+  const {
+    download,
+    gateway,
+    heavyJobs,
+    ids,
+    magicCandidates,
+    magicCommitter,
+    magicDrafts,
+    magicWorker,
+    manualCommitter,
+    manualDrafts,
+    repository,
+  } = dependencies;
   const listeners = new Set<() => void>();
   let currentDocumentId: DocumentId | null = null;
   let disposed = false;
@@ -44,16 +57,71 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     fileName: () => snapshot.fileName,
     repository,
   });
+  const magicPredictor =
+    options.magicPredictor ??
+    new MagicPredictionService({
+      candidates: magicCandidates,
+      client: magicWorker,
+      drafts: magicDrafts,
+      artifactsFor(documentId) {
+        if (snapshot.kind !== "document") return null;
+        const document = snapshot.actor.getSnapshot().context.document;
+        if (document.documentId !== documentId) return null;
+        const baseValue =
+          document.committed === null ? null : repository.read(document.committed.matte);
+        return {
+          source: document.source,
+          revision: document.revision,
+          baseMatte: baseValue instanceof Uint8ClampedArray ? baseValue.slice() : null,
+        };
+      },
+      publish(correlation, progress) {
+        if (snapshot.kind !== "document") return;
+        const document = snapshot.actor.getSnapshot().context.document;
+        const draft = document.activeDraft;
+        if (
+          document.documentId !== correlation.documentId ||
+          draft?.kind !== "magic-cutout" ||
+          draft.draftId !== correlation.draftId ||
+          draft.draftRevision !== correlation.draftRevision
+        ) {
+          return;
+        }
+        publish({ ...snapshot, magicProgress: progress });
+      },
+    });
   const documentMachine = createDocumentMachine({
     artifacts: artifactEffects,
     cancellation: createNativeProcessingCancellationSource(),
     gateway,
     runIds: { next: ids.run },
     manualIds: { draft: ids.manualDraft, operation: ids.editOperation },
+    magicIds: { draft: ids.magicDraft },
     manualCommitter,
+    magicPredictor,
+    magicCommitter,
   });
   const workspace = createActor(createWorkspaceMachine({ documentMachine }));
   workspace.start();
+  const currentActor = (): DocumentActorRef | null =>
+    snapshot.kind === "document" ? snapshot.actor : null;
+  const manualController = new ManualCutoutController({
+    actor: currentActor,
+    documentId: () => currentDocumentId,
+    drafts: manualDrafts,
+    repository,
+  });
+  const magicController = new MagicCutoutController({
+    actor: currentActor,
+    candidates: magicCandidates,
+    dimensions: () =>
+      snapshot.kind === "document"
+        ? { width: snapshot.width, height: snapshot.height }
+        : null,
+    documentId: () => currentDocumentId,
+    drafts: magicDrafts,
+    nextRunId: ids.run,
+  });
 
   function emptySnapshot(
     error: Extract<EditorSessionSnapshot, { kind: "empty" }>["error"] = null,
@@ -121,7 +189,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       activeRun: null,
       pendingCommit: null,
       pendingManualCommit: null,
-      manualDraft: null,
+      activeMagicPrediction: null,
+      pendingMagicCommit: null,
+      magicCandidates: [],
+      activeDraft: null,
       history: { past: [], future: [], retainedHistoricalBytes: 0 },
       status: "preparing",
       stage: null,
@@ -144,14 +215,17 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       error: null,
       fileName: file.name,
       height: prepared.height,
+      magicProgress: null,
       previewUrl: preview?.url ?? null,
       resultUrl: null,
       width: prepared.width,
     });
     resultProjection.watch(actor, documentId, (resultUrl) => {
       if (snapshot.kind === "document") {
-        if (snapshot.actor.getSnapshot().context.document.manualDraft === null) {
+        if (snapshot.actor.getSnapshot().context.document.activeDraft === null) {
           manualDrafts.releaseDocument(documentId);
+          magicDrafts.releaseDocument(documentId);
+          magicCandidates.releaseDocument(documentId);
         }
         publish({ ...snapshot, resultUrl });
       }
@@ -180,96 +254,35 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       return;
     }
     resultProjection.stop();
+    magicWorker.reset();
     snapshot.actor.send({
       type: "COMMAND",
       command: { type: "RESET_DOCUMENT", documentId },
     });
     workspace.send({ type: "REMOVE_DOCUMENT", documentId });
     manualDrafts.releaseDocument(documentId);
+    magicDrafts.releaseDocument(documentId);
+    magicCandidates.releaseDocument(documentId);
     currentDocumentId = null;
     publish(emptySnapshot());
   }
 
   return {
+    beginMagic() {
+      magicController.begin();
+    },
     beginManual() {
-      if (snapshot.kind !== "document" || currentDocumentId === null) return;
-      const document = snapshot.actor.getSnapshot().context.document;
-      snapshot.actor.send({
-        type: "COMMAND",
-        command: {
-          type: "BEGIN_MANUAL_CUTOUT",
-          documentId: currentDocumentId,
-          expectedRevision: document.revision,
-        },
-      });
-      const next = snapshot.actor.getSnapshot().context.document;
-      if (next.manualDraft === null || next.committed === null) return;
-      const value = repository.read(next.committed.matte);
-      const baselineValue =
-        next.baseline === null ? null : repository.read(next.baseline.matte);
-      const metadata = repository.metadata(next.committed.matte);
-      if (
-        !(value instanceof Uint8ClampedArray) ||
-        !(baselineValue instanceof Uint8ClampedArray) ||
-        metadata === null
-      )
-        return;
-      manualDrafts.create(
-        next.manualDraft.draftId,
-        currentDocumentId,
-        value,
-        metadata.width,
-        metadata.height,
-        baselineValue,
-      );
+      manualController.begin();
     },
     applyManual() {
-      if (snapshot.kind !== "document" || currentDocumentId === null) return;
-      const document = snapshot.actor.getSnapshot().context.document;
-      if (document.manualDraft === null || document.pendingManualCommit !== null) return;
-      const engine = manualDrafts.get(document.manualDraft.draftId);
-      if (engine === null) return;
-      const draftOwner = {
-        kind: "manual-draft",
-        documentId: currentDocumentId,
-        draftId: document.manualDraft.draftId,
-      } as const;
-      repository.releaseOwnerIfPresent(draftOwner);
-      const draftMatte = repository.register(
-        engine.alphaCopy(),
-        {
-          kind: "matte",
-          mediaType: "application/octet-stream",
-          width: engine.width,
-          height: engine.height,
-          estimatedBytes: engine.width * engine.height,
-        },
-        draftOwner,
-      );
-      snapshot.actor.send({
-        type: "COMMAND",
-        command: {
-          type: "APPLY_MANUAL_CUTOUT",
-          documentId: currentDocumentId,
-          draftId: document.manualDraft.draftId,
-          expectedRevision: document.revision,
-          draftMatte,
-        },
-      });
+      manualController.apply();
     },
     cancelManual() {
-      if (snapshot.kind !== "document" || currentDocumentId === null) return;
-      const draft = snapshot.actor.getSnapshot().context.document.manualDraft;
-      if (draft === null) return;
-      snapshot.actor.send({
-        type: "COMMAND",
-        command: {
-          type: "CANCEL_MANUAL_CUTOUT",
-          documentId: currentDocumentId,
-          draftId: draft.draftId,
-        },
-      });
-      manualDrafts.release(draft.draftId);
+      manualController.cancel();
+    },
+    cancelMagic() {
+      magicController.cancel();
+      magicWorker.reset();
     },
     cancel() {
       if (snapshot.kind === "document" && currentDocumentId !== null) {
@@ -288,6 +301,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       workspace.send({ type: "DISPOSE" });
       workspace.stop();
       await gateway.dispose();
+      magicWorker.dispose();
+      heavyJobs.dispose();
+      magicCandidates.dispose();
+      magicDrafts.dispose();
       repository.dispose();
       manualDrafts.dispose();
       listeners.clear();
@@ -308,32 +325,44 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     },
     getSnapshot: () => snapshot,
     manualDraft() {
-      if (snapshot.kind !== "document") return null;
-      const draft = snapshot.actor.getSnapshot().context.document.manualDraft;
-      return draft === null ? null : manualDrafts.get(draft.draftId);
+      return manualController.draft();
+    },
+    magicDraft() {
+      return magicController.draft();
+    },
+    notifyMagicChanged() {
+      const predictionActive =
+        snapshot.kind === "document" &&
+        snapshot.actor.getSnapshot().context.document.activeMagicPrediction !== null;
+      magicController.notifyChanged();
+      if (predictionActive) magicWorker.reset();
+    },
+    paintMagicCandidate(canvas, candidateId) {
+      magicController.paintCandidate(canvas, candidateId);
     },
     notifyManualDirty() {
-      if (snapshot.kind !== "document") return;
-      const draft = snapshot.actor.getSnapshot().context.document.manualDraft;
-      const engine = draft === null ? null : manualDrafts.get(draft.draftId);
-      if (draft === null || engine === null) return;
-      snapshot.actor.send({
-        type: "DOMAIN_EVENT",
-        event: {
-          type: "MANUAL_DRAFT_DIRTY_CHANGED",
-          documentId: draft.documentId,
-          draftId: draft.draftId,
-          dirty: engine.dirty,
-        },
-      });
+      manualController.notifyDirty();
     },
     undoManual() {
-      const engine = this.manualDraft();
-      if (engine?.undo() !== null) this.notifyManualDirty();
+      manualController.undo();
     },
     redoManual() {
-      const engine = this.manualDraft();
-      if (engine?.redo() !== null) this.notifyManualDirty();
+      manualController.redo();
+    },
+    undoMagic() {
+      magicController.undo();
+    },
+    redoMagic() {
+      magicController.redo();
+    },
+    predictMagic() {
+      magicController.predict();
+    },
+    selectMagicCandidate(candidateId) {
+      magicController.select(candidateId);
+    },
+    applyMagic() {
+      magicController.apply();
     },
     undoDocument() {
       if (snapshot.kind !== "document" || currentDocumentId === null) return;

@@ -24,11 +24,18 @@ export function executeArtifactEffect(
     case "commit-manual-history":
       dependencies.artifacts.commitManualHistory(effect);
       return null;
+    case "release-magic-draft":
+      dependencies.artifacts.releaseMagicDraft?.(effect);
+      return null;
+    case "commit-magic-history":
+      dependencies.artifacts.commitMagicHistory?.(effect);
+      return null;
     case "move-document-history":
       dependencies.artifacts.moveDocumentHistory(effect);
       return null;
     case "start-processing":
     case "cancel-processing":
+    case "cancel-magic-prediction":
       return null;
   }
 }

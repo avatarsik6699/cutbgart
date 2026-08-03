@@ -34,6 +34,19 @@ export type {
   ManualCutoutPoint,
 } from "./manual-cutout";
 export {
+  MAGIC_STROKE_LIMIT,
+  MAGIC_STROKE_POINT_LIMIT,
+  MagicDraftEngine,
+  MagicDraftRepository,
+} from "./magic-cutout";
+export type {
+  MagicDraftSnapshot,
+  MagicRuntimeProgress,
+  MagicPoint,
+  MagicStroke,
+  MagicStrokeStart,
+} from "./magic-cutout";
+export {
   createNativeDownloadAdapter,
   createNativeEditorIdSource,
   createNativeProcessingCancellationSource,
@@ -44,6 +57,7 @@ export {
   createNativeProcessingWorkerFactory,
   detectBrowserProcessingCapabilities,
   LocalProcessingGateway,
+  HeavyJobCoordinator,
   PROCESSING_WORKER_PROTOCOL_VERSION,
   resolveUsableInferencePath,
   sameCorrelation,
@@ -53,6 +67,8 @@ export type {
   BrowserCapabilitySource,
   LocalModelConfig,
   LocalProcessingExecutor,
+  HeavyJobKind,
+  HeavyJobRequest,
   ProcessingWorker,
   ProcessingWorkerCommand,
   ProcessingWorkerEvent,

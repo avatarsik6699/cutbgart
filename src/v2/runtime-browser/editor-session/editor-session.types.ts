@@ -1,10 +1,24 @@
-import type { DocumentActorRef, ProcessingGateway } from "@/v2/application";
-import type { ArtifactRepositoryStats } from "@/v2/domain";
+import type {
+  DocumentActorRef,
+  MagicCutoutCommitter,
+  MagicCutoutPredictor,
+  ProcessingGateway,
+} from "@/v2/application";
+import type { ArtifactRepositoryStats, MagicCandidateId } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
 import type { ManualDraftEngine, ManualDraftRepository } from "../manual-cutout";
+import type {
+  MagicCandidateRepository,
+  MagicDraftEngine,
+  MagicRuntimeProgress,
+  MagicDraftRepository,
+  MagicWorkerClient,
+} from "../magic-cutout";
 import type { ManualCutoutCommitter } from "@/v2/application";
 import type { DownloadAdapter, EditorIdSource } from "../platform";
+import type { HeavyJobCoordinator } from "../processing";
+import type { SnapshotCommitter } from "../snapshot-commit";
 
 export type EditorImportError =
   "unsupported-file" | "invalid-image" | "preparation-failed";
@@ -37,6 +51,7 @@ export type ActiveEditorSessionSnapshot = {
   error: null;
   fileName: string;
   height: number;
+  magicProgress: MagicRuntimeProgress | null;
   previewUrl: string | null;
   resultUrl: string | null;
   width: number;
@@ -48,8 +63,11 @@ export type EditorSessionSnapshot =
   | ActiveEditorSessionSnapshot;
 
 export type EditorSession = {
+  beginMagic(): void;
   beginManual(): void;
+  applyMagic(): void;
   applyManual(): void;
+  cancelMagic(): void;
   cancelManual(): void;
   cancel(): void;
   dispose(): Promise<void>;
@@ -57,9 +75,19 @@ export type EditorSession = {
   getSnapshot(): EditorSessionSnapshot;
   importImage(file: File): Promise<void>;
   manualDraft(): ManualDraftEngine | null;
+  magicDraft(): MagicDraftEngine | null;
+  notifyMagicChanged(): void;
+  paintMagicCandidate(
+    canvas: HTMLCanvasElement,
+    candidateId: MagicCandidateId | null,
+  ): void;
   notifyManualDirty(): void;
   undoManual(): void;
   redoManual(): void;
+  undoMagic(): void;
+  redoMagic(): void;
+  predictMagic(): void;
+  selectMagicCandidate(candidateId: MagicCandidateId): void;
   undoDocument(): void;
   redoDocument(): void;
   resources(): ArtifactRepositoryStats;
@@ -75,6 +103,12 @@ export type EditorSessionOptions = {
   repository?: ArtifactRepository;
   manualCommitter?: ManualCutoutCommitter;
   manualDrafts?: ManualDraftRepository;
+  magicCandidates?: MagicCandidateRepository;
+  magicCommitter?: MagicCutoutCommitter;
+  magicDrafts?: MagicDraftRepository;
+  magicPredictor?: MagicCutoutPredictor;
+  magicWorker?: MagicWorkerClient;
+  snapshotCommitter?: SnapshotCommitter;
 };
 
 export type EditorSessionDependencies = {
@@ -84,4 +118,10 @@ export type EditorSessionDependencies = {
   repository: ArtifactRepository;
   manualCommitter: ManualCutoutCommitter;
   manualDrafts: ManualDraftRepository;
+  magicCandidates: MagicCandidateRepository;
+  magicCommitter: MagicCutoutCommitter;
+  magicDrafts: MagicDraftRepository;
+  magicWorker: MagicWorkerClient;
+  snapshotCommitter: SnapshotCommitter;
+  heavyJobs: HeavyJobCoordinator;
 };

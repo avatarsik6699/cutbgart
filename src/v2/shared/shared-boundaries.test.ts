@@ -63,6 +63,7 @@ describe("v2 shared platform boundaries", () => {
       pattern: /new AbortController/,
       allowed: [
         "src/v2/runtime-browser/processing/local-processing-gateway.ts",
+        "src/v2/runtime-browser/processing/heavy-job-coordinator.ts",
         "src/v2/runtime-browser/platform/processing-cancellation.ts",
       ],
     },
@@ -71,7 +72,8 @@ describe("v2 shared platform boundaries", () => {
       pattern: /new Worker\s*\(/,
       allowed: [
         "src/v2/runtime-browser/processing/worker-factory.ts",
-        "src/v2/runtime-browser/manual-cutout/worker-manual-cutout-committer.ts",
+        "src/v2/runtime-browser/magic-cutout/magic-worker-factory.ts",
+        "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
       ],
     },
     {
@@ -80,8 +82,10 @@ describe("v2 shared platform boundaries", () => {
       allowed: [
         "src/v2/runtime-browser/processing/worker-client.ts",
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
-        "src/v2/runtime-browser/manual-cutout/worker-manual-cutout-committer.ts",
-        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
+        "src/v2/runtime-browser/magic-cutout/magic-worker-client.ts",
+        "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
+        "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
+        "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
       ],
     },
     {
@@ -96,7 +100,8 @@ describe("v2 shared platform boundaries", () => {
       allowed: [
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
         "src/v2/runtime-browser/manual-cutout/manual-source-bitmap.ts",
-        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
+        "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
+        "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
       ],
     },
     {
@@ -105,14 +110,19 @@ describe("v2 shared platform boundaries", () => {
         /(?:new OffscreenCanvas\s*\(|\.getImageData\s*\(|\.putImageData\s*\(|\.convertToBlob\s*\()/,
       allowed: [
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
-        "src/v2/runtime-browser/manual-cutout/worker/manual-cutout.worker.ts",
+        "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
+        "src/v2/runtime-browser/magic-cutout/magic-cutout-controller.ts",
         "src/v2/presentation/manual-cutout/manual-cutout-workspace.tsx",
+        "src/v2/presentation/magic-cutout/magic-cutout-workspace.tsx",
       ],
     },
     {
       title: "model-provider runtime access",
       pattern: /from\s+["']@huggingface\/transformers["']/,
-      allowed: ["src/v2/runtime-browser/processing/worker/processing.worker.ts"],
+      allowed: [
+        "src/v2/runtime-browser/processing/worker/processing.worker.ts",
+        "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
+      ],
     },
   ] satisfies readonly SourceRule[])("keeps $title in its owning adapter", (rule) => {
     expect(violations(rule)).toEqual([]);

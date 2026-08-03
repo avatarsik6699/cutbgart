@@ -12,6 +12,7 @@ import {
   rejectDecision,
 } from "./transition-policy";
 import { redoDocumentHistory, undoDocumentHistory } from "../document-history";
+import { createMagicCutoutDraft } from "../magic-cutout";
 
 export function decideDocumentCommand(
   state: DocumentState,
@@ -24,13 +25,19 @@ export function decideDocumentCommand(
   }
 
   switch (command.type) {
-    case "BEGIN_MANUAL_CUTOUT": {
-      if (!("draftId" in envelope))
+    case "BEGIN_MAGIC_CUTOUT": {
+      if (envelope.command.type !== "BEGIN_MAGIC_CUTOUT")
         return rejectDecision(state, command.type, "not-ready");
+      const draftId = (
+        envelope as Extract<
+          DocumentCommandEnvelope,
+          { command: { type: "BEGIN_MAGIC_CUTOUT" } }
+        >
+      ).draftId;
       if (state.status !== "result" || state.committed === null) {
         return rejectDecision(state, command.type, "no-result");
       }
-      if (state.manualDraft !== null)
+      if (state.activeDraft !== null)
         return rejectDecision(state, command.type, "draft-active");
       if (command.expectedRevision !== state.revision) {
         return rejectDecision(state, command.type, "stale-revision");
@@ -39,8 +46,224 @@ export function decideDocumentCommand(
         outcome: accepted(command.type),
         state: {
           ...state,
-          manualDraft: {
-            draftId: envelope.draftId,
+          activeDraft: createMagicCutoutDraft({
+            documentId: state.documentId,
+            draftId,
+            baselineRevision: state.revision,
+          }),
+          activeMagicPrediction: null,
+          pendingMagicCommit: null,
+          magicCandidates: [],
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "MAGIC_DRAFT_CHANGED": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "magic-cutout" || draft.draftId !== command.draftId) {
+        return rejectDecision(state, command.type, "no-draft");
+      }
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      ) {
+        return rejectDecision(state, command.type, "stale-revision");
+      }
+      if (command.draftRevision !== draft.draftRevision + 1) {
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      }
+      const effects: DocumentEffect[] = [];
+      if (state.activeMagicPrediction !== null) {
+        effects.push({
+          type: "cancel-magic-prediction",
+          documentId: state.documentId,
+          draftId: draft.draftId,
+          runId: state.activeMagicPrediction.runId,
+        });
+      }
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: {
+            ...draft,
+            draftRevision: command.draftRevision,
+            dirty: command.dirty,
+            status: command.dirty ? "dirty" : "ready",
+            selectedCandidateId: null,
+          },
+          activeMagicPrediction: null,
+          pendingMagicCommit: null,
+          magicCandidates: [],
+          status: "result",
+          error: null,
+        },
+        effects,
+      };
+    }
+    case "PREDICT_MAGIC_CUTOUT": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "magic-cutout" || draft.draftId !== command.draftId) {
+        return rejectDecision(state, command.type, "no-draft");
+      }
+      if (state.activeMagicPrediction !== null) {
+        return rejectDecision(state, command.type, "prediction-active");
+      }
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      ) {
+        return rejectDecision(state, command.type, "stale-revision");
+      }
+      if (command.draftRevision !== draft.draftRevision) {
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      }
+      if (!draft.dirty) return rejectDecision(state, command.type, "draft-not-dirty");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "encoding", selectedCandidateId: null },
+          activeMagicPrediction: {
+            documentId: state.documentId,
+            draftId: draft.draftId,
+            runId: command.runId,
+            expectedRevision: command.expectedRevision,
+            draftRevision: command.draftRevision,
+          },
+          magicCandidates: [],
+          status: "magic-predicting",
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "SELECT_MAGIC_CANDIDATE": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "magic-cutout" || draft.draftId !== command.draftId) {
+        return rejectDecision(state, command.type, "no-draft");
+      }
+      if (
+        command.expectedRevision !== state.revision ||
+        command.draftRevision !== draft.draftRevision
+      ) {
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      }
+      if (
+        !state.magicCandidates.some((item) => item.candidateId === command.candidateId)
+      ) {
+        return rejectDecision(state, command.type, "no-candidate");
+      }
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: { ...draft, selectedCandidateId: command.candidateId },
+        },
+        effects: [],
+      };
+    }
+    case "APPLY_MAGIC_CUTOUT": {
+      const draft = state.activeDraft;
+      if (
+        !("operationId" in envelope) ||
+        draft?.kind !== "magic-cutout" ||
+        draft.draftId !== command.draftId
+      ) {
+        return rejectDecision(state, command.type, "no-draft");
+      }
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      ) {
+        return rejectDecision(state, command.type, "stale-revision");
+      }
+      if (
+        command.draftRevision !== draft.draftRevision ||
+        state.activeMagicPrediction !== null
+      ) {
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      }
+      if (
+        !state.magicCandidates.some((item) => item.candidateId === command.candidateId)
+      ) {
+        return rejectDecision(state, command.type, "no-candidate");
+      }
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          status: "magic-applying",
+          pendingMagicCommit: {
+            draftId: draft.draftId,
+            candidateId: command.candidateId,
+            expectedRevision: command.expectedRevision,
+            draftRevision: command.draftRevision,
+            operationId: envelope.operationId,
+          },
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "CANCEL_MAGIC_CUTOUT": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "magic-cutout" || draft.draftId !== command.draftId) {
+        return rejectDecision(state, command.type, "no-draft");
+      }
+      const effects: DocumentEffect[] = [];
+      if (state.activeMagicPrediction !== null) {
+        effects.push({
+          type: "cancel-magic-prediction",
+          documentId: state.documentId,
+          draftId: draft.draftId,
+          runId: state.activeMagicPrediction.runId,
+        });
+      }
+      effects.push({
+        type: "release-magic-draft",
+        documentId: state.documentId,
+        draftId: draft.draftId,
+      });
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: null,
+          activeMagicPrediction: null,
+          pendingMagicCommit: null,
+          magicCandidates: [],
+          status: "result",
+          error: null,
+        },
+        effects,
+      };
+    }
+    case "BEGIN_MANUAL_CUTOUT": {
+      if (envelope.command.type !== "BEGIN_MANUAL_CUTOUT")
+        return rejectDecision(state, command.type, "not-ready");
+      const draftId = (
+        envelope as Extract<
+          DocumentCommandEnvelope,
+          { command: { type: "BEGIN_MANUAL_CUTOUT" } }
+        >
+      ).draftId;
+      if (state.status !== "result" || state.committed === null) {
+        return rejectDecision(state, command.type, "no-result");
+      }
+      if (state.activeDraft !== null)
+        return rejectDecision(state, command.type, "draft-active");
+      if (command.expectedRevision !== state.revision) {
+        return rejectDecision(state, command.type, "stale-revision");
+      }
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: {
+            kind: "manual-cutout",
+            draftId,
             documentId: state.documentId,
             baselineRevision: state.revision,
             dirty: false,
@@ -51,14 +274,17 @@ export function decideDocumentCommand(
       };
     }
     case "CANCEL_MANUAL_CUTOUT": {
-      if (state.manualDraft?.draftId !== command.draftId) {
+      if (
+        state.activeDraft?.kind !== "manual-cutout" ||
+        state.activeDraft.draftId !== command.draftId
+      ) {
         return rejectDecision(state, command.type, "no-draft");
       }
       return {
         outcome: accepted(command.type),
         state: {
           ...state,
-          manualDraft: null,
+          activeDraft: null,
           pendingManualCommit: null,
           status: "result",
           error: null,
@@ -75,17 +301,18 @@ export function decideDocumentCommand(
     case "APPLY_MANUAL_CUTOUT": {
       if (
         !("operationId" in envelope) ||
-        state.manualDraft?.draftId !== command.draftId
+        state.activeDraft?.kind !== "manual-cutout" ||
+        state.activeDraft.draftId !== command.draftId
       ) {
         return rejectDecision(state, command.type, "no-draft");
       }
       if (
         command.expectedRevision !== state.revision ||
-        state.manualDraft.baselineRevision !== state.revision
+        state.activeDraft.baselineRevision !== state.revision
       ) {
         return rejectDecision(state, command.type, "stale-revision");
       }
-      if (!state.manualDraft.dirty)
+      if (!state.activeDraft.dirty)
         return rejectDecision(state, command.type, "draft-not-dirty");
       return {
         outcome: accepted(command.type),
@@ -105,7 +332,7 @@ export function decideDocumentCommand(
     }
     case "UNDO_DOCUMENT":
     case "REDO_DOCUMENT": {
-      if (state.manualDraft !== null)
+      if (state.activeDraft !== null)
         return rejectDecision(state, command.type, "draft-active");
       if (state.committed === null)
         return rejectDecision(state, command.type, "no-result");
@@ -214,10 +441,38 @@ export function decideDocumentCommand(
           runId: correlation.runId,
         });
       }
+      if (state.activeMagicPrediction !== null) {
+        effects.push({
+          type: "cancel-magic-prediction",
+          documentId: state.documentId,
+          draftId: state.activeMagicPrediction.draftId,
+          runId: state.activeMagicPrediction.runId,
+        });
+      }
+      if (state.activeDraft?.kind === "manual-cutout") {
+        effects.push({
+          type: "release-manual-draft",
+          documentId: state.documentId,
+          draftId: state.activeDraft.draftId,
+        });
+      } else if (state.activeDraft?.kind === "magic-cutout") {
+        effects.push({
+          type: "release-magic-draft",
+          documentId: state.documentId,
+          draftId: state.activeDraft.draftId,
+        });
+      }
       effects.push({ type: "release-document", documentId: state.documentId });
       return {
         outcome: accepted(command.type),
-        state: clearRun(state, "disposed", null),
+        state: {
+          ...clearRun(state, "disposed", null),
+          activeDraft: null,
+          pendingManualCommit: null,
+          activeMagicPrediction: null,
+          pendingMagicCommit: null,
+          magicCandidates: [],
+        },
         effects,
       };
     }

@@ -19,6 +19,8 @@ export async function installMockEditorV2Worker(
         ) => void;
         __v2RunCount?: number;
         __v2ManualCommitCount?: number;
+        __v2MagicCommitCount?: number;
+        __v2MagicPredictionCount?: number;
       };
 
       const testWindow = window as TestWindow;
@@ -49,12 +51,55 @@ export async function installMockEditorV2Worker(
             }
             return;
           }
+          if (command.type === "PREDICT" && command.correlation !== undefined) {
+            testWindow.__v2MagicPredictionCount =
+              (testWindow.__v2MagicPredictionCount ?? 0) + 1;
+            const correlation = command.correlation;
+            queueMicrotask(() => {
+              this.emit({
+                protocol: 1,
+                type: "PROGRESS",
+                correlation,
+                stage: "magic-encode",
+                fraction: null,
+              });
+              this.emit({
+                protocol: 1,
+                type: "PROGRESS",
+                correlation,
+                stage: "magic-predict",
+                fraction: null,
+              });
+              this.emit({
+                protocol: 1,
+                type: "SUCCEEDED",
+                correlation,
+                candidates: [
+                  {
+                    data: new Uint8Array([255]).buffer,
+                    width: 1,
+                    height: 1,
+                    score: 0.9,
+                  },
+                ],
+              });
+            });
+            return;
+          }
           if (
-            command.type === "MANUAL_CUTOUT_COMMIT" &&
+            command.type === "MATERIALIZE_SNAPSHOT" &&
             command.correlation !== undefined
           ) {
-            testWindow.__v2ManualCommitCount =
-              (testWindow.__v2ManualCommitCount ?? 0) + 1;
+            if (
+              "operation" in command.correlation &&
+              command.correlation.operation === "magic-cutout"
+            ) {
+              testWindow.__v2MagicCommitCount =
+                (testWindow.__v2MagicCommitCount ?? 0) + 1;
+            } else {
+              testWindow.__v2ManualCommitCount =
+                (testWindow.__v2ManualCommitCount ?? 0) + 1;
+            }
             const png = Uint8Array.from([
               137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
               0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8,
@@ -186,6 +231,21 @@ export async function mockEditorV2ManualCommitCount(page: Page): Promise<number>
   );
 }
 
+export async function mockEditorV2MagicPredictionCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2MagicPredictionCount?: number })
+        .__v2MagicPredictionCount ?? 0,
+  );
+}
+
+export async function mockEditorV2MagicCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2MagicCommitCount?: number }).__v2MagicCommitCount ?? 0,
+  );
+}
+
 export async function resetMockEditorV2Worker(page: Page): Promise<void> {
   await page
     .evaluate(() => {
@@ -197,11 +257,15 @@ export async function resetMockEditorV2Worker(page: Page): Promise<void> {
         ) => void;
         __v2RunCount?: number;
         __v2ManualCommitCount?: number;
+        __v2MagicCommitCount?: number;
+        __v2MagicPredictionCount?: number;
       };
       delete testWindow.__completeV2Run;
       delete testWindow.__advanceV2RunStage;
       delete testWindow.__v2RunCount;
       delete testWindow.__v2ManualCommitCount;
+      delete testWindow.__v2MagicCommitCount;
+      delete testWindow.__v2MagicPredictionCount;
     })
     .catch(() => undefined);
 }

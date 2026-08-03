@@ -6,6 +6,8 @@ import {
   selectDocumentStatus,
   selectLastDocumentCommandOutcome,
   selectManualDraft,
+  selectMagicCandidates,
+  selectMagicDraft,
   selectCanUndoDocument,
   selectCanRedoDocument,
   selectDocumentRevision,
@@ -18,6 +20,8 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
   const error = useSelector(actor, selectDocumentError);
   const lastCommandOutcome = useSelector(actor, selectLastDocumentCommandOutcome);
   const manualDraft = useSelector(actor, selectManualDraft);
+  const magicDraft = useSelector(actor, selectMagicDraft);
+  const magicCandidates = useSelector(actor, selectMagicCandidates);
   const canUndoDocument = useSelector(actor, selectCanUndoDocument);
   const canRedoDocument = useSelector(actor, selectCanRedoDocument);
   const revision = useSelector(actor, selectDocumentRevision);
@@ -28,6 +32,8 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
     error,
     lastCommandOutcome,
     manualDraft,
+    magicDraft,
+    magicCandidates,
     canUndoDocument,
     canRedoDocument,
     revision,

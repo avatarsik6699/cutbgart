@@ -1,0 +1,79 @@
+[
+  {
+    "schemaVersion": "phase-35.magic-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "mocked-browser", "environmentKind": "automated-host" },
+    "automaticInferenceCount": 1,
+    "magicPredictionCount": 2,
+    "magicCommitCount": 1,
+    "explicitApplyOnly": true,
+    "draftBounds": {
+      "maximumStrokes": 50,
+      "maximumPointsPerStroke": 512,
+      "maximumUndoEntries": 50
+    },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "firstPrediction": { "support": "unsupported", "samplesMs": [] },
+      "warmPrediction": { "support": "unsupported", "samplesMs": [] },
+      "interaction": { "support": "unsupported", "samplesMs": [] },
+      "longTasksMs": []
+    },
+    "missedActions": 0,
+    "limitations": [
+      "The deterministic mocked lane verifies lifecycle, bounds, and cleanup, but does not represent model or target-device timings."
+    ]
+  },
+  {
+    "schemaVersion": "phase-35.magic-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "host-real-model", "environmentKind": "linux-host-real-model" },
+    "automaticInferenceCount": 1,
+    "magicPredictionCount": 2,
+    "magicCommitCount": 1,
+    "explicitApplyOnly": true,
+    "draftBounds": {
+      "maximumStrokes": 50,
+      "maximumPointsPerStroke": 512,
+      "maximumUndoEntries": 50
+    },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "firstPrediction": { "support": "unsupported", "samplesMs": [] },
+      "warmPrediction": { "support": "unsupported", "samplesMs": [] },
+      "interaction": { "support": "unsupported", "samplesMs": [] },
+      "longTasksMs": []
+    },
+    "missedActions": 0,
+    "limitations": [
+      "The final 31.2-second serialized smoke proves two real SlimSAM predictions and cleanup, but did not capture separate stage or interaction timings."
+    ]
+  },
+  {
+    "schemaVersion": "phase-35.magic-cutout.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "windows-target", "environmentKind": "windows-playwright-mcp" },
+    "automaticInferenceCount": 1,
+    "magicPredictionCount": 2,
+    "magicCommitCount": 1,
+    "explicitApplyOnly": true,
+    "draftBounds": {
+      "maximumStrokes": 50,
+      "maximumPointsPerStroke": 512,
+      "maximumUndoEntries": 50
+    },
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "firstPrediction": { "support": "supported", "samplesMs": [10000] },
+      "warmPrediction": { "support": "supported", "samplesMs": [347] },
+      "interaction": { "support": "supported", "samplesMs": [27, 27, 34] },
+      "longTasksMs": [55]
+    },
+    "missedActions": 0,
+    "limitations": [
+      "The first-prediction sample is an approximate fresh-worker observation; network-cache provenance was not observable.",
+      "Separate event-to-paint samples for model loading and decoder prediction were not captured.",
+      "Automatic and Magic overlap was not forced in this target capture; the coordinator contract test covers global FIFO admission."
+    ]
+  }
+]

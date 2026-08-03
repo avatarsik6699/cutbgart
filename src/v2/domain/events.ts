@@ -1,4 +1,11 @@
-import type { ArtifactId, DocumentId, ManualDraftId, Revision, RunId } from "./ids";
+import type {
+  ArtifactId,
+  DocumentId,
+  MagicDraftId,
+  ManualDraftId,
+  Revision,
+  RunId,
+} from "./ids";
 import type { DocumentSnapshot } from "./artifacts";
 import type {
   ProcessingError,
@@ -6,6 +13,7 @@ import type {
   ProcessingTerminalEvent,
   RunCorrelation,
 } from "./processing";
+import type { MagicCandidateSummary, MagicPredictionCorrelation } from "./magic-cutout";
 
 export type SourceRegisteredEvent = {
   type: "SOURCE_REGISTERED";
@@ -61,6 +69,34 @@ export type ManualCutoutEvent =
       error: ProcessingError;
     };
 
+export type MagicCutoutEvent =
+  | (MagicPredictionCorrelation & { type: "MAGIC_PREDICTION_STARTED" })
+  | (MagicPredictionCorrelation & {
+      type: "MAGIC_PREVIEW_READY";
+      candidates: readonly MagicCandidateSummary[];
+    })
+  | (MagicPredictionCorrelation & {
+      type: "MAGIC_PREDICTION_FAILED";
+      error: ProcessingError;
+    })
+  | {
+      type: "MAGIC_COMMIT_SUCCEEDED";
+      documentId: DocumentId;
+      draftId: MagicDraftId;
+      expectedRevision: Revision;
+      draftRevision: Revision;
+      snapshot: DocumentSnapshot;
+      estimatedHistoricalBytes: number;
+    }
+  | {
+      type: "MAGIC_COMMIT_FAILED";
+      documentId: DocumentId;
+      draftId: MagicDraftId;
+      expectedRevision: Revision;
+      draftRevision: Revision;
+      error: ProcessingError;
+    };
+
 export type DocumentEvent =
   | SourceRegisteredEvent
   | PreparationEvent
@@ -68,4 +104,5 @@ export type DocumentEvent =
   | CommitEvent
   | ExportEvent
   | ManualCutoutEvent
+  | MagicCutoutEvent
   | DocumentLifecycleEvent;

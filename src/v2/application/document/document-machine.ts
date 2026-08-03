@@ -6,6 +6,7 @@ import {
   type DocumentEffect,
   type DocumentSnapshot,
   type DocumentState,
+  type ProcessingError,
   type ProcessingRequest,
 } from "@/v2/domain";
 
@@ -17,14 +18,36 @@ import type {
   DocumentMachineDependencies,
 } from "./document-machine.types";
 import { createProcessingRunActor } from "./processing-run-actor";
+import { ProcessingGatewayError } from "../processing";
 
 type ManualCommitInput = {
   documentId: DocumentState["documentId"];
-  draftId: NonNullable<DocumentState["manualDraft"]>["draftId"];
+  draftId: Extract<
+    NonNullable<DocumentState["activeDraft"]>,
+    { kind: "manual-cutout" }
+  >["draftId"];
   expectedRevision: number;
   source: DocumentState["source"];
   draftMatte: NonNullable<DocumentState["pendingManualCommit"]>["draftMatte"];
 };
+
+type MagicPredictionInput = NonNullable<DocumentState["activeMagicPrediction"]>;
+type MagicCommitInput = {
+  documentId: DocumentState["documentId"];
+  draftId: NonNullable<DocumentState["pendingMagicCommit"]>["draftId"];
+  candidateId: NonNullable<DocumentState["pendingMagicCommit"]>["candidateId"];
+  expectedRevision: number;
+  draftRevision: number;
+};
+
+function invokedProcessingError(error: unknown, fallback: string): ProcessingError {
+  if (error instanceof ProcessingGatewayError) return error.detail;
+  return {
+    code: "processing-failed",
+    message: error instanceof Error ? error.message : fallback,
+    retryable: true,
+  };
+}
 
 function processingRequestFromState(state: DocumentState): ProcessingRequest {
   if (state.activeRun === null) {
@@ -63,6 +86,23 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
       manualCommit: fromPromise<DocumentSnapshot, ManualCommitInput>(
         async ({ input, signal }) => dependencies.manualCommitter.commit(input, signal),
       ),
+      magicPrediction: fromPromise<
+        readonly import("@/v2/domain").MagicCandidateSummary[],
+        MagicPredictionInput
+      >(async ({ input, signal }) => {
+        if (dependencies.magicPredictor === undefined) {
+          throw new Error("Magic prediction is unavailable");
+        }
+        return dependencies.magicPredictor.predict(input, signal);
+      }),
+      magicCommit: fromPromise<DocumentSnapshot, MagicCommitInput>(
+        async ({ input, signal }) => {
+          if (dependencies.magicCommitter === undefined) {
+            throw new Error("Magic commit is unavailable");
+          }
+          return dependencies.magicCommitter.commit(input, signal);
+        },
+      ),
     },
   });
 
@@ -80,6 +120,20 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         draftId: dependencies.manualIds.draft(),
       } as const;
     } else if (event.command.type === "APPLY_MANUAL_CUTOUT") {
+      envelope = {
+        command: event.command,
+        operationId: dependencies.manualIds.operation(),
+      } as const;
+    } else if (event.command.type === "BEGIN_MAGIC_CUTOUT") {
+      const draftId = dependencies.magicIds?.draft();
+      if (draftId === undefined) {
+        throw new Error("Magic draft IDs are unavailable");
+      }
+      envelope = {
+        command: event.command,
+        draftId,
+      } as const;
+    } else if (event.command.type === "APPLY_MAGIC_CUTOUT") {
       envelope = {
         command: event.command,
         operationId: dependencies.manualIds.operation(),
@@ -171,6 +225,14 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
           {
             guard: ({ context }) => context.document.pendingManualCommit !== null,
             target: "manualApplying",
+          },
+          {
+            guard: ({ context }) => context.document.activeMagicPrediction !== null,
+            target: "magicPredicting",
+          },
+          {
+            guard: ({ context }) => context.document.pendingMagicCommit !== null,
+            target: "magicApplying",
           },
         ],
         on: {
@@ -288,6 +350,155 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         },
       },
       manualSettling: {
+        on: {
+          DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
+          COMMAND: { actions: applyCommand },
+        },
+      },
+      magicPredicting: {
+        entry: ({ context, self }) => {
+          const prediction = context.document.activeMagicPrediction;
+          if (prediction === null) return;
+          self.send({
+            type: "DOMAIN_EVENT",
+            event: { type: "MAGIC_PREDICTION_STARTED", ...prediction },
+          });
+        },
+        invoke: {
+          id: "magic-prediction",
+          src: "magicPrediction",
+          input: ({ context }) => {
+            const prediction = context.document.activeMagicPrediction;
+            if (prediction === null)
+              throw new Error("Magic prediction input is unavailable");
+            return prediction;
+          },
+          onDone: {
+            target: "magicPredictionSettling",
+            actions: ({ context, event, self }) => {
+              const prediction = context.document.activeMagicPrediction;
+              if (prediction === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MAGIC_PREVIEW_READY",
+                  ...prediction,
+                  candidates: event.output,
+                },
+              });
+            },
+          },
+          onError: {
+            target: "magicPredictionSettling",
+            actions: ({ context, event, self }) => {
+              const prediction = context.document.activeMagicPrediction;
+              if (prediction === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MAGIC_PREDICTION_FAILED",
+                  ...prediction,
+                  error: invokedProcessingError(event.error, "Magic prediction failed"),
+                },
+              });
+            },
+          },
+        },
+        always: [
+          {
+            guard: ({ context }) => context.document.status === "disposed",
+            target: "disposed",
+          },
+          {
+            guard: ({ context }) => context.document.activeMagicPrediction === null,
+            target: "active",
+          },
+        ],
+        on: {
+          COMMAND: { actions: applyCommand },
+          DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      magicPredictionSettling: {
+        on: {
+          DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
+          COMMAND: { actions: applyCommand },
+        },
+      },
+      magicApplying: {
+        invoke: {
+          id: "magic-commit",
+          src: "magicCommit",
+          input: ({ context }) => {
+            const pending = context.document.pendingMagicCommit;
+            if (pending === null) throw new Error("Magic commit input is unavailable");
+            return {
+              documentId: context.document.documentId,
+              draftId: pending.draftId,
+              candidateId: pending.candidateId,
+              expectedRevision: pending.expectedRevision,
+              draftRevision: pending.draftRevision,
+            };
+          },
+          onDone: {
+            target: "magicCommitSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingMagicCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MAGIC_COMMIT_SUCCEEDED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  expectedRevision: pending.expectedRevision,
+                  draftRevision: pending.draftRevision,
+                  snapshot: event.output,
+                  estimatedHistoricalBytes:
+                    context.document.committed === null
+                      ? 0
+                      : dependencies.artifacts.estimateHistoricalBytes(
+                          context.document.committed,
+                        ),
+                },
+              });
+            },
+          },
+          onError: {
+            target: "magicCommitSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingMagicCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "MAGIC_COMMIT_FAILED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  expectedRevision: pending.expectedRevision,
+                  draftRevision: pending.draftRevision,
+                  error: invokedProcessingError(event.error, "Magic apply failed"),
+                },
+              });
+            },
+          },
+        },
+        always: [
+          {
+            guard: ({ context }) => context.document.status === "disposed",
+            target: "disposed",
+          },
+          {
+            guard: ({ context }) => context.document.pendingMagicCommit === null,
+            target: "active",
+          },
+        ],
+        on: {
+          COMMAND: { actions: applyCommand },
+          DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      magicCommitSettling: {
         on: {
           DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
           COMMAND: { actions: applyCommand },

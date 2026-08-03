@@ -17,6 +17,12 @@ export type {
   DocumentRunIdSource,
 } from "./document";
 export type { ManualCutoutCommitRequest, ManualCutoutCommitter } from "./document";
+export type {
+  MagicCutoutCommitInput,
+  MagicCutoutCommitter,
+  MagicCutoutPredictor,
+  MagicPredictionInput,
+} from "./document";
 export {
   selectDocumentError,
   selectDocumentProgress,
@@ -24,6 +30,8 @@ export {
   selectDocumentStatus,
   selectLastDocumentCommandOutcome,
   selectManualDraft,
+  selectMagicCandidates,
+  selectMagicDraft,
   selectCanUndoDocument,
   selectCanRedoDocument,
   selectDocumentRevision,

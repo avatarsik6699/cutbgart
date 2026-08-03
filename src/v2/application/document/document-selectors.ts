@@ -3,6 +3,8 @@ import type {
   DocumentState,
   DocumentStatus,
   ManualCutoutDraft,
+  MagicCandidateSummary,
+  MagicCutoutDraft,
   Revision,
 } from "@/v2/domain";
 
@@ -35,19 +37,33 @@ export function selectLastDocumentCommandOutcome(
 export function selectManualDraft(
   snapshot: DocumentSnapshotLike,
 ): ManualCutoutDraft | null {
-  return snapshot.context.document.manualDraft;
+  const draft = snapshot.context.document.activeDraft;
+  return draft?.kind === "manual-cutout" ? draft : null;
+}
+
+export function selectMagicDraft(
+  snapshot: DocumentSnapshotLike,
+): MagicCutoutDraft | null {
+  const draft = snapshot.context.document.activeDraft;
+  return draft?.kind === "magic-cutout" ? draft : null;
+}
+
+export function selectMagicCandidates(
+  snapshot: DocumentSnapshotLike,
+): readonly MagicCandidateSummary[] {
+  return snapshot.context.document.magicCandidates;
 }
 
 export function selectCanUndoDocument(snapshot: DocumentSnapshotLike): boolean {
   return (
-    snapshot.context.document.manualDraft === null &&
+    snapshot.context.document.activeDraft === null &&
     snapshot.context.document.history.past.length > 0
   );
 }
 
 export function selectCanRedoDocument(snapshot: DocumentSnapshotLike): boolean {
   return (
-    snapshot.context.document.manualDraft === null &&
+    snapshot.context.document.activeDraft === null &&
     snapshot.context.document.history.future.length > 0
   );
 }

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createArtifactId, createDocumentId, createManualDraftId } from "@/v2/domain";
 
 import { ArtifactRepository } from "../artifacts";
-import { MANUAL_COMMIT_PROTOCOL_VERSION } from "./manual-commit-protocol";
+import { SNAPSHOT_COMMIT_PROTOCOL_VERSION } from "../snapshot-commit";
 import {
   WorkerManualCutoutCommitter,
   type ManualCutoutWorkerFactory,
@@ -21,9 +21,9 @@ class FakeManualWorker extends EventTarget {
     this.dispatchEvent(
       new MessageEvent("message", {
         data: {
-          protocol: MANUAL_COMMIT_PROTOCOL_VERSION,
+          protocol: SNAPSHOT_COMMIT_PROTOCOL_VERSION,
           type: "SUCCEEDED",
-          correlation,
+          correlation: { ...correlation, operation: "manual-cutout" },
           compositePng: new Uint8Array([1, 2, 3]).buffer,
         },
       }),
@@ -82,11 +82,12 @@ describe("WorkerManualCutoutCommitter", () => {
     await vi.waitFor(() => expect(test.worker.postMessage).toHaveBeenCalledOnce());
     const command = test.worker.postMessage.mock.calls[0]?.[0];
     expect(command).toMatchObject({
-      type: "MANUAL_CUTOUT_COMMIT",
+      type: "MATERIALIZE_SNAPSHOT",
       correlation: {
         documentId: test.documentId,
         draftId: test.draftId,
         expectedRevision: 3,
+        operation: "manual-cutout",
       },
     });
     expect(command).not.toHaveProperty("model");

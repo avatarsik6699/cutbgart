@@ -12,7 +12,7 @@ import {
   type StageTiming,
   type TransferableArtifactSet,
 } from "../worker-protocol";
-import { applyMatte } from "./image-compositor";
+import { applyMatte } from "../../image-processing";
 import { isWebGpuFailure, normalizeProcessingError } from "./processing-error-policy";
 
 type WorkerScope = {

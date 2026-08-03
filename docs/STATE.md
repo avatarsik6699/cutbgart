@@ -20,19 +20,20 @@
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
 | 33 | ✅ done | gate passed; tag `v0.33.0` after merge | Editor v2 foundation and first local vertical slice |
 | 34 | ✅ done | gate passed; tag `v0.34.0` after merge | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
+| 35 | ✅ done | gate passed; tag `v0.35.0` after merge | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
 
-**Latest closed phase:** `34`
+**Latest closed phase:** `35`
 
-**Implementation in progress:** none
+**Implementation in progress:** None; Phase 36 has not been initialized
 
-**Only active implementation scope:** none — initialize Phase 35 before further implementation
+**Only active implementation scope:** None
 
 ## Current contract
 
-This section describes code that exists after Phase 34. The legacy editor remains the public product;
-the separately reachable v2 foundation, automatic-removal slice, Manual Cutout, and document history
-are now shipped code. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
-[`PHASE_34.md`](./PHASE_34.md).
+This section describes code that exists after Phase 35. The legacy editor remains the public product;
+the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
+Cutout, and document history. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
+[`PHASE_35.md`](./PHASE_35.md).
 
 ### Runtime status
 
@@ -50,6 +51,9 @@ are now shipped code. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
   device verification passed without reproducing the legacy freeze.
 - The same v2 surface now implements runtime-owned Restore/Erase drafts, local gesture Undo/Redo,
   atomic Manual Apply/Cancel, and actor-owned committed document Undo/Redo without reinference.
+- Guided Magic Cutout now adds bounded source-space Keep/Remove strokes, explicit prediction and
+  candidate preview/refinement, and one explicit artifact-aware Apply without inference during
+  commit, Undo/Redo, export, or reset.
 
 ### Core models
 
@@ -110,6 +114,12 @@ Phase 34 adds `ManualDraftId`, `EditOperationId`, `ManualCutoutDraft`, `Document
 dirty-rectangle gesture patches remain runtime-owned. Committed history is capped at 20 operations
 and 96 MiB, while draft gesture history is independently capped at 20 patches.
 
+Phase 35 extends that vocabulary with a discriminated active-tool draft,
+`MagicDraftId`, `MagicCandidateId`, `MagicCutoutMode`, a monotonic Magic `draftRevision`, and
+`"magic-cutout"` history entries. Source embeddings, prompts, candidate mattes, and preview pixels
+remain runtime-owned; prediction correlates both committed baseline and draft revision before it can
+publish, while actor snapshots contain only IDs and bounded metadata.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -121,15 +131,15 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual Cutout, and document history slice |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual Cutout, guided Magic Cutout, and document history slice |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
 ### Persistence and ownership
 
 - **App DB/tables/migrations/seeds:** none.
-- **Browser tab memory:** source images, mattes, prompts, edits, composites, object URLs, histories,
-  v2 actors/artifacts/runs, and exports.
+- **Browser tab memory:** source images, mattes, prompts, Magic embeddings/candidates/strokes,
+  edits, composites, object URLs, histories, v2 actors/artifacts/runs, and exports.
 - **`localStorage`:** legacy `qualityMode` only.
 - **Cache Storage:** immutable public model and ONNX Runtime assets only; never user images/artifacts.
 - **Umami PostgreSQL:** externally managed analytics schema, not app-owned persistence.
@@ -147,7 +157,7 @@ There is no image-processing API.
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime |
 
-Phases 33–34 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
+Phases 33–35 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
 ### Current Editor v2 contract
@@ -170,11 +180,13 @@ The implemented v2 foundation is intentionally isolated and local-only:
   candidates with no Phase-33 dependency or evaluation work;
 - Manual Cutout with Restore/Erase, explicit Apply/Cancel, local gesture history, and committed
   document Undo/Redo;
-- no Magic Cutout, Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
+- guided Magic Cutout with Keep/Remove, explicit Predict/preview/refinement/Apply/Cancel, bounded
+  local stroke history, and globally serialized automatic/Magic model work;
+- no Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-Further capabilities are not implied by this foundation. Magic Cutout, Background,
-Enhancements, batch, public-route migration, and legacy removal require later accepted slices.
+Further capabilities are not implied by this foundation. Background, Enhancements, batch,
+public-route migration, and legacy removal require later accepted slices.
 
 ## Phase-34 contract
 
@@ -190,6 +202,22 @@ removal/export/reset and Phase-33 responsiveness/resource guarantees must not re
 Enhancements, Background, batch, public-route migration, backend, and paid capabilities remain out
 of scope.
 
+## Phase-35 contract
+
+The completed isolated v2 slice adds one runtime-owned Magic draft per document with at most 50
+source-space Keep/Remove strokes, 512 simplified points per stroke, and 50 local Undo entries.
+Prediction is explicitly separate from commit, correlates document/draft/run/baseline/draft
+revisions, and publishes only candidate IDs/scores to the actor. Embeddings, prompts, constraint
+maps, matte buffers, previews, and pixels remain in browser-runtime services.
+
+Automatic removal and Magic inference share one FIFO `HeavyJobCoordinator`; Manual and Magic share
+only a versioned non-inference snapshot committer and proven artifact-history lifecycle helper.
+Explicit Magic Apply creates exactly one `magic-cutout` document-history operation. Cancel, stale
+results, retry, reset, worker failure, and disposal preserve committed state and release their owned
+runtime resources. The bilingual noindex route exposes accessible Keep/Remove, brush size, local
+Undo/Redo, Predict, candidate selection/refinement, Apply/Cancel, and truthful queued/model/encode/
+prediction states.
+
 ## Active blockers and residual risks
 
 | Scope | State |
@@ -197,12 +225,62 @@ of scope.
 | Legacy editor | Known main-thread freezes during model load/removal and Magic Apply; retained for comparison, not treated as resolved |
 | Phase 33 | Complete; gate, real-model evidence, and architect target-device acceptance passed |
 | Phase 34 | Complete; gate, real-model evidence, and architect acceptance passed |
+| Phase 35 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-03 — Phase 35 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_35 gate passed and architect Magic Cutout acceptance completed
+
+#### Changes / Decision
+
+- Added guided Magic Cutout to the isolated bilingual v2 editor with bounded runtime-owned
+  Keep/Remove strokes, explicit prediction/candidate refinement, and one atomic Apply operation.
+- Added a shared FIFO heavy-model coordinator, correlated SlimSAM worker lifecycle, runtime-owned
+  embeddings/candidates/previews, and a shared versioned non-inference snapshot committer for
+  Manual and Magic.
+- Added domain/actor/worker/ownership tests, bilingual browser coverage, real SlimSAM cold/warm
+  evidence, Windows target-device evidence, resource-churn reports, container smoke, and security
+  scans.
+
+#### Affected Phases / Consequences
+
+- Phase 36 must be explicitly scoped and initialized before another v2 capability is implemented.
+- Background, Enhancements, batch, public-route migration, backend, and paid capabilities remain
+  later slices; the legacy editor remains public until accepted v2 parity.
+
+### 2026-08-03 — Phase 35 Magic Cutout slice approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed continuation of the v2 architecture migration after accepting
+Phase 34
+
+#### Changes / Decision
+
+- SPEC v1.31 scopes Phase 35 to guided Magic Cutout on the existing isolated v2 route.
+- Prediction remains distinct from document commit; runtime owns embeddings/prompts/candidates,
+  while correlated actor metadata includes both committed and draft revision.
+- The second tool authorizes a narrow shared lifecycle and heavy-job admission boundary, while
+  tool-specific controllers/services remain cohesive and no generic event bus or god-service is
+  introduced.
+
+#### Affected Phases / Consequences
+
+- Phase 35 requires a new phase contract before implementation.
+- Phases 33–34 remain complete and unchanged; Background, Enhancements, batch, public-route
+  migration, backend, and paid capabilities remain later slices.
 
 ### 2026-08-03 — Phase 34 complete
 

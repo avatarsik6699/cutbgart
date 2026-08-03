@@ -1,6 +1,6 @@
 # BG Remove App v2 — Domain Model and Target Architecture
 
-**Status:** approved direction; Phase-33 foundation accepted; Phase-34 Manual/history contract frozen
+**Status:** approved direction; Phases 33–34 accepted; Phase-35 Magic Cutout contract frozen
 
 **Date:** 2026-08-01
 **Purpose:** replace incremental repairs of the current editor with an architecture-led, testable
@@ -481,28 +481,26 @@ to workspace packages without changing their public contracts.
 
 ## 9. Migration roadmap
 
-### Phase 33 — v2 foundation and first vertical slice
+### Completed slices
 
-- Freeze the v2 commands/events/invariants and actor hierarchy.
-- Establish the reviewed v2 shared UI/util/config foundation, including Typography, Image, and
-  typed SSR-safe environment/runtime access.
-- Add artifact repository and unified worker protocol with deterministic fakes.
-- Implement a separately reachable v2 single-image flow: import, local automatic removal, preview,
-  PNG export.
-- Instrument stage timings and prove scroll/control responsiveness during model initialization and
-  inference on the architect's target browser/device.
-- Keep the legacy route available for comparison and rollback.
-- Do not migrate Magic, Manual, Enhancements, Background, or batch yet.
+- **Phase 33:** v2 actor/artifact/worker/shared-UI foundation and one-image local automatic removal,
+  preview, export, cancellation, cleanup, and target-device evidence.
+- **Phase 34:** bounded committed document history and runtime-owned exact Manual Cutout with
+  explicit Apply/Cancel, two-level Undo/Redo, artifact-aware pruning, and no reinference.
+
+### Active slice
+
+1. **Phase 35:** Magic Cutout with bounded semantic strokes, runtime-owned encoding/candidates,
+   correlated prediction, explicit preview/apply separation, and one shared heavy-job admission
+   boundary for automatic and Magic inference.
 
 ### Later slices
 
-1. document history and exact Manual Cutout;
-2. Magic Cutout with draft/preview/apply separation;
-3. Background and Enhancements;
-4. batch as a parent actor spawning the already-proven per-image actor;
-5. accessibility/device/product validation;
-6. paid backend foundation and one opt-in remote-processing slice;
-7. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
+1. Background and Enhancements;
+2. batch as a parent actor spawning the already-proven per-image actor;
+3. accessibility/device/product validation;
+4. paid backend foundation and one opt-in remote-processing slice;
+5. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
 
 The old editor is removed only after the replacement has feature parity and the architect has
 verified the target-device experience.
@@ -1071,3 +1069,103 @@ Legacy audit outcome: the reusable signal was limited to pure brush geometry, de
 falloff, source-space interpolation, dirty rectangles, and the proven 20-step/96-MiB limits. Those
 policies were rewritten behind v2 module boundaries. No legacy React hook, editor store, worker
 lifecycle, workflow state, or component crosses into v2.
+
+## 15. Phase-35 Magic Cutout and second-tool boundary
+
+Phase 35 keeps the document actor as the only committed-workflow writer and adds one discriminated
+active-tool descriptor. Manual and Magic do not share mutable runtime draft storage: each controller
+owns its tool-specific engine/repository, while `EditorSession` composes them behind a thin route-
+lifetime facade. A common helper or lifecycle contract is extracted only when both tools use it;
+inheritance, a generic event bus, a catch-all utility layer, and a stateful god-service are excluded.
+
+Magic has three deliberately separate lifecycles:
+
+1. **Draft input:** Keep/Remove strokes mutate only a runtime draft. The live draft is capped at 50
+   strokes, each committed stroke at 512 simplified source-space points, with bounded local
+   Undo/Redo. Each mutation increments `draftRevision`.
+2. **Prediction:** an explicit user action encodes the source as needed and requests candidates.
+   Embeddings, prompts/constraints, candidate mattes, and preview pixels remain runtime-owned. A
+   result may publish only when `{ documentId, draftId, runId, expectedRevision, draftRevision }`
+   still matches; cancellation, further input, document revision changes, and disposal make it
+   stale. Prediction never increments document revision or history.
+3. **Commit:** explicit Apply materializes the selected candidate through an off-main-path commit
+   adapter and asks the document actor to create exactly one `magic-cutout` history operation.
+   Failure retains the draft for retry/cancel; Cancel releases Magic ownership without changing the
+   committed snapshot, revision, history, or redo branch.
+
+Automatic removal and Magic may keep distinct typed protocols and model sessions, but both enter one
+runtime `HeavyJobCoordinator`. It owns admission order, truthful queued state, cancellation, and the
+one-heavy-model-job limit; a tool-specific worker cannot initialize or infer outside it. Manual's
+non-inference commit worker remains outside the heavy-model lane while still obeying artifact,
+correlation, cancellation, and disposal contracts.
+
+The legacy guided-selection implementation is research input, not an adapter target. Pure stroke
+sampling, source-coordinate prompt construction, semantic constraints, candidate ranking/fusion,
+and bounded local history may be rewritten with focused tests. Legacy React hooks, component state,
+mutable refs, worker lifecycle, and first-stroke warm-up semantics do not cross the v2 boundary.
+
+### 15.1 Ownership and module map
+
+| Concern | Owner | Contract |
+|---------|-------|----------|
+| committed snapshot, revision, active-tool descriptor, history | document actor | sole writer; IDs and bounded metadata only |
+| route/session composition | `EditorSession` | thin facade; delegates, subscribes, and disposes collaborators |
+| Manual mutable alpha/patches | Manual controller + draft repository | existing Phase-34 behavior; no Magic state |
+| Magic strokes/prompts/draft revision | Magic controller + draft repository | bounded runtime state; actor receives metadata updates only |
+| embeddings/model session/candidate buffers | Magic prediction runtime | never exposed through React/XState or generic artifacts until candidate preview registration |
+| automatic and Magic heavy-job admission | `HeavyJobCoordinator` | one model init/inference globally; cancellation and truthful queue ownership |
+| matte-to-snapshot materialization | shared snapshot committer | second-consumer extraction from Manual; no inference/model dependency |
+| preview/history/document binary reachability | `ArtifactRepository` | independently auditable leases and deterministic release |
+| canvas/input semantics | tool presentation adapter | source coordinates, pointer capture, at most one committed stroke per gesture |
+
+Controllers/services are composed objects only where they own state or lifecycle. Pure point
+simplification, constraints, ranking, fusion, and transition decisions remain functions in named
+capability modules; they are not wrapped in classes for visual uniformity.
+
+### 15.2 Magic lifecycle and stale-result matrix
+
+| Current state | Input/result | Accepted result | Stale/rejected behavior |
+|---------------|--------------|-----------------|-------------------------|
+| committed result | Begin Magic at current revision | clean draft, revision 0 | other active draft or wrong revision rejected |
+| ready/dirty draft | pointer gesture | one bounded stroke; increment draft revision | cancelled/lost gesture adds nothing |
+| dirty/preview draft | Predict | correlated queued/encoding/predicting run | no strokes, active run, or stale baseline rejected |
+| predicting | draft mutation/cancel/reset | cancel run and invalidate its draft revision | late progress/terminal cannot publish |
+| predicting | matching candidates | runtime registers candidates; actor stores summaries/selection | foreign run/document/draft or mismatched revision releases outputs |
+| preview | select/refine | select ID or invalidate preview and increment draft revision | unknown candidate rejected |
+| preview | Apply | one invoked snapshot materialization | wrong baseline/draft/candidate rejected |
+| applying | matching success | one `magic-cutout` history commit; increment document revision | duplicate/late success released |
+| applying | retryable failure | retain draft/candidate and expose error | committed state/history unchanged |
+| any Magic draft | Cancel | release draft/run/candidate/preview owners | committed state/history/revision unchanged |
+
+Document Undo/Redo is unavailable while either tool draft is active. Magic Undo/Redo changes only
+its stroke history and `draftRevision`; it cannot move committed history. Apply and Cancel remain
+the only exits that respectively commit or discard a draft.
+
+### 15.3 Legacy signal audit
+
+| Legacy signal | Phase-35 decision |
+|---------------|-------------------|
+| `GUIDED_MODEL` immutable ID/revision/dtype/size/path/license | move behind the existing shared production-model config with backward-compatible legacy import |
+| source-space sampling and minimum-distance simplification | rewrite as pure Magic geometry policy with 512-point cap |
+| Keep/Remove semantic strokes and prompt coordinates | rewrite as typed framework-free values/policies |
+| refinement constraints that make Keep additive and Remove subtractive | rewrite and test against non-uniform baseline mattes |
+| multiple decoder candidates, score ordering, and directional fusion | rewrite as deterministic policy; candidate bytes stay runtime-owned |
+| bounded local draft Undo/Redo | rewrite with independent 50-stroke live/history bounds |
+| `use-object-selection.ts`, `use-guided-cutout.ts`, React refs/state | reject; no import or adapter |
+| first-stroke model encode and shared busy label | reject; only explicit Predict enters the heavy-job lifecycle |
+| legacy worker construction/message/reset/dispose lifecycle | reject; v2 owns a correlated versioned protocol and disposal |
+| raw `SourceImage`/`AlphaMatte` transfer in UI-facing types | reject; runtime checkout/transfer and opaque IDs only |
+
+### 15.4 Performance and evidence contract
+
+Phase-35 typed stages add `magic-queued`, `magic-model-loading`, `magic-encode`,
+`magic-predict`, `magic-candidate-register`, and `magic-commit`. Marks use the existing
+`v2:<runId>:<stage>:start|end` registry; free-form page marks are forbidden. Reports distinguish
+automatic and Magic queue delay, cold/warm model state, draft revision, candidate count, gateway
+kind, and supported/unsupported interaction signals without recording points or image data.
+
+Acceptance retains zero application-attributable long tasks of at least 50 ms and interaction-to-
+next-paint p95 below 100 ms on target evidence. It additionally requires one admitted heavy model
+job, zero missed scroll/control/stroke actions during every Magic stage, zero inference on Apply/
+Undo/Redo/export, bounded live draft/candidates, and zero reachable Magic leases/model sessions/
+workers after repeated cancel/reset/dispose churn.

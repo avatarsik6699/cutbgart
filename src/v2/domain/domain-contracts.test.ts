@@ -4,6 +4,8 @@ import {
   createArtifactId,
   createDocumentId,
   createImageId,
+  createMagicCandidateId,
+  createMagicDraftId,
   createRunId,
   isProcessingTerminalEvent,
   isRevision,
@@ -19,6 +21,8 @@ describe("v2 domain contracts", () => {
     expect(createArtifactId("artifact-1")).toBe("artifact-1");
     expect(createDocumentId("document-1")).toBe("document-1");
     expect(createImageId("image-1")).toBe("image-1");
+    expect(createMagicDraftId("magic-draft-1")).toBe("magic-draft-1");
+    expect(createMagicCandidateId("candidate-1")).toBe("candidate-1");
     expect(createRunId("run-1")).toBe("run-1");
     expect(() => createRunId("  ")).toThrow("RunId must not be empty");
   });

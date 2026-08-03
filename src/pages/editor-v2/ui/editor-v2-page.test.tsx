@@ -8,6 +8,8 @@ import {
   createEditOperationId,
   createImageId,
   createManualDraftId,
+  createMagicCandidateId,
+  createMagicDraftId,
   createRunId,
 } from "@/v2/domain";
 import { ArtifactRepository, type EditorSessionOptions } from "@/v2/runtime-browser";
@@ -36,6 +38,8 @@ function sessionOptions(): EditorSessionOptions {
       image: () => createImageId("image-1"),
       run: () => createRunId("run-1"),
       manualDraft: () => createManualDraftId("draft-1"),
+      magicDraft: () => createMagicDraftId("magic-draft-1"),
+      magicCandidate: () => createMagicCandidateId("magic-candidate-1"),
       editOperation: () => createEditOperationId("operation-1"),
     },
   };

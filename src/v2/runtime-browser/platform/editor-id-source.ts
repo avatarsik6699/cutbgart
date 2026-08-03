@@ -4,12 +4,16 @@ import {
   createEditOperationId,
   createImageId,
   createManualDraftId,
+  createMagicDraftId,
+  createMagicCandidateId,
   createRunId,
   type ArtifactId,
   type DocumentId,
   type EditOperationId,
   type ImageId,
   type ManualDraftId,
+  type MagicDraftId,
+  type MagicCandidateId,
   type RunId,
 } from "@/v2/domain";
 
@@ -19,6 +23,8 @@ export type EditorIdSource = {
   image: () => ImageId;
   run: () => RunId;
   manualDraft: () => ManualDraftId;
+  magicDraft: () => MagicDraftId;
+  magicCandidate: () => MagicCandidateId;
   editOperation: () => EditOperationId;
 };
 
@@ -31,6 +37,8 @@ export function createNativeEditorIdSource(
     image: () => createImageId(randomUuid()),
     run: () => createRunId(randomUuid()),
     manualDraft: () => createManualDraftId(randomUuid()),
+    magicDraft: () => createMagicDraftId(randomUuid()),
+    magicCandidate: () => createMagicCandidateId(randomUuid()),
     editOperation: () => createEditOperationId(randomUuid()),
   };
 }

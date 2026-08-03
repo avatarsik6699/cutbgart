@@ -13,26 +13,35 @@ export type {
 } from "./capabilities";
 export type {
   ApplyManualCutoutCommand,
+  ApplyMagicCutoutCommand,
+  BeginMagicCutoutCommand,
   BeginManualCutoutCommand,
   CancelActiveRunCommand,
   CancelManualCutoutCommand,
+  CancelMagicCutoutCommand,
   CommandOutcome,
   CommandRejectionReason,
   DocumentCommand,
   EditorCommandType,
   ExportPngCommand,
+  MagicDraftChangedCommand,
+  PredictMagicCutoutCommand,
   ResetDocumentCommand,
   RedoDocumentCommand,
   StartAutomaticRemovalCommand,
+  SelectMagicCandidateCommand,
   UndoDocumentCommand,
 } from "./commands";
 export type {
   ActiveRun,
+  ActiveToolDraft,
+  ActiveMagicPrediction,
   DocumentSnapshot,
   DocumentState,
   DocumentStatus,
   PendingCommit,
   PendingManualCommit,
+  PendingMagicCommit,
 } from "./document";
 export type {
   CommitEvent,
@@ -42,6 +51,7 @@ export type {
   PreparationEvent,
   ProcessingLifecycleEvent,
   ManualCutoutEvent,
+  MagicCutoutEvent,
   SourceRegisteredEvent,
 } from "./events";
 export {
@@ -49,6 +59,8 @@ export {
   createDocumentId,
   createEditOperationId,
   createImageId,
+  createMagicCandidateId,
+  createMagicDraftId,
   createManualDraftId,
   createRunId,
   isRevision,
@@ -58,6 +70,8 @@ export type {
   DocumentId,
   EditOperationId,
   ImageId,
+  MagicCandidateId,
+  MagicDraftId,
   ManualDraftId,
   Revision,
   RunId,
@@ -71,6 +85,18 @@ export {
   redoDocumentHistory,
   undoDocumentHistory,
 } from "./document-history";
+export {
+  advanceMagicDraftRevision,
+  createMagicCutoutDraft,
+  matchesMagicPrediction,
+} from "./magic-cutout";
+export type {
+  MagicCandidateSummary,
+  MagicCutoutDraft,
+  MagicCutoutMode,
+  MagicCutoutStatus,
+  MagicPredictionCorrelation,
+} from "./magic-cutout";
 export type {
   DocumentHistory,
   DocumentHistoryChange,

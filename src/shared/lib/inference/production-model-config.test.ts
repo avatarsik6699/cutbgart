@@ -4,6 +4,7 @@ import {
   getProductionModel,
   normalizeModelMode,
   PRODUCTION_MODELS,
+  GUIDED_MODEL,
 } from "./production-model-config";
 
 describe("production model config", () => {
@@ -16,5 +17,13 @@ describe("production model config", () => {
       dtype: "q8",
     });
     expect(PRODUCTION_MODELS).toHaveLength(3);
+    expect(GUIDED_MODEL).toEqual({
+      modelId: "Xenova/slimsam-77-uniform",
+      revision: "7c8459c48dabad6291b384c97be46c451c25d6c4",
+      dtype: "q8",
+      approximateBytes: 13_840_000,
+      supportedPaths: ["wasm"],
+      license: "Apache-2.0",
+    });
   });
 });

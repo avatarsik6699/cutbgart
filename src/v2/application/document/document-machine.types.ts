@@ -8,6 +8,7 @@ import type {
   DocumentState,
   RunId,
   ManualDraftId,
+  MagicDraftId,
   EditOperationId,
 } from "@/v2/domain";
 import type { ProcessingCancellationSource, ProcessingGateway } from "../processing";
@@ -17,6 +18,7 @@ export type DocumentManualIdSource = {
   draft(): ManualDraftId;
   operation(): EditOperationId;
 };
+export type DocumentMagicIdSource = { draft(): MagicDraftId };
 
 export type DocumentArtifactEffects = {
   estimateHistoricalBytes(snapshot: import("@/v2/domain").DocumentSnapshot): number;
@@ -30,6 +32,12 @@ export type DocumentArtifactEffects = {
   commitManualHistory(
     effect: Extract<DocumentEffect, { type: "commit-manual-history" }>,
   ): void;
+  releaseMagicDraft?(
+    effect: Extract<DocumentEffect, { type: "release-magic-draft" }>,
+  ): void;
+  commitMagicHistory?(
+    effect: Extract<DocumentEffect, { type: "commit-magic-history" }>,
+  ): void;
   moveDocumentHistory(
     effect: Extract<DocumentEffect, { type: "move-document-history" }>,
   ): void;
@@ -41,7 +49,10 @@ export type DocumentMachineDependencies = {
   gateway: ProcessingGateway;
   runIds: DocumentRunIdSource;
   manualIds: DocumentManualIdSource;
+  magicIds?: DocumentMagicIdSource;
   manualCommitter: import("./manual-cutout-committer").ManualCutoutCommitter;
+  magicPredictor?: import("./magic-cutout-predictor").MagicCutoutPredictor;
+  magicCommitter?: import("./magic-cutout-committer").MagicCutoutCommitter;
 };
 
 export type DocumentActorInput = { document: DocumentState };

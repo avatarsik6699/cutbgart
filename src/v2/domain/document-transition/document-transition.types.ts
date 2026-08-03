@@ -5,6 +5,7 @@ import type {
   DocumentId,
   EditOperationId,
   ManualDraftId,
+  MagicDraftId,
   Revision,
   RunId,
 } from "../ids";
@@ -21,14 +22,27 @@ export type DocumentCommandEnvelope =
       draftId: ManualDraftId;
     }
   | {
+      command: Extract<DocumentCommand, { type: "BEGIN_MAGIC_CUTOUT" }>;
+      draftId: MagicDraftId;
+    }
+  | {
       command: Extract<DocumentCommand, { type: "APPLY_MANUAL_CUTOUT" }>;
+      operationId: EditOperationId;
+    }
+  | {
+      command: Extract<DocumentCommand, { type: "APPLY_MAGIC_CUTOUT" }>;
       operationId: EditOperationId;
     }
   | {
       command: Exclude<
         DocumentCommand,
         {
-          type: "START_AUTOMATIC_REMOVAL" | "BEGIN_MANUAL_CUTOUT" | "APPLY_MANUAL_CUTOUT";
+          type:
+            | "START_AUTOMATIC_REMOVAL"
+            | "BEGIN_MANUAL_CUTOUT"
+            | "APPLY_MANUAL_CUTOUT"
+            | "BEGIN_MAGIC_CUTOUT"
+            | "APPLY_MAGIC_CUTOUT";
         }
       >;
     };
@@ -40,10 +54,24 @@ export type DocumentEffect =
   | { type: "release-run-if-owned"; documentId: DocumentId; runId: RunId }
   | { type: "release-document"; documentId: DocumentId }
   | { type: "release-manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
+  | { type: "release-magic-draft"; documentId: DocumentId; draftId: MagicDraftId }
+  | {
+      type: "cancel-magic-prediction";
+      documentId: DocumentId;
+      draftId: MagicDraftId;
+      runId: RunId;
+    }
   | {
       type: "commit-manual-history";
       documentId: DocumentId;
       draftId: ManualDraftId;
+      entry: DocumentHistoryEntry;
+      released: readonly DocumentHistoryEntry[];
+    }
+  | {
+      type: "commit-magic-history";
+      documentId: DocumentId;
+      draftId: MagicDraftId;
       entry: DocumentHistoryEntry;
       released: readonly DocumentHistoryEntry[];
     }

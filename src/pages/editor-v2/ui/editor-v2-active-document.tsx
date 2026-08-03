@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 
-import { ManualCutoutWorkspace, useDocumentActorSelectors } from "@/v2/presentation";
+import {
+  MagicCutoutWorkspace,
+  ManualCutoutWorkspace,
+  useDocumentActorSelectors,
+} from "@/v2/presentation";
 import type { ActiveEditorSessionSnapshot, EditorSession } from "@/v2/runtime-browser";
 import { Typography } from "@/v2/shared/ui";
 
@@ -19,7 +23,12 @@ export function EditorV2ActiveDocument(props: Props) {
   useEffect(
     function routeDocumentHistoryShortcutsFx() {
       function keyDownFx(event: KeyboardEvent): void {
-        if (document.manualDraft !== null || !(event.ctrlKey || event.metaKey)) return;
+        if (
+          document.manualDraft !== null ||
+          document.magicDraft !== null ||
+          !(event.ctrlKey || event.metaKey)
+        )
+          return;
         if (event.key.toLowerCase() !== "z" && event.key.toLowerCase() !== "y") return;
         event.preventDefault();
         if (event.key.toLowerCase() === "y" || event.shiftKey)
@@ -31,7 +40,7 @@ export function EditorV2ActiveDocument(props: Props) {
         globalThis.removeEventListener("keydown", keyDownFx);
       };
     },
-    [document.manualDraft, props.session],
+    [document.magicDraft, document.manualDraft, props.session],
   );
 
   return (
@@ -43,16 +52,31 @@ export function EditorV2ActiveDocument(props: Props) {
         canUndoDocument={document.canUndoDocument}
         canRedoDocument={document.canRedoDocument}
         manualOpen={document.manualDraft !== null}
+        magicOpen={document.magicDraft !== null}
         revision={document.revision}
       />
-      {document.manualDraft !== null && props.snapshot.previewUrl !== null ? (
+      {document.magicDraft !== null && props.snapshot.previewUrl !== null ? (
+        <MagicCutoutWorkspace
+          candidates={document.magicCandidates}
+          draft={document.magicDraft}
+          height={props.snapshot.height}
+          runtimeProgress={props.snapshot.magicProgress}
+          session={props.session}
+          sourceUrl={props.snapshot.previewUrl}
+          width={props.snapshot.width}
+        />
+      ) : null}
+      {document.magicDraft === null &&
+      document.manualDraft !== null &&
+      props.snapshot.previewUrl !== null ? (
         <ManualCutoutWorkspace
           height={props.snapshot.height}
           session={props.session}
           sourceUrl={props.snapshot.previewUrl}
           width={props.snapshot.width}
         />
-      ) : (
+      ) : null}
+      {document.magicDraft === null && document.manualDraft === null ? (
         <EditorV2Stage
           fileName={props.snapshot.fileName}
           grid={props.grid}
@@ -63,7 +87,7 @@ export function EditorV2ActiveDocument(props: Props) {
           status={document.status}
           width={props.snapshot.width}
         />
-      )}
+      ) : null}
       {document.error !== null ? (
         <Typography
           variant="body-small"

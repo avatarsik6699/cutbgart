@@ -10,6 +10,7 @@ import type {
   ProcessingProgress,
   ProcessingRequest,
 } from "@/v2/domain";
+import { HeavyJobCoordinator } from "./heavy-job-coordinator";
 
 export type LocalProcessingExecutor = {
   execute(
@@ -42,10 +43,14 @@ function normalizeError(error: unknown): ProcessingError {
 export class LocalProcessingGateway implements ProcessingGateway {
   readonly #activeRuns = new Set<ActiveRun>();
   readonly #executor: LocalProcessingExecutor;
+  readonly #coordinator: HeavyJobCoordinator;
+  readonly #ownsCoordinator: boolean;
   #disposed = false;
 
-  constructor(executor: LocalProcessingExecutor) {
+  constructor(executor: LocalProcessingExecutor, coordinator?: HeavyJobCoordinator) {
     this.#executor = executor;
+    this.#coordinator = coordinator ?? new HeavyJobCoordinator();
+    this.#ownsCoordinator = coordinator === undefined;
   }
 
   start(request: ProcessingRequest, signal: AbortSignal): ProcessingRun {
@@ -80,20 +85,23 @@ export class LocalProcessingGateway implements ProcessingGateway {
 
     let execution: Promise<DocumentSnapshot>;
     try {
-      execution = this.#executor.execute(request, controller.signal, (progress) => {
-        if (
-          released ||
-          terminalReached ||
-          controller.signal.aborted ||
-          progress.documentId !== request.documentId ||
-          progress.runId !== request.runId ||
-          progress.expectedRevision !== request.expectedRevision
-        ) {
-          return;
-        }
-        for (const listener of listeners) {
-          listener(progress);
-        }
+      execution = this.#coordinator.schedule({
+        kind: "automatic-remove",
+        signal: controller.signal,
+        execute: (admittedSignal) =>
+          this.#executor.execute(request, admittedSignal, (progress) => {
+            if (
+              released ||
+              terminalReached ||
+              admittedSignal.aborted ||
+              progress.documentId !== request.documentId ||
+              progress.runId !== request.runId ||
+              progress.expectedRevision !== request.expectedRevision
+            ) {
+              return;
+            }
+            for (const listener of listeners) listener(progress);
+          }),
       });
     } catch (error) {
       execution = Promise.reject(
@@ -177,6 +185,7 @@ export class LocalProcessingGateway implements ProcessingGateway {
       run.cancel();
       run.release();
     }
+    if (this.#ownsCoordinator) this.#coordinator.dispose();
     await this.#executor.dispose();
   }
 }

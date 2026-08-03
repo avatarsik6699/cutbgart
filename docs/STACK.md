@@ -281,6 +281,7 @@ pnpm e2e:matting-lab-real  # Phase 18 only: serialized ViTMatte alpha/runtime ev
 pnpm e2e:phase-19-real     # Phase 19 only: serialized production q8/fp32 refinement evidence
 pnpm e2e:phase-20-real     # Phase 20 only: serialized full-pipeline + bounded-input evidence
 pnpm e2e:phase-21-real     # Phase 21 only: serialized brush-derived SlimSAM evidence
+pnpm e2e:phase-35-real     # Phase 35 only: serialized v2 Magic cold/warm lifecycle evidence
 pnpm e2e:full              # Required phase gate: deterministic suite + real-model smoke
                            # host-only: never in Docker or CI
 ```
@@ -324,6 +325,16 @@ pnpm profile:phase-33     # validates the stored fake + cold/warm real-model
 The physical-target capture itself is driven by the configured Playwright MCP in a managed,
 isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS.md` and
 `PHASE_33_REPORTS.json`; repository scripts do not attach to a personal browser or debugging port.
+
+### Phase-35 Magic Cutout reports
+
+```bash
+pnpm profile:phase-35 -- --verify  # validates mocked, host real-model, and Windows target evidence
+```
+
+The versioned report bundle lives in `docs/audits/PHASE_35_REPORTS.json`. Values not captured by
+the host runner or Windows Playwright MCP are recorded as unsupported with limitations rather than
+inferred from command duration.
 
 ---
 
@@ -384,6 +395,7 @@ pnpm e2e:matting-lab-real # opt-in Phase 18 ViTMatte evaluation; never CI/normal
 pnpm e2e:phase-19-real    # opt-in Phase 19 production refiner; never CI/normal matrix
 pnpm e2e:phase-20-real    # opt-in Phase 20 hybrid pipeline; never CI/normal matrix
 pnpm e2e:phase-21-real    # opt-in Phase 21 brush-guided SlimSAM; never CI/normal matrix
+pnpm e2e:phase-35-real    # opt-in Phase 35 v2 Magic lifecycle; never CI/normal matrix
 
 # Sitemap (SPEC.md §7.5): `pnpm build` runs this automatically before `vite
 # build` so `public/sitemap.xml` is always current with `src/routes/` — run

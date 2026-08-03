@@ -12,6 +12,14 @@ export type {
   ManualCutoutCommitRequest,
   ManualCutoutCommitter,
 } from "./manual-cutout-committer";
+export type {
+  MagicCutoutPredictor,
+  MagicPredictionInput,
+} from "./magic-cutout-predictor";
+export type {
+  MagicCutoutCommitInput,
+  MagicCutoutCommitter,
+} from "./magic-cutout-committer";
 export {
   selectDocumentError,
   selectDocumentProgress,
@@ -19,6 +27,8 @@ export {
   selectDocumentStatus,
   selectLastDocumentCommandOutcome,
   selectManualDraft,
+  selectMagicDraft,
+  selectMagicCandidates,
   selectCanUndoDocument,
   selectCanRedoDocument,
   selectDocumentRevision,
