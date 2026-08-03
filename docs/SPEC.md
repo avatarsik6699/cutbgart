@@ -310,12 +310,13 @@ freezes, evidence is skipped, an invariant is violated, or review notes remain u
 |-------|-------|---------|
 | 01–31 | Complete / historical | Legacy product, operations, editor, design, and audit evolution; contracts archived under `archive/phases/` |
 | 32 | Closed incomplete | Legacy stabilization stopped by architect decision; gate waived, no tag, known freezes remain |
-| 33 | Pending / active contract | Editor v2 foundation and first local vertical slice |
-| 34 | Needs review / archived | Former legal-phase numbering is stale; re-scope only after Phase-33 evidence |
+| 33 | Complete | Editor v2 foundation and first local vertical slice; gate and architect acceptance passed |
+| 34 | Needs review / next candidate | Re-scope as the next v2 capability slice before implementation |
 | Later | Unscheduled | Migrate capabilities one tested slice at a time, then define paid backend phases explicitly |
 
-No v2 capability is migrated merely because legacy code exists. The next slice is selected only after
-Phase 33 proves its architecture and resource/performance contract on the affected environment.
+No v2 capability is migrated merely because legacy code exists. Phase 33 proved its architecture and
+resource/performance contract on the affected environment; the next slice still requires an explicit
+approved phase contract.
 
 ## 9. Deferred decisions
 

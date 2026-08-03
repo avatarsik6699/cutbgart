@@ -26,12 +26,13 @@
 
 ---
 
-## Planned editor v2 stack (not yet installed)
+## Editor v2 foundation stack
 
-Phase 33 is governed by [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md). Until that phase implements
-and gates the first vertical slice, the table above remains the deployed/current stack.
+Phase 33 implemented and gated the first isolated vertical slice governed by
+[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md). The table above remains the deployed public-product
+stack while the noindex v2 route grows through later accepted slices.
 
-| Area | Planned direction | Phase-33 boundary |
+| Area | Direction | Phase-33 boundary |
 |------|-------------------|-------------------|
 | Workflow state | XState v5 + `@xstate/react`; one actor per image, selector-only React bindings | Add for local single-image workflow only |
 | Domain/application | Framework-free TypeScript commands, events, transitions, ports, policies | No React, worker, HTTP, provider, or binary values |

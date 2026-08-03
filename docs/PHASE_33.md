@@ -6,7 +6,7 @@
 |-------|-------|
 | Phase | `33` |
 | Title | Editor v2 Foundation & First Vertical Slice |
-| Status | `🔄 in-progress` |
+| Status | `✅ done` |
 | Tag | `v0.33.0` |
 | Depends on | PHASE_32 closed-incomplete by architect exception; no gate dependency |
 
@@ -399,7 +399,9 @@ duplicated real-model scenario, or performance report that hides unsupported met
   Docker Compose `5.3.1`. The complete repository gate, Phase-33 mocked and real-model lanes,
   production container/smoke, report verifier, dependency/license/model checks, and pinned Trivy
   filesystem/image scans were green. Durable browser/device/GPU evidence and limitations are
-  recorded in `docs/audits/PHASE_33_RESULTS.md`; manual architect device acceptance remains open.
+  recorded in `docs/audits/PHASE_33_RESULTS.md`.
+- The architect completed the required manual affected-device verification on 2026-08-03 and
+  accepted the v2 slice without a reproduced freeze.
 
 ## Atomic Commit Message
 
@@ -411,9 +413,9 @@ feat(phase-33): establish editor v2 local vertical slice
 
 - [x] Scope completed in dependency order
 - [x] Automated gates, real-model smoke, and target-device evidence green
-- [ ] Architect verifies the affected browser/device without a reproduced freeze
+- [x] Architect verifies the affected browser/device without a reproduced freeze
 - [x] Architect reviews the domain, shared/config, shared UI/utilities, SSR behavior, and
   `FRONTEND_CONVENTIONS.md` compliance; every review note is resolved
 - [x] Architect review notes resolved
-- [ ] Run `/context-update 33`
-- [ ] Commit on `feat/phase-33`; tag `v0.33.0` only after merge
+- [x] Run `/context-update 33`
+- [x] Commit on `feat/phase-33`; tag `v0.33.0` only after merge

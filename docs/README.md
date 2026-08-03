@@ -10,7 +10,7 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
-| [`PHASE_33.md`](./PHASE_33.md) | Only active implementation scope |
+| [`PHASE_33.md`](./PHASE_33.md) | Latest completed phase contract; retained until the next phase is initialized |
 | [`STACK.md`](./STACK.md) | Current/planned technologies, commands, gates, deployment |
 | [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md) | Hard React/TypeScript/frontend requirements |
 | [`KNOWN_GOTCHAS.md`](./KNOWN_GOTCHAS.md) | Recurring project-specific failure modes and fixes |
@@ -19,10 +19,11 @@ it as supporting or historical material—not as an implementation contract.
 `PHASE_TEMPLATE.md` and `playbooks/` define the SDD workflow. `security/`, `operations/`, and
 `runbooks/` remain active production-operational documentation.
 
-## Evidence being produced now
+## Current phase boundary
 
-`audits/` is reserved for evidence required by the active phase. Historical Phase-31/32 evidence
-has moved to the archive.
+No implementation phase is active. Phase 34 remains `NEEDS_REVIEW`; initialize it only after its
+next v2 capability slice is explicitly scoped. `audits/` currently retains the accepted Phase-33
+evidence; older Phase-31/32 evidence has moved to the archive.
 
 ## Archive
 

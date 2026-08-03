@@ -18,20 +18,20 @@
 | 30 | ✅ historical done | `v0.30.0`; gate not run by architect decision | Design system/redesign; T19–T21 deferred |
 | 31 | ✅ historical done | `v0.31.0`; gate passed | Whole-project audit/refactor |
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
-| 33 | 🔄 in-progress | gate passed; manual architect device acceptance pending | Active editor v2 contract: [`PHASE_33.md`](./PHASE_33.md) |
+| 33 | ✅ done | gate passed; tag `v0.33.0` after merge | Editor v2 foundation and first local vertical slice |
 | 34 | ⚠️ NEEDS_REVIEW | stale planned number | Former legal phase archived; re-scope after Phase-33 evidence |
 
-**Latest closed phase:** `32` (architect exception)
+**Latest closed phase:** `33`
 
-**Implementation in progress:** `PHASE_33` — implementation and automated gate complete; manual
-architect device acceptance remains before `/context-update 33`
+**Implementation in progress:** none
 
-**Only active implementation scope:** `PHASE_33`
+**Only active implementation scope:** none — Phase 34 must be re-scoped before implementation
 
 ## Current contract
 
-This section describes code that exists after Phase 32. Target v2 contracts are planned, not shipped;
-see [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_33.md`](./PHASE_33.md).
+This section describes code that exists after Phase 33. The legacy editor remains the public product;
+the separately reachable v2 foundation and first local slice are now shipped code. See
+[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_33.md`](./PHASE_33.md).
 
 ### Runtime status
 
@@ -43,10 +43,12 @@ see [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_33.md`](./PHASE_33.
   and resource-lifecycle work.
 - Architect verification still reproduces model-load/removal and Magic Apply freezes that block page
   scroll and controls. Phase 32 therefore did not satisfy its responsiveness goal.
-- Legacy remains available while v2 is built separately. Phase 33 must prove responsiveness and
-  ownership on the affected browser/device before any further capability migration.
+- Legacy remains available while v2 grows one accepted capability slice at a time.
+- The noindex v2 surface implements one-image import, local automatic removal, preview, PNG export,
+  truthful cancel/retry/reset, and deterministic artifact cleanup. Its gate and architect target-
+  device verification passed without reproducing the legacy freeze.
 
-### Core legacy models
+### Core models
 
 ```ts
 type QualityMode = "fast" | "max";
@@ -94,6 +96,12 @@ is limited to 20 entries / 96 MiB of avoidable historical artifacts. Async work 
 run, item, and revision identity; stale, failed, or cancelled work must not commit. Exact legacy
 types and phase additions remain available in the archived full STATE.
 
+The Phase-33 v2 contract adds opaque identity and correlation types (`DocumentId`, `ArtifactId`,
+`RunId`, `Revision`), ID-only `DocumentSnapshot` values, in-process editor commands and terminal
+processing events, and a backend-neutral `ProcessingGateway`. XState actors own workflow state;
+`ArtifactRepository` owns binary artifacts, leases, object URLs, budgets, and disposal. The only
+implemented gateway is the bounded local browser-worker adapter.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -105,10 +113,9 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic-removal slice |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
-
-Phase 33 adds a separate noindex v2 page but no server API/RPC endpoint.
 
 ### Persistence and ownership
 
@@ -132,12 +139,12 @@ Phase 33 adds a separate noindex v2 page but no server API/RPC endpoint.
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime |
 
-Phase 33 adds no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` will centralize access
+Phase 33 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
-## Target contract: Phase 33
+### Editor v2 Phase-33 contract
 
-The planned v2 contract is intentionally isolated and local-only:
+The implemented v2 foundation is intentionally isolated and local-only:
 
 - `src/v2/{domain,application,runtime-browser,presentation,shared/ui,shared/lib,testing}`;
 - one workspace actor and one document actor per image;
@@ -156,15 +163,15 @@ The planned v2 contract is intentionally isolated and local-only:
 - no Cutout, Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-This target does not become the Current Contract until Phase 33 passes its gate, architect review,
-`/context-update`, and merge.
+Further capabilities are not implied by this foundation. Manual/History, Magic Cutout, Background,
+Enhancements, batch, public-route migration, and legacy removal require later accepted slices.
 
 ## Active blockers and residual risks
 
 | Scope | State |
 |-------|-------|
 | Legacy editor | Known main-thread freezes during model load/removal and Magic Apply; retained for comparison, not treated as resolved |
-| Phase 33 | No implementation blocker; target-device/real-model evidence is a mandatory completion dependency |
+| Phase 33 | Complete; gate, real-model evidence, and architect target-device acceptance passed |
 | Phase 34 | `NEEDS_REVIEW`: stale legal-phase number and legacy assumptions; do not implement before re-scoping |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
@@ -172,6 +179,28 @@ This target does not become the Current Contract until Phase 33 passes its gate,
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-03 — Phase 33 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_33 gate passed, implementation committed, and architect target-device
+acceptance completed
+
+#### Changes / Decision
+
+- Added the isolated editor v2 foundation and bilingual noindex one-image automatic-removal slice.
+- Established XState workflow actors, framework-free domain transitions, backend-neutral processing
+  contracts, browser-worker execution, and explicit artifact ownership/lifecycle.
+- Added typed shared config/runtime and v2 Typography/Image primitives plus deterministic unit,
+  browser, real-model, performance, resource, container, and security evidence.
+
+#### Affected Phases / Consequences
+
+- Phase 34 remains `NEEDS_REVIEW` and must be re-scoped as the next capability slice before
+  implementation. The legacy editor remains the public product until v2 reaches accepted parity.
 
 ### 2026-08-01 — Active contracts compacted without history loss
 
