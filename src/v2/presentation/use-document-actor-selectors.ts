@@ -11,6 +11,8 @@ import {
   selectCanUndoDocument,
   selectCanRedoDocument,
   selectDocumentRevision,
+  selectBackgroundDraft,
+  selectEnhancementDraft,
   type DocumentActorRef,
 } from "@/v2/application";
 
@@ -25,6 +27,8 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
   const canUndoDocument = useSelector(actor, selectCanUndoDocument);
   const canRedoDocument = useSelector(actor, selectCanRedoDocument);
   const revision = useSelector(actor, selectDocumentRevision);
+  const backgroundDraft = useSelector(actor, selectBackgroundDraft);
+  const enhancementDraft = useSelector(actor, selectEnhancementDraft);
 
   return {
     status,
@@ -37,5 +41,7 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
     canUndoDocument,
     canRedoDocument,
     revision,
+    backgroundDraft,
+    enhancementDraft,
   };
 }

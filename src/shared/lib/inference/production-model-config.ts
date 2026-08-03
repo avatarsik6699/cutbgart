@@ -1,6 +1,56 @@
 export type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
 export type AutomaticQualityMode = "fast" | "max" | AutomaticModelMode;
 export type BrowserInferencePath = "webgpu" | "wasm";
+export type MattingRefinementMode = "balanced" | "maximum";
+export type MattingModelVariantId =
+  "vitmatte-small-distinctions646-q8" | "vitmatte-small-distinctions646-fp32";
+
+export type MattingModelProfile = {
+  id: MattingModelVariantId;
+  mode: MattingRefinementMode;
+  modelId: "Xenova/vitmatte-small-distinctions-646";
+  revision: "358d428c452e5e0cd52955011a8b51944731d28e";
+  graphFile: "onnx/model_quantized.onnx" | "onnx/model.onnx";
+  dtype: "q8" | "fp32";
+  approximateBytes: 27_499_369 | 103_885_865;
+  supportedPaths: readonly ["webgpu", "wasm"];
+  license: "Apache-2.0";
+};
+
+export const MATTING_MODELS = Object.freeze([
+  Object.freeze({
+    id: "vitmatte-small-distinctions646-q8",
+    mode: "balanced",
+    modelId: "Xenova/vitmatte-small-distinctions-646",
+    revision: "358d428c452e5e0cd52955011a8b51944731d28e",
+    graphFile: "onnx/model_quantized.onnx",
+    dtype: "q8",
+    approximateBytes: 27_499_369,
+    supportedPaths: ["webgpu", "wasm"] as const,
+    license: "Apache-2.0",
+  }),
+  Object.freeze({
+    id: "vitmatte-small-distinctions646-fp32",
+    mode: "maximum",
+    modelId: "Xenova/vitmatte-small-distinctions-646",
+    revision: "358d428c452e5e0cd52955011a8b51944731d28e",
+    graphFile: "onnx/model.onnx",
+    dtype: "fp32",
+    approximateBytes: 103_885_865,
+    supportedPaths: ["webgpu", "wasm"] as const,
+    license: "Apache-2.0",
+  }),
+] as const satisfies readonly MattingModelProfile[]);
+
+export function getMattingModel(
+  modeOrId: MattingRefinementMode | MattingModelVariantId,
+): MattingModelProfile {
+  const profile = MATTING_MODELS.find(
+    (candidate) => candidate.mode === modeOrId || candidate.id === modeOrId,
+  );
+  if (profile === undefined) throw new Error(`Unknown matting model: ${modeOrId}`);
+  return profile;
+}
 
 export type GuidedModelProfile = {
   approximateBytes: 13_840_000;

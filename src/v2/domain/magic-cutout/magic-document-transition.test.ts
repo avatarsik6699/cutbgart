@@ -21,6 +21,7 @@ const before = {
   matte: createArtifactId("matte-before"),
   foreground: null,
   composite: createArtifactId("composite-before"),
+  background: { type: "transparent" as const },
 };
 
 function resultState(): DocumentState {
@@ -36,6 +37,8 @@ function resultState(): DocumentState {
     pendingManualCommit: null,
     activeMagicPrediction: null,
     pendingMagicCommit: null,
+    pendingBackgroundCommit: null,
+    pendingEnhancementCommit: null,
     magicCandidates: [],
     activeDraft: null,
     history: createEmptyDocumentHistory(),
@@ -152,6 +155,7 @@ describe("Magic document transitions", () => {
       matte: createArtifactId("matte-after"),
       foreground: null,
       composite: createArtifactId("composite-after"),
+      background: before.background,
     };
     const committed = transitionDocument(applying, {
       type: "MAGIC_COMMIT_SUCCEEDED",

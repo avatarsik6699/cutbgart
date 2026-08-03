@@ -21,19 +21,20 @@
 | 33 | ✅ done | gate passed; tag `v0.33.0` after merge | Editor v2 foundation and first local vertical slice |
 | 34 | ✅ done | gate passed; tag `v0.34.0` after merge | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
 | 35 | ✅ done | gate passed; tag `v0.35.0` after merge | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
+| 36 | ✅ done | gate passed; tag `v0.36.0` after merge | [`PHASE_36.md`](./PHASE_36.md): Background + Enhancements |
 
-**Latest closed phase:** `35`
+**Latest closed phase:** `36`
 
-**Implementation in progress:** None; Phase 36 has not been initialized
+**Implementation in progress:** None
 
-**Only active implementation scope:** None
+**Only active implementation scope:** None; initialize the next approved phase before implementation
 
 ## Current contract
 
-This section describes code that exists after Phase 35. The legacy editor remains the public product;
+This section describes code that exists after Phase 36. The legacy editor remains the public product;
 the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
-Cutout, and document history. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
-[`PHASE_35.md`](./PHASE_35.md).
+Cutout, Background, Enhancements, and document history. See
+[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_36.md`](./PHASE_36.md).
 
 ### Runtime status
 
@@ -54,6 +55,10 @@ Cutout, and document history. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) a
 - Guided Magic Cutout now adds bounded source-space Keep/Remove strokes, explicit prediction and
   candidate preview/refinement, and one explicit artifact-aware Apply without inference during
   commit, Undo/Redo, export, or reset.
+- Background now adds transparent, colour, gradient, and validated artifact-backed image drafts
+  with immediate uncommitted preview and one atomic materialized Apply.
+- Fine-detail and colour-halo Enhancements run in registry order through the shared heavy-job
+  coordinator and publish one changed snapshot or a truthful no-op without partial commits.
 
 ### Core models
 
@@ -120,6 +125,11 @@ Phase 35 extends that vocabulary with a discriminated active-tool draft,
 remain runtime-owned; prediction correlates both committed baseline and draft revision before it can
 publish, while actor snapshots contain only IDs and bounded metadata.
 
+Phase 36 adds ID-only `BackgroundFillDescriptor`, `BackgroundDraft`, `EnhancementDraft`, and
+finishing-tool command/event correlations. Background image bytes, preview URLs, Enhancement
+baselines/intermediates, worker buffers, and model sessions remain runtime-owned. Duplicate or
+stale Apply/Change commands cannot replace the immutable correlation of an in-flight operation.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -131,7 +141,7 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual Cutout, guided Magic Cutout, and document history slice |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual/Magic Cutout, Background, Enhancements, and document history slice |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
@@ -157,7 +167,7 @@ There is no image-processing API.
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime |
 
-Phases 33–35 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
+Phases 33–36 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
 ### Current Editor v2 contract
@@ -182,11 +192,14 @@ The implemented v2 foundation is intentionally isolated and local-only:
   document Undo/Redo;
 - guided Magic Cutout with Keep/Remove, explicit Predict/preview/refinement/Apply/Cancel, bounded
   local stroke history, and globally serialized automatic/Magic model work;
-- no Enhancements, Background, batch, auth, billing, upload, remote jobs, or generation;
+- Background drafts for transparent/colour/gradient/custom image fills with explicit Apply/Cancel;
+- fine-detail and colour-halo Enhancement drafts with ordered globally admitted heavy stages and
+  atomic changed/no-op/failure/cancel outcomes;
+- no batch, auth, billing, upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-Further capabilities are not implied by this foundation. Background, Enhancements, batch,
-public-route migration, and legacy removal require later accepted slices.
+Further capabilities are not implied by this foundation. Batch, public-route migration, and legacy
+removal require later accepted slices.
 
 ## Phase-34 contract
 
@@ -218,6 +231,20 @@ runtime resources. The bilingual noindex route exposes accessible Keep/Remove, b
 Undo/Redo, Predict, candidate selection/refinement, Apply/Cancel, and truthful queued/model/encode/
 prediction states.
 
+## Phase-36 contract
+
+The completed isolated v2 slice adds one Background or Enhancement draft at a time. Background
+supports transparent, colour, two-stop linear/radial gradients, and validated artifact-backed
+JPEG/PNG/WebP images up to 20 MiB and 4096 px. Preview is immediate and uncommitted; explicit Apply
+materializes one snapshot and creates exactly one `background` history operation.
+
+Enhancements capture one committed baseline and execute selected `fine-detail` then `colour-halo`
+operations through the shared FIFO `HeavyJobCoordinator`. Intermediate mattes, foreground pixels,
+model sessions, and URLs stay runtime-owned. A changed explicit Apply creates exactly one `enhance`
+operation; no-op, cancel, stale, duplicate, and failed work creates none. Undo/Redo/export restore
+the committed descriptor and pixels without reinference. The bilingual noindex route exposes
+accessible controls, dirty-draft guards, truthful stages/progress, retry, and keyboard behavior.
+
 ## Active blockers and residual risks
 
 | Scope | State |
@@ -226,12 +253,60 @@ prediction states.
 | Phase 33 | Complete; gate, real-model evidence, and architect target-device acceptance passed |
 | Phase 34 | Complete; gate, real-model evidence, and architect acceptance passed |
 | Phase 35 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
+| Phase 36 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-03 — Phase 36 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_36 gate passed and architect Background/Enhancements acceptance completed
+
+#### Changes / Decision
+
+- Added atomic Background drafts for transparent, colour, gradient, and validated custom-image
+  fills to the isolated bilingual v2 editor.
+- Added ordered fine-detail/colour-halo Enhancements behind the shared FIFO heavy-job boundary,
+  with runtime-owned intermediates and correlated changed/no-op/failure/cancel settlement.
+- Added domain/actor/worker/ownership tests, bilingual browser coverage, serialized real-model and
+  Windows target evidence, profiling reports, production container smoke, and security scans.
+
+#### Affected Phases / Consequences
+
+- No later phase is initialized; the next v2 migration slice requires explicit SPEC approval and a
+  new phase contract.
+- Batch, public-route migration, legacy removal, backend, and paid capabilities remain later work.
+
+### 2026-08-03 — Phase 36 Background and Enhancements slice approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed continuation of the v2 architecture migration after accepting
+Phase 35
+
+#### Changes / Decision
+
+- SPEC v1.32 scopes Phase 36 to Background and the existing local fine-detail/colour-halo
+  Enhancements on the isolated bilingual v2 route.
+- Committed snapshots gain an ID-only background descriptor; custom background bytes remain
+  artifact-owned, preview remains uncommitted, and explicit Apply creates one history operation.
+- Enhancement stages execute from one captured baseline and publish atomically through the document
+  actor, while heavy stages join the existing automatic/Magic admission boundary.
+
+#### Affected Phases / Consequences
+
+- Phase 36 requires a new phase contract before implementation.
+- Phases 33–35 remain complete and unchanged; batch, public-route migration, legacy removal,
+  backend, and paid capabilities remain later slices.
 
 ### 2026-08-03 — Phase 35 complete
 

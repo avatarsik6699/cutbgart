@@ -2,8 +2,10 @@ import type { CommandOutcome, DocumentCommand } from "../commands";
 import type { DocumentSnapshot, DocumentState } from "../document";
 import type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
   EditOperationId,
+  EnhancementDraftId,
   ManualDraftId,
   MagicDraftId,
   Revision,
@@ -26,11 +28,27 @@ export type DocumentCommandEnvelope =
       draftId: MagicDraftId;
     }
   | {
+      command: Extract<DocumentCommand, { type: "BEGIN_BACKGROUND" }>;
+      draftId: BackgroundDraftId;
+    }
+  | {
+      command: Extract<DocumentCommand, { type: "BEGIN_ENHANCEMENTS" }>;
+      draftId: EnhancementDraftId;
+    }
+  | {
       command: Extract<DocumentCommand, { type: "APPLY_MANUAL_CUTOUT" }>;
       operationId: EditOperationId;
     }
   | {
       command: Extract<DocumentCommand, { type: "APPLY_MAGIC_CUTOUT" }>;
+      operationId: EditOperationId;
+    }
+  | {
+      command: Extract<DocumentCommand, { type: "APPLY_BACKGROUND" }>;
+      operationId: EditOperationId;
+    }
+  | {
+      command: Extract<DocumentCommand, { type: "APPLY_ENHANCEMENTS" }>;
       operationId: EditOperationId;
     }
   | {
@@ -42,7 +60,11 @@ export type DocumentCommandEnvelope =
             | "BEGIN_MANUAL_CUTOUT"
             | "APPLY_MANUAL_CUTOUT"
             | "BEGIN_MAGIC_CUTOUT"
-            | "APPLY_MAGIC_CUTOUT";
+            | "APPLY_MAGIC_CUTOUT"
+            | "BEGIN_BACKGROUND"
+            | "APPLY_BACKGROUND"
+            | "BEGIN_ENHANCEMENTS"
+            | "APPLY_ENHANCEMENTS";
         }
       >;
     };
@@ -55,6 +77,16 @@ export type DocumentEffect =
   | { type: "release-document"; documentId: DocumentId }
   | { type: "release-manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
   | { type: "release-magic-draft"; documentId: DocumentId; draftId: MagicDraftId }
+  | {
+      type: "release-background-draft";
+      documentId: DocumentId;
+      draftId: BackgroundDraftId;
+    }
+  | {
+      type: "release-enhancement-draft";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+    }
   | {
       type: "cancel-magic-prediction";
       documentId: DocumentId;
@@ -72,6 +104,20 @@ export type DocumentEffect =
       type: "commit-magic-history";
       documentId: DocumentId;
       draftId: MagicDraftId;
+      entry: DocumentHistoryEntry;
+      released: readonly DocumentHistoryEntry[];
+    }
+  | {
+      type: "commit-background-history";
+      documentId: DocumentId;
+      draftId: BackgroundDraftId;
+      entry: DocumentHistoryEntry;
+      released: readonly DocumentHistoryEntry[];
+    }
+  | {
+      type: "commit-enhancement-history";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
       entry: DocumentHistoryEntry;
       released: readonly DocumentHistoryEntry[];
     }

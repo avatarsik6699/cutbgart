@@ -1,8 +1,10 @@
 import type { DocumentSnapshot } from "./artifacts";
 import type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
   EditOperationId,
+  EnhancementDraftId,
   ImageId,
   MagicCandidateId,
   MagicDraftId,
@@ -12,11 +14,14 @@ import type {
 import type { ProcessingError, ProcessingStage } from "./processing";
 import type { DocumentHistory, ManualCutoutDraft } from "./document-history";
 import type { MagicCutoutDraft } from "./magic-cutout";
+import type { BackgroundDraft } from "./background";
+import type { EnhancementDraft } from "./enhancements";
 import type { MagicCandidateSummary } from "./magic-cutout";
 
 export type { DocumentSnapshot } from "./artifacts";
 
-export type ActiveToolDraft = ManualCutoutDraft | MagicCutoutDraft;
+export type ActiveToolDraft =
+  ManualCutoutDraft | MagicCutoutDraft | BackgroundDraft | EnhancementDraft;
 
 export type ActiveRun = {
   runId: RunId;
@@ -50,6 +55,20 @@ export type PendingMagicCommit = {
   operationId: EditOperationId;
 };
 
+export type PendingBackgroundCommit = {
+  draftId: BackgroundDraftId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+  operationId: EditOperationId;
+};
+
+export type PendingEnhancementCommit = {
+  draftId: EnhancementDraftId;
+  runId: RunId;
+  expectedRevision: Revision;
+  operationId: EditOperationId;
+};
+
 export type DocumentStatus =
   | "preparing"
   | "ready"
@@ -61,6 +80,10 @@ export type DocumentStatus =
   | "manual-applying"
   | "magic-predicting"
   | "magic-applying"
+  | "background-applying"
+  | "enhancement-queued"
+  | "enhancement-running"
+  | "enhancement-applying"
   | "result"
   | "error"
   | "disposed";
@@ -77,6 +100,8 @@ export type DocumentState = {
   pendingManualCommit: PendingManualCommit | null;
   activeMagicPrediction: ActiveMagicPrediction | null;
   pendingMagicCommit: PendingMagicCommit | null;
+  pendingBackgroundCommit: PendingBackgroundCommit | null;
+  pendingEnhancementCommit: PendingEnhancementCommit | null;
   magicCandidates: readonly MagicCandidateSummary[];
   activeDraft: ActiveToolDraft | null;
   history: DocumentHistory;

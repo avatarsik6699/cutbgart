@@ -1,4 +1,4 @@
-export type HeavyJobKind = "automatic-remove" | "magic-cutout";
+export type HeavyJobKind = "automatic-remove" | "magic-cutout" | "enhancement";
 
 export type HeavyJobRequest<T> = {
   kind: HeavyJobKind;

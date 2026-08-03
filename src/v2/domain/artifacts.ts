@@ -1,13 +1,18 @@
 import type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
   EditOperationId,
+  EnhancementDraftId,
   ManualDraftId,
   MagicDraftId,
   RunId,
 } from "./ids";
 
-export type ArtifactKind = "source" | "matte" | "foreground" | "composite" | "png";
+import type { BackgroundFillDescriptor } from "./background";
+
+export type ArtifactKind =
+  "source" | "matte" | "foreground" | "composite" | "png" | "background-image";
 
 export type ArtifactMediaType =
   "application/octet-stream" | "image/jpeg" | "image/png" | "image/webp";
@@ -27,6 +32,9 @@ export type ArtifactLeaseOwner =
   | { kind: "run"; documentId: DocumentId; runId: RunId }
   | { kind: "manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
   | { kind: "magic-draft"; documentId: DocumentId; draftId: MagicDraftId }
+  | { kind: "background-draft"; documentId: DocumentId; draftId: BackgroundDraftId }
+  | { kind: "background-preview"; documentId: DocumentId; draftId: BackgroundDraftId }
+  | { kind: "enhancement-draft"; documentId: DocumentId; draftId: EnhancementDraftId }
   | { kind: "history"; documentId: DocumentId; operationId: EditOperationId }
   | { kind: "preview"; documentId: DocumentId }
   | { kind: "export"; documentId: DocumentId };
@@ -47,4 +55,5 @@ export type DocumentSnapshot = {
   matte: ArtifactId;
   foreground: ArtifactId | null;
   composite: ArtifactId;
+  background: BackgroundFillDescriptor;
 };

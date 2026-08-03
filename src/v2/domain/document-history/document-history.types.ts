@@ -13,7 +13,7 @@ export type ManualCutoutDraft = {
 
 export type DocumentHistoryEntry = {
   operationId: EditOperationId;
-  kind: "manual-cutout" | "magic-cutout";
+  kind: "manual-cutout" | "magic-cutout" | "background" | "enhance";
   before: DocumentSnapshot;
   after: DocumentSnapshot;
   estimatedHistoricalBytes: number;

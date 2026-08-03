@@ -73,6 +73,8 @@ describe("v2 shared platform boundaries", () => {
       allowed: [
         "src/v2/runtime-browser/processing/worker-factory.ts",
         "src/v2/runtime-browser/magic-cutout/magic-worker-factory.ts",
+        "src/v2/runtime-browser/background/background-image-worker-factory.ts",
+        "src/v2/runtime-browser/enhancements/enhancement-worker-factory.ts",
         "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
       ],
     },
@@ -84,6 +86,10 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
         "src/v2/runtime-browser/magic-cutout/magic-worker-client.ts",
         "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
+        "src/v2/runtime-browser/background/background-image-client.ts",
+        "src/v2/runtime-browser/background/worker/background-image.worker.ts",
+        "src/v2/runtime-browser/enhancements/enhancement-worker-client.ts",
+        "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
         "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
         "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
       ],
@@ -102,6 +108,8 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/manual-cutout/manual-source-bitmap.ts",
         "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
         "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
+        "src/v2/runtime-browser/background/worker/background-image.worker.ts",
+        "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
       ],
     },
     {
@@ -114,6 +122,8 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/magic-cutout/magic-cutout-controller.ts",
         "src/v2/presentation/manual-cutout/manual-cutout-workspace.tsx",
         "src/v2/presentation/magic-cutout/magic-cutout-workspace.tsx",
+        "src/v2/runtime-browser/background/worker/background-image.worker.ts",
+        "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
       ],
     },
     {
@@ -122,6 +132,7 @@ describe("v2 shared platform boundaries", () => {
       allowed: [
         "src/v2/runtime-browser/processing/worker/processing.worker.ts",
         "src/v2/runtime-browser/magic-cutout/worker/magic-cutout.worker.ts",
+        "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
       ],
     },
   ] satisfies readonly SourceRule[])("keeps $title in its owning adapter", (rule) => {

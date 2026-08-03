@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type {
+  EnhancementCommitter,
   ProcessingGateway,
   ProcessingRun,
   ProcessingTerminalOutcome,
 } from "@/v2/application";
 import {
   createArtifactId,
+  createBackgroundDraftId,
   createDocumentId,
   createEditOperationId,
+  createEnhancementDraftId,
   createImageId,
   createManualDraftId,
   createMagicDraftId,
@@ -20,7 +23,9 @@ import {
 } from "@/v2/domain";
 
 import { ArtifactRepository } from "../artifacts";
+import type { EnhancementRuntimeService } from "../enhancements";
 import { createEditorSession } from "./editor-session";
+import type { EditorSessionOptions } from "./editor-session.types";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -86,7 +91,11 @@ function createGatewayHarness() {
   };
 }
 
-function createHarness() {
+function createHarness(
+  runtimeOptions: (
+    repository: ArtifactRepository,
+  ) => Partial<EditorSessionOptions> = () => ({}),
+) {
   let nextArtifact = 0;
   let nextUrl = 0;
   const revoke = vi.fn();
@@ -109,11 +118,32 @@ function createHarness() {
       manualDraft: () => createManualDraftId("draft-1"),
       magicDraft: () => createMagicDraftId("magic-draft-1"),
       magicCandidate: () => createMagicCandidateId("magic-candidate-1"),
+      backgroundDraft: () => createBackgroundDraftId("background-draft-1"),
+      enhancementDraft: () => createEnhancementDraftId("enhancement-draft-1"),
       editOperation: () => createEditOperationId("operation-1"),
     },
     repository,
+    ...runtimeOptions(repository),
   });
   return { download, gateway, repository, revoke, session };
+}
+
+function enhancementRuntime(
+  commit: EnhancementCommitter["commit"],
+): EnhancementRuntimeService {
+  return {
+    commit,
+    dispose() {},
+    getSnapshot: () => ({
+      status: "ready",
+      activeOperationId: null,
+      fraction: null,
+      error: null,
+    }),
+    reportError: vi.fn(),
+    reset: vi.fn(),
+    subscribe: () => () => undefined,
+  };
 }
 
 describe("editor v2 browser session", () => {
@@ -164,7 +194,12 @@ describe("editor v2 browser session", () => {
       },
       owner,
     );
-    const result: DocumentSnapshot = { matte, foreground: null, composite };
+    const result: DocumentSnapshot = {
+      matte,
+      foreground: null,
+      composite,
+      background: { type: "transparent" },
+    };
     harness.gateway.terminal.resolve({ type: "succeeded", snapshot: result });
     await vi.waitFor(() =>
       expect(active.actor.getSnapshot().context.document.status).toBe("result"),
@@ -197,6 +232,120 @@ describe("editor v2 browser session", () => {
       error: "invalid-image",
     });
     expect(harness.gateway.request()).toBeNull();
+    harness.repository.assertEmpty();
+    await harness.session.dispose();
+  });
+
+  it("delegates Background and Enhancement lifecycles without adding pixels to session state", async () => {
+    const backgroundCommit = vi.fn();
+    const enhancementCommit = vi.fn(() =>
+      Promise.resolve({ outcome: "unchanged" as const }),
+    );
+    const harness = createHarness((repository) => ({
+      backgroundCommitter: {
+        commit(input) {
+          backgroundCommit(input);
+          const owner = {
+            kind: "background-draft",
+            documentId: input.documentId,
+            draftId: input.draftId,
+          } as const;
+          const composite = repository.register(
+            new Blob(["background-result"], { type: "image/png" }),
+            {
+              kind: "composite",
+              mediaType: "image/png",
+              width: 1,
+              height: 1,
+              estimatedBytes: 17,
+            },
+            owner,
+          );
+          return Promise.resolve({
+            ...input.snapshot,
+            composite,
+            background: input.fill,
+          });
+        },
+      },
+      enhancementService: enhancementRuntime(enhancementCommit),
+    }));
+    await harness.session.importImage(pngFile());
+    const request = harness.gateway.request();
+    const active = harness.session.getSnapshot();
+    if (request === null || active.kind !== "document")
+      throw new Error("Document was not prepared");
+    const runOwner = {
+      kind: "run",
+      documentId: request.documentId,
+      runId: request.runId,
+    } as const;
+    const matte = harness.repository.register(
+      new Uint8ClampedArray([255]),
+      {
+        kind: "matte",
+        mediaType: "application/octet-stream",
+        width: 1,
+        height: 1,
+        estimatedBytes: 1,
+      },
+      runOwner,
+    );
+    const composite = harness.repository.register(
+      new Blob(["automatic"], { type: "image/png" }),
+      {
+        kind: "composite",
+        mediaType: "image/png",
+        width: 1,
+        height: 1,
+        estimatedBytes: 9,
+      },
+      runOwner,
+    );
+    harness.gateway.terminal.resolve({
+      type: "succeeded",
+      snapshot: {
+        matte,
+        foreground: null,
+        composite,
+        background: { type: "transparent" },
+      },
+    });
+    await vi.waitFor(() =>
+      expect(active.actor.getSnapshot().context.document.revision).toBe(1),
+    );
+
+    harness.session.beginBackground();
+    harness.session.changeBackground({ type: "color", value: "#112233" });
+    expect(harness.session.getSnapshot()).toMatchObject({
+      backgroundRuntime: { status: "ready", previewUrl: null },
+    });
+    harness.session.applyBackground();
+    await vi.waitFor(() =>
+      expect(active.actor.getSnapshot().context.document.revision).toBe(2),
+    );
+    expect(backgroundCommit).toHaveBeenCalledOnce();
+    expect(active.actor.getSnapshot().context.document).toMatchObject({
+      committed: { background: { type: "color", value: "#112233" } },
+      activeDraft: null,
+    });
+
+    harness.session.beginEnhancements();
+    harness.session.changeEnhancements(["colour-halo", "fine-detail"]);
+    harness.session.applyEnhancements();
+    await vi.waitFor(() => expect(enhancementCommit).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(active.actor.getSnapshot().context.document.status).toBe("result"),
+    );
+    expect(active.actor.getSnapshot().context.document).toMatchObject({
+      revision: 2,
+      activeDraft: { kind: "enhance", status: "ready" },
+    });
+    expect(active.actor.getSnapshot().context.document.history.past).toHaveLength(1);
+    harness.session.cancelEnhancements();
+    expect(active.actor.getSnapshot().context.document.activeDraft).toBeNull();
+
+    harness.session.reset();
     harness.repository.assertEmpty();
     await harness.session.dispose();
   });

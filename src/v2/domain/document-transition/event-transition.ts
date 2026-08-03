@@ -21,6 +21,202 @@ export function transitionDocument(
   }
 
   switch (event.type) {
+    case "BACKGROUND_COMMIT_SUCCEEDED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingBackgroundCommit;
+      if (
+        state.status !== "background-applying" ||
+        state.committed === null ||
+        draft?.kind !== "background" ||
+        draft.draftId !== event.draftId ||
+        pending?.draftId !== event.draftId ||
+        pending.draftRevision !== event.draftRevision ||
+        event.expectedRevision !== state.revision
+      ) {
+        return {
+          outcome: "ignored-stale",
+          state,
+          effects: [
+            {
+              type: "release-background-draft",
+              documentId: event.documentId,
+              draftId: event.draftId,
+            },
+          ],
+        };
+      }
+      const entry = {
+        operationId: pending.operationId,
+        kind: "background" as const,
+        before: state.committed,
+        after: event.snapshot,
+        estimatedHistoricalBytes: event.estimatedHistoricalBytes,
+      };
+      const committedHistory = commitDocumentHistory(state.history, entry);
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          committed: event.snapshot,
+          history: committedHistory.history,
+          activeDraft: null,
+          pendingBackgroundCommit: null,
+          revision: state.revision + 1,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "commit-background-history",
+            documentId: state.documentId,
+            draftId: event.draftId,
+            entry,
+            released: committedHistory.released,
+          },
+        ],
+      };
+    }
+    case "BACKGROUND_COMMIT_FAILED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingBackgroundCommit;
+      if (
+        draft?.kind !== "background" ||
+        pending?.draftId !== event.draftId ||
+        pending.draftRevision !== event.draftRevision ||
+        event.expectedRevision !== state.revision
+      )
+        return { outcome: "ignored-stale", state, effects: [] };
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "error" },
+          pendingBackgroundCommit: null,
+          status: "result",
+          error: event.error,
+        },
+        effects: [],
+      };
+    }
+    case "ENHANCEMENT_STARTED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingEnhancementCommit;
+      if (
+        draft?.kind !== "enhance" ||
+        pending?.draftId !== event.draftId ||
+        pending.runId !== event.runId ||
+        event.expectedRevision !== state.revision
+      )
+        return { outcome: "ignored-stale", state, effects: [] };
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "running" },
+          status: "enhancement-running",
+        },
+        effects: [],
+      };
+    }
+    case "ENHANCEMENT_COMMIT_SUCCEEDED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingEnhancementCommit;
+      if (
+        state.committed === null ||
+        draft?.kind !== "enhance" ||
+        pending?.draftId !== event.draftId ||
+        pending.runId !== event.runId ||
+        event.expectedRevision !== state.revision
+      ) {
+        return {
+          outcome: "ignored-stale",
+          state,
+          effects: [
+            {
+              type: "release-enhancement-draft",
+              documentId: event.documentId,
+              draftId: event.draftId,
+            },
+          ],
+        };
+      }
+      const entry = {
+        operationId: pending.operationId,
+        kind: "enhance" as const,
+        before: state.committed,
+        after: event.snapshot,
+        estimatedHistoricalBytes: event.estimatedHistoricalBytes,
+      };
+      const committedHistory = commitDocumentHistory(state.history, entry);
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          committed: event.snapshot,
+          history: committedHistory.history,
+          activeDraft: null,
+          pendingEnhancementCommit: null,
+          revision: state.revision + 1,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "commit-enhancement-history",
+            documentId: state.documentId,
+            draftId: event.draftId,
+            entry,
+            released: committedHistory.released,
+          },
+        ],
+      };
+    }
+    case "ENHANCEMENT_UNCHANGED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingEnhancementCommit;
+      if (
+        draft?.kind !== "enhance" ||
+        pending?.draftId !== event.draftId ||
+        pending.runId !== event.runId ||
+        event.expectedRevision !== state.revision
+      )
+        return { outcome: "ignored-stale", state, effects: [] };
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "ready" },
+          pendingEnhancementCommit: null,
+          status: "result",
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "ENHANCEMENT_FAILED": {
+      const draft = state.activeDraft;
+      const pending = state.pendingEnhancementCommit;
+      if (
+        draft?.kind !== "enhance" ||
+        pending?.draftId !== event.draftId ||
+        pending.runId !== event.runId ||
+        event.expectedRevision !== state.revision
+      )
+        return { outcome: "ignored-stale", state, effects: [] };
+      return {
+        outcome: "applied",
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "error" },
+          pendingEnhancementCommit: null,
+          status: "result",
+          error: event.error,
+        },
+        effects: [],
+      };
+    }
+    case "ENHANCEMENT_CANCELLED":
+      return { outcome: "ignored-stale", state, effects: [] };
     case "MAGIC_PREDICTION_STARTED": {
       const draft = state.activeDraft;
       if (

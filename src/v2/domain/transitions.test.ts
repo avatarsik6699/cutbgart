@@ -20,6 +20,7 @@ const snapshot: DocumentSnapshot = {
   matte: createArtifactId("matte-1"),
   foreground: null,
   composite: createArtifactId("composite-1"),
+  background: { type: "transparent" },
 };
 const retryableError: ProcessingError = {
   code: "worker-crashed",
@@ -40,6 +41,8 @@ function createReadyState(overrides: Partial<DocumentState> = {}): DocumentState
     pendingManualCommit: null,
     activeMagicPrediction: null,
     pendingMagicCommit: null,
+    pendingBackgroundCommit: null,
+    pendingEnhancementCommit: null,
     magicCandidates: [],
     activeDraft: null,
     history: { past: [], future: [], retainedHistoricalBytes: 0 },

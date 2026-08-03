@@ -5,6 +5,8 @@ declare const runIdBrand: unique symbol;
 declare const manualDraftIdBrand: unique symbol;
 declare const magicDraftIdBrand: unique symbol;
 declare const magicCandidateIdBrand: unique symbol;
+declare const backgroundDraftIdBrand: unique symbol;
+declare const enhancementDraftIdBrand: unique symbol;
 declare const editOperationIdBrand: unique symbol;
 
 export type ArtifactId = string & { readonly [artifactIdBrand]: "ArtifactId" };
@@ -15,6 +17,12 @@ export type ManualDraftId = string & { readonly [manualDraftIdBrand]: "ManualDra
 export type MagicDraftId = string & { readonly [magicDraftIdBrand]: "MagicDraftId" };
 export type MagicCandidateId = string & {
   readonly [magicCandidateIdBrand]: "MagicCandidateId";
+};
+export type BackgroundDraftId = string & {
+  readonly [backgroundDraftIdBrand]: "BackgroundDraftId";
+};
+export type EnhancementDraftId = string & {
+  readonly [enhancementDraftIdBrand]: "EnhancementDraftId";
 };
 export type EditOperationId = string & {
   readonly [editOperationIdBrand]: "EditOperationId";
@@ -55,6 +63,14 @@ export function createMagicDraftId(value: string): MagicDraftId {
 
 export function createMagicCandidateId(value: string): MagicCandidateId {
   return createId<MagicCandidateId>("MagicCandidateId", value);
+}
+
+export function createBackgroundDraftId(value: string): BackgroundDraftId {
+  return createId<BackgroundDraftId>("BackgroundDraftId", value);
+}
+
+export function createEnhancementDraftId(value: string): EnhancementDraftId {
+  return createId<EnhancementDraftId>("EnhancementDraftId", value);
 }
 
 export function createEditOperationId(value: string): EditOperationId {

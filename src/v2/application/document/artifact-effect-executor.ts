@@ -30,6 +30,18 @@ export function executeArtifactEffect(
     case "commit-magic-history":
       dependencies.artifacts.commitMagicHistory?.(effect);
       return null;
+    case "release-background-draft":
+      dependencies.artifacts.releaseBackgroundDraft?.(effect);
+      return null;
+    case "commit-background-history":
+      dependencies.artifacts.commitBackgroundHistory?.(effect);
+      return null;
+    case "release-enhancement-draft":
+      dependencies.artifacts.releaseEnhancementDraft?.(effect);
+      return null;
+    case "commit-enhancement-history":
+      dependencies.artifacts.commitEnhancementHistory?.(effect);
+      return null;
     case "move-document-history":
       dependencies.artifacts.moveDocumentHistory(effect);
       return null;

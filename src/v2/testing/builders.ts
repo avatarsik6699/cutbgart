@@ -3,6 +3,7 @@ import {
   createDocumentId,
   createImageId,
   createRunId,
+  TRANSPARENT_BACKGROUND,
   type DocumentSnapshot,
   type DocumentState,
   type ProcessingError,
@@ -17,6 +18,7 @@ export function buildDocumentSnapshot(
     matte: createArtifactId("matte-1"),
     foreground: null,
     composite: createArtifactId("composite-1"),
+    background: TRANSPARENT_BACKGROUND,
     ...overrides,
   };
 }
@@ -36,6 +38,8 @@ export function buildDocumentState(
     pendingManualCommit: null,
     activeMagicPrediction: null,
     pendingMagicCommit: null,
+    pendingBackgroundCommit: null,
+    pendingEnhancementCommit: null,
     magicCandidates: [],
     activeDraft: null,
     history: { past: [], future: [], retainedHistoricalBytes: 0 },

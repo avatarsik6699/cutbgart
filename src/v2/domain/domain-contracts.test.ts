@@ -2,7 +2,9 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   createArtifactId,
+  createBackgroundDraftId,
   createDocumentId,
+  createEnhancementDraftId,
   createImageId,
   createMagicCandidateId,
   createMagicDraftId,
@@ -22,6 +24,8 @@ describe("v2 domain contracts", () => {
     expect(createDocumentId("document-1")).toBe("document-1");
     expect(createImageId("image-1")).toBe("image-1");
     expect(createMagicDraftId("magic-draft-1")).toBe("magic-draft-1");
+    expect(createBackgroundDraftId("background-draft-1")).toBe("background-draft-1");
+    expect(createEnhancementDraftId("enhancement-draft-1")).toBe("enhancement-draft-1");
     expect(createMagicCandidateId("candidate-1")).toBe("candidate-1");
     expect(createRunId("run-1")).toBe("run-1");
     expect(() => createRunId("  ")).toThrow("RunId must not be empty");
@@ -46,6 +50,7 @@ describe("v2 domain contracts", () => {
       matte: string;
       foreground: string | null;
       composite: string;
+      background: { type: string };
     }>();
     expectTypeOf<ProcessingRequest>().toExtend<{
       documentId: string;

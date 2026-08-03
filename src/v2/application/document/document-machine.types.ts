@@ -7,6 +7,8 @@ import type {
   DocumentEvent,
   DocumentState,
   RunId,
+  BackgroundDraftId,
+  EnhancementDraftId,
   ManualDraftId,
   MagicDraftId,
   EditOperationId,
@@ -19,6 +21,11 @@ export type DocumentManualIdSource = {
   operation(): EditOperationId;
 };
 export type DocumentMagicIdSource = { draft(): MagicDraftId };
+export type DocumentFinishingIdSource = {
+  backgroundDraft(): BackgroundDraftId;
+  enhancementDraft(): EnhancementDraftId;
+  operation(): EditOperationId;
+};
 
 export type DocumentArtifactEffects = {
   estimateHistoricalBytes(snapshot: import("@/v2/domain").DocumentSnapshot): number;
@@ -38,6 +45,18 @@ export type DocumentArtifactEffects = {
   commitMagicHistory?(
     effect: Extract<DocumentEffect, { type: "commit-magic-history" }>,
   ): void;
+  releaseBackgroundDraft?(
+    effect: Extract<DocumentEffect, { type: "release-background-draft" }>,
+  ): void;
+  commitBackgroundHistory?(
+    effect: Extract<DocumentEffect, { type: "commit-background-history" }>,
+  ): void;
+  releaseEnhancementDraft?(
+    effect: Extract<DocumentEffect, { type: "release-enhancement-draft" }>,
+  ): void;
+  commitEnhancementHistory?(
+    effect: Extract<DocumentEffect, { type: "commit-enhancement-history" }>,
+  ): void;
   moveDocumentHistory(
     effect: Extract<DocumentEffect, { type: "move-document-history" }>,
   ): void;
@@ -50,9 +69,12 @@ export type DocumentMachineDependencies = {
   runIds: DocumentRunIdSource;
   manualIds: DocumentManualIdSource;
   magicIds?: DocumentMagicIdSource;
+  finishingIds?: DocumentFinishingIdSource;
   manualCommitter: import("./manual-cutout-committer").ManualCutoutCommitter;
   magicPredictor?: import("./magic-cutout-predictor").MagicCutoutPredictor;
   magicCommitter?: import("./magic-cutout-committer").MagicCutoutCommitter;
+  backgroundCommitter?: import("./background-committer").BackgroundCommitter;
+  enhancementCommitter?: import("./enhancement-committer").EnhancementCommitter;
 };
 
 export type DocumentActorInput = { document: DocumentState };

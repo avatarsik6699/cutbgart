@@ -35,6 +35,7 @@ const resultSnapshot: DocumentSnapshot = {
   matte: createArtifactId("matte-1"),
   foreground: null,
   composite: createArtifactId("composite-1"),
+  background: { type: "transparent" },
 };
 
 type Deferred<T> = {
@@ -167,6 +168,8 @@ function createDocumentState(status: DocumentState["status"]): DocumentState {
     pendingManualCommit: null,
     activeMagicPrediction: null,
     pendingMagicCommit: null,
+    pendingBackgroundCommit: null,
+    pendingEnhancementCommit: null,
     magicCandidates: [],
     activeDraft: null,
     history: { past: [], future: [], retainedHistoricalBytes: 0 },

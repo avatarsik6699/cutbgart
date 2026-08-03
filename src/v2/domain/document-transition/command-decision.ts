@@ -13,6 +13,12 @@ import {
 } from "./transition-policy";
 import { redoDocumentHistory, undoDocumentHistory } from "../document-history";
 import { createMagicCutoutDraft } from "../magic-cutout";
+import {
+  changeBackgroundDraft,
+  normalizeBackgroundFill,
+  sameBackgroundFill,
+} from "../background";
+import { changeEnhancementDraft, ENHANCEMENT_OPERATION_ORDER } from "../enhancements";
 
 export function decideDocumentCommand(
   state: DocumentState,
@@ -25,6 +31,238 @@ export function decideDocumentCommand(
   }
 
   switch (command.type) {
+    case "BEGIN_BACKGROUND": {
+      if (envelope.command.type !== "BEGIN_BACKGROUND")
+        return rejectDecision(state, command.type, "not-ready");
+      if (state.status !== "result" || state.committed === null)
+        return rejectDecision(state, command.type, "no-result");
+      if (state.activeDraft !== null)
+        return rejectDecision(state, command.type, "draft-active");
+      if (command.expectedRevision !== state.revision)
+        return rejectDecision(state, command.type, "stale-revision");
+      const draftId = (
+        envelope as Extract<
+          DocumentCommandEnvelope,
+          { command: { type: "BEGIN_BACKGROUND" } }
+        >
+      ).draftId;
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: {
+            kind: "background",
+            draftId,
+            documentId: state.documentId,
+            baselineRevision: state.revision,
+            draftRevision: 0,
+            fill: state.committed.background,
+            dirty: false,
+            status: "ready",
+          },
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "CHANGE_BACKGROUND": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "background" || draft.draftId !== command.draftId)
+        return rejectDecision(state, command.type, "no-draft");
+      if (state.pendingBackgroundCommit !== null || draft.status === "applying")
+        return rejectDecision(state, command.type, "operation-active");
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      )
+        return rejectDecision(state, command.type, "stale-revision");
+      if (command.draftRevision !== draft.draftRevision + 1)
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      const fill = normalizeBackgroundFill(command.fill);
+      if (fill === null) return rejectDecision(state, command.type, "invalid-background");
+      const changed = changeBackgroundDraft(draft, fill);
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: {
+            ...changed,
+            dirty:
+              state.committed === null ||
+              !sameBackgroundFill(state.committed.background, changed.fill),
+          },
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "APPLY_BACKGROUND": {
+      const draft = state.activeDraft;
+      if (
+        !("operationId" in envelope) ||
+        draft?.kind !== "background" ||
+        draft.draftId !== command.draftId
+      )
+        return rejectDecision(state, command.type, "no-draft");
+      if (state.pendingBackgroundCommit !== null || draft.status === "applying")
+        return rejectDecision(state, command.type, "operation-active");
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      )
+        return rejectDecision(state, command.type, "stale-revision");
+      if (command.draftRevision !== draft.draftRevision)
+        return rejectDecision(state, command.type, "draft-revision-stale");
+      if (!draft.dirty) return rejectDecision(state, command.type, "draft-not-dirty");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "applying" },
+          pendingBackgroundCommit: {
+            draftId: draft.draftId,
+            expectedRevision: command.expectedRevision,
+            draftRevision: command.draftRevision,
+            operationId: envelope.operationId,
+          },
+          status: "background-applying",
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "CANCEL_BACKGROUND": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "background" || draft.draftId !== command.draftId)
+        return rejectDecision(state, command.type, "no-draft");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: null,
+          pendingBackgroundCommit: null,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "release-background-draft",
+            documentId: state.documentId,
+            draftId: draft.draftId,
+          },
+        ],
+      };
+    }
+    case "BEGIN_ENHANCEMENTS": {
+      if (envelope.command.type !== "BEGIN_ENHANCEMENTS")
+        return rejectDecision(state, command.type, "not-ready");
+      if (state.status !== "result" || state.committed === null)
+        return rejectDecision(state, command.type, "no-result");
+      if (state.activeDraft !== null)
+        return rejectDecision(state, command.type, "draft-active");
+      if (command.expectedRevision !== state.revision)
+        return rejectDecision(state, command.type, "stale-revision");
+      const draftId = (
+        envelope as Extract<
+          DocumentCommandEnvelope,
+          { command: { type: "BEGIN_ENHANCEMENTS" } }
+        >
+      ).draftId;
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: {
+            kind: "enhance",
+            draftId,
+            documentId: state.documentId,
+            baselineRevision: state.revision,
+            selectedOperationIds: ENHANCEMENT_OPERATION_ORDER,
+            dirty: false,
+            status: "ready",
+          },
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "CHANGE_ENHANCEMENTS": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "enhance" || draft.draftId !== command.draftId)
+        return rejectDecision(state, command.type, "no-draft");
+      if (state.pendingEnhancementCommit !== null)
+        return rejectDecision(state, command.type, "operation-active");
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      )
+        return rejectDecision(state, command.type, "stale-revision");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: changeEnhancementDraft(draft, command.operationIds),
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "APPLY_ENHANCEMENTS": {
+      const draft = state.activeDraft;
+      if (
+        !("operationId" in envelope) ||
+        draft?.kind !== "enhance" ||
+        draft.draftId !== command.draftId
+      )
+        return rejectDecision(state, command.type, "no-draft");
+      if (state.pendingEnhancementCommit !== null)
+        return rejectDecision(state, command.type, "operation-active");
+      if (
+        command.expectedRevision !== state.revision ||
+        draft.baselineRevision !== state.revision
+      )
+        return rejectDecision(state, command.type, "stale-revision");
+      if (draft.selectedOperationIds.length === 0)
+        return rejectDecision(state, command.type, "no-operations");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: { ...draft, status: "queued" },
+          pendingEnhancementCommit: {
+            draftId: draft.draftId,
+            runId: command.runId,
+            expectedRevision: command.expectedRevision,
+            operationId: envelope.operationId,
+          },
+          status: "enhancement-queued",
+          error: null,
+        },
+        effects: [],
+      };
+    }
+    case "CANCEL_ENHANCEMENTS": {
+      const draft = state.activeDraft;
+      if (draft?.kind !== "enhance" || draft.draftId !== command.draftId)
+        return rejectDecision(state, command.type, "no-draft");
+      return {
+        outcome: accepted(command.type),
+        state: {
+          ...state,
+          activeDraft: null,
+          pendingEnhancementCommit: null,
+          status: "result",
+          error: null,
+        },
+        effects: [
+          {
+            type: "release-enhancement-draft",
+            documentId: state.documentId,
+            draftId: draft.draftId,
+          },
+        ],
+      };
+    }
     case "BEGIN_MAGIC_CUTOUT": {
       if (envelope.command.type !== "BEGIN_MAGIC_CUTOUT")
         return rejectDecision(state, command.type, "not-ready");
@@ -461,6 +699,18 @@ export function decideDocumentCommand(
           documentId: state.documentId,
           draftId: state.activeDraft.draftId,
         });
+      } else if (state.activeDraft?.kind === "background") {
+        effects.push({
+          type: "release-background-draft",
+          documentId: state.documentId,
+          draftId: state.activeDraft.draftId,
+        });
+      } else if (state.activeDraft?.kind === "enhance") {
+        effects.push({
+          type: "release-enhancement-draft",
+          documentId: state.documentId,
+          draftId: state.activeDraft.draftId,
+        });
       }
       effects.push({ type: "release-document", documentId: state.documentId });
       return {
@@ -471,6 +721,8 @@ export function decideDocumentCommand(
           pendingManualCommit: null,
           activeMagicPrediction: null,
           pendingMagicCommit: null,
+          pendingBackgroundCommit: null,
+          pendingEnhancementCommit: null,
           magicCandidates: [],
         },
         effects,

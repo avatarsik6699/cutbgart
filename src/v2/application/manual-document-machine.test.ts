@@ -60,6 +60,7 @@ describe("manual document actor", () => {
       matte: createArtifactId("matte-manual"),
       foreground: null,
       composite: createArtifactId("composite-manual"),
+      background: before.background,
     };
     const commit = vi.fn(() => Promise.resolve(after));
     const actor = createActor(machine({ commit }), {

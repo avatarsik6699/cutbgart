@@ -9,6 +9,8 @@ import {
 import type { DocumentId, DocumentState } from "@/v2/domain";
 
 import { createNativeProcessingCancellationSource } from "../platform";
+import { BackgroundController } from "../background";
+import { EnhancementController } from "../enhancements";
 import { MagicCutoutController, MagicPredictionService } from "../magic-cutout";
 import { ManualCutoutController } from "../manual-cutout";
 import { createEditorArtifactEffects } from "./editor-artifact-effects";
@@ -24,9 +26,14 @@ import { prepareImageImport } from "./image-import-preparation";
 export function createEditorSession(options: EditorSessionOptions = {}): EditorSession {
   const dependencies = createEditorSessionDependencies(options);
   const {
+    backgroundCommitter,
+    backgroundDrafts,
+    backgroundImages,
     download,
     gateway,
     heavyJobs,
+    enhancementDrafts,
+    enhancementService,
     ids,
     magicCandidates,
     magicCommitter,
@@ -97,9 +104,16 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     runIds: { next: ids.run },
     manualIds: { draft: ids.manualDraft, operation: ids.editOperation },
     magicIds: { draft: ids.magicDraft },
+    finishingIds: {
+      backgroundDraft: ids.backgroundDraft,
+      enhancementDraft: ids.enhancementDraft,
+      operation: ids.editOperation,
+    },
     manualCommitter,
     magicPredictor,
     magicCommitter,
+    backgroundCommitter,
+    enhancementCommitter: enhancementService,
   });
   const workspace = createActor(createWorkspaceMachine({ documentMachine }));
   workspace.start();
@@ -122,6 +136,20 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     drafts: magicDrafts,
     nextRunId: ids.run,
   });
+  const backgroundController = new BackgroundController({
+    actor: currentActor,
+    drafts: backgroundDrafts,
+    images: backgroundImages,
+  });
+  const enhancementController = new EnhancementController({
+    actor: currentActor,
+    drafts: enhancementDrafts,
+    nextRunId: ids.run,
+    service: enhancementService,
+  });
+  let finishingActorSubscription: { unsubscribe(): void } | null = null;
+  const stopBackgroundRuntime = backgroundController.subscribe(publishRuntime);
+  const stopEnhancementRuntime = enhancementController.subscribe(publishRuntime);
 
   function emptySnapshot(
     error: Extract<EditorSessionSnapshot, { kind: "empty" }>["error"] = null,
@@ -143,6 +171,15 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     for (const listener of listeners) {
       listener();
     }
+  }
+
+  function publishRuntime(): void {
+    if (snapshot.kind !== "document") return;
+    publish({
+      ...snapshot,
+      backgroundRuntime: backgroundController.getSnapshot(),
+      enhancementRuntime: enhancementController.getSnapshot(),
+    });
   }
 
   async function performImport(file: File): Promise<void> {
@@ -191,6 +228,8 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       pendingManualCommit: null,
       activeMagicPrediction: null,
       pendingMagicCommit: null,
+      pendingBackgroundCommit: null,
+      pendingEnhancementCommit: null,
       magicCandidates: [],
       activeDraft: null,
       history: { past: [], future: [], retainedHistoricalBytes: 0 },
@@ -212,22 +251,30 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     publish({
       kind: "document",
       actor,
+      backgroundRuntime: backgroundController.getSnapshot(),
       error: null,
       fileName: file.name,
+      foregroundUrl: null,
       height: prepared.height,
+      enhancementRuntime: enhancementController.getSnapshot(),
       magicProgress: null,
       previewUrl: preview?.url ?? null,
       resultUrl: null,
       width: prepared.width,
     });
-    resultProjection.watch(actor, documentId, (resultUrl) => {
+    finishingActorSubscription = actor.subscribe(() => {
+      backgroundController.reconcile();
+      enhancementController.reconcile();
+      publishRuntime();
+    });
+    resultProjection.watch(actor, documentId, (resultUrl, foregroundUrl) => {
       if (snapshot.kind === "document") {
         if (snapshot.actor.getSnapshot().context.document.activeDraft === null) {
           manualDrafts.releaseDocument(documentId);
           magicDrafts.releaseDocument(documentId);
           magicCandidates.releaseDocument(documentId);
         }
-        publish({ ...snapshot, resultUrl });
+        publish({ ...snapshot, foregroundUrl, resultUrl });
       }
     });
     actor.send({
@@ -254,6 +301,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       return;
     }
     resultProjection.stop();
+    finishingActorSubscription?.unsubscribe();
+    finishingActorSubscription = null;
+    backgroundController.reset();
+    enhancementController.reset();
     magicWorker.reset();
     snapshot.actor.send({
       type: "COMMAND",
@@ -268,6 +319,18 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   }
 
   return {
+    applyBackground() {
+      backgroundController.apply();
+    },
+    applyEnhancements() {
+      enhancementController.apply();
+    },
+    beginBackground() {
+      backgroundController.begin();
+    },
+    beginEnhancements() {
+      enhancementController.begin();
+    },
     beginMagic() {
       magicController.begin();
     },
@@ -279,6 +342,18 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     },
     cancelManual() {
       manualController.cancel();
+    },
+    cancelBackground() {
+      backgroundController.cancel();
+    },
+    cancelEnhancements() {
+      enhancementController.cancel();
+    },
+    changeBackground(fill) {
+      backgroundController.change(fill);
+    },
+    changeEnhancements(operationIds) {
+      enhancementController.change(operationIds);
     },
     cancelMagic() {
       magicController.cancel();
@@ -301,12 +376,16 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       workspace.send({ type: "DISPOSE" });
       workspace.stop();
       await gateway.dispose();
+      backgroundController.dispose();
+      enhancementController.dispose();
       magicWorker.dispose();
       heavyJobs.dispose();
       magicCandidates.dispose();
       magicDrafts.dispose();
       repository.dispose();
       manualDrafts.dispose();
+      stopBackgroundRuntime();
+      stopEnhancementRuntime();
       listeners.clear();
     },
     exportPng() {
@@ -402,6 +481,12 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
           },
         });
       }
+    },
+    retryEnhancements() {
+      enhancementController.retry();
+    },
+    selectBackgroundImage(file) {
+      return backgroundController.selectImage(file);
     },
     subscribe(listener) {
       listeners.add(listener);

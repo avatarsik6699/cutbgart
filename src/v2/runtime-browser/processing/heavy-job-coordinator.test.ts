@@ -64,4 +64,41 @@ describe("HeavyJobCoordinator", () => {
     await expect(queuedResult).rejects.toMatchObject({ name: "AbortError" });
     expect(queued).not.toHaveBeenCalled();
   });
+
+  it("admits Enhancement through the same global FIFO boundary", async () => {
+    const coordinator = new HeavyJobCoordinator();
+    const active = deferred<string>();
+    const order: string[] = [];
+    const automaticResult = coordinator.schedule({
+      kind: "automatic-remove",
+      signal: new AbortController().signal,
+      execute: () => {
+        order.push("automatic");
+        return active.promise;
+      },
+    });
+    const enhancementResult = coordinator.schedule({
+      kind: "enhancement",
+      signal: new AbortController().signal,
+      execute: () => {
+        order.push("enhancement");
+        return Promise.resolve("enhancement");
+      },
+    });
+    const magicResult = coordinator.schedule({
+      kind: "magic-cutout",
+      signal: new AbortController().signal,
+      execute: () => {
+        order.push("magic");
+        return Promise.resolve("magic");
+      },
+    });
+    expect(order).toEqual(["automatic"]);
+    expect(coordinator.queued).toBe(2);
+    active.resolve("automatic");
+    await expect(automaticResult).resolves.toBe("automatic");
+    await expect(enhancementResult).resolves.toBe("enhancement");
+    await expect(magicResult).resolves.toBe("magic");
+    expect(order).toEqual(["automatic", "enhancement", "magic"]);
+  });
 });

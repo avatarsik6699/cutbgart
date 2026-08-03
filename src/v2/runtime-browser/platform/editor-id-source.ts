@@ -1,15 +1,19 @@
 import {
   createArtifactId,
+  createBackgroundDraftId,
   createDocumentId,
   createEditOperationId,
+  createEnhancementDraftId,
   createImageId,
   createManualDraftId,
   createMagicDraftId,
   createMagicCandidateId,
   createRunId,
   type ArtifactId,
+  type BackgroundDraftId,
   type DocumentId,
   type EditOperationId,
+  type EnhancementDraftId,
   type ImageId,
   type ManualDraftId,
   type MagicDraftId,
@@ -25,6 +29,8 @@ export type EditorIdSource = {
   manualDraft: () => ManualDraftId;
   magicDraft: () => MagicDraftId;
   magicCandidate: () => MagicCandidateId;
+  backgroundDraft: () => BackgroundDraftId;
+  enhancementDraft: () => EnhancementDraftId;
   editOperation: () => EditOperationId;
 };
 
@@ -39,6 +45,8 @@ export function createNativeEditorIdSource(
     manualDraft: () => createManualDraftId(randomUuid()),
     magicDraft: () => createMagicDraftId(randomUuid()),
     magicCandidate: () => createMagicCandidateId(randomUuid()),
+    backgroundDraft: () => createBackgroundDraftId(randomUuid()),
+    enhancementDraft: () => createEnhancementDraftId(randomUuid()),
     editOperation: () => createEditOperationId(randomUuid()),
   };
 }

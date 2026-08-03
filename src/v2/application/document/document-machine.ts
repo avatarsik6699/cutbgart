@@ -29,6 +29,8 @@ type ManualCommitInput = {
   expectedRevision: number;
   source: DocumentState["source"];
   draftMatte: NonNullable<DocumentState["pendingManualCommit"]>["draftMatte"];
+  foreground: DocumentSnapshot["foreground"];
+  background: DocumentSnapshot["background"];
 };
 
 type MagicPredictionInput = NonNullable<DocumentState["activeMagicPrediction"]>;
@@ -38,6 +40,23 @@ type MagicCommitInput = {
   candidateId: NonNullable<DocumentState["pendingMagicCommit"]>["candidateId"];
   expectedRevision: number;
   draftRevision: number;
+  foreground: DocumentSnapshot["foreground"];
+  background: DocumentSnapshot["background"];
+};
+type BackgroundCommitInput = import("./background-committer").BackgroundCommitInput & {
+  operationId: import("@/v2/domain").EditOperationId;
+};
+type BackgroundCommitOutput = {
+  input: BackgroundCommitInput;
+  snapshot: DocumentSnapshot;
+};
+type EnhancementCommitInput = import("./enhancement-committer").EnhancementCommitInput & {
+  operationId: import("@/v2/domain").EditOperationId;
+};
+type EnhancementCommitResult = import("./enhancement-committer").EnhancementCommitResult;
+type EnhancementCommitOutput = {
+  input: EnhancementCommitInput;
+  result: EnhancementCommitResult;
 };
 
 function invokedProcessingError(error: unknown, fallback: string): ProcessingError {
@@ -103,6 +122,26 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
           return dependencies.magicCommitter.commit(input, signal);
         },
       ),
+      backgroundCommit: fromPromise<BackgroundCommitOutput, BackgroundCommitInput>(
+        async ({ input, signal }) => {
+          if (dependencies.backgroundCommitter === undefined)
+            throw new Error("Background commit is unavailable");
+          return {
+            input,
+            snapshot: await dependencies.backgroundCommitter.commit(input, signal),
+          };
+        },
+      ),
+      enhancementCommit: fromPromise<EnhancementCommitOutput, EnhancementCommitInput>(
+        async ({ input, signal }) => {
+          if (dependencies.enhancementCommitter === undefined)
+            throw new Error("Enhancements are unavailable");
+          return {
+            input,
+            result: await dependencies.enhancementCommitter.commit(input, signal),
+          };
+        },
+      ),
     },
   });
 
@@ -138,6 +177,24 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         command: event.command,
         operationId: dependencies.manualIds.operation(),
       } as const;
+    } else if (event.command.type === "BEGIN_BACKGROUND") {
+      const draftId = dependencies.finishingIds?.backgroundDraft();
+      if (draftId === undefined) throw new Error("Background draft IDs are unavailable");
+      envelope = { command: event.command, draftId } as const;
+    } else if (event.command.type === "APPLY_BACKGROUND") {
+      const operationId = dependencies.finishingIds?.operation();
+      if (operationId === undefined)
+        throw new Error("Background operation IDs are unavailable");
+      envelope = { command: event.command, operationId } as const;
+    } else if (event.command.type === "BEGIN_ENHANCEMENTS") {
+      const draftId = dependencies.finishingIds?.enhancementDraft();
+      if (draftId === undefined) throw new Error("Enhancement draft IDs are unavailable");
+      envelope = { command: event.command, draftId } as const;
+    } else if (event.command.type === "APPLY_ENHANCEMENTS") {
+      const operationId = dependencies.finishingIds?.operation();
+      if (operationId === undefined)
+        throw new Error("Enhancement operation IDs are unavailable");
+      envelope = { command: event.command, operationId } as const;
     } else {
       envelope = { command: event.command } as const;
     }
@@ -234,6 +291,14 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
             guard: ({ context }) => context.document.pendingMagicCommit !== null,
             target: "magicApplying",
           },
+          {
+            guard: ({ context }) => context.document.pendingBackgroundCommit !== null,
+            target: "backgroundApplying",
+          },
+          {
+            guard: ({ context }) => context.document.pendingEnhancementCommit !== null,
+            target: "enhancementApplying",
+          },
         ],
         on: {
           COMMAND: { actions: applyCommand },
@@ -294,6 +359,10 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
               expectedRevision: pending.expectedRevision,
               source: context.document.source,
               draftMatte: pending.draftMatte,
+              foreground: context.document.committed?.foreground ?? null,
+              background: context.document.committed?.background ?? {
+                type: "transparent",
+              },
             };
           },
           onDone: {
@@ -438,6 +507,10 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
               candidateId: pending.candidateId,
               expectedRevision: pending.expectedRevision,
               draftRevision: pending.draftRevision,
+              foreground: context.document.committed?.foreground ?? null,
+              background: context.document.committed?.background ?? {
+                type: "transparent",
+              },
             };
           },
           onDone: {
@@ -499,6 +572,195 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         },
       },
       magicCommitSettling: {
+        on: {
+          DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
+          COMMAND: { actions: applyCommand },
+        },
+      },
+      backgroundApplying: {
+        invoke: {
+          id: "background-commit",
+          src: "backgroundCommit",
+          input: ({ context }) => {
+            const pending = context.document.pendingBackgroundCommit;
+            const draft = context.document.activeDraft;
+            const snapshot = context.document.committed;
+            if (pending === null || draft?.kind !== "background" || snapshot === null)
+              throw new Error("Background commit input is unavailable");
+            return {
+              documentId: context.document.documentId,
+              draftId: pending.draftId,
+              expectedRevision: pending.expectedRevision,
+              draftRevision: pending.draftRevision,
+              source: context.document.source,
+              snapshot,
+              fill: draft.fill,
+              operationId: pending.operationId,
+            };
+          },
+          onDone: {
+            target: "backgroundCommitSettling",
+            actions: ({ context, event, self }) => {
+              const invocation = event.output.input;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "BACKGROUND_COMMIT_SUCCEEDED",
+                  documentId: invocation.documentId,
+                  draftId: invocation.draftId,
+                  expectedRevision: invocation.expectedRevision,
+                  draftRevision: invocation.draftRevision,
+                  snapshot: event.output.snapshot,
+                  estimatedHistoricalBytes:
+                    context.document.committed === null
+                      ? 0
+                      : dependencies.artifacts.estimateHistoricalBytes(
+                          context.document.committed,
+                        ),
+                },
+              });
+            },
+          },
+          onError: {
+            target: "backgroundCommitSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingBackgroundCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "BACKGROUND_COMMIT_FAILED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  expectedRevision: pending.expectedRevision,
+                  draftRevision: pending.draftRevision,
+                  error: invokedProcessingError(event.error, "Background apply failed"),
+                },
+              });
+            },
+          },
+        },
+        always: [
+          {
+            guard: ({ context }) => context.document.pendingBackgroundCommit === null,
+            target: "active",
+          },
+        ],
+        on: {
+          COMMAND: { actions: applyCommand },
+          DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      backgroundCommitSettling: {
+        on: {
+          DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
+          COMMAND: { actions: applyCommand },
+        },
+      },
+      enhancementApplying: {
+        entry: ({ context, self }) => {
+          const pending = context.document.pendingEnhancementCommit;
+          const draft = context.document.activeDraft;
+          if (pending === null || draft?.kind !== "enhance") return;
+          self.send({
+            type: "DOMAIN_EVENT",
+            event: {
+              type: "ENHANCEMENT_STARTED",
+              documentId: context.document.documentId,
+              draftId: pending.draftId,
+              runId: pending.runId,
+              expectedRevision: pending.expectedRevision,
+              operationIds: draft.selectedOperationIds,
+            },
+          });
+        },
+        invoke: {
+          id: "enhancement-commit",
+          src: "enhancementCommit",
+          input: ({ context }) => {
+            const pending = context.document.pendingEnhancementCommit;
+            const draft = context.document.activeDraft;
+            const snapshot = context.document.committed;
+            if (pending === null || draft?.kind !== "enhance" || snapshot === null)
+              throw new Error("Enhancement input is unavailable");
+            return {
+              documentId: context.document.documentId,
+              draftId: pending.draftId,
+              runId: pending.runId,
+              expectedRevision: pending.expectedRevision,
+              source: context.document.source,
+              snapshot,
+              operationIds: draft.selectedOperationIds,
+              operationId: pending.operationId,
+            };
+          },
+          onDone: {
+            target: "enhancementCommitSettling",
+            actions: ({ context, event, self }) => {
+              const invocation = event.output.input;
+              if (event.output.result.outcome === "unchanged") {
+                self.send({
+                  type: "DOMAIN_EVENT",
+                  event: {
+                    type: "ENHANCEMENT_UNCHANGED",
+                    documentId: invocation.documentId,
+                    draftId: invocation.draftId,
+                    runId: invocation.runId,
+                    expectedRevision: invocation.expectedRevision,
+                  },
+                });
+                return;
+              }
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "ENHANCEMENT_COMMIT_SUCCEEDED",
+                  documentId: invocation.documentId,
+                  draftId: invocation.draftId,
+                  runId: invocation.runId,
+                  expectedRevision: invocation.expectedRevision,
+                  snapshot: event.output.result.snapshot,
+                  estimatedHistoricalBytes:
+                    context.document.committed === null
+                      ? 0
+                      : dependencies.artifacts.estimateHistoricalBytes(
+                          context.document.committed,
+                        ),
+                },
+              });
+            },
+          },
+          onError: {
+            target: "enhancementCommitSettling",
+            actions: ({ context, event, self }) => {
+              const pending = context.document.pendingEnhancementCommit;
+              if (pending === null) return;
+              self.send({
+                type: "DOMAIN_EVENT",
+                event: {
+                  type: "ENHANCEMENT_FAILED",
+                  documentId: context.document.documentId,
+                  draftId: pending.draftId,
+                  runId: pending.runId,
+                  expectedRevision: pending.expectedRevision,
+                  error: invokedProcessingError(event.error, "Enhancements failed"),
+                },
+              });
+            },
+          },
+        },
+        always: [
+          {
+            guard: ({ context }) => context.document.pendingEnhancementCommit === null,
+            target: "active",
+          },
+        ],
+        on: {
+          COMMAND: { actions: applyCommand },
+          DOMAIN_EVENT: { actions: applyDomainEvent },
+        },
+      },
+      enhancementCommitSettling: {
         on: {
           DOMAIN_EVENT: { target: "active", actions: applyDomainEvent },
           COMMAND: { actions: applyCommand },

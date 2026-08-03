@@ -15,9 +15,11 @@ function exportName(fileName: string | null): string {
 }
 
 function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
+  const background =
+    snapshot.background.type === "image" ? snapshot.background.artifactId : null;
   return [
     ...new Set(
-      [snapshot.matte, snapshot.foreground, snapshot.composite].filter(
+      [snapshot.matte, snapshot.foreground, snapshot.composite, background].filter(
         (id): id is ArtifactId => id !== null,
       ),
     ),
@@ -26,9 +28,20 @@ function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
 
 type DraftHistoryEffect = Extract<
   DocumentEffect,
-  { type: "commit-manual-history" | "commit-magic-history" }
+  {
+    type:
+      | "commit-manual-history"
+      | "commit-magic-history"
+      | "commit-background-history"
+      | "commit-enhancement-history";
+  }
 >;
-type DraftOwner = Extract<ArtifactLeaseOwner, { kind: "manual-draft" | "magic-draft" }>;
+type DraftOwner = Extract<
+  ArtifactLeaseOwner,
+  {
+    kind: "manual-draft" | "magic-draft" | "background-draft" | "enhancement-draft";
+  }
+>;
 
 function commitDraftHistory(
   repository: ArtifactRepository,
@@ -45,10 +58,15 @@ function commitDraftHistory(
     ...snapshotIds(effect.entry.after),
   ]))
     repository.retain(id, historyOwner);
-  repository.promote(snapshotIds(effect.entry.after), draftOwner, {
-    kind: "document",
-    documentId: effect.documentId,
-  });
+  const beforeIds = new Set(snapshotIds(effect.entry.before));
+  const introducedIds = snapshotIds(effect.entry.after).filter(
+    (id) => !beforeIds.has(id),
+  );
+  if (introducedIds.length > 0)
+    repository.promote(introducedIds, draftOwner, {
+      kind: "document",
+      documentId: effect.documentId,
+    });
   repository.releaseOwnerIfPresent(draftOwner);
   const afterIds = new Set(snapshotIds(effect.entry.after));
   for (const id of snapshotIds(effect.entry.before))
@@ -126,6 +144,20 @@ export function createEditorArtifactEffects(options: {
         draftId: effect.draftId,
       });
     },
+    releaseBackgroundDraft(effect) {
+      options.repository.releaseOwnerIfPresent({
+        kind: "background-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
+    releaseEnhancementDraft(effect) {
+      options.repository.releaseOwnerIfPresent({
+        kind: "enhancement-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
     commitManualHistory(effect) {
       commitDraftHistory(options.repository, effect, {
         kind: "manual-draft",
@@ -136,6 +168,20 @@ export function createEditorArtifactEffects(options: {
     commitMagicHistory(effect) {
       commitDraftHistory(options.repository, effect, {
         kind: "magic-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
+    commitBackgroundHistory(effect) {
+      commitDraftHistory(options.repository, effect, {
+        kind: "background-draft",
+        documentId: effect.documentId,
+        draftId: effect.draftId,
+      });
+    },
+    commitEnhancementHistory(effect) {
+      commitDraftHistory(options.repository, effect, {
+        kind: "enhancement-draft",
         documentId: effect.documentId,
         draftId: effect.draftId,
       });

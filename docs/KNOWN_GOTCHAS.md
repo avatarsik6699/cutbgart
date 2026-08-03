@@ -63,7 +63,9 @@
   every state mutation, and increment it on reset, cancel, item switch, batch clear, replacement
   upload, and unmount. Explicitly reset the guided hook when its batch target leaves scope.
 - **Prevention**: any new multi-step editor transition must have target identity plus a run token;
-  disabling a button is UX protection, not stale-completion protection.
+  disabling a button is UX protection, not stale-completion protection. XState invoke settlement
+  must publish the immutable invocation input/correlation, never reconstruct it from mutable parent
+  context; domain transitions must reject duplicate Apply/Change while that correlation is pending.
 
 ### SlimSAM `iou_scores` is not a user-facing accuracy percentage
 

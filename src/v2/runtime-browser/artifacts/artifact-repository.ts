@@ -27,7 +27,10 @@ export type ArtifactRepositoryOptions = {
 
 export type ArtifactObjectUrl = {
   artifactId: ArtifactId;
-  owner: Extract<ArtifactLeaseOwner, { kind: "preview" | "export" }>;
+  owner: Extract<
+    ArtifactLeaseOwner,
+    { kind: "preview" | "export" | "background-preview" }
+  >;
   url: string;
 };
 

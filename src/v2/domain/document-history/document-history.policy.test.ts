@@ -19,11 +19,13 @@ function entry(index: number, bytes = 1): DocumentHistoryEntry {
       matte: createArtifactId(`matte-before-${index}`),
       foreground: null,
       composite: createArtifactId(`composite-before-${index}`),
+      background: { type: "transparent" },
     },
     after: {
       matte: createArtifactId(`matte-after-${index}`),
       foreground: null,
       composite: createArtifactId(`composite-after-${index}`),
+      background: { type: "transparent" },
     },
     estimatedHistoricalBytes: bytes,
   };

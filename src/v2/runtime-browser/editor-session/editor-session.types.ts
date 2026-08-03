@@ -1,12 +1,28 @@
 import type {
+  BackgroundCommitter,
   DocumentActorRef,
   MagicCutoutCommitter,
   MagicCutoutPredictor,
   ProcessingGateway,
 } from "@/v2/application";
-import type { ArtifactRepositoryStats, MagicCandidateId } from "@/v2/domain";
+import type {
+  ArtifactRepositoryStats,
+  BackgroundFillDescriptor,
+  EnhancementOperationId,
+  MagicCandidateId,
+} from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
+import type {
+  BackgroundDraftRepository,
+  BackgroundImagePreparer,
+  BackgroundRuntimeSnapshot,
+} from "../background";
+import type {
+  EnhancementDraftRepository,
+  EnhancementRuntimeService,
+  EnhancementRuntimeSnapshot,
+} from "../enhancements";
 import type { ManualDraftEngine, ManualDraftRepository } from "../manual-cutout";
 import type {
   MagicCandidateRepository,
@@ -50,7 +66,10 @@ export type ActiveEditorSessionSnapshot = {
   actor: DocumentActorRef;
   error: null;
   fileName: string;
+  foregroundUrl: string | null;
   height: number;
+  backgroundRuntime: BackgroundRuntimeSnapshot;
+  enhancementRuntime: EnhancementRuntimeSnapshot;
   magicProgress: MagicRuntimeProgress | null;
   previewUrl: string | null;
   resultUrl: string | null;
@@ -63,13 +82,21 @@ export type EditorSessionSnapshot =
   | ActiveEditorSessionSnapshot;
 
 export type EditorSession = {
+  applyBackground(): void;
+  applyEnhancements(): void;
+  beginBackground(): void;
+  beginEnhancements(): void;
   beginMagic(): void;
   beginManual(): void;
   applyMagic(): void;
   applyManual(): void;
   cancelMagic(): void;
   cancelManual(): void;
+  cancelBackground(): void;
+  cancelEnhancements(): void;
   cancel(): void;
+  changeBackground(fill: BackgroundFillDescriptor): void;
+  changeEnhancements(operationIds: readonly EnhancementOperationId[]): void;
   dispose(): Promise<void>;
   exportPng(): void;
   getSnapshot(): EditorSessionSnapshot;
@@ -93,13 +120,20 @@ export type EditorSession = {
   resources(): ArtifactRepositoryStats;
   reset(): void;
   retry(): void;
+  retryEnhancements(): void;
+  selectBackgroundImage(file: File): Promise<void>;
   subscribe(listener: () => void): () => void;
 };
 
 export type EditorSessionOptions = {
+  backgroundCommitter?: BackgroundCommitter;
+  backgroundDrafts?: BackgroundDraftRepository;
+  backgroundImages?: BackgroundImagePreparer;
   download?: DownloadAdapter;
   gateway?: ProcessingGateway;
   ids?: EditorIdSource;
+  enhancementDrafts?: EnhancementDraftRepository;
+  enhancementService?: EnhancementRuntimeService;
   repository?: ArtifactRepository;
   manualCommitter?: ManualCutoutCommitter;
   manualDrafts?: ManualDraftRepository;
@@ -112,9 +146,14 @@ export type EditorSessionOptions = {
 };
 
 export type EditorSessionDependencies = {
+  backgroundCommitter: BackgroundCommitter;
+  backgroundDrafts: BackgroundDraftRepository;
+  backgroundImages: BackgroundImagePreparer;
   download: DownloadAdapter;
   gateway: ProcessingGateway;
   ids: EditorIdSource;
+  enhancementDrafts: EnhancementDraftRepository;
+  enhancementService: EnhancementRuntimeService;
   repository: ArtifactRepository;
   manualCommitter: ManualCutoutCommitter;
   manualDrafts: ManualDraftRepository;

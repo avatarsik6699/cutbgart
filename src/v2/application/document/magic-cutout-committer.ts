@@ -12,6 +12,8 @@ export type MagicCutoutCommitInput = {
   candidateId: MagicCandidateId;
   expectedRevision: Revision;
   draftRevision: Revision;
+  foreground: DocumentSnapshot["foreground"];
+  background: DocumentSnapshot["background"];
 };
 
 export type MagicCutoutCommitter = {

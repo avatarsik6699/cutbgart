@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.31` |
+| Version | `v1.32` |
 | Date | `2026-08-03` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -37,9 +37,9 @@ Three invariants govern every decision:
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
 The accepted v2 implementation now covers one-image local automatic removal, bounded committed
-history, exact Manual Cutout, preview/export, and safe cancel/retry/reset. The next vertical slice
-migrates guided Magic Cutout while preserving those accepted contracts and continuing the
-architecture refactor only where a second real tool proves a shared abstraction.
+history, exact Manual Cutout, guided Magic Cutout, preview/export, and safe cancel/retry/reset. The
+next vertical slice migrates Background and Enhancements while preserving those accepted contracts
+and extending shared lifecycle abstractions only where the new tools prove another consumer.
 
 ## 2. Scope and boundaries
 
@@ -60,9 +60,9 @@ Phase 32 added useful legacy guards, item-owned edit state, structured batch fai
 work, but did not eliminate real-browser model-load and Magic Apply freezes. It is closed incomplete,
 not evidence that the legacy editor satisfies the responsiveness contract.
 
-### 2.2 Implemented v2 foundation through Phase 34
+### 2.2 Implemented v2 foundation through Phase 35
 
-Phases 33–34 built an isolated implementation under `src/v2/` and a separate noindex route. It
+Phases 33–35 built an isolated implementation under `src/v2/` and a separate noindex route. It
 includes:
 
 - framework-free IDs, snapshots, commands, events, invariants, and processing ports;
@@ -72,10 +72,12 @@ includes:
 - rewritten shared Typography and Image primitives;
 - typed SSR-safe `shared/config/env.ts` and `runtime.ts`, plus only consumed/tested wrappers;
 - bounded committed document history and runtime-owned exact Manual Cutout drafts;
+- runtime-owned guided Magic drafts, correlated prediction/candidates, and explicit Apply;
+- one shared FIFO heavy-job coordinator for automatic-removal and Magic model work;
 - deterministic unit, actor, worker, component, Playwright, real-model, and target-device evidence.
 
-Their exact checklists and acceptance gates live in [`PHASE_33.md`](./PHASE_33.md) and
-[`PHASE_34.md`](./PHASE_34.md).
+Their exact checklists and acceptance gates live in [`PHASE_33.md`](./PHASE_33.md),
+[`PHASE_34.md`](./PHASE_34.md), and [`PHASE_35.md`](./PHASE_35.md).
 
 ### 2.3 Implemented v2 slice — Phase 34
 
@@ -102,9 +104,9 @@ Background, batch/multi-document UI, public routes, accounts, payments, remote p
 generated backgrounds. It may reuse reviewed pure geometry/pixel policies from legacy code but must
 not import legacy React hooks, mutable stores, or editor workflow state.
 
-### 2.4 Active v2 scope — Phase 35
+### 2.4 Implemented v2 slice — Phase 35
 
-Phase 35 migrates guided Magic Cutout as the next complete vertical slice and performs only the
+Phase 35 migrated guided Magic Cutout as a complete vertical slice and performed only the
 architecture refactoring justified by the second tool:
 
 - one Magic draft belongs to one document, captures its committed baseline revision, and is the only
@@ -143,11 +145,58 @@ stroke sampling, prompt coordinates, semantic constraints, candidate ranking/fus
 draft history may be rewritten behind v2 contracts. Legacy React hooks, mutable workflow state, and
 legacy worker lifecycle code must not be imported.
 
-Phase 35 does **not** migrate fine-detail/foreground refinement, Enhancements, Background,
+Phase 35 did **not** migrate fine-detail/foreground refinement, Enhancements, Background,
 batch/multi-document UI, public routes, accounts, payments, remote processing, or generated
 backgrounds, and it adds no new environment variable or third-party dependency.
 
-### 2.5 Future paid direction
+### 2.5 Active v2 scope — Phase 36
+
+Phase 36 migrates Background and the two existing local Enhancement operations as one finishing-
+workflow slice. It does not mechanically copy the legacy React hooks or mutable workspace state:
+
+- `DocumentSnapshot` gains an ID-only `background` descriptor. Transparent, solid-colour, and
+  two-stop linear/radial gradients contain only validated scalar metadata; a custom background
+  image is referenced by an artifact ID and never embeds a `Blob`, bitmap, or object URL;
+- one Background draft belongs to one document and committed baseline revision. Changing a fill
+  produces an immediate runtime-owned preview without PNG encoding or document revision changes;
+  Cancel discards the draft, while explicit Apply materializes one composite/PNG and creates
+  exactly one `background` history operation;
+- custom background images accept JPEG/PNG/WebP up to 20 MiB, are bounded to 4096 px on the longest
+  side during worker-side preparation, and are owned and released through `ArtifactRepository` on
+  replace, Cancel, stale Apply, reset, history pruning, and disposal;
+- one Enhancement draft selects `fine-detail`, `colour-halo`, or both. Fine detail refines the
+  committed alpha matte; colour-halo cleanup may produce a foreground artifact while preserving
+  the matte as the sole alpha authority. The selected operations execute in registry order against
+  one captured baseline and publish no partial document state;
+- explicit Enhancement Apply is one correlated, cancellable run and creates exactly one `enhance`
+  history operation only when the materialized snapshot differs. Cancel, failure, stale completion,
+  or a safe no-op keeps the committed snapshot/revision/history unchanged; retry starts a fresh run
+  from the same still-valid draft;
+- automatic removal, Magic, and every model- or memory-heavy Enhancement stage use the same FIFO
+  `HeavyJobCoordinator`. Background preview/commit, Manual commit, Magic commit, history, and export
+  remain non-inference work and are not serialized behind an unrelated model job;
+- Background and Enhancement receive cohesive runtime controllers/services. `EditorSession` stays
+  a thin composition facade; the document actor remains the sole commit writer; shared helpers
+  require concrete consumers and may not become a generic tool engine, event bus, inheritance
+  hierarchy, catch-all utility module, shared mutable draft store, or stateful god-service;
+- the bilingual noindex v2 route gains accessible Background and Enhancements workspaces with
+  truthful preview/dirty/preparing/queued/running/applying/error/no-change states, explicit Apply/
+  Cancel, retry where safe, keyboard routing, dirty-draft protection, and export bound only to the
+  committed snapshot;
+- all accepted Phase-33–35 automatic-removal, Manual, Magic, history, SSR, responsiveness, resource,
+  and deterministic cleanup contracts remain green.
+
+Phase 36 may rewrite reviewed pure legacy policies for fill validation/normalization, matte
+refinement, deterministic fusion, and foreground cleanup behind v2 contracts. It reuses the pinned
+model families/revisions and immutable local asset policy; it adds no dependency, environment key,
+server endpoint, storage, or remote fallback. Legacy React hooks, components, mutable editor state,
+and worker lifecycle code must not be imported.
+
+Phase 36 does **not** migrate batch/multi-document UI, public/scenario routes, legacy removal,
+accounts, payments, remote processing, generated backgrounds, arbitrary image adjustments, or a
+new model family. A custom uploaded background is local compositing, not generated content.
+
+### 2.6 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -170,10 +219,25 @@ type RunId = string;
 type Revision = number;
 type ProcessingBackend = "local" | "remote"; // remote is reserved, not implemented
 
+type HexColor = `#${string}`;
+type BackgroundFillDescriptor =
+  | { type: "transparent" }
+  | { type: "color"; value: HexColor }
+  | {
+      type: "gradient";
+      kind: "linear" | "radial";
+      stops: readonly [
+        { offset: 0; color: HexColor },
+        { offset: 1; color: HexColor },
+      ];
+    }
+  | { type: "image"; artifactId: ArtifactId };
+
 type DocumentSnapshot = {
   matte: ArtifactId;
   foreground: ArtifactId | null;
   composite: ArtifactId;
+  background: BackgroundFillDescriptor;
 };
 
 type ProcessingError = {
@@ -187,6 +251,9 @@ type ManualDraftId = string;
 type MagicCutoutMode = "keep" | "remove";
 type MagicDraftId = string;
 type MagicCandidateId = string;
+type BackgroundDraftId = string;
+type EnhancementDraftId = string;
+type EnhancementOperationId = "fine-detail" | "colour-halo";
 type EditOperationId = string;
 
 type ManualCutoutDraft = {
@@ -208,11 +275,36 @@ type MagicCutoutDraft = {
   selectedCandidateId: MagicCandidateId | null;
 };
 
-type ActiveToolDraft = ManualCutoutDraft | MagicCutoutDraft;
+type BackgroundDraft = {
+  kind: "background";
+  draftId: BackgroundDraftId;
+  documentId: DocumentId;
+  baselineRevision: Revision;
+  draftRevision: Revision;
+  fill: BackgroundFillDescriptor;
+  dirty: boolean;
+  status: "ready" | "preparing-image" | "applying" | "error";
+};
+
+type EnhancementDraft = {
+  kind: "enhance";
+  draftId: EnhancementDraftId;
+  documentId: DocumentId;
+  baselineRevision: Revision;
+  selectedOperationIds: readonly EnhancementOperationId[];
+  dirty: boolean;
+  status: "ready" | "queued" | "running" | "applying" | "error";
+};
+
+type ActiveToolDraft =
+  | ManualCutoutDraft
+  | MagicCutoutDraft
+  | BackgroundDraft
+  | EnhancementDraft;
 
 type DocumentHistoryEntry = {
   operationId: EditOperationId;
-  kind: "manual-cutout" | "magic-cutout";
+  kind: "manual-cutout" | "magic-cutout" | "background" | "enhance";
   before: DocumentSnapshot;
   after: DocumentSnapshot;
   estimatedHistoricalBytes: number;
@@ -248,15 +340,22 @@ Core rules:
   canvas/image buffers, and object URLs never enter React or actor snapshots.
 - Draft gesture Undo/Redo and committed document Undo/Redo are separate histories. Applying a draft
   creates one committed operation regardless of gesture count; cancelling creates none.
-- A document owns at most one active tool draft. Manual and Magic keep separate tool-specific
-  runtime state; their discriminated actor metadata does not imply one shared mutable draft store.
+- A document owns at most one active tool draft. Manual, Magic, Background, and Enhancement keep
+  separate tool-specific runtime state; their discriminated actor metadata does not imply one
+  shared mutable draft store.
 - Every tool apply/undo/redo commit increments revision. Commands against a stale baseline are
   rejected, and a new commit after document Undo releases the unreachable redo branch.
 - Magic draft mutations increment `draftRevision`. Prediction is a preview operation, not a document
   commit, and may publish only when both baseline and draft revision still match.
-- Automatic removal and Magic model work share one heavy-job admission boundary. Tool-specific
-  workers may own their protocols and sessions, but they may not bypass global scheduling,
-  cancellation, or backpressure.
+- Background preview is uncommitted runtime state. Export, document Undo/Redo, and reopening a tool
+  read only the committed snapshot descriptor; a custom image remains an artifact with explicit
+  leases across the current snapshot and reachable history.
+- Enhancement operations run in a fixed registry order from one captured committed baseline and
+  publish atomically. Intermediate matte/foreground buffers remain runtime-owned and are discarded
+  on cancellation, failure, staleness, or a no-op outcome.
+- Automatic removal, Magic model work, and heavy Enhancement stages share one heavy-job admission
+  boundary. Tool-specific workers may own their protocols and sessions, but they may not bypass
+  global scheduling, cancellation, or backpressure.
 - React renders narrow selectors and sends commands. Component lifecycle is an adapter signal, not
   workflow truth.
 
@@ -303,7 +402,7 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
 | `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 35 adds Magic Cutout without changing route identity |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 36 adds Background and Enhancements without changing route identity |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -351,6 +450,13 @@ the distinction between Predict and Apply are visible and localized. Keyboard Un
 active Magic draft while it is open; candidate prediction never steals document-history shortcuts or
 silently commits.
 
+For Phase 36, Background selection previews immediately but Apply and export remain visibly
+distinct: downloads never include an uncommitted fill. Custom-image validation/preparation and every
+Enhancement stage expose localized progress/errors without blocking navigation controls. While a
+Background or Enhancement draft is active, its controls own only tool-local changes; document
+Undo/Redo remains unavailable until Apply/Cancel resolves the draft, and reset/navigation cannot
+silently discard it.
+
 ## 6. Stack and runtime configuration
 
 [`STACK.md`](./STACK.md) is authoritative for versions, commands, repository layout, gates, and
@@ -369,7 +475,7 @@ Current environment contract:
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Immutable production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime configuration |
 
-Phases 33–35 add no environment variable. Future backend technology is deliberately undecided; current
+Phases 33–36 add no environment variable. Future backend technology is deliberately undecided; current
 candidates and decision criteria are recorded in `ARCHITECTURE_V2.md`, not an implementation mandate.
 
 ## 7. Non-functional acceptance
@@ -455,6 +561,13 @@ implicitly commits; a stale/cancelled prediction publishes; Apply creates anythi
 `magic-cutout` history operation; Cancel mutates committed state; automatic and Magic heavy jobs run
 without shared admission/backpressure; or accepted Phase-33/34 contracts regress.
 
+Phase 36 additionally fails if a Background preview changes the committed snapshot or export;
+custom-image bytes/object URLs enter React/XState; Apply encodes more than once or creates anything
+other than one `background` history operation; a selected Enhancement stage publishes partial
+document state; a no-op/cancelled/failed/stale run changes revision/history; Enhancement bypasses
+shared heavy-job admission; Undo/Redo loses the committed fill descriptor or leaks its image
+artifact; or accepted Phase-33–35 contracts regress.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -463,11 +576,13 @@ without shared admission/backpressure; or accepted Phase-33/34 contracts regress
 | 32 | Closed incomplete | Legacy stabilization stopped by architect decision; gate waived, no tag, known freezes remain |
 | 33 | Complete | Editor v2 foundation and first local vertical slice; gate and architect acceptance passed |
 | 34 | Complete | Bounded document history and exact Manual Cutout on v2; gate and architect acceptance passed |
-| 35 | Approved / active | Guided Magic Cutout vertical slice plus second-consumer architecture refactor |
-| Later | Unscheduled | Migrate Background and Enhancements, then batch as a parent actor over proven document actors; public-route migration and paid backend remain separately approved work |
+| 35 | Complete | Guided Magic Cutout vertical slice; gate and architect acceptance passed |
+| 36 | Approved / active | Background and Enhancements finishing workflow on the isolated v2 editor |
+| Later | Unscheduled | Migrate batch as a parent actor over proven document actors, then run parity/product validation; public-route migration and paid backend remain separately approved work |
 
-No v2 capability is migrated merely because legacy code exists. Phase 35 is limited to the explicit
-Magic contract above; later tools still require their own approved phase contracts.
+No v2 capability is migrated merely because legacy code exists. Phase 36 is limited to the explicit
+Background/Enhancements contract above; batch, public migration, and paid work still require their
+own approved phase contracts.
 
 ## 9. Deferred decisions
 

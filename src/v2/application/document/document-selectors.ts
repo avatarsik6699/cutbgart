@@ -1,7 +1,9 @@
 import type {
   CommandOutcome,
+  BackgroundDraft,
   DocumentState,
   DocumentStatus,
+  EnhancementDraft,
   ManualCutoutDraft,
   MagicCandidateSummary,
   MagicCutoutDraft,
@@ -46,6 +48,20 @@ export function selectMagicDraft(
 ): MagicCutoutDraft | null {
   const draft = snapshot.context.document.activeDraft;
   return draft?.kind === "magic-cutout" ? draft : null;
+}
+
+export function selectBackgroundDraft(
+  snapshot: DocumentSnapshotLike,
+): BackgroundDraft | null {
+  const draft = snapshot.context.document.activeDraft;
+  return draft?.kind === "background" ? draft : null;
+}
+
+export function selectEnhancementDraft(
+  snapshot: DocumentSnapshotLike,
+): EnhancementDraft | null {
+  const draft = snapshot.context.document.activeDraft;
+  return draft?.kind === "enhance" ? draft : null;
 }
 
 export function selectMagicCandidates(

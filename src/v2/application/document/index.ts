@@ -6,6 +6,7 @@ export type {
   DocumentActorRef,
   DocumentArtifactEffects,
   DocumentMachineDependencies,
+  DocumentFinishingIdSource,
   DocumentRunIdSource,
 } from "./document-machine.types";
 export type {
@@ -22,9 +23,11 @@ export type {
 } from "./magic-cutout-committer";
 export {
   selectDocumentError,
+  selectBackgroundDraft,
   selectDocumentProgress,
   selectDocumentState,
   selectDocumentStatus,
+  selectEnhancementDraft,
   selectLastDocumentCommandOutcome,
   selectManualDraft,
   selectMagicDraft,
@@ -33,4 +36,10 @@ export {
   selectCanRedoDocument,
   selectDocumentRevision,
 } from "./document-selectors";
+export type { BackgroundCommitInput, BackgroundCommitter } from "./background-committer";
+export type {
+  EnhancementCommitInput,
+  EnhancementCommitResult,
+  EnhancementCommitter,
+} from "./enhancement-committer";
 export type { DocumentSnapshotLike } from "./document-selectors";

@@ -26,6 +26,7 @@ const snapshot: DocumentSnapshot = {
   matte: createArtifactId("matte-1"),
   foreground: null,
   composite: createArtifactId("composite-1"),
+  background: { type: "transparent" },
 };
 
 type Deferred<T> = {

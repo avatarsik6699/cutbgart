@@ -130,6 +130,8 @@ function createHarness() {
     candidateId,
     expectedRevision: 2,
     draftRevision: 3,
+    foreground: null,
+    background: { type: "transparent" },
   } as const;
   return { committer, input, repository, worker };
 }

@@ -12,6 +12,8 @@ export type ManualCutoutCommitRequest = {
   expectedRevision: Revision;
   source: ArtifactId;
   draftMatte: ArtifactId;
+  foreground: DocumentSnapshot["foreground"];
+  background: DocumentSnapshot["background"];
 };
 
 export type ManualCutoutCommitter = {

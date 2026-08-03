@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProcessingGateway } from "@/v2/application";
 import {
   createArtifactId,
+  createBackgroundDraftId,
   createDocumentId,
   createEditOperationId,
+  createEnhancementDraftId,
   createImageId,
   createManualDraftId,
   createMagicCandidateId,
@@ -40,6 +42,8 @@ function sessionOptions(): EditorSessionOptions {
       manualDraft: () => createManualDraftId("draft-1"),
       magicDraft: () => createMagicDraftId("magic-draft-1"),
       magicCandidate: () => createMagicCandidateId("magic-candidate-1"),
+      backgroundDraft: () => createBackgroundDraftId("background-draft-1"),
+      enhancementDraft: () => createEnhancementDraftId("enhancement-draft-1"),
       editOperation: () => createEditOperationId("operation-1"),
     },
   };

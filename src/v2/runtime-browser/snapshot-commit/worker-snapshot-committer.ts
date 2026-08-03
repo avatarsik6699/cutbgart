@@ -7,18 +7,25 @@ import {
   sameSnapshotCommitCorrelation,
   SNAPSHOT_COMMIT_PROTOCOL_VERSION,
   type SnapshotCommitCorrelation,
+  type SnapshotCommitWorkerBackground,
   type SnapshotCommitWorkerCommand,
+  type SnapshotCommitWorkerImage,
 } from "./snapshot-commit-protocol";
 
 export type SnapshotCommitRequest = SnapshotCommitCorrelation & {
   draftMatte: ArtifactId;
   source: ArtifactId;
+  foreground?: ArtifactId | null;
+  background: DocumentSnapshot["background"];
 };
 
 export type SnapshotCommitter = {
   commit(
     request: SnapshotCommitRequest,
-    owner: Extract<ArtifactLeaseOwner, { kind: "manual-draft" | "magic-draft" }>,
+    owner: Extract<
+      ArtifactLeaseOwner,
+      { kind: "manual-draft" | "magic-draft" | "background-draft" | "run" }
+    >,
     signal: AbortSignal,
   ): Promise<DocumentSnapshot>;
 };
@@ -75,7 +82,10 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
 
   async commit(
     request: SnapshotCommitRequest,
-    owner: Extract<ArtifactLeaseOwner, { kind: "manual-draft" | "magic-draft" }>,
+    owner: Extract<
+      ArtifactLeaseOwner,
+      { kind: "manual-draft" | "magic-draft" | "background-draft" | "run" }
+    >,
     signal: AbortSignal,
   ): Promise<DocumentSnapshot> {
     const sourceValue = this.#repository.read(request.source);
@@ -91,6 +101,8 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
       throw new Error("Snapshot commit artifacts are unavailable");
     }
     const sourceBytes = await transferableBytes(sourceValue);
+    const foreground = await this.#encodedArtifact(request.foreground ?? null);
+    const background = await this.#background(request.background);
     const matte = matteValue.slice().buffer;
     if (signal.aborted) throw cancelledError();
     const worker = this.#factory.create();
@@ -138,7 +150,12 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
           );
           settled = true;
           cleanup();
-          resolve({ matte: request.draftMatte, foreground: null, composite });
+          resolve({
+            matte: request.draftMatte,
+            foreground: request.foreground ?? null,
+            composite,
+            background: request.background,
+          });
         } catch (error) {
           fail(
             error instanceof Error ? error : new Error("Snapshot registration failed"),
@@ -159,11 +176,18 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
               bytes: sourceBytes,
               mediaType: encodedMediaType(sourceMetadata.mediaType),
             },
+            foreground,
+            background,
             matte,
             width: matteMetadata.width,
             height: matteMetadata.height,
           },
-          [sourceBytes, matte],
+          [
+            sourceBytes,
+            matte,
+            ...(foreground === null ? [] : [foreground.bytes]),
+            ...(background.type === "image" ? [background.bytes] : []),
+          ],
         );
       } catch (error) {
         fail(
@@ -171,5 +195,29 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
         );
       }
     });
+  }
+
+  async #encodedArtifact(
+    artifactId: ArtifactId | null,
+  ): Promise<SnapshotCommitWorkerImage | null> {
+    if (artifactId === null) return null;
+    const value = this.#repository.read(artifactId);
+    const metadata = this.#repository.metadata(artifactId);
+    if (value === null || metadata === null || !(value instanceof Blob)) {
+      throw new Error("Snapshot foreground artifact is unavailable");
+    }
+    return {
+      bytes: await transferableBytes(value),
+      mediaType: encodedMediaType(metadata.mediaType),
+    };
+  }
+
+  async #background(
+    descriptor: DocumentSnapshot["background"],
+  ): Promise<SnapshotCommitWorkerBackground> {
+    if (descriptor.type !== "image") return descriptor;
+    const image = await this.#encodedArtifact(descriptor.artifactId);
+    if (image === null) throw new Error("Snapshot background artifact is unavailable");
+    return { type: "image", ...image };
   }
 }

@@ -1,12 +1,16 @@
 import type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
+  EnhancementDraftId,
   MagicCandidateId,
   MagicDraftId,
   ManualDraftId,
   Revision,
   RunId,
 } from "./ids";
+import type { BackgroundFillDescriptor } from "./background";
+import type { EnhancementOperationId } from "./enhancements";
 
 export type StartAutomaticRemovalCommand = {
   type: "START_AUTOMATIC_REMOVAL";
@@ -98,6 +102,63 @@ export type CancelMagicCutoutCommand = {
   draftId: MagicDraftId;
 };
 
+export type BeginBackgroundCommand = {
+  type: "BEGIN_BACKGROUND";
+  documentId: DocumentId;
+  expectedRevision: Revision;
+};
+
+export type ChangeBackgroundCommand = {
+  type: "CHANGE_BACKGROUND";
+  documentId: DocumentId;
+  draftId: BackgroundDraftId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+  fill: BackgroundFillDescriptor;
+};
+
+export type ApplyBackgroundCommand = {
+  type: "APPLY_BACKGROUND";
+  documentId: DocumentId;
+  draftId: BackgroundDraftId;
+  expectedRevision: Revision;
+  draftRevision: Revision;
+};
+
+export type CancelBackgroundCommand = {
+  type: "CANCEL_BACKGROUND";
+  documentId: DocumentId;
+  draftId: BackgroundDraftId;
+};
+
+export type BeginEnhancementsCommand = {
+  type: "BEGIN_ENHANCEMENTS";
+  documentId: DocumentId;
+  expectedRevision: Revision;
+};
+
+export type ChangeEnhancementsCommand = {
+  type: "CHANGE_ENHANCEMENTS";
+  documentId: DocumentId;
+  draftId: EnhancementDraftId;
+  expectedRevision: Revision;
+  operationIds: readonly EnhancementOperationId[];
+};
+
+export type ApplyEnhancementsCommand = {
+  type: "APPLY_ENHANCEMENTS";
+  documentId: DocumentId;
+  draftId: EnhancementDraftId;
+  runId: RunId;
+  expectedRevision: Revision;
+};
+
+export type CancelEnhancementsCommand = {
+  type: "CANCEL_ENHANCEMENTS";
+  documentId: DocumentId;
+  draftId: EnhancementDraftId;
+};
+
 export type UndoDocumentCommand = {
   type: "UNDO_DOCUMENT";
   documentId: DocumentId;
@@ -124,6 +185,14 @@ export type DocumentCommand =
   | SelectMagicCandidateCommand
   | ApplyMagicCutoutCommand
   | CancelMagicCutoutCommand
+  | BeginBackgroundCommand
+  | ChangeBackgroundCommand
+  | ApplyBackgroundCommand
+  | CancelBackgroundCommand
+  | BeginEnhancementsCommand
+  | ChangeEnhancementsCommand
+  | ApplyEnhancementsCommand
+  | CancelEnhancementsCommand
   | UndoDocumentCommand
   | RedoDocumentCommand;
 
@@ -141,8 +210,11 @@ export type CommandRejectionReason =
   | "no-draft"
   | "draft-not-dirty"
   | "draft-revision-stale"
+  | "operation-active"
   | "prediction-active"
   | "no-candidate"
+  | "no-operations"
+  | "invalid-background"
   | "history-boundary"
   | "disposed";
 

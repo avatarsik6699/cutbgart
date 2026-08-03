@@ -27,6 +27,10 @@ function stageLabel(status: DocumentStatus): string {
     "manual-applying": m.editorV2StageCommitting,
     "magic-predicting": m.editorV2StageProcessing,
     "magic-applying": m.editorV2StageCommitting,
+    "background-applying": m.editorV2StageCommitting,
+    "enhancement-queued": m.editorV2StageQueued,
+    "enhancement-running": m.editorV2StageProcessing,
+    "enhancement-applying": m.editorV2StageCommitting,
     result: m.editorV2StageResult,
     error: m.editorV2StageError,
     disposed: m.editorV2StageDisposed,
@@ -49,6 +53,10 @@ function currentIndex(status: Props["status"]): number {
   if (status === "ready") return 0;
   if (status === "cancelling" || status === "error") return 3;
   if (status === "disposed") return -1;
+  if (status === "background-applying" || status === "enhancement-applying")
+    return STAGES.indexOf("committing");
+  if (status === "enhancement-queued") return STAGES.indexOf("queued");
+  if (status === "enhancement-running") return STAGES.indexOf("processing");
   return STAGES.indexOf(status);
 }
 

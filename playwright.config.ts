@@ -11,34 +11,38 @@ const phase21RealRun = process.env.E2E_PHASE21_REAL === "1";
 const phase33RealRun = process.env.E2E_PHASE33_REAL === "1";
 const phase34RealRun = process.env.E2E_PHASE34_REAL === "1";
 const phase35RealRun = process.env.E2E_PHASE35_REAL === "1";
+const phase36RealRun = process.env.E2E_PHASE36_REAL === "1";
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: phase35RealRun
-    ? "**/phase-35-magic-cutout.real.spec.ts"
-    : phase34RealRun
-      ? "**/phase-34-manual-cutout.real.spec.ts"
-      : phase33RealRun
-        ? "**/phase-33-editor-v2.real.spec.ts"
-        : phase21RealRun
-          ? "**/phase-21.real.spec.ts"
-          : phase20RealRun
-            ? "**/phase-20.real.spec.ts"
-            : mattingLabRealRun
-              ? "**/matting-lab.real.spec.ts"
-              : phase19RealRun
-                ? "**/phase-19.real.spec.ts"
-                : phase17RealRun
-                  ? "**/phase-17.real.spec.ts"
-                  : phase16RealRun
-                    ? "**/phase-16.real.spec.ts"
-                    : modelLabRealRun
-                      ? "**/model-lab.real.spec.ts"
-                      : realModelRun
-                        ? "**/real-model.spec.ts"
-                        : "**/*.spec.ts",
+  testMatch: phase36RealRun
+    ? "**/phase-36-finishing-tools.real.spec.ts"
+    : phase35RealRun
+      ? "**/phase-35-magic-cutout.real.spec.ts"
+      : phase34RealRun
+        ? "**/phase-34-manual-cutout.real.spec.ts"
+        : phase33RealRun
+          ? "**/phase-33-editor-v2.real.spec.ts"
+          : phase21RealRun
+            ? "**/phase-21.real.spec.ts"
+            : phase20RealRun
+              ? "**/phase-20.real.spec.ts"
+              : mattingLabRealRun
+                ? "**/matting-lab.real.spec.ts"
+                : phase19RealRun
+                  ? "**/phase-19.real.spec.ts"
+                  : phase17RealRun
+                    ? "**/phase-17.real.spec.ts"
+                    : phase16RealRun
+                      ? "**/phase-16.real.spec.ts"
+                      : modelLabRealRun
+                        ? "**/model-lab.real.spec.ts"
+                        : realModelRun
+                          ? "**/real-model.spec.ts"
+                          : "**/*.spec.ts",
   testIgnore:
+    phase36RealRun ||
     phase35RealRun ||
     phase34RealRun ||
     phase33RealRun ||

@@ -77,6 +77,8 @@ describe("WorkerManualCutoutCommitter", () => {
       expectedRevision: 3,
       source: test.source,
       draftMatte: test.draftMatte,
+      foreground: null,
+      background: { type: "transparent" } as const,
     };
     const result = test.committer.commit(request, new AbortController().signal);
     await vi.waitFor(() => expect(test.worker.postMessage).toHaveBeenCalledOnce());
@@ -110,6 +112,8 @@ describe("WorkerManualCutoutCommitter", () => {
         expectedRevision: 0,
         source: test.source,
         draftMatte: test.draftMatte,
+        foreground: null,
+        background: { type: "transparent" },
       },
       controller.signal,
     );

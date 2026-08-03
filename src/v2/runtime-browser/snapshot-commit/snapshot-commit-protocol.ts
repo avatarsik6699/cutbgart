@@ -1,19 +1,68 @@
-import type { DocumentId, ManualDraftId, MagicDraftId, Revision } from "@/v2/domain";
+import type {
+  BackgroundDraftId,
+  DocumentId,
+  EnhancementDraftId,
+  ManualDraftId,
+  MagicDraftId,
+  Revision,
+  RunId,
+} from "@/v2/domain";
 
-export const SNAPSHOT_COMMIT_PROTOCOL_VERSION = 1 as const;
+export const SNAPSHOT_COMMIT_PROTOCOL_VERSION = 3 as const;
 
-export type SnapshotCommitCorrelation = {
-  documentId: DocumentId;
-  draftId: ManualDraftId | MagicDraftId;
-  expectedRevision: Revision;
-  operation: "manual-cutout" | "magic-cutout";
+export type SnapshotCommitCorrelation =
+  | {
+      documentId: DocumentId;
+      draftId: ManualDraftId;
+      expectedRevision: Revision;
+      operation: "manual-cutout";
+    }
+  | {
+      documentId: DocumentId;
+      draftId: MagicDraftId;
+      expectedRevision: Revision;
+      operation: "magic-cutout";
+    }
+  | {
+      documentId: DocumentId;
+      draftId: BackgroundDraftId;
+      expectedRevision: Revision;
+      draftRevision: Revision;
+      operation: "background";
+    }
+  | {
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+      runId: RunId;
+      expectedRevision: Revision;
+      operation: "enhancement";
+    };
+
+export type SnapshotCommitWorkerImage = {
+  bytes: ArrayBuffer;
+  mediaType: "image/jpeg" | "image/png" | "image/webp";
 };
+
+export type SnapshotCommitWorkerBackground =
+  | { type: "transparent" }
+  | { type: "color"; value: `#${string}` }
+  | {
+      type: "gradient";
+      kind: "linear" | "radial";
+      stops: readonly [
+        { offset: 0; color: `#${string}` },
+        { offset: 1; color: `#${string}` },
+      ];
+    }
+  | ({ type: "image" } & SnapshotCommitWorkerImage);
 
 export type SnapshotCommitWorkerCommand = {
   protocol: typeof SNAPSHOT_COMMIT_PROTOCOL_VERSION;
   type: "MATERIALIZE_SNAPSHOT";
   correlation: SnapshotCommitCorrelation;
-  source: { bytes: ArrayBuffer; mediaType: "image/jpeg" | "image/png" | "image/webp" };
+  source: SnapshotCommitWorkerImage;
+  foreground: SnapshotCommitWorkerImage | null;
+  background: SnapshotCommitWorkerBackground;
   matte: ArrayBuffer;
   width: number;
   height: number;
@@ -41,7 +90,11 @@ export function sameSnapshotCommitCorrelation(
     left.documentId === right.documentId &&
     left.draftId === right.draftId &&
     left.expectedRevision === right.expectedRevision &&
-    left.operation === right.operation
+    left.operation === right.operation &&
+    (left.operation !== "background" ||
+      (right.operation === "background" && left.draftRevision === right.draftRevision)) &&
+    (left.operation !== "enhancement" ||
+      (right.operation === "enhancement" && left.runId === right.runId))
   );
 }
 
@@ -64,7 +117,12 @@ export function isSnapshotCommitWorkerEvent(
     typeof correlation.draftId !== "string" ||
     !Number.isSafeInteger(correlation.expectedRevision) ||
     (correlation.operation !== "manual-cutout" &&
-      correlation.operation !== "magic-cutout")
+      correlation.operation !== "magic-cutout" &&
+      correlation.operation !== "background" &&
+      correlation.operation !== "enhancement") ||
+    (correlation.operation === "background" &&
+      !Number.isSafeInteger(correlation.draftRevision)) ||
+    (correlation.operation === "enhancement" && typeof correlation.runId !== "string")
   ) {
     return false;
   }

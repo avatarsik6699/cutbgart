@@ -6,6 +6,20 @@ export type {
   ArtifactMetadata,
   ArtifactRepositoryStats,
 } from "./artifacts";
+export {
+  changeBackgroundDraft,
+  normalizeBackgroundFill,
+  normalizeHexColor,
+  sameBackgroundFill,
+  TRANSPARENT_BACKGROUND,
+} from "./background";
+export type {
+  BackgroundDraft,
+  BackgroundDraftStatus,
+  BackgroundFillDescriptor,
+  BackgroundGradientStop,
+  HexColor,
+} from "./background";
 export type {
   BrowserProcessingCapabilities,
   CapabilitySupport,
@@ -14,11 +28,19 @@ export type {
 export type {
   ApplyManualCutoutCommand,
   ApplyMagicCutoutCommand,
+  ApplyBackgroundCommand,
+  ApplyEnhancementsCommand,
+  BeginBackgroundCommand,
+  BeginEnhancementsCommand,
   BeginMagicCutoutCommand,
   BeginManualCutoutCommand,
   CancelActiveRunCommand,
   CancelManualCutoutCommand,
   CancelMagicCutoutCommand,
+  CancelBackgroundCommand,
+  CancelEnhancementsCommand,
+  ChangeBackgroundCommand,
+  ChangeEnhancementsCommand,
   CommandOutcome,
   CommandRejectionReason,
   DocumentCommand,
@@ -42,6 +64,8 @@ export type {
   PendingCommit,
   PendingManualCommit,
   PendingMagicCommit,
+  PendingBackgroundCommit,
+  PendingEnhancementCommit,
 } from "./document";
 export type {
   CommitEvent,
@@ -52,12 +76,16 @@ export type {
   ProcessingLifecycleEvent,
   ManualCutoutEvent,
   MagicCutoutEvent,
+  BackgroundEvent,
+  EnhancementEvent,
   SourceRegisteredEvent,
 } from "./events";
 export {
   createArtifactId,
+  createBackgroundDraftId,
   createDocumentId,
   createEditOperationId,
+  createEnhancementDraftId,
   createImageId,
   createMagicCandidateId,
   createMagicDraftId,
@@ -67,8 +95,10 @@ export {
 } from "./ids";
 export type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
   EditOperationId,
+  EnhancementDraftId,
   ImageId,
   MagicCandidateId,
   MagicDraftId,
@@ -76,6 +106,20 @@ export type {
   Revision,
   RunId,
 } from "./ids";
+export {
+  changeEnhancementDraft,
+  enhancementOperation,
+  ENHANCEMENT_OPERATION_ORDER,
+  ENHANCEMENT_OPERATION_REGISTRY,
+  orderEnhancementOperations,
+} from "./enhancements";
+export type {
+  EnhancementDraft,
+  EnhancementDraftStatus,
+  EnhancementExecutionAdapter,
+  EnhancementOperationDefinition,
+  EnhancementOperationId,
+} from "./enhancements";
 export {
   clearDocumentHistory,
   commitDocumentHistory,
@@ -105,7 +149,7 @@ export type {
   ManualCutoutDraft,
   ManualCutoutMode,
 } from "./document-history";
-export { isProcessingTerminalEvent } from "./processing";
+export { isProcessingErrorCode, isProcessingTerminalEvent } from "./processing";
 export type {
   ProcessingBackend,
   ProcessingError,

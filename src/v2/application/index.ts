@@ -14,9 +14,17 @@ export type {
   DocumentActorRef,
   DocumentArtifactEffects,
   DocumentMachineDependencies,
+  DocumentFinishingIdSource,
   DocumentRunIdSource,
 } from "./document";
 export type { ManualCutoutCommitRequest, ManualCutoutCommitter } from "./document";
+export type {
+  BackgroundCommitInput,
+  BackgroundCommitter,
+  EnhancementCommitInput,
+  EnhancementCommitResult,
+  EnhancementCommitter,
+} from "./document";
 export type {
   MagicCutoutCommitInput,
   MagicCutoutCommitter,
@@ -25,9 +33,11 @@ export type {
 } from "./document";
 export {
   selectDocumentError,
+  selectBackgroundDraft,
   selectDocumentProgress,
   selectDocumentState,
   selectDocumentStatus,
+  selectEnhancementDraft,
   selectLastDocumentCommandOutcome,
   selectManualDraft,
   selectMagicCandidates,

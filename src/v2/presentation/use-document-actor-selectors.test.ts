@@ -30,6 +30,8 @@ function createPreparingDocument(): DocumentState {
     pendingManualCommit: null,
     activeMagicPrediction: null,
     pendingMagicCommit: null,
+    pendingBackgroundCommit: null,
+    pendingEnhancementCommit: null,
     magicCandidates: [],
     activeDraft: null,
     history: { past: [], future: [], retainedHistoricalBytes: 0 },
@@ -102,6 +104,8 @@ describe("useDocumentActorSelectors", () => {
       canUndoDocument: false,
       canRedoDocument: false,
       revision: 0,
+      backgroundDraft: null,
+      enhancementDraft: null,
     });
 
     act(() => {

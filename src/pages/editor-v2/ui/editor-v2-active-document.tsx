@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 
 import {
+  BackgroundWorkspace,
+  EnhancementWorkspace,
   MagicCutoutWorkspace,
   ManualCutoutWorkspace,
   useDocumentActorSelectors,
@@ -19,16 +21,31 @@ type Props = {
 
 export function EditorV2ActiveDocument(props: Props) {
   const document = useDocumentActorSelectors(props.snapshot.actor);
+  const draftOpen =
+    document.manualDraft !== null ||
+    document.magicDraft !== null ||
+    document.backgroundDraft !== null ||
+    document.enhancementDraft !== null;
+  const dirtyDraft =
+    document.manualDraft?.dirty === true ||
+    document.magicDraft?.dirty === true ||
+    document.backgroundDraft?.dirty === true ||
+    document.enhancementDraft?.dirty === true;
+  const canApplyBackground =
+    document.backgroundDraft?.dirty === true &&
+    document.backgroundDraft.status !== "applying" &&
+    props.snapshot.backgroundRuntime.status === "ready";
+  const canApplyEnhancements =
+    document.enhancementDraft !== null &&
+    document.enhancementDraft.selectedOperationIds.length > 0 &&
+    document.enhancementDraft.status !== "queued" &&
+    document.enhancementDraft.status !== "running" &&
+    document.enhancementDraft.status !== "applying";
 
   useEffect(
     function routeDocumentHistoryShortcutsFx() {
       function keyDownFx(event: KeyboardEvent): void {
-        if (
-          document.manualDraft !== null ||
-          document.magicDraft !== null ||
-          !(event.ctrlKey || event.metaKey)
-        )
-          return;
+        if (draftOpen || !(event.ctrlKey || event.metaKey)) return;
         if (event.key.toLowerCase() !== "z" && event.key.toLowerCase() !== "y") return;
         event.preventDefault();
         if (event.key.toLowerCase() === "y" || event.shiftKey)
@@ -40,7 +57,58 @@ export function EditorV2ActiveDocument(props: Props) {
         globalThis.removeEventListener("keydown", keyDownFx);
       };
     },
-    [document.magicDraft, document.manualDraft, props.session],
+    [draftOpen, props.session],
+  );
+
+  useEffect(
+    function routeFinishingDraftGuardsFx() {
+      function beforeUnloadFx(event: BeforeUnloadEvent): void {
+        if (!dirtyDraft) return;
+        event.preventDefault();
+        event.returnValue = "";
+      }
+      function keyDownFx(event: KeyboardEvent): void {
+        if (document.backgroundDraft !== null) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            props.session.cancelBackground();
+          } else if (
+            canApplyBackground &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key === "Enter"
+          ) {
+            event.preventDefault();
+            props.session.applyBackground();
+          }
+        } else if (document.enhancementDraft !== null) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            props.session.cancelEnhancements();
+          } else if (
+            canApplyEnhancements &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key === "Enter"
+          ) {
+            event.preventDefault();
+            props.session.applyEnhancements();
+          }
+        }
+      }
+      globalThis.addEventListener("beforeunload", beforeUnloadFx);
+      globalThis.addEventListener("keydown", keyDownFx);
+      return function removeFinishingDraftGuardsFx() {
+        globalThis.removeEventListener("beforeunload", beforeUnloadFx);
+        globalThis.removeEventListener("keydown", keyDownFx);
+      };
+    },
+    [
+      canApplyBackground,
+      canApplyEnhancements,
+      dirtyDraft,
+      document.backgroundDraft,
+      document.enhancementDraft,
+      props.session,
+    ],
   );
 
   return (
@@ -53,6 +121,8 @@ export function EditorV2ActiveDocument(props: Props) {
         canRedoDocument={document.canRedoDocument}
         manualOpen={document.manualDraft !== null}
         magicOpen={document.magicDraft !== null}
+        backgroundOpen={document.backgroundDraft !== null}
+        enhancementOpen={document.enhancementDraft !== null}
         revision={document.revision}
       />
       {document.magicDraft !== null && props.snapshot.previewUrl !== null ? (
@@ -76,7 +146,27 @@ export function EditorV2ActiveDocument(props: Props) {
           width={props.snapshot.width}
         />
       ) : null}
-      {document.magicDraft === null && document.manualDraft === null ? (
+      {document.backgroundDraft !== null && props.snapshot.foregroundUrl !== null ? (
+        <BackgroundWorkspace
+          draft={document.backgroundDraft}
+          foregroundUrl={props.snapshot.foregroundUrl}
+          height={props.snapshot.height}
+          runtime={props.snapshot.backgroundRuntime}
+          session={props.session}
+          width={props.snapshot.width}
+        />
+      ) : null}
+      {document.enhancementDraft !== null && props.snapshot.resultUrl !== null ? (
+        <EnhancementWorkspace
+          draft={document.enhancementDraft}
+          height={props.snapshot.height}
+          previewUrl={props.snapshot.resultUrl}
+          runtime={props.snapshot.enhancementRuntime}
+          session={props.session}
+          width={props.snapshot.width}
+        />
+      ) : null}
+      {!draftOpen ? (
         <EditorV2Stage
           fileName={props.snapshot.fileName}
           grid={props.grid}

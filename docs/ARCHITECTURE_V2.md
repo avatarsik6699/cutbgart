@@ -1,6 +1,6 @@
 # BG Remove App v2 — Domain Model and Target Architecture
 
-**Status:** approved direction; Phases 33–34 accepted; Phase-35 Magic Cutout contract frozen
+**Status:** approved direction; Phases 33–35 accepted; Phase-36 finishing-tools contract frozen
 
 **Date:** 2026-08-01
 **Purpose:** replace incremental repairs of the current editor with an architecture-led, testable
@@ -487,20 +487,21 @@ to workspace packages without changing their public contracts.
   preview, export, cancellation, cleanup, and target-device evidence.
 - **Phase 34:** bounded committed document history and runtime-owned exact Manual Cutout with
   explicit Apply/Cancel, two-level Undo/Redo, artifact-aware pruning, and no reinference.
+- **Phase 35:** guided Magic Cutout with bounded semantic strokes, runtime-owned prediction/
+  candidates, explicit preview/apply separation, and shared automatic/Magic heavy-job admission.
 
 ### Active slice
 
-1. **Phase 35:** Magic Cutout with bounded semantic strokes, runtime-owned encoding/candidates,
-   correlated prediction, explicit preview/apply separation, and one shared heavy-job admission
-   boundary for automatic and Magic inference.
+1. **Phase 36:** Background and local fine-detail/colour-halo Enhancements with runtime-owned
+   previews/intermediates, one atomic history operation per explicit Apply, and shared heavy-job
+   admission for automatic, Magic, and Enhancement work.
 
 ### Later slices
 
-1. Background and Enhancements;
-2. batch as a parent actor spawning the already-proven per-image actor;
-3. accessibility/device/product validation;
-4. paid backend foundation and one opt-in remote-processing slice;
-5. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
+1. batch as a parent actor spawning the already-proven per-image actor;
+2. accessibility/device/product validation;
+3. paid backend foundation and one opt-in remote-processing slice;
+4. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
 
 The old editor is removed only after the replacement has feature parity and the architect has
 verified the target-device experience.
@@ -1169,3 +1170,92 @@ next-paint p95 below 100 ms on target evidence. It additionally requires one adm
 job, zero missed scroll/control/stroke actions during every Magic stage, zero inference on Apply/
 Undo/Redo/export, bounded live draft/candidates, and zero reachable Magic leases/model sessions/
 workers after repeated cancel/reset/dispose churn.
+
+## 16. Phase-36 Background and Enhancements boundary
+
+Phase 36 completes the isolated single-document finishing workflow without introducing one generic
+tool runtime. The document actor remains the sole committed-state writer and gains only bounded,
+discriminated Background/Enhancement metadata. Binary draft values, prepared background images,
+intermediate mattes/foregrounds, preview URLs, model sessions, and worker values remain owned by
+browser-runtime collaborators.
+
+Committed snapshots now contain a `BackgroundFillDescriptor`. Transparent/colour/gradient values
+are validated scalar metadata; a custom image is an `ArtifactId`. The descriptor is part of every
+baseline/current/history snapshot so Undo/Redo and reopening Background restore truthful state
+without inspecting composite pixels. Automatic removal initializes transparent; Manual, Magic, and
+Enhancement commits preserve the current descriptor; Background Apply replaces only the descriptor
+and composite/PNG values.
+
+### 16.1 Ownership and module map
+
+| Concern | Owner | Contract |
+|---------|-------|----------|
+| committed snapshot/background, revision, active draft, history | document actor | sole writer; IDs and bounded metadata only |
+| route/session composition | `EditorSession` | delegates commands/subscriptions/disposal; no tool buffers or orchestration state |
+| Background fill/draft revision and preview lease | Background controller + draft repository | one baseline-bound draft; preview never changes export/history |
+| custom background bytes/preparation | Background preparation worker + `ArtifactRepository` | JPEG/PNG/WebP, 20 MiB, 4096 px; replace/cancel/stale/dispose cleanup |
+| Enhancement selection/run sequencing | Enhancement controller + operation registry | fixed `fine-detail` then `colour-halo`; one captured baseline and terminal publication |
+| matte refinement/model session/intermediate matte | fine-detail worker runtime | correlated transferable values; no partial document publication |
+| foreground cleanup/intermediate foreground | colour-halo worker runtime | matte stays alpha authority; output remains run-owned until commit |
+| automatic/Magic/Enhancement heavy admission | `HeavyJobCoordinator` | one admitted model/memory-heavy job; FIFO, truthful queue, cancellation |
+| snapshot compositing/PNG materialization | shared versioned snapshot committer | Manual/Magic/Background/Enhancement consumer; no model/session ownership |
+| document/history/draft/run/preview/export reachability | `ArtifactRepository` | independent leases and deterministic release/pruning |
+| tool controls/focus/announcements | focused presentation adapters | selector-only reads and intent commands; no workflow truth |
+
+Stateful controllers are composed services because they own a draft/run lifecycle and explicit
+disposal. Fill normalization, descriptor equality, operation ordering, deterministic fusion,
+foreground cleanup decisions, and transition policies remain named pure functions. There is no
+base tool class, shared mutable draft store, generic event bus, or catch-all service; shared code is
+limited to the already-proven artifact, heavy-job, and snapshot-materialization boundaries.
+
+### 16.2 Background lifecycle and stale-result matrix
+
+| Current state | Input/result | Accepted result | Stale/rejected behavior |
+|---------------|--------------|-----------------|-------------------------|
+| committed result | Begin Background at current revision | draft seeded from committed descriptor | active draft or wrong revision rejected |
+| ready/dirty draft | choose scalar fill | increment draft revision; replace preview lease | invalid colour/gradient rejected; no encode/commit |
+| ready/dirty draft | choose custom image | correlated preparation; prepared artifact becomes draft-owned | invalid/oversize/failed/late output released |
+| dirty draft | Apply | one correlated snapshot materialization | clean/stale/busy draft rejected |
+| applying | matching success | one `background` history operation and revision increment | duplicate/late result released |
+| applying | failure | retain valid draft and expose retryable error | committed descriptor/composite unchanged |
+| any Background draft | Cancel/reset/dispose | release prepared image and preview owners | committed snapshot/history/export unchanged |
+
+Preview rendering may use CSS/canvas composition and leased URLs, but must not encode a PNG on each
+selection. Export always reads the committed composite. Background Undo/Redo swaps already-
+materialized snapshots and descriptor/artifact leases; it never reruns preparation or compositing.
+
+### 16.3 Enhancement lifecycle and stale-result matrix
+
+| Current state | Input/result | Accepted result | Stale/rejected behavior |
+|---------------|--------------|-----------------|-------------------------|
+| committed result | Begin Enhancements at current revision | draft with registry defaults | active draft or wrong revision rejected |
+| ready draft | change selection | bounded scalar metadata only | empty selection cannot Apply |
+| dirty draft | Apply | one correlated run queued through heavy coordinator | stale baseline or active run rejected |
+| queued/running | progress/stage result | runtime advances fixed registry sequence | foreign/late/cancelled event cannot publish |
+| running | all selected stages complete | materialize one final snapshot once | intermediate artifacts remain run-owned |
+| applying | matching changed result | one `enhance` history operation and revision increment | duplicate/late success released |
+| applying | matching no-op | no revision/history change; release intermediates | never represented as a successful commit |
+| queued/running/applying | cancel/failure | retain valid draft for retry/cancel; release run outputs | committed state and redo branch unchanged |
+| any Enhancement draft | Cancel/reset/dispose | cancel admission/worker and release draft/run owners | late terminals are stale and released |
+
+The entire selected Enhancement sequence observes one baseline. `fine-detail` may replace the matte;
+`colour-halo` may replace the foreground while using the latest runtime matte, but neither stage is
+visible to the actor until final materialization succeeds. Safe no-op detection compares artifact-
+independent result semantics before document publication.
+
+### 16.4 Legacy signal and performance contract
+
+Reusable legacy input is limited to validated fill presets/normalization, pinned refinement model
+configuration, trimap/focus-crop/runtime policies, deterministic fusion, edge cleanup, foreground
+estimation, and tested quality thresholds. These are rewritten or extracted as framework-free pure
+modules with backward-compatible legacy imports. Legacy React hooks, tool panels, refs, mutable
+workspace state, and worker lifecycle never cross into v2.
+
+Typed Phase-36 stages add `background-image-prepare`, `background-preview`, `background-commit`,
+`enhancement-queued`, `enhancement-model-loading`, `enhancement-fine-detail`,
+`enhancement-colour-halo`, and `enhancement-commit`. Evidence retains the Phase-33 interaction/long-
+task budgets and records cold/warm model state, queue delay, fallback, selected operation IDs, no-op
+outcome, and resource counts without filenames, colours, images, pixels, or other user content.
+Acceptance requires one admitted heavy job, no preview/export confusion, no partial Enhancement
+publication, no reinference on Background Apply/history/export, and zero reachable finishing-tool
+leases/sessions/workers after repeated cancel/reset/dispose churn.

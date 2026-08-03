@@ -1,6 +1,8 @@
 import type {
   ArtifactId,
+  BackgroundDraftId,
   DocumentId,
+  EnhancementDraftId,
   MagicDraftId,
   ManualDraftId,
   Revision,
@@ -14,6 +16,7 @@ import type {
   RunCorrelation,
 } from "./processing";
 import type { MagicCandidateSummary, MagicPredictionCorrelation } from "./magic-cutout";
+import type { EnhancementOperationId } from "./enhancements";
 
 export type SourceRegisteredEvent = {
   type: "SOURCE_REGISTERED";
@@ -97,6 +100,59 @@ export type MagicCutoutEvent =
       error: ProcessingError;
     };
 
+export type BackgroundEvent =
+  | {
+      type: "BACKGROUND_COMMIT_SUCCEEDED";
+      documentId: DocumentId;
+      draftId: BackgroundDraftId;
+      expectedRevision: Revision;
+      draftRevision: Revision;
+      snapshot: DocumentSnapshot;
+      estimatedHistoricalBytes: number;
+    }
+  | {
+      type: "BACKGROUND_COMMIT_FAILED";
+      documentId: DocumentId;
+      draftId: BackgroundDraftId;
+      expectedRevision: Revision;
+      draftRevision: Revision;
+      error: ProcessingError;
+    };
+
+export type EnhancementEvent =
+  | {
+      type: "ENHANCEMENT_STARTED";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+      runId: RunId;
+      expectedRevision: Revision;
+      operationIds: readonly EnhancementOperationId[];
+    }
+  | {
+      type: "ENHANCEMENT_COMMIT_SUCCEEDED";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+      runId: RunId;
+      expectedRevision: Revision;
+      snapshot: DocumentSnapshot;
+      estimatedHistoricalBytes: number;
+    }
+  | {
+      type: "ENHANCEMENT_UNCHANGED" | "ENHANCEMENT_CANCELLED";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+      runId: RunId;
+      expectedRevision: Revision;
+    }
+  | {
+      type: "ENHANCEMENT_FAILED";
+      documentId: DocumentId;
+      draftId: EnhancementDraftId;
+      runId: RunId;
+      expectedRevision: Revision;
+      error: ProcessingError;
+    };
+
 export type DocumentEvent =
   | SourceRegisteredEvent
   | PreparationEvent
@@ -105,4 +161,6 @@ export type DocumentEvent =
   | ExportEvent
   | ManualCutoutEvent
   | MagicCutoutEvent
+  | BackgroundEvent
+  | EnhancementEvent
   | DocumentLifecycleEvent;

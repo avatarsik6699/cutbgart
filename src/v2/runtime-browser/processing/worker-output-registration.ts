@@ -37,7 +37,12 @@ export function registerWorkerOutput(
       },
       owner,
     );
-    return { matte, foreground: null, composite };
+    return {
+      matte,
+      foreground: null,
+      composite,
+      background: { type: "transparent" },
+    };
   } catch (error) {
     repository.releaseOwnerIfPresent(owner);
     if (error instanceof ProcessingGatewayError) throw error;

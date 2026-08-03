@@ -14,12 +14,14 @@ import {
 
 class FakeWorker extends EventTarget {
   readonly messages: SnapshotCommitWorkerCommand[] = [];
+  readonly transfers: Transferable[][] = [];
   readonly terminate = vi.fn();
   postError: Error | null = null;
 
-  postMessage(message: SnapshotCommitWorkerCommand): void {
+  postMessage(message: SnapshotCommitWorkerCommand, transfer: Transferable[]): void {
     if (this.postError !== null) throw this.postError;
     this.messages.push(message);
+    this.transfers.push(transfer);
   }
 
   emitMessage(data: unknown): void {
@@ -75,6 +77,7 @@ function createHarness() {
     operation: "manual-cutout",
     source,
     draftMatte,
+    background: { type: "transparent" },
   } as const;
   return { committer, owner, repository, request, worker };
 }
@@ -155,5 +158,82 @@ describe("WorkerSnapshotCommitter lifecycle", () => {
 
     await expect(result).resolves.toMatchObject({ foreground: null });
     expect(harness.worker.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("transfers an optional foreground and keeps it in the committed snapshot", async () => {
+    const harness = createHarness();
+    const foreground = harness.repository.register(
+      new Blob([new Uint8Array([2])], { type: "image/webp" }),
+      {
+        kind: "foreground",
+        mediaType: "image/webp",
+        width: 1,
+        height: 1,
+        estimatedBytes: 1,
+      },
+      harness.owner,
+    );
+    const request = {
+      ...harness.request,
+      foreground,
+      background: { type: "color", value: "#112233" },
+    } as const;
+    const result = harness.committer.commit(
+      request,
+      harness.owner,
+      new AbortController().signal,
+    );
+    await vi.waitFor(() => expect(harness.worker.messages).toHaveLength(1));
+    expect(harness.worker.messages[0]).toMatchObject({
+      foreground: { mediaType: "image/webp" },
+      background: { type: "color", value: "#112233" },
+    });
+    expect(harness.worker.transfers[0]).toHaveLength(3);
+    harness.worker.emitMessage({
+      protocol: SNAPSHOT_COMMIT_PROTOCOL_VERSION,
+      type: "SUCCEEDED",
+      correlation: request,
+      compositePng: new Uint8Array([1]).buffer,
+    });
+    await expect(result).resolves.toMatchObject({
+      foreground,
+      background: request.background,
+    });
+  });
+
+  it("resolves an artifact-backed background into transferable worker bytes", async () => {
+    const harness = createHarness();
+    const background = harness.repository.register(
+      new Blob([new Uint8Array([3])], { type: "image/jpeg" }),
+      {
+        kind: "background-image",
+        mediaType: "image/jpeg",
+        width: 1,
+        height: 1,
+        estimatedBytes: 1,
+      },
+      harness.owner,
+    );
+    const request = {
+      ...harness.request,
+      background: { type: "image", artifactId: background },
+    } as const;
+    const result = harness.committer.commit(
+      request,
+      harness.owner,
+      new AbortController().signal,
+    );
+    await vi.waitFor(() => expect(harness.worker.messages).toHaveLength(1));
+    expect(harness.worker.messages[0]).toMatchObject({
+      background: { type: "image", mediaType: "image/jpeg" },
+    });
+    expect(harness.worker.transfers[0]).toHaveLength(3);
+    harness.worker.emitMessage({
+      protocol: SNAPSHOT_COMMIT_PROTOCOL_VERSION,
+      type: "SUCCEEDED",
+      correlation: request,
+      compositePng: new Uint8Array([1]).buffer,
+    });
+    await expect(result).resolves.toMatchObject({ background: request.background });
   });
 });

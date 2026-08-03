@@ -7,8 +7,10 @@ import { Typography } from "@/v2/shared/ui";
 import { EditorV2StatusRail } from "./editor-v2-status-rail";
 
 type Props = {
+  backgroundOpen: boolean;
   canRedoDocument: boolean;
   canUndoDocument: boolean;
+  enhancementOpen: boolean;
   manualOpen: boolean;
   magicOpen: boolean;
   revision: number;
@@ -23,14 +25,20 @@ function statusMessage(status: DocumentStatus): string {
   if (status === "manual-applying") return m.editorV2ManualApplying();
   if (status === "magic-applying") return m.editorV2MagicApplying();
   if (status === "magic-predicting") return m.editorV2MagicPredicting();
+  if (status === "background-applying") return m.editorV2BackgroundApplying();
+  if (status === "enhancement-queued") return m.editorV2EnhancementsQueued();
+  if (status === "enhancement-running") return m.editorV2EnhancementsRunning();
+  if (status === "enhancement-applying") return m.editorV2EnhancementsApplying();
   return m.editorV2Privacy();
 }
 
 export function EditorV2DocumentPanel(props: Props) {
   const canCancel = ["queued", "model-loading", "processing"].includes(props.status);
   const canRetry = props.status === "error" || props.status === "ready";
-  const draftOpen = props.manualOpen || props.magicOpen;
-  const canExport = props.status === "result" && !draftOpen;
+  const draftOpen =
+    props.manualOpen || props.magicOpen || props.backgroundOpen || props.enhancementOpen;
+  const canExport = props.status === "result";
+  const canOpenTool = props.status === "result" && !draftOpen;
 
   return (
     <div className="space-y-4">
@@ -84,17 +92,27 @@ export function EditorV2DocumentPanel(props: Props) {
           ) : null}
           {canExport ? (
             <Button onClick={() => props.session.exportPng()}>
-              {m.editorV2DownloadPng()}
+              {draftOpen ? m.editorV2DownloadCommittedPng() : m.editorV2DownloadPng()}
             </Button>
           ) : null}
-          {canExport ? (
+          {canOpenTool ? (
             <Button variant="outline" onClick={() => props.session.beginManual()}>
               {m.editorV2ManualTitle()}
             </Button>
           ) : null}
-          {canExport ? (
+          {canOpenTool ? (
             <Button variant="outline" onClick={() => props.session.beginMagic()}>
               {m.editorV2MagicTitle()}
+            </Button>
+          ) : null}
+          {canOpenTool ? (
+            <Button variant="outline" onClick={() => props.session.beginBackground()}>
+              {m.editorV2BackgroundTitle()}
+            </Button>
+          ) : null}
+          {canOpenTool ? (
+            <Button variant="outline" onClick={() => props.session.beginEnhancements()}>
+              {m.editorV2EnhancementsTitle()}
             </Button>
           ) : null}
           <Button

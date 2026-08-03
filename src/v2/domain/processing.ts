@@ -32,11 +32,28 @@ export type ProcessingErrorCode =
   | "aborted"
   | "artifact-unavailable"
   | "decode-failed"
+  | "device-out-of-memory"
   | "invalid-request"
   | "model-load-failed"
+  | "operator-unsupported"
   | "processing-failed"
   | "worker-crashed"
   | "worker-protocol-error";
+
+export function isProcessingErrorCode(value: unknown): value is ProcessingErrorCode {
+  return (
+    value === "aborted" ||
+    value === "artifact-unavailable" ||
+    value === "decode-failed" ||
+    value === "device-out-of-memory" ||
+    value === "invalid-request" ||
+    value === "model-load-failed" ||
+    value === "operator-unsupported" ||
+    value === "processing-failed" ||
+    value === "worker-crashed" ||
+    value === "worker-protocol-error"
+  );
+}
 
 export type ProcessingError = {
   code: ProcessingErrorCode;

@@ -12,6 +12,28 @@ export type {
   ArtifactUrlAdapter,
   ArtifactValue,
 } from "./artifacts";
+export {
+  BACKGROUND_IMAGE_MAX_BYTES,
+  BACKGROUND_IMAGE_MAX_DIMENSION,
+  BACKGROUND_IMAGE_PROTOCOL_VERSION,
+  BackgroundController,
+  BackgroundDraftRepository,
+  BackgroundImageClient,
+  createNativeBackgroundImageWorkerFactory,
+  WorkerBackgroundCommitter,
+} from "./background";
+export type {
+  BackgroundImageCorrelation,
+  BackgroundImageMediaType,
+  BackgroundImagePreparer,
+  BackgroundImageWorker,
+  BackgroundImageWorkerCommand,
+  BackgroundImageWorkerEvent,
+  BackgroundImageWorkerFactory,
+  BackgroundRuntimeSnapshot,
+  PreparedBackgroundImage,
+  PreparedBackgroundRecord,
+} from "./background";
 export { createEditorSession } from "./editor-session";
 export type {
   ActiveEditorSessionSnapshot,
@@ -20,6 +42,34 @@ export type {
   EditorSessionOptions,
   EditorSessionSnapshot,
 } from "./editor-session";
+export {
+  createNativeEnhancementWorkerFactory,
+  ENHANCEMENT_WORKER_PROTOCOL_VERSION,
+  EnhancementCommitService,
+  EnhancementController,
+  EnhancementDraftRepository,
+  EnhancementWorkerClient,
+  isEnhancementWorkerEvent,
+  sameEnhancementCorrelation,
+} from "./enhancements";
+export type {
+  EnhancementDraftBaseline,
+  EnhancementDraftPixels,
+  EnhancementOperationRunner,
+  EnhancementRuntimeService,
+  EnhancementRuntimeSnapshot,
+  EnhancementRunCorrelation,
+  EnhancementWorker,
+  EnhancementWorkerCommand,
+  EnhancementWorkerEvent,
+  EnhancementWorkerFactory,
+  EnhancementWorkerImage,
+  EnhancementWorkerProgress,
+  EnhancementWorkerResult,
+  EnhancementWorkerRunInput,
+  EnhancementWorkerStage,
+  EnhancementWorkerSuccess,
+} from "./enhancements";
 export {
   MANUAL_DRAFT_PATCH_LIMIT,
   ManualDraftEngine,

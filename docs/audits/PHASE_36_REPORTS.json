@@ -1,0 +1,89 @@
+[
+  {
+    "schemaVersion": "phase-36.finishing-tools.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "mocked-browser", "environmentKind": "automated-host" },
+    "automaticInferenceCount": 1,
+    "backgroundPreparationCount": 1,
+    "backgroundCommitCount": 1,
+    "enhancementOperationRunCount": 8,
+    "enhancementCommitCount": 2,
+    "magicPredictionCount": 0,
+    "observedStages": ["enhancement-fine-detail", "enhancement-colour-halo"],
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "scenarioTotal": { "support": "unsupported", "samplesMs": [] },
+      "coldEnhancement": { "support": "unsupported", "samplesMs": [] },
+      "warmEnhancement": { "support": "unsupported", "samplesMs": [] },
+      "backgroundApply": { "support": "unsupported", "samplesMs": [] },
+      "interactionEventToPaint": { "support": "unsupported", "samplesMs": [] },
+      "longTasksMs": []
+    },
+    "missedActions": 0,
+    "limitations": [
+      "The deterministic mocked bundle verifies lifecycle, terminal outcomes, atomic counts, and cleanup, but does not represent model or target-device timings. Counts aggregate three isolated zero-retry scenarios."
+    ]
+  },
+  {
+    "schemaVersion": "phase-36.finishing-tools.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "host-real-model", "environmentKind": "linux-host-real-model" },
+    "automaticInferenceCount": 1,
+    "backgroundPreparationCount": 1,
+    "backgroundCommitCount": 1,
+    "enhancementOperationRunCount": 4,
+    "enhancementCommitCount": null,
+    "magicPredictionCount": 0,
+    "observedStages": [
+      "enhancement-model-loading",
+      "enhancement-fine-detail",
+      "enhancement-colour-halo"
+    ],
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "scenarioTotal": { "support": "supported", "samplesMs": [46600] },
+      "coldEnhancement": { "support": "unsupported", "samplesMs": [] },
+      "warmEnhancement": { "support": "unsupported", "samplesMs": [] },
+      "backgroundApply": { "support": "unsupported", "samplesMs": [] },
+      "interactionEventToPaint": { "support": "unsupported", "samplesMs": [] },
+      "longTasksMs": []
+    },
+    "missedActions": 0,
+    "limitations": [
+      "The 46.6-second serialized host smoke measured the complete representative-image scenario, not separate stage timings.",
+      "The test accepts either an atomic changed commit or a truthful no-op for each real Enhancement pass, so a host commit count is not claimed."
+    ]
+  },
+  {
+    "schemaVersion": "phase-36.finishing-tools.v1",
+    "capturedAt": "2026-08-03",
+    "run": { "id": "windows-target", "environmentKind": "windows-playwright-mcp" },
+    "automaticInferenceCount": 2,
+    "backgroundPreparationCount": 1,
+    "backgroundCommitCount": 1,
+    "enhancementOperationRunCount": 4,
+    "enhancementCommitCount": 2,
+    "magicPredictionCount": 1,
+    "observedStages": [
+      "enhancement-model-loading",
+      "enhancement-fine-detail",
+      "enhancement-colour-halo"
+    ],
+    "resourcesAfterReset": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "timings": {
+      "scenarioTotal": { "support": "unsupported", "samplesMs": [] },
+      "coldEnhancement": { "support": "supported", "samplesMs": [64711] },
+      "warmEnhancement": { "support": "supported", "samplesMs": [18711] },
+      "backgroundApply": { "support": "supported", "samplesMs": [1626] },
+      "interactionEventToPaint": { "support": "unsupported", "samplesMs": [] },
+      "longTasksMs": []
+    },
+    "missedActions": 0,
+    "limitations": [
+      "Cold/warm and Background samples are rounded end-to-end MCP observations and include tool transport and assertion latency; they are not pure worker or event-to-paint durations.",
+      "Grid and scroll completed during model loading, but their MCP round trips are not reported as event-to-paint timings.",
+      "The one-document UI does not deliberately overlap Automatic, Magic, and Enhancement; executable FIFO coordinator tests are the admission evidence.",
+      "PerformanceObserver reported no long tasks after instrumentation began; instrumentation started after the first Automatic run."
+    ]
+  }
+]
