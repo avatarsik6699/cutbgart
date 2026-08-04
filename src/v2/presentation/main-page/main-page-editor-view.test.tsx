@@ -1,7 +1,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { MainPageEditorProjection } from "./main-page-editor-contract";
+import { createDocumentId, createWorkspaceItemId } from "@/v2/domain";
+
+import type {
+  BatchMainPageProjection,
+  MainPageEditorProjection,
+} from "./main-page-editor-contract";
 import { MainPageEditorView } from "./main-page-editor-view";
 
 afterEach(cleanup);
@@ -34,7 +39,7 @@ function projection(
 }
 
 describe("MainPageEditorView", () => {
-  it("routes single-file admission through the intent boundary", () => {
+  it("routes image admission through the batch-capable intent boundary", () => {
     const onIntent = vi.fn();
     render(<MainPageEditorView projection={projection()} onIntent={onIntent} />);
     const file = new File([new Uint8Array([1])], "photo.png", {
@@ -46,7 +51,49 @@ describe("MainPageEditorView", () => {
     });
 
     expect(onIntent).toHaveBeenCalledWith({ type: "choose-files", files: [file] });
-    expect(screen.getByText(/up to 20 MB|до 20 МБ/)).toBeTruthy();
+    expect(screen.getByText(/Drop several|несколько файлов/)).toBeTruthy();
+  });
+
+  it("renders bounded batch projection and emits only typed batch intents", () => {
+    const onIntent = vi.fn();
+    const onBatchIntent = vi.fn();
+    const documentId = createDocumentId("document-1");
+    const itemId = createWorkspaceItemId("item-1");
+    const batch: BatchMainPageProjection = {
+      admissionError: null,
+      capacity: { current: 1, limit: 20 },
+      counts: { active: 0, queued: 0, completed: 1, failed: 0 },
+      export: { status: "idle", includedCount: 0, skippedCount: 0, error: null },
+      items: [
+        {
+          documentId,
+          error: null,
+          fileName: "portrait.png",
+          itemId,
+          previewUrl: "blob:preview",
+          qualityMode: "isnet-q8",
+          queuePosition: null,
+          selected: false,
+          status: "result",
+        },
+      ],
+    };
+    render(
+      <MainPageEditorView
+        batch={batch}
+        onBatchIntent={onBatchIntent}
+        projection={projection({ phase: "processing", sourcePreviewUrl: "blob:source" })}
+        onIntent={onIntent}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-filmstrip")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Select portrait|Выбрать portrait/ }),
+    );
+    expect(onBatchIntent).toHaveBeenCalledWith({ type: "select-item", documentId });
+    fireEvent.click(screen.getByRole("button", { name: /Download all|Скачать все/ }));
+    expect(onBatchIntent).toHaveBeenCalledWith({ type: "download-all" });
   });
 
   it("renders projected dimensions immediately and routes result actions", () => {

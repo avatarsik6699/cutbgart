@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.36` |
+| Version | `v1.37` |
 | Date | `2026-08-04` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -331,7 +331,46 @@ returns with the dedicated batch UI slice. Phase 39 requires a serialized local 
 managed-Windows product acceptance remains mandatory for the later complete-UI/cutover gate, where
 all presentation slices can be assessed together.
 
-### 2.9 Future paid direction
+### 2.9 Active v2 scope — Phase 40
+
+Phase 40 completes the main-page workspace migration by restoring the established v1 batch
+presentation on the separate bilingual noindex v2 routes. It reuses the Phase-39 shell and typed
+presentation boundary plus the accepted Phase-37 workspace actor, per-document runtimes, shared
+heavy-job coordinator, and ZIP exporter. It does not introduce a second batch state owner or revive
+legacy batch hooks/controllers.
+
+The dependency-complete slice covers:
+
+- picker, drag-and-drop, and clipboard admission of up to 20 ordered JPEG/PNG/WebP files, including
+  the existing 20 MiB and 4096 px preparation outcomes, bounded two-file preparation concurrency,
+  capacity feedback, and per-file recoverable failures;
+- the v1 batch workspace hierarchy, counters, queue/progress/error states, horizontal item rail,
+  selected-result editor placement, Add images, per-item retry/remove/download, clear-batch guard,
+  and Download all ZIP presentation in both locales and approved desktop/narrow viewports;
+- quality/model selection captured per admitted item, FIFO single-heavy-job processing, responsive
+  selection while work continues, and preservation of each document's history, drafts, settings,
+  previews, and artifacts when selection changes;
+- typed batch projection/intents at the presentation boundary. React renders bounded summaries and
+  emits intents; files, blobs, pixels, URLs beyond runtime-owned preview handles, actors, workers,
+  controllers, and mutable workflow state remain behind runtime owners;
+- deterministic behavioral, accessibility, visual, resource-lifecycle, and serialized real-model
+  evidence for mixed success/failure, incremental admission, retry/remove, selection, individual
+  PNG export, and privacy-neutral ZIP export without reinference or redundant encoding.
+
+The rendered v1 batch workspace is the normative presentation reference. Phase 39's truthful
+single-image copy exception ends once batch admission is reachable; empty/input copy and controls
+must return to their v1 batch-capable form. The existing deferred v2 editor-tool presentation
+remains the only accepted visual difference in result/editing states and keeps dedicated reviewed
+baselines until its own slice. No general screenshot tolerance or masked product UI is allowed.
+
+Phase 40 does not restyle Manual/Magic Cutout, Background, or Enhancements; migrate scenario/public
+route bindings; remove legacy code; add persistence/backend behavior; change model families; or
+authorize public cutover. Phase-37/38 batch route journeys return to the active regression lane and
+must be adapted only where the Phase-39 main-page presentation contract changed their locators or
+state entry. Managed-Windows complete-product acceptance remains assigned to the later full-UI
+cutover gate.
+
+### 2.10 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -483,6 +522,7 @@ type WorkspaceItemId = string;
 type WorkspaceItemStatus =
   | "preparing"
   | "queued"
+  | "model-loading"
   | "processing"
   | "result"
   | "error";
@@ -505,6 +545,41 @@ type EditorWorkspaceSnapshot = {
   selectedDocumentId: DocumentId | null;
   items: readonly WorkspaceItemSummary[];
 };
+
+type BatchMainPageItemProjection = {
+  itemId: WorkspaceItemId;
+  documentId: DocumentId | null;
+  fileName: string;
+  status: WorkspaceItemStatus;
+  error: { message: string; retryable: boolean } | null;
+  previewUrl: string | null;
+  queuePosition: number | null;
+  qualityMode: AutomaticModelMode;
+  selected: boolean;
+};
+
+type BatchMainPageProjection = {
+  items: readonly BatchMainPageItemProjection[];
+  capacity: { current: number; limit: 20 };
+  admissionError: { code: "capacity-exceeded"; rejectedCount: number } | null;
+  counts: {
+    active: number;
+    queued: number;
+    completed: number;
+    failed: number;
+  };
+  export: BatchExportSnapshot;
+};
+
+type BatchMainPageIntent =
+  | { type: "add-files"; files: readonly File[] }
+  | { type: "select-item"; documentId: DocumentId }
+  | { type: "retry-item"; itemId: WorkspaceItemId }
+  | { type: "remove-item"; itemId: WorkspaceItemId }
+  | { type: "download-item"; documentId: DocumentId }
+  | { type: "clear-batch" }
+  | { type: "cancel-download-all" }
+  | { type: "download-all" };
 
 const WORKSPACE_ITEM_LIMIT = 20;
 const IMPORT_PREPARATION_CONCURRENCY = 2;
@@ -801,6 +876,14 @@ bypasses accepted v2 ownership; bilingual desktop/narrow visual evidence or the 
 real-model journey is missing; or the public/scenario routes change before the isolated slice is
 accepted.
 
+Phase 40 additionally fails if multi-file admission is absent, silently drops files, exceeds the
+20-item bound, or bypasses bounded preparation and global heavy-job admission; batch presentation
+visibly drifts from v1 outside the explicitly deferred tool workspace; selection/retry/remove or
+quality changes mutate a sibling or reconstruct/reinfer a completed document; files/pixels/native
+runtime values enter presentation or actor snapshots; individual/ZIP export includes private source
+metadata, unfinished/error items, reinfers, or redundantly re-encodes committed results; route-level
+Phase-37/38 batch evidence remains disabled; resource churn leaks; or public/scenario routes change.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -813,12 +896,13 @@ accepted.
 | 36 | Complete | Background and Enhancements finishing workflow; gate and architect acceptance passed |
 | 37 | Complete | Batch/multi-document v2 workspace; gate and architect acceptance passed; public routes remain unchanged |
 | 38 | Complete / blocked result | Validation gate passed; visual/product/evidence blockers remain, so no public cutover |
-| 39 | Approved / active | Reproduce the v1 main-page shell and single-image input/process/export UI over v2 on the isolated routes |
-| Later | Unscheduled | Add batch and editor-tool UI slices, migrate scenario/public routes after full acceptance, then remove legacy; paid backend remains separate work |
+| 39 | Complete | V1-faithful main-page shell and single-image input/process/export UI over v2; gate and architect acceptance passed |
+| 40 | Approved / active | Restore the v1 batch workspace UI over the accepted v2 workspace runtime on the isolated routes |
+| Later | Unscheduled | Add editor-tool UI slices, migrate scenario/public routes after full acceptance, then remove legacy; paid backend remains separate work |
 
-No v2 capability is accepted merely because legacy code exists. Phase 39 is limited to the first
-main-page vertical slice above. Batch, editor tools, public migration, legacy removal, and paid work
-still require their own approved phase contracts.
+No v2 capability is accepted merely because legacy code exists. Phase 40 is limited to the batch
+main-page vertical slice above. Editor tools, public migration, legacy removal, and paid work still
+require their own approved phase contracts.
 
 ## 9. Deferred decisions
 

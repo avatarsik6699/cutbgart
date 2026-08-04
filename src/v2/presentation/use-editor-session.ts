@@ -25,5 +25,5 @@ export function useEditorSession(options?: EditorSessionOptions) {
     [session],
   );
 
-  return { session, snapshot };
+  return { session, snapshot, workspace: session.workspaceSnapshot() };
 }

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 vi.mock("@/shared/ui", async (importOriginal) => {
@@ -26,6 +26,8 @@ import {
 import { ArtifactRepository, type EditorSessionOptions } from "@/v2/runtime-browser";
 
 import { EditorV2Page } from "./editor-v2-page";
+
+afterEach(cleanup);
 
 function sessionOptions(): EditorSessionOptions {
   const gateway: ProcessingGateway = {
@@ -87,5 +89,25 @@ describe("EditorV2Page", () => {
         name: /Cutout|Enhancements|Background tool|Batch|Пакет/,
       }),
     ).toBeNull();
+  });
+
+  it("admits a bounded batch and reports files rejected beyond capacity", async () => {
+    render(<EditorV2Page sessionOptions={sessionOptions()} />);
+    const files = Array.from(
+      { length: 21 },
+      (_, index) =>
+        new File([new Uint8Array([1, 2, 3])], `broken-${index + 1}.png`, {
+          type: "image/png",
+        }),
+    );
+
+    fireEvent.change(screen.getByLabelText(/Upload an image|Загрузить изображения/), {
+      target: { files },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("batch-filmstrip").children).toHaveLength(20),
+    );
+    expect(screen.getByRole("alert").textContent).toMatch(/up to 20|до 20/);
   });
 });

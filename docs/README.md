@@ -10,7 +10,8 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
-| [`PHASE_39.md`](./PHASE_39.md) | Active v1-faithful main-page UI migration contract |
+| [`PHASE_40.md`](./PHASE_40.md) | Latest completed v1-faithful batch workspace migration contract |
+| [`PHASE_39.md`](./PHASE_39.md) | Completed v1-faithful single-image main-page UI migration contract |
 | [`PHASE_38.md`](./PHASE_38.md) | Blocked cutover-readiness evidence; parity dispositions need review under the v1-UI preservation decision |
 | [`PHASE_37.md`](./PHASE_37.md) | Completed v2 batch and multi-document workspace contract and acceptance record |
 | [`PHASE_36.md`](./PHASE_36.md) | Latest completed v2 Background and Enhancements contract and acceptance record |
@@ -27,10 +28,9 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-Phase 38 completed with a passing technical gate and an architect-accepted `blocked` public-cutover
-conclusion. Phase 39 is the next active scope: the first v1-faithful main-page vertical slice on the
-isolated noindex v2 routes. Implementation is limited to [`PHASE_39.md`](./PHASE_39.md). Public and
-scenario routes remain on legacy.
+Phase 40 completed the v1-faithful main-page batch workspace on the isolated noindex v2 routes.
+There is no active implementation phase. Editor-tool UI, managed-Windows complete-product
+acceptance, public/scenario route migration, and cutover require a separately approved next phase.
 
 ## Archive
 

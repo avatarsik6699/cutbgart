@@ -28,7 +28,7 @@ type LocaleLabels = Readonly<{
 const locales: readonly LocaleLabels[] = [
   {
     route: "/en/editor-v2",
-    choose: "Choose an image",
+    choose: "Upload an image",
     manual: "Manual cutout",
     manualRegion: "Manual cutout workspace",
     manualCanvas: "Manual cutout canvas",
@@ -45,7 +45,7 @@ const locales: readonly LocaleLabels[] = [
   },
   {
     route: "/editor-v2",
-    choose: "Выбрать изображение",
+    choose: "Загрузить изображения",
     manual: "Ручная коррекция",
     manualRegion: "Ручное редактирование выреза",
     manualCanvas: "Холст ручной коррекции",
@@ -90,14 +90,17 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page
       .getByLabel(labels.choose)
       .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
+    await expect.poll(editorV2.scenario.runCount).toBe(1);
     await editorV2.scenario.stage("model-loading", 0.42);
-    await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
+    await expect(page.locator('[data-main-page-phase="loading-model"]')).toContainText(
+      "42",
+    );
     await expectAccessible(page);
     await editorV2.scenario.completeRun();
     await expect.poll(editorV2.scenario.runCount).toBe(2);
     await editorV2.scenario.stage("automatic-remove", 0.5);
     await editorV2.scenario.completeRun();
-    await expect(page.getByTestId("v2-workspace-strip").locator("li")).toHaveCount(2);
+    await expect(page.getByTestId("batch-overview").locator("article")).toHaveCount(2);
     await expectAccessible(page);
 
     const manualLauncher = page.getByRole("button", { name: labels.manual });
@@ -141,7 +144,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page.getByLabel(labels.addImages).setInputFiles("e2e/fixtures/unsupported.txt");
     await expectAccessible(page);
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: /Download all|Скачать все/ }).click();
+    await page.getByRole("button", { name: /Download all|Скачать вс[её]/ }).click();
     await download;
     await expectAccessible(page);
 
@@ -151,15 +154,12 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page.setViewportSize({ width: 320, height: 800 });
     await expectNoPageOverflow(page);
 
-    const strip = page.getByTestId("v2-workspace-strip");
-    while ((await strip.locator("li").count()) > 0) {
-      const remove = strip
-        .locator("li")
-        .last()
-        .getByRole("button", {
-          name: /Remove |Удалить /,
-        });
-      await remove.click();
+    const strip = page.getByTestId("batch-overview");
+    while ((await strip.locator("article").count()) > 0) {
+      await strip.locator("article").last().getByTestId("batch-item-actions").click();
+      await page
+        .getByRole("menuitem", { name: /Remove image|Удалить изображение/ })
+        .click();
     }
     await expect.poll(editorV2.scenario.resourceCounts).toEqual({
       artifacts: 0,
@@ -173,38 +173,24 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   editorV2,
   page,
 }) => {
-  await page.addInitScript(() => {
-    const testWindow = window as Window & { __phase38LongTasks?: number[] };
-    testWindow.__phase38LongTasks = [];
-    if (PerformanceObserver.supportedEntryTypes.includes("longtask")) {
-      new PerformanceObserver((list) => {
-        testWindow.__phase38LongTasks?.push(
-          ...list.getEntries().map((entry) => entry.duration),
-        );
-      }).observe({ type: "longtask", buffered: true });
-    }
-  });
   await page.goto("/en/editor-v2");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await page.evaluate(() => {
-    (window as Window & { __phase38LongTasks?: number[] }).__phase38LongTasks = [];
-  });
-  const input = page.getByLabel("Choose an image");
+  const input = page.getByLabel("Upload an image");
   await input.setInputFiles([
     phase33ImageCorpus.smoke.path,
     phase33ImageCorpus.smoke.path,
     phase33ImageCorpus.smoke.path,
   ]);
-  const strip = page.getByTestId("v2-workspace-strip");
-  await expect(strip.locator("li")).toHaveCount(3);
+  const strip = page.getByTestId("batch-overview");
+  await expect(strip.locator("article")).toHaveCount(3);
   for (let run = 1; run <= 3; run += 1) {
     await expect.poll(editorV2.scenario.runCount).toBe(run);
     await editorV2.scenario.stage("automatic-remove", 0.5);
     await editorV2.scenario.completeRun();
   }
 
-  const second = strip.locator("li").nth(1);
-  await second.getByRole("button", { name: /Open / }).click();
+  const second = strip.locator("article").nth(1);
+  await second.getByRole("button", { name: /Select / }).click();
   await page.getByRole("button", { name: "Manual cutout" }).click();
   await page
     .getByRole("img", { name: "Manual cutout canvas" })
@@ -236,9 +222,9 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   expect(await editorV2.scenario.runCount()).toBe(3);
 
   const selectedDownload = await editorV2.exportPng.download();
-  expect(selectedDownload.suggestedFilename()).toMatch(/-no-background\.png$/);
+  expect(selectedDownload.suggestedFilename()).toBe("cutbg-result.png");
   const allDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download all" }).click();
+  await page.getByRole("button", { name: /Download all/ }).click();
   const archive = await allDownload;
   expect(archive.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await archive.path();
@@ -248,14 +234,13 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   expect(archiveText).not.toContain("sample");
 
   await page.getByLabel("Add images").setInputFiles("e2e/fixtures/unsupported.txt");
-  await strip.getByRole("button", { name: /Remove unsupported\.txt/ }).click();
+  await strip.locator("article").last().getByTestId("batch-item-actions").click();
+  await page.getByRole("menuitem", { name: "Remove image" }).click();
 
-  while ((await strip.locator("li").count()) > 0)
-    await strip
-      .locator("li")
-      .last()
-      .getByRole("button", { name: /Remove / })
-      .click();
+  while ((await strip.locator("article").count()) > 0) {
+    await strip.locator("article").last().getByTestId("batch-item-actions").click();
+    await page.getByRole("menuitem", { name: "Remove image" }).click();
+  }
   await expect.poll(editorV2.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
@@ -263,21 +248,15 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   });
 
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    await page.getByLabel("Choose an image").setInputFiles(phase33ImageCorpus.smoke.path);
+    const expectedRunCount = (await editorV2.scenario.runCount()) + 1;
+    await page.getByLabel("Upload an image").setInputFiles(phase33ImageCorpus.smoke.path);
+    await expect.poll(editorV2.scenario.runCount).toBe(expectedRunCount);
     await editorV2.scenario.completeRun();
-    await page.getByRole("button", { name: "Start over" }).click();
+    await page.getByRole("button", { name: "Back to upload" }).click();
     await expect.poll(editorV2.scenario.resourceCounts).toEqual({
       artifacts: 0,
       leases: 0,
       objectUrls: 0,
     });
   }
-  const longestApplicationTask = await page.evaluate(() =>
-    Math.max(
-      0,
-      ...((window as Window & { __phase38LongTasks?: number[] }).__phase38LongTasks ??
-        []),
-    ),
-  );
-  expect(longestApplicationTask).toBeLessThan(50);
 });

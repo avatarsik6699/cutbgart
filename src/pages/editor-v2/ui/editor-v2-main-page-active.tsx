@@ -1,7 +1,11 @@
 import {
+  MainPageBatchActions,
+  MainPageBatchRail,
   MainPageEditorView,
   useDocumentActorSelectors,
   type ExportSize,
+  type BatchMainPageIntent,
+  type BatchMainPageProjection,
   type MainPageEditorIntent,
   type MainPageEditorProjection,
 } from "@/v2/presentation";
@@ -10,9 +14,11 @@ import type { ActiveEditorSessionSnapshot, EditorSession } from "@/v2/runtime-br
 import { EditorV2ActiveDocument } from "./editor-v2-active-document";
 
 type Props = Readonly<{
+  batch?: BatchMainPageProjection;
   exportSize: ExportSize;
   locale: "ru" | "en";
   onIntent: (intent: MainPageEditorIntent) => void;
+  onBatchIntent?: (intent: BatchMainPageIntent) => void;
   qualityMode: MainPageEditorProjection["qualityMode"];
   restoreFocusTool: MainPageEditorProjection["restoreFocusTool"];
   session: EditorSession;
@@ -37,11 +43,27 @@ export function EditorV2MainPageActive(props: Props) {
     document.enhancementDraft !== null;
   if (draftOpen) {
     return (
-      <EditorV2ActiveDocument
-        grid="fine"
-        session={props.session}
-        snapshot={props.snapshot}
-      />
+      <div className="space-y-4">
+        {props.batch && props.onBatchIntent ? (
+          <>
+            <div className="flex justify-end">
+              <MainPageBatchActions
+                batch={props.batch}
+                disabled={false}
+                onBatchIntent={props.onBatchIntent}
+                onEditorIntent={props.onIntent}
+                qualityMode={props.qualityMode}
+              />
+            </div>
+            <MainPageBatchRail batch={props.batch} onIntent={props.onBatchIntent} />
+          </>
+        ) : null}
+        <EditorV2ActiveDocument
+          grid="fine"
+          session={props.session}
+          snapshot={props.snapshot}
+        />
+      </div>
     );
   }
   const processingSelection = props.session.processingSelection();
@@ -68,5 +90,12 @@ export function EditorV2MainPageActive(props: Props) {
     committedResultUrl: props.snapshot.resultUrl,
     width: props.snapshot.width,
   };
-  return <MainPageEditorView projection={projection} onIntent={props.onIntent} />;
+  return (
+    <MainPageEditorView
+      batch={props.batch}
+      onBatchIntent={props.onBatchIntent}
+      projection={projection}
+      onIntent={props.onIntent}
+    />
+  );
 }

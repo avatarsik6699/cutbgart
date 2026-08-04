@@ -88,6 +88,7 @@ function itemStatus(item: ItemRecord): WorkspaceItemStatus {
   if (status === "result") return "result";
   if (status === "error") return "error";
   if (status === "queued" || status === "enhancement-queued") return "queued";
+  if (status === "model-loading") return "model-loading";
   return "processing";
 }
 
@@ -271,6 +272,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
           error: item.error ?? documentError,
           previewUrl: item.runtime?.getSnapshot().previewUrl ?? null,
           queuePosition,
+          qualityMode: item.modelMode,
         };
       }),
       export: batchExport.getSnapshot(),
@@ -455,6 +457,9 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
         command: { type: "CANCEL_ACTIVE_RUN", documentId: runtime.documentId },
       });
     },
+    cancelExportAll() {
+      batchExport.cancel();
+    },
     async dispose() {
       if (disposed) return;
       disposed = true;
@@ -534,6 +539,20 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       });
       return batchExport.export(completed, items.filter((item) => !item.removed).length);
     },
+    exportItemPng(documentId) {
+      const runtime = runtimes.get(documentId);
+      if (runtime === undefined) return;
+      const document = runtime.actor.getSnapshot().context.document;
+      if (document.committed === null) return;
+      runtime.actor.send({
+        type: "COMMAND",
+        command: {
+          type: "EXPORT_PNG",
+          documentId,
+          expectedRevision: document.revision,
+        },
+      });
+    },
     getSnapshot,
     importImage: (file, modelMode) => importImages([file], modelMode),
     importImages,
@@ -567,9 +586,13 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     reset() {
       exportCancellation?.abort();
       singleExport = { status: "idle", error: null, size: null };
+      const selectedDocumentId = selected()?.documentId ?? null;
       const item = items.find(
         (candidate) =>
-          candidate.documentId === selected()?.documentId && !candidate.removed,
+          !candidate.removed &&
+          (selectedDocumentId === null
+            ? candidate.documentId === null
+            : candidate.documentId === selectedDocumentId),
       );
       if (item !== undefined) removeItem(item.itemId);
     },

@@ -25,17 +25,17 @@
 | 37 | ✅ done | gate passed; no tag | [`PHASE_37.md`](./PHASE_37.md): batch + multi-document workspace |
 | 38 | ✅ done | gate passed; blocked cutover result; no tag | [`PHASE_38.md`](./PHASE_38.md): validation complete; public cutover not authorized |
 | 39 | ✅ done | gate passed; `v0.39.0` | [`PHASE_39.md`](./PHASE_39.md): v1-faithful main-page single-image flow on isolated v2 routes |
+| 40 | ✅ done | gate passed; `v0.40.0` | [`PHASE_40.md`](./PHASE_40.md): v1-faithful batch workspace on isolated v2 routes |
 
-**Latest closed phase:** `39`
+**Latest closed phase:** `40`
 
-**Implementation in progress:** None
+**Implementation in progress:** —
 
-**Only active implementation scope:** None; initialize the next approved slice through
-`/phase-init`
+**Only active implementation scope:** —; the next migration slice requires an approved phase
 
 ## Current contract
 
-This section describes code that exists after Phase 39. The legacy editor remains the public product;
+This section describes code that exists after Phase 40. The legacy editor remains the public product;
 the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
 Cutout, Background, Enhancements, document history, and a batch/multi-document workspace. See
 [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_37.md`](./PHASE_37.md).
@@ -147,10 +147,20 @@ and `BatchExportSnapshot`. The workspace actor owns child lifecycle but never do
 per-document runtimes own controllers and local view state, while the artifact repository, one
 FIFO heavy-job coordinator, gateways, and warm workers remain shared collaborators.
 
+Phase 40 preserves `model-loading` as a distinct `WorkspaceItemStatus` projection instead of
+collapsing it into generic processing; this is an additive presentation truth and does not change
+the document actor or scheduling contract.
+
 Phase 39 adds `AutomaticModelMode`, neutral `ExportSize`, `MainPageEditorProjection`, and
 `MainPageEditorIntent`. The immutable projection includes runtime-owned dimensions, effective
 model/path/fallback, revision/history availability, export lifecycle, admission error, and focus
 restoration signals; presentation emits typed intents and never owns workflow state.
+
+Phase 40 adds bounded `BatchMainPageItemProjection`,
+`BatchMainPageProjection`, and `BatchMainPageIntent` presentation values over the already implemented
+Phase-37 workspace runtime. Item summaries include the captured model mode; capacity rejection is an
+explicit bounded presentation error. Files, pixels, workers, controllers, actors, and mutable
+workflow state remain outside presentation snapshots.
 
 ### Active endpoints and pages
 
@@ -163,7 +173,7 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v1-faithful single-image main-page slice over v2 automatic removal/export ownership; accepted v2 Manual/Magic/Background/Enhancement workspaces remain reachable, while batch presentation is deferred |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v1-faithful main-page and batch workspace over v2 automatic removal/export ownership; accepted v2 Manual/Magic/Background/Enhancement workspaces remain reachable with their deferred presentation |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
@@ -307,6 +317,11 @@ accepts dedicated reviewed snapshots only for truthful single-image copy and the
 v2 tool-workspace presentation. Public/scenario routes remain legacy. Batch/tool visual migration,
 managed-Windows complete-product acceptance, public cutover, and legacy removal remain later slices.
 
+SPEC v1.37 approves Phase 40 as the batch presentation slice. It restores v1 multi-file copy,
+admission, counters, item rail/actions, selection, and Download All over Phase-37 ownership. The
+deferred v2 editor-tool presentation remains the only accepted visual difference; public/scenario
+routes and cutover remain out of scope.
+
 ## Active blockers and residual risks
 
 | Scope | State |
@@ -318,13 +333,62 @@ managed-Windows complete-product acceptance, public cutover, and legacy removal 
 | Phase 36 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Phase 37 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Phase 38 | Complete; technical gate passed, but public cutover remains blocked by documented product/evidence gaps |
-| Phase 39 | In progress: architecture review remediation complete; SPEC v1.36 resolves the single-image/batch/tool-presentation verification boundary |
+| Phase 39 | Complete; gate passed and `v0.39.0` tags the locally merged implementation |
+| Phase 40 | Complete; full gate, exact bilingual batch evidence, and real-model FIFO/export journey passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-04 — Phase 40 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** Phase-40 gate passed and architect-directed continuation completed
+
+#### Changes / Decision
+
+- Restored the bilingual v1 batch workspace on the isolated v2 routes through immutable bounded
+  projection values and typed intents over Phase-37 runtime ownership.
+- Added ordered admission/capacity feedback, truthful item status and quality capture, selection,
+  per-item retry/remove/PNG, guarded clear, and deterministic privacy-neutral ZIP presentation.
+- Shared the controller-neutral v1 rail/status UI with the legacy adapter, fixed invalid-item reset,
+  reactivated Phase-37/38 browser coverage, and froze exact desktop/narrow visual evidence.
+
+#### Affected Phases / Consequences
+
+- Phase 40 is complete; full gate and both architecture review notes passed.
+- Editor-tool presentation, managed-Windows complete-product acceptance, public cutover, and legacy
+  removal remain separately approved future work.
+
+### 2026-08-04 — Phase 40 batch presentation approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed continued iterative v1-faithful UI migration after Phase 39
+
+#### Changes / Decision
+
+- SPEC v1.37 makes the v1-faithful batch workspace the next isolated v2 slice, using the accepted
+  Phase-37 workspace/runtime and Phase-39 presentation seam.
+- The slice restores multi-file admission, batch status/selection/actions, individual export, and
+  privacy-neutral ZIP presentation without changing workflow ownership.
+- `model-loading` remains a distinct bounded workspace status so presentation does not mislabel
+  model preparation as inference processing.
+- Editor-tool visual migration, public/scenario route cutover, legacy removal, and paid work remain
+  later separately approved phases.
+
+#### Affected Phases / Consequences
+
+- Phase 40 — approved for initialization; its presentation contracts and gate boundary are new.
+- Phases 33–39 remain complete and unchanged because the new contract is additive and consumes their
+  accepted runtime boundaries.
 
 ### 2026-08-04 — Phase 39 complete
 

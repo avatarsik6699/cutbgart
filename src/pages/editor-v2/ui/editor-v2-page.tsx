@@ -1,17 +1,24 @@
 import { useCallback, useState } from "react";
 
 import { ModelStorageTrigger } from "@/features/model-storage";
+import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 import { useAutomaticModelMode } from "@/shared/lib";
 import { SiteShell } from "@/shared/ui";
 import {
   MainPageEditorView,
   useEditorSession,
+  type BatchMainPageIntent,
+  type BatchMainPageProjection,
   type ExportSize,
   type MainPageEditorIntent,
   type MainPageEditorProjection,
 } from "@/v2/presentation";
-import type { EditorImportError, EditorSessionOptions } from "@/v2/runtime-browser";
+import type {
+  EditorImportError,
+  EditorSessionOptions,
+  WorkspaceItemSummary,
+} from "@/v2/runtime-browser";
 import { useIsHydrated } from "@/v2/shared/lib";
 
 import { EditorV2MainPageActive } from "./editor-v2-main-page-active";
@@ -21,6 +28,19 @@ type Props = {
   sessionOptions?: EditorSessionOptions;
 };
 
+function batchError(
+  item: WorkspaceItemSummary,
+): { message: string; retryable: boolean } | null {
+  if (item.error === null) return null;
+  if (typeof item.error !== "string")
+    return { message: item.error.message, retryable: item.error.retryable };
+  if (item.error === "exceeds-size-limit")
+    return { message: m.uploadTooLarge(), retryable: true };
+  if (item.error === "unsupported-file")
+    return { message: m.uploadUnsupported({ format: "unknown" }), retryable: true };
+  return { message: m.editorV2InvalidImage(), retryable: true };
+}
+
 export function EditorV2Page(props: Props) {
   const editor = useEditorSession(props.sessionOptions);
   const hydrated = useIsHydrated();
@@ -29,21 +49,51 @@ export function EditorV2Page(props: Props) {
   const [admissionError, setAdmissionError] = useState<
     EditorImportError | "multiple-files" | null
   >(null);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchAdmissionError, setBatchAdmissionError] =
+    useState<BatchMainPageProjection["admissionError"]>(null);
   const [restoreFocusTool, setRestoreFocusTool] =
     useState<MainPageEditorProjection["restoreFocusTool"]>(null);
   const locale = getLocale();
 
   const admitFiles = useCallback(
     async (files: readonly File[]) => {
-      if (files.length !== 1) {
-        setAdmissionError("multiple-files");
-        return;
-      }
+      if (files.length === 0) return;
+      const workspace = editor.session.workspaceSnapshot();
+      const remaining = Math.max(0, 20 - workspace.items.length);
+      const rejectedCount = Math.max(0, files.length - remaining);
+      setBatchAdmissionError(
+        rejectedCount > 0 ? { code: "capacity-exceeded", rejectedCount } : null,
+      );
+      if (workspace.items.length + Math.min(files.length, remaining) > 1)
+        setBatchMode(true);
       setAdmissionError(null);
-      await editor.session.importImage(files[0]!, automaticModel.qualityMode);
+      await editor.session.importImages(files, automaticModel.qualityMode);
     },
     [automaticModel.qualityMode, editor.session],
   );
+
+  const batchProjection: BatchMainPageProjection = {
+    admissionError: batchAdmissionError,
+    capacity: { current: editor.workspace.items.length, limit: 20 },
+    counts: {
+      active: editor.workspace.items.filter(
+        (item) =>
+          item.status === "preparing" ||
+          item.status === "model-loading" ||
+          item.status === "processing",
+      ).length,
+      queued: editor.workspace.items.filter((item) => item.status === "queued").length,
+      completed: editor.workspace.items.filter((item) => item.status === "result").length,
+      failed: editor.workspace.items.filter((item) => item.status === "error").length,
+    },
+    export: editor.workspace.export,
+    items: editor.workspace.items.map((item) => ({
+      ...item,
+      error: batchError(item),
+      selected: item.documentId === editor.workspace.selectedDocumentId,
+    })),
+  };
 
   let inactivePhase: MainPageEditorProjection["phase"] = "empty";
   if (admissionError !== null || editor.snapshot.error !== null) inactivePhase = "error";
@@ -91,6 +141,64 @@ export function EditorV2Page(props: Props) {
     [admitFiles, automaticModel, editor.session, exportSize],
   );
 
+  const onBatchIntent = useCallback(
+    (intent: BatchMainPageIntent) => {
+      const workspace = editor.session.workspaceSnapshot();
+      const snapshot = editor.session.getSnapshot();
+      if (intent.type === "add-files") {
+        void admitFiles(intent.files);
+      } else if (intent.type === "select-item") {
+        editor.session.selectDocument(intent.documentId);
+      } else if (intent.type === "retry-item") {
+        void editor.session.retryItem(intent.itemId);
+      } else if (intent.type === "remove-item") {
+        const selected = workspace.items.find(
+          (item) =>
+            item.itemId === intent.itemId &&
+            item.documentId === workspace.selectedDocumentId,
+        );
+        const activeDocument =
+          snapshot.kind === "document"
+            ? snapshot.actor.getSnapshot().context.document
+            : null;
+        const guarded =
+          selected !== undefined &&
+          (activeDocument?.activeDraft?.dirty === true ||
+            (activeDocument !== null &&
+              !["ready", "result", "error"].includes(activeDocument.status)));
+        if (guarded && !globalThis.confirm(m.editorV2RemoveGuard())) return;
+        editor.session.removeItem(intent.itemId);
+        if (workspace.items.length <= 1) {
+          setBatchMode(false);
+          setBatchAdmissionError(null);
+        }
+      } else if (intent.type === "download-item") {
+        editor.session.exportItemPng(intent.documentId);
+      } else if (intent.type === "download-all") {
+        void editor.session.exportAll();
+      } else if (intent.type === "cancel-download-all") {
+        editor.session.cancelExportAll();
+      } else if (intent.type === "clear-batch") {
+        const activeDocument =
+          snapshot.kind === "document"
+            ? snapshot.actor.getSnapshot().context.document
+            : null;
+        const guarded =
+          activeDocument?.activeDraft?.dirty === true ||
+          (activeDocument !== null &&
+            !["ready", "result", "error"].includes(activeDocument.status));
+        if (guarded && !globalThis.confirm(m.editorV2RemoveGuard())) return;
+        for (const item of workspace.items) editor.session.removeItem(item.itemId);
+        setAdmissionError(null);
+        setBatchAdmissionError(null);
+        setBatchMode(false);
+        setExportSize("original");
+        setRestoreFocusTool(null);
+      }
+    },
+    [admitFiles, editor.session],
+  );
+
   const projection: MainPageEditorProjection = {
     admissionError: admissionError ?? editor.snapshot.error,
     canRedoDocument: false,
@@ -126,16 +234,23 @@ export function EditorV2Page(props: Props) {
       >
         {editor.snapshot.kind === "document" ? (
           <EditorV2MainPageActive
+            batch={batchMode ? batchProjection : undefined}
             exportSize={exportSize}
             locale={locale}
             onIntent={onIntent}
+            onBatchIntent={batchMode ? onBatchIntent : undefined}
             qualityMode={automaticModel.qualityMode}
             restoreFocusTool={restoreFocusTool}
             session={editor.session}
             snapshot={editor.snapshot}
           />
         ) : (
-          <MainPageEditorView projection={projection} onIntent={onIntent} />
+          <MainPageEditorView
+            batch={batchMode ? batchProjection : undefined}
+            onBatchIntent={batchMode ? onBatchIntent : undefined}
+            projection={projection}
+            onIntent={onIntent}
+          />
         )}
       </main>
     </SiteShell>

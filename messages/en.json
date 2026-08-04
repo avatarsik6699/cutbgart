@@ -104,6 +104,7 @@
   "batchWorkspaceTitle": "Image processing",
   "batchWorkspaceHint": "Add files to the queue and select a finished image to adjust it.",
   "batchActionsAria": "Add and download images",
+  "batchCapacityExceeded": "A batch holds up to {limit} images. {rejected} file(s) were not added.",
   "batchEditorTitle": "Editor",
   "batchEditorEmpty": "Select a finished image from the list below to adjust its background, refine the mask, or download it.",
   "batchSettingsEmpty": "Select a finished image first",

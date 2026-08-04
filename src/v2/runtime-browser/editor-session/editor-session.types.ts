@@ -90,7 +90,7 @@ export type EditorSessionSnapshot =
   | ActiveEditorSessionSnapshot;
 
 export type WorkspaceItemStatus =
-  "preparing" | "queued" | "processing" | "result" | "error";
+  "preparing" | "queued" | "model-loading" | "processing" | "result" | "error";
 
 export type WorkspaceItemSummary = Readonly<{
   itemId: WorkspaceItemId;
@@ -100,6 +100,7 @@ export type WorkspaceItemSummary = Readonly<{
   error: ProcessingError | EditorImportError | null;
   previewUrl: string | null;
   queuePosition: number | null;
+  qualityMode: AutomaticModelMode;
 }>;
 
 export type BatchExportSnapshot = Readonly<{
@@ -143,12 +144,14 @@ export type EditorSession = {
   cancelBackground(): void;
   cancelEnhancements(): void;
   cancel(): void;
+  cancelExportAll(): void;
   changeBackground(fill: BackgroundFillDescriptor): void;
   changeEnhancements(operationIds: readonly EnhancementOperationId[]): void;
   dispose(): Promise<void>;
   exportPng(size?: ExportSize): Promise<void>;
   singleExportSnapshot(): SingleExportSnapshot;
   exportAll(): Promise<void>;
+  exportItemPng(documentId: DocumentId): void;
   getSnapshot(): EditorSessionSnapshot;
   importImage(file: File, modelMode?: AutomaticModelMode): Promise<void>;
   importImages(files: readonly File[], modelMode?: AutomaticModelMode): Promise<void>;

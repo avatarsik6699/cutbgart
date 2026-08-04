@@ -229,6 +229,8 @@ describe("editor v2 browser session", () => {
       error: "invalid-image",
     });
     expect(harness.gateway.request()).toBeNull();
+    harness.session.reset();
+    expect(harness.session.workspaceSnapshot().items).toHaveLength(0);
     harness.repository.assertEmpty();
     await harness.session.dispose();
   });
@@ -244,7 +246,14 @@ describe("editor v2 browser session", () => {
       inferencePath: "wasm",
       requestedMode: "ben2-fp16",
     });
-    expect(harness.gateway.request()).toMatchObject({ modelMode: "isnet-fp32" });
+    const request = harness.gateway.request();
+    expect(request).toMatchObject({ modelMode: "isnet-fp32" });
+    if (request === null) throw new Error("Processing request is unavailable");
+    harness.gateway.publish({ ...request, stage: "model-loading", fraction: 0.25 });
+    expect(harness.session.workspaceSnapshot().items[0]).toMatchObject({
+      qualityMode: "isnet-fp32",
+      status: "model-loading",
+    });
     harness.session.reset();
     await harness.session.dispose();
   });
@@ -260,6 +269,7 @@ describe("editor v2 browser session", () => {
     const workspace = harness.session.workspaceSnapshot();
     expect(workspace.items).toHaveLength(20);
     expect(workspace.items.every((item) => item.status === "error")).toBe(true);
+    expect(workspace.items.every((item) => item.qualityMode === "isnet-q8")).toBe(true);
     expect(new Set(workspace.itemIds).size).toBe(20);
     harness.repository.assertEmpty();
     await harness.session.dispose();

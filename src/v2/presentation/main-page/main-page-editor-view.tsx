@@ -13,6 +13,8 @@ import { EditorToolbar, LocalExecutionReadout } from "@/widgets/tool-workspace";
 import { Typography } from "@/v2/shared/ui";
 
 import type { MainPageEditorPresentationProps } from "./main-page-editor-contract";
+import { MainPageBatchActions } from "./main-page-batch-actions";
+import { MainPageBatchRail } from "./main-page-batch-rail";
 import { MainPageResultRail } from "./main-page-result-rail";
 import { MainPageStageContent } from "./main-page-stage-content";
 
@@ -26,9 +28,15 @@ function modeLabel(
 
 export function MainPageEditorView(props: MainPageEditorPresentationProps) {
   const projection = props.projection;
+  const batch =
+    props.batch && props.onBatchIntent
+      ? { projection: props.batch, onIntent: props.onBatchIntent }
+      : null;
+  const batchActive = batch !== null && batch.projection.items.length > 0;
   const emptyLike =
-    projection.phase === "empty" ||
-    (projection.phase === "error" && projection.sourcePreviewUrl === null);
+    !batchActive &&
+    (projection.phase === "empty" ||
+      (projection.phase === "error" && projection.sourcePreviewUrl === null));
   const busy =
     projection.phase === "preparing" ||
     projection.phase === "loading-model" ||
@@ -62,7 +70,7 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
     <div
       data-testid="tool-workspace"
       data-main-page-phase={projection.phase}
-      className={`tool-workspace-grid ${emptyLike ? "tool-workspace-idle" : ""}`}
+      className={`tool-workspace-grid ${emptyLike ? "tool-workspace-idle" : ""} ${batchActive ? "tool-workspace-batch" : ""}`}
     >
       <div aria-live="polite" role="status" className="sr-only">
         {statusText}
@@ -88,10 +96,19 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
         </Typography>
       ) : null}
 
+      {batchActive && batch !== null ? (
+        <div className="[grid-area:batch]">
+          <MainPageBatchRail batch={batch.projection} onIntent={batch.onIntent} />
+        </div>
+      ) : null}
+
       {!emptyLike ? (
         <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
           <EditorToolbar
-            onBack={() => props.onIntent({ type: busy ? "cancel" : "reset" })}
+            onBack={() => {
+              if (batchActive && batch !== null) batch.onIntent({ type: "clear-batch" });
+              else props.onIntent({ type: busy ? "cancel" : "reset" });
+            }}
             downloadSlot={
               projection.phase === "result" ? (
                 <DownloadSplitControl
@@ -116,11 +133,22 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
                 inferencePath={projection.inferencePath}
               />
             }
+            workspaceActionsSlot={
+              batchActive && batch !== null ? (
+                <MainPageBatchActions
+                  batch={batch.projection}
+                  disabled={busy}
+                  onBatchIntent={batch.onIntent}
+                  onEditorIntent={props.onIntent}
+                  qualityMode={projection.qualityMode}
+                />
+              ) : undefined
+            }
           />
         </div>
       ) : null}
 
-      {projection.phase === "error" && !emptyLike ? (
+      {projection.phase === "error" && !emptyLike && !batchActive ? (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive [grid-area:error]"
@@ -157,14 +185,14 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
               <FileDropzone
                 className="command-deck-dropzone border border-border bg-background/50 backdrop-blur-sm"
                 disabled={busy}
-                multiple={false}
+                multiple
                 onFiles={(files) => props.onIntent({ type: "choose-files", files })}
               />
             }
             uploadButtonSlot={
               <ChooseFilesButton
                 disabled={busy}
-                multiple={false}
+                multiple
                 onFiles={(files) => props.onIntent({ type: "choose-files", files })}
               />
             }
@@ -198,7 +226,13 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
         <>
           <div className="[grid-area:surface]">
             <EditorStage documentId="main-page-v2" loading={busy}>
-              <MainPageStageContent projection={projection} loadingText={loadingText} />
+              {batchActive && projection.sourcePreviewUrl === null ? (
+                <p className="max-w-sm text-center text-sm text-muted-foreground">
+                  {m.batchEditorEmpty()}
+                </p>
+              ) : (
+                <MainPageStageContent projection={projection} loadingText={loadingText} />
+              )}
             </EditorStage>
           </div>
           <div className="[grid-area:rail]">

@@ -1,4 +1,9 @@
 export { Button, buttonVariants } from "./button";
+export { BatchWorkspaceRail, type BatchWorkspaceRailItem } from "./batch-workspace-rail";
+export {
+  BatchWorkspaceStatus,
+  type BatchWorkspaceSummary,
+} from "./batch-workspace-status";
 export { BrandLogo } from "./brand-logo";
 export { Switch } from "./switch";
 export { SiteHeader } from "./site-header";

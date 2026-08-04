@@ -237,38 +237,21 @@ test.describe("Phase 39 v2 main-page parity", () => {
         ).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
         const prefix = `${locale.id}-${viewport.id}`;
-        const singleImageCopyDifference =
-          viewport.id === "desktop" ? "single-image-copy" : null;
-        await expectV2SliceScreenshot(page, prefix, "empty", singleImageCopyDifference);
+        await expectV2SliceScreenshot(page, prefix, "empty");
 
         const activeInput =
           viewport.id === "desktop"
             ? page.getByLabel(locale.upload)
             : page.locator('input[type="file"][capture="environment"]');
         await activeInput.focus();
-        await expectV2SliceScreenshot(
-          page,
-          prefix,
-          "input-active",
-          singleImageCopyDifference,
-        );
+        await expectV2SliceScreenshot(page, prefix, "input-active", null);
 
         await page.getByRole("radio", { name: locale.maximum }).click();
-        await expectV2SliceScreenshot(
-          page,
-          prefix,
-          "quality-choice",
-          singleImageCopyDifference,
-        );
+        await expectV2SliceScreenshot(page, prefix, "quality-choice", null);
 
         await activeInput.setInputFiles(UNSUPPORTED_FILE);
         await expect(page.getByRole("alert")).toBeVisible();
-        await expectV2SliceScreenshot(
-          page,
-          prefix,
-          "recoverable-error",
-          singleImageCopyDifference,
-        );
+        await expectV2SliceScreenshot(page, prefix, "recoverable-error", null);
         await page.getByRole("button", { name: locale.retry, exact: true }).click();
 
         await activeInput.setInputFiles(await createLargeReferenceImage(page));
