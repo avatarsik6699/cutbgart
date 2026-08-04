@@ -1,5 +1,8 @@
+import type { AutomaticModelMode } from "@/shared/lib";
+
 /** Explicit production model selected for automatic background removal. */
-export type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+export type { AutomaticModelMode } from "@/shared/lib";
+export type ExportSize = "original" | 2048 | 1024;
 
 /**
  * `fast`/`max` remain accepted at the worker boundary for backwards-compatible

@@ -60,6 +60,7 @@ export function buildProcessingRequest(
     expectedRevision: 0,
     operation: "automatic-remove",
     source: createArtifactId("source-1"),
+    modelMode: "isnet-q8",
     ...overrides,
   };
 }

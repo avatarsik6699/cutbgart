@@ -4,6 +4,7 @@ import type {
   ProcessingStage,
   RunCorrelation,
 } from "@/v2/domain";
+import type { AutomaticModelMode, BrowserInferencePath } from "@/shared/lib";
 
 import type { LocalModelConfig } from "./model-config";
 
@@ -48,6 +49,13 @@ export type ProcessingWorkerEvent =
       protocol: typeof PROCESSING_WORKER_PROTOCOL_VERSION;
       type: "ACCEPTED";
       correlation: RunCorrelation;
+    }
+  | {
+      protocol: typeof PROCESSING_WORKER_PROTOCOL_VERSION;
+      type: "EXECUTION_SELECTED";
+      correlation: RunCorrelation;
+      inferencePath: BrowserInferencePath;
+      modelMode: AutomaticModelMode;
     }
   | {
       protocol: typeof PROCESSING_WORKER_PROTOCOL_VERSION;

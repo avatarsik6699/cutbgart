@@ -58,6 +58,7 @@ describe("production worker/browser adapter churn", () => {
         expectedRevision: iteration,
         operation: "automatic-remove",
         source,
+        modelMode: "isnet-q8",
       };
       const result = executor.execute(
         request,

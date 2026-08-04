@@ -11,11 +11,13 @@ import type {
 } from "./ids";
 import type { BackgroundFillDescriptor } from "./background";
 import type { EnhancementOperationId } from "./enhancements";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export type StartAutomaticRemovalCommand = {
   type: "START_AUTOMATIC_REMOVAL";
   documentId: DocumentId;
   backend: "local";
+  modelMode: AutomaticModelMode;
 };
 
 export type CancelActiveRunCommand = {

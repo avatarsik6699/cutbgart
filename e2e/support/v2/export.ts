@@ -1,9 +1,11 @@
 import type { Page } from "@playwright/test";
 
 export function exportComponent(page: Page) {
-  const button = page.getByRole("button", {
-    name: /Download (?:committed )?PNG|Скачать (?:сохранённый )?PNG/,
-  });
+  const button = page
+    .getByRole("button", {
+      name: /^(?:Download(?: (?:committed )?PNG)?|Скачать(?: (?:сохранённый )?PNG)?)$/,
+    })
+    .first();
   return {
     button,
     async download() {

@@ -4,6 +4,12 @@ export { Switch } from "./switch";
 export { SiteHeader } from "./site-header";
 export { SiteFooter } from "./site-footer";
 export { SiteShell } from "./site-shell";
+export { useHeaderUtilityPortalTarget } from "./header-utility-portal-context";
+export { MainPageIntro } from "./main-page-intro";
+export { MainPageEmptySurface } from "./main-page-empty-surface";
+export type { MainPageEmptySurfaceProps } from "./main-page-empty-surface";
+export { EditorStage } from "./editor-stage";
+export type { EditorStageFullscreenControls, EditorStageProps } from "./editor-stage";
 export {
   Card,
   CardHeader,

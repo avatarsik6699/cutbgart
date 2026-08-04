@@ -57,22 +57,38 @@ function createReadyState(overrides: Partial<DocumentState> = {}): DocumentState
 describe("document command decisions", () => {
   it("starts one correlated run and rejects a duplicate", () => {
     const started = decideDocumentCommand(createReadyState(), {
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
       runId,
     });
 
     expect(started.outcome.status).toBe("accepted");
-    expect(started.state.activeRun).toEqual({ runId, expectedRevision: 0 });
+    expect(started.state.activeRun).toEqual({
+      runId,
+      expectedRevision: 0,
+      modelMode: "isnet-q8",
+    });
     expect(started.effects).toEqual([
       {
         type: "start-processing",
+        operation: "automatic-remove",
         source: createArtifactId("source-1"),
+        modelMode: "isnet-q8",
         ...correlation,
       },
     ]);
 
     const duplicate = decideDocumentCommand(started.state, {
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
       runId: createRunId("run-2"),
     });
     expect(duplicate.outcome).toEqual({
@@ -85,7 +101,7 @@ describe("document command decisions", () => {
 
   it("turns cancel into one effect and rejects a repeated cancel", () => {
     const running = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       status: "processing",
       stage: "automatic-remove",
     });
@@ -133,7 +149,7 @@ describe("document command decisions", () => {
 
   it("orders cancellation and deterministic cleanup on reset", () => {
     const running = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       status: "processing",
     });
     const reset = decideDocumentCommand(running, {
@@ -152,7 +168,7 @@ describe("document command decisions", () => {
 describe("document event transitions", () => {
   it("commits exactly one matching success and increments the revision", () => {
     const running = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       status: "processing",
     });
     const succeeded = transitionDocument(running, {
@@ -190,7 +206,7 @@ describe("document event transitions", () => {
 
   it("rejects a stale success and requests safe run cleanup", () => {
     const running = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       revision: 1,
       status: "processing",
     });
@@ -207,7 +223,7 @@ describe("document event transitions", () => {
 
   it("never lets a late success escape cancelling", () => {
     const cancelling = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       status: "cancelling",
     });
     const stale = transitionDocument(cancelling, {
@@ -230,7 +246,7 @@ describe("document event transitions", () => {
 
   it("enters a retryable error only for the matching active run", () => {
     const running = createReadyState({
-      activeRun: { runId, expectedRevision: 0 },
+      activeRun: { runId, expectedRevision: 0, modelMode: "isnet-q8" },
       status: "processing",
     });
     const failed = transitionDocument(running, {
@@ -245,7 +261,12 @@ describe("document event transitions", () => {
     });
 
     const retry = decideDocumentCommand(failed.state, {
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
       runId: createRunId("run-2"),
     });
     expect(retry.outcome.status).toBe("accepted");

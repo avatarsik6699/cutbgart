@@ -17,6 +17,7 @@ import type { MagicCutoutDraft } from "./magic-cutout";
 import type { BackgroundDraft } from "./background";
 import type { EnhancementDraft } from "./enhancements";
 import type { MagicCandidateSummary } from "./magic-cutout";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export type { DocumentSnapshot } from "./artifacts";
 
@@ -26,6 +27,7 @@ export type ActiveToolDraft =
 export type ActiveRun = {
   runId: RunId;
   expectedRevision: Revision;
+  modelMode: AutomaticModelMode;
 };
 
 export type PendingCommit = ActiveRun & {

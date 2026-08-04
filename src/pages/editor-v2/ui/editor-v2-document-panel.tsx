@@ -15,6 +15,7 @@ type Props = {
   magicOpen: boolean;
   revision: number;
   progress: number | null;
+  showPrimaryActions?: boolean;
   session: EditorSession;
   status: DocumentStatus;
   onBeginManual(button: HTMLButtonElement): void;
@@ -37,6 +38,7 @@ function statusMessage(status: DocumentStatus): string {
 }
 
 export function EditorV2DocumentPanel(props: Props) {
+  const showPrimaryActions = props.showPrimaryActions ?? true;
   const canCancel = ["queued", "model-loading", "processing"].includes(props.status);
   const canRetry = props.status === "error" || props.status === "ready";
   const draftOpen =
@@ -99,16 +101,20 @@ export function EditorV2DocumentPanel(props: Props) {
           </div>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
-          {canCancel ? (
+          {showPrimaryActions && canCancel ? (
             <Button variant="outline" onClick={() => props.session.cancel()}>
               {m.editorV2Cancel()}
             </Button>
           ) : null}
-          {canRetry ? (
+          {showPrimaryActions && canRetry ? (
             <Button onClick={() => props.session.retry()}>{m.editorV2Retry()}</Button>
           ) : null}
-          {canExport ? (
-            <Button onClick={() => props.session.exportPng()}>
+          {showPrimaryActions && canExport ? (
+            <Button
+              onClick={() => {
+                void props.session.exportPng();
+              }}
+            >
               {draftOpen ? m.editorV2DownloadCommittedPng() : m.editorV2DownloadPng()}
             </Button>
           ) : null}
@@ -154,18 +160,20 @@ export function EditorV2DocumentPanel(props: Props) {
           >
             {m.editorV2DocumentRedo()}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => props.session.reset()}
-            disabled={
-              props.status === "cancelling" ||
-              props.status === "manual-applying" ||
-              props.status === "magic-applying" ||
-              draftOpen
-            }
-          >
-            {m.editorV2StartOver()}
-          </Button>
+          {showPrimaryActions ? (
+            <Button
+              variant="ghost"
+              onClick={() => props.session.reset()}
+              disabled={
+                props.status === "cancelling" ||
+                props.status === "manual-applying" ||
+                props.status === "magic-applying" ||
+                draftOpen
+              }
+            >
+              {m.editorV2StartOver()}
+            </Button>
+          ) : null}
         </div>
       </section>
     </div>

@@ -1,5 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+
+vi.mock("@/shared/ui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/shared/ui")>();
+  return {
+    ...actual,
+    SiteShell: ({ children }: { children: ReactNode }) => children,
+  };
+});
 
 import type { ProcessingGateway } from "@/v2/application";
 import {
@@ -50,15 +59,16 @@ function sessionOptions(): EditorSessionOptions {
 }
 
 describe("EditorV2Page", () => {
-  it("offers one-image input, keeps an unrelated preview control live, and directs invalid input", async () => {
+  it("renders the shared main-page controls and directs invalid input", async () => {
     render(<EditorV2Page sessionOptions={sessionOptions()} />);
 
-    const gridButton = screen.getByRole("button", { name: /Grid|Сетка/ });
-    const firstLabel = gridButton.textContent;
-    fireEvent.click(gridButton);
-    expect(gridButton.textContent).not.toBe(firstLabel);
+    const heading = screen.getByRole("heading", {
+      name: /Remove image backgrounds in seconds|Уберите фон с изображения за секунды/,
+    });
+    expect(heading).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
 
-    const input = screen.getByLabelText(/Choose an image|Выбрать изображение/);
+    const input = screen.getByLabelText(/Upload an image|Загрузить изображения/);
     fireEvent.change(input, {
       target: {
         files: [

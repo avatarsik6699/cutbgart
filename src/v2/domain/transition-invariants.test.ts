@@ -29,11 +29,16 @@ describe("document transition invariants", () => {
           type: "START_AUTOMATIC_REMOVAL",
           documentId: initial.documentId,
           backend: "local",
+          modelMode: "isnet-q8",
         },
         runId,
       });
       expect(started.outcome.status).toBe("accepted");
-      expect(started.state.activeRun).toEqual({ runId, expectedRevision: 0 });
+      expect(started.state.activeRun).toEqual({
+        runId,
+        expectedRevision: 0,
+        modelMode: "isnet-q8",
+      });
 
       const branch = random() % 3;
       if (branch === 0) {

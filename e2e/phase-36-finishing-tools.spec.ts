@@ -21,7 +21,7 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await page.getByRole("button", { name: "Ocean" }).click();
   await expect(page.getByText("Background preview has unapplied changes.")).toBeVisible();
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
+    "cutbg-result.png",
   );
   await expect(page.getByText("Document revision 1")).toBeVisible();
   await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(0);
@@ -64,7 +64,7 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await expect.poll(editorV2.scenario.runCount).toBe(1);
 
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
+    "cutbg-result.png",
   );
   await editorV2.preview.resetButton.click();
   await expect.poll(editorV2.scenario.resourceCounts).toEqual({

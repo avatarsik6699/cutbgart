@@ -61,7 +61,11 @@ class FakeWorker implements ProcessingWorker {
   }
 }
 
-function createHarness() {
+function createHarness(
+  onExecutionSelected?: ConstructorParameters<
+    typeof WorkerProcessingExecutor
+  >[0]["onExecutionSelected"],
+) {
   let nextArtifact = 0;
   const repository = new ArtifactRepository({
     assertions: "throw",
@@ -97,12 +101,14 @@ function createHarness() {
       onnxRuntimeWebVersion: "1.27.0",
       revision: "revision-1",
     },
+    onExecutionSelected,
     repository,
   });
   const request: ProcessingRequest = {
     ...correlation,
     operation: "automatic-remove",
     source,
+    modelMode: "isnet-q8",
   };
   return { executor, repository, request, workers };
 }
@@ -134,6 +140,39 @@ function successEvent(): Extract<ProcessingWorkerEvent, { type: "SUCCEEDED" }> {
 }
 
 describe("WorkerProcessingExecutor", () => {
+  it("publishes only correlated effective execution selections", async () => {
+    const onExecutionSelected = vi.fn();
+    const harness = createHarness(onExecutionSelected);
+    const result = harness.executor.execute(
+      harness.request,
+      new AbortController().signal,
+      () => undefined,
+    );
+    const worker = await startedWorker(harness);
+    worker.emit({
+      protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
+      type: "EXECUTION_SELECTED",
+      correlation: { ...correlation, runId: createRunId("stale") },
+      inferencePath: "wasm",
+      modelMode: "isnet-fp32",
+    });
+    worker.emit({
+      protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
+      type: "EXECUTION_SELECTED",
+      correlation,
+      inferencePath: "wasm",
+      modelMode: "isnet-fp32",
+    });
+    worker.emit(successEvent());
+
+    await result;
+    expect(onExecutionSelected).toHaveBeenCalledOnce();
+    expect(onExecutionSelected).toHaveBeenCalledWith(harness.request, {
+      inferencePath: "wasm",
+      modelMode: "isnet-fp32",
+    });
+  });
+
   it("does not create a worker when disposal wins source preparation", async () => {
     const harness = createHarness();
     const result = harness.executor.execute(
@@ -179,7 +218,11 @@ describe("WorkerProcessingExecutor", () => {
     );
     const worker = await startedWorker(harness);
 
-    expect(worker.messages[0]?.message).toMatchObject({ type: "RUN", correlation });
+    expect(worker.messages[0]?.message).toMatchObject({
+      type: "RUN",
+      correlation,
+      model: { mode: "isnet-q8" },
+    });
     expect(worker.messages[0]?.transfer).toHaveLength(1);
     worker.emit({
       protocol: PROCESSING_WORKER_PROTOCOL_VERSION,

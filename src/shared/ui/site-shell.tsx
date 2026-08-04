@@ -4,10 +4,13 @@ import { HeaderUtilityPortalProvider } from "./header-utility-portal";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 
-function SiteShell({
-  children,
-  headerUtilitySlot,
-}: Readonly<{ children: ReactNode; headerUtilitySlot?: ReactNode }>) {
+type Props = Readonly<{
+  children: ReactNode;
+  headerUtilitySlot?: ReactNode;
+  homeNavigationActive?: boolean;
+}>;
+
+function SiteShell(props: Props) {
   const [workspaceUtilityTarget, setWorkspaceUtilityTarget] =
     useState<HTMLElement | null>(null);
 
@@ -16,15 +19,16 @@ function SiteShell({
       <div className="relative flex min-h-screen flex-col overflow-x-clip">
         <SiteHeader
           className="relative z-30"
-          utilitySlot={headerUtilitySlot}
-          workspaceUtilityRef={setWorkspaceUtilityTarget}
+          homeActive={props.homeNavigationActive}
+          utilitySlot={props.headerUtilitySlot}
+          onWorkspaceUtilityChange={setWorkspaceUtilityTarget}
         />
         <div className="relative z-20 flex-1">
           <div
             aria-hidden="true"
             className="site-background-pattern pointer-events-none absolute inset-0 z-0"
           />
-          <div className="relative z-10">{children}</div>
+          <div className="relative z-10">{props.children}</div>
         </div>
         <SiteFooter className="relative z-10" />
       </div>

@@ -232,7 +232,7 @@ describe("editor v2 document actor", () => {
 
     actor.send({
       type: "DOMAIN_EVENT",
-      event: { type: "PREPARATION_SUCCEEDED", documentId },
+      event: { type: "PREPARATION_SUCCEEDED", documentId, modelMode: "isnet-q8" },
     });
     await vi.waitFor(() => expect(gateway.runs).toHaveLength(1));
     expect(gateway.runs).toHaveLength(1);
@@ -286,7 +286,12 @@ describe("editor v2 document actor", () => {
     actor.start();
     actor.send({
       type: "COMMAND",
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
     });
     await vi.waitFor(() => expect(gateway.runs).toHaveLength(1));
 
@@ -317,7 +322,12 @@ describe("editor v2 document actor", () => {
     actor.start();
     actor.send({
       type: "COMMAND",
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
     });
     await vi.waitFor(() => expect(gateway.runs).toHaveLength(1));
 

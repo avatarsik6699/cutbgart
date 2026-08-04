@@ -47,7 +47,7 @@ test("Magic strokes predict separately and Apply creates exactly one document ed
   await page.keyboard.press("Control+y");
   await expect(page.getByRole("button", { name: "Undo edit" })).toBeEnabled();
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
+    "cutbg-result.png",
   );
 
   await editorV2.preview.resetButton.click();

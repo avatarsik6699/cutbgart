@@ -10,6 +10,8 @@ export async function installMockEditorV2Worker(
         protocol: 1;
         type: "RUN";
         correlation: { documentId: string; runId: string; expectedRevision: number };
+        model?: { mode?: string };
+        source?: { height: number; width: number };
       };
       type WorkerCommand = {
         protocol: number;
@@ -18,6 +20,9 @@ export async function installMockEditorV2Worker(
         bytes?: ArrayBuffer;
         mediaType?: string;
         matte?: ArrayBuffer;
+        blob?: Blob;
+        height?: number;
+        width?: number;
       };
       type TestWindow = Window & {
         __completeV2Run?: () => void;
@@ -26,6 +31,7 @@ export async function installMockEditorV2Worker(
           fraction: number,
         ) => void;
         __v2RunCount?: number;
+        __v2RunModelModes?: string[];
         __v2ManualCommitCount?: number;
         __v2MagicCommitCount?: number;
         __v2MagicPredictionCount?: number;
@@ -48,6 +54,25 @@ export async function installMockEditorV2Worker(
         }
 
         postMessage(command: WorkerCommand): void {
+          if (
+            command.type === "RESIZE_EXPORT" &&
+            command.blob !== undefined &&
+            command.width !== undefined &&
+            command.height !== undefined
+          ) {
+            void createImageBitmap(command.blob).then(async (bitmap) => {
+              try {
+                const canvas = new OffscreenCanvas(command.width!, command.height!);
+                const context = canvas.getContext("2d")!;
+                context.drawImage(bitmap, 0, 0, command.width!, command.height!);
+                const blob = await canvas.convertToBlob({ type: "image/png" });
+                this.emit({ type: "RESIZED", blob });
+              } finally {
+                bitmap.close();
+              }
+            });
+            return;
+          }
           if (command.type === "RUN" && command.correlation?.operationId !== undefined) {
             const operationId = command.correlation.operationId;
             const correlation = command.correlation;
@@ -129,6 +154,10 @@ export async function installMockEditorV2Worker(
               activeWorker.progress(stage, fraction);
             };
             testWindow.__v2RunCount = (testWindow.__v2RunCount ?? 0) + 1;
+            testWindow.__v2RunModelModes = [
+              ...(testWindow.__v2RunModelModes ?? []),
+              (command as RunCommand).model?.mode ?? "unknown",
+            ];
             this.emit({
               protocol: 1,
               type: "ACCEPTED",
@@ -267,24 +296,31 @@ export async function installMockEditorV2Worker(
             throw new Error("No active editor v2 run");
           }
           this.active = null;
-          const png = Uint8Array.from([
-            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
-            0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 215,
-            99, 248, 207, 192, 240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73,
-            69, 78, 68, 174, 66, 96, 130,
-          ]);
-          this.emit({
-            protocol: 1,
-            type: "SUCCEEDED",
-            correlation: command.correlation,
-            outputs: {
-              matte: new Uint8Array([255]).buffer,
-              compositePng: png.buffer,
-              width: 1,
-              height: 1,
-            },
-            timings: [],
-          });
+          const width = command.source?.width ?? 1;
+          const height = command.source?.height ?? 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d")!;
+          context.fillStyle = "#FFFFFF";
+          context.fillRect(0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob === null) throw new Error("Could not encode mock v2 result");
+            void blob.arrayBuffer().then((compositePng) =>
+              this.emit({
+                protocol: 1,
+                type: "SUCCEEDED",
+                correlation: command.correlation,
+                outputs: {
+                  matte: new Uint8Array(width * height).fill(255).buffer,
+                  compositePng,
+                  width,
+                  height,
+                },
+                timings: [],
+              }),
+            );
+          }, "image/png");
         }
 
         png(): Uint8Array {

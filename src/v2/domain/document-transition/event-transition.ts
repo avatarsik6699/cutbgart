@@ -528,6 +528,7 @@ export function transitionDocument(
             pendingCommit: {
               runId: event.runId,
               expectedRevision: event.expectedRevision,
+              modelMode: state.activeRun?.modelMode ?? "isnet-q8",
               snapshot: event.snapshot,
             },
           },

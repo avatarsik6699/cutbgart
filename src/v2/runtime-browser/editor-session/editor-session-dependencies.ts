@@ -29,6 +29,8 @@ import {
 } from "../processing";
 import { WorkerSnapshotCommitter } from "../snapshot-commit";
 import type { DocumentId } from "@/v2/domain";
+import type { ProcessingRequest } from "@/v2/domain";
+import type { AutomaticModelMode, BrowserInferencePath } from "@/shared/lib";
 import type {
   EditorSessionDependencies,
   EditorSessionOptions,
@@ -36,6 +38,15 @@ import type {
 
 export function createEditorSessionDependencies(
   options: EditorSessionOptions,
+  runtimeEvents?: Readonly<{
+    onExecutionSelected(
+      request: ProcessingRequest,
+      selection: Readonly<{
+        inferencePath: BrowserInferencePath;
+        modelMode: AutomaticModelMode;
+      }>,
+    ): void;
+  }>,
 ): EditorSessionDependencies {
   const ids = options.ids ?? createNativeEditorIdSource();
   const repository =
@@ -57,6 +68,7 @@ export function createEditorSessionDependencies(
       new WorkerProcessingExecutor({
         factory: createNativeProcessingWorkerFactory(),
         model: createLocalModelConfig(inferencePath),
+        onExecutionSelected: runtimeEvents?.onExecutionSelected,
         repository,
       }),
       heavyJobs,

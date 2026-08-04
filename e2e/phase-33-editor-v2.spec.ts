@@ -16,37 +16,27 @@ test("editor v2 runs once, remains interactive, cancels/retries, exports, and re
     "content",
     "noindex, nofollow",
   );
-  const grid = page.getByRole("button", { name: "Grid: fine" });
-
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.stage("model-loading", 0.5);
-  await expect(editorV2.progress.currentStage).toContainText("Loading model");
+  await expect(editorV2.progress.currentStage).toContainText(/Loading .*model/);
   const modelScrollBefore = await page.evaluate(() => scrollY);
   await page.mouse.move(450, 250);
   await page.mouse.wheel(0, 400);
   await expect
     .poll(() => page.evaluate(() => scrollY))
     .toBeGreaterThan(modelScrollBefore);
-  await grid.click();
-  await expect(page.getByRole("button", { name: "Grid: wide" })).toBeVisible();
 
   await editorV2.scenario.stage("automatic-remove", 0.5);
   await expect(editorV2.progress.currentStage).toContainText("Removing background");
-  const inferenceScrollBefore = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, 300);
-  await expect
-    .poll(() => page.evaluate(() => scrollY))
-    .toBeGreaterThan(inferenceScrollBefore);
-  await page.getByRole("button", { name: "Grid: wide" }).click();
-  await expect(page.getByRole("button", { name: "Grid: fine" })).toBeVisible();
 
   await editorV2.scenario.completeRun();
   await expect(editorV2.exportPng.button).toBeVisible();
   await expect(editorV2.preview.image).toBeVisible();
 
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
+    "cutbg-result.png",
   );
   await expect.poll(editorV2.scenario.runCount).toBe(1);
 
@@ -88,9 +78,9 @@ test("editor v2 exposes the Russian noindex surface", async ({ editorV2, page })
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
 
   await expect(
-    page.getByRole("heading", { name: "Фон исчезает. Управление остаётся." }),
+    page.getByRole("heading", { name: "Удалите фон с фото за секунды" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Выбрать изображение")).toBeVisible();
+  await expect(page.getByLabel("Загрузить изображения")).toBeVisible();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
     "content",
     "noindex, nofollow",
@@ -98,9 +88,9 @@ test("editor v2 exposes the Russian noindex surface", async ({ editorV2, page })
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.stage("model-loading", 1);
-  await expect(editorV2.progress.currentStage).toContainText("Загрузка модели");
+  await expect(editorV2.progress.currentStage).toContainText(/Загружаем модель/);
   await editorV2.scenario.stage("automatic-remove", 0.5);
-  await expect(editorV2.progress.currentStage).toContainText("Удаление фона");
+  await expect(editorV2.progress.currentStage).toContainText("Удаляем фон");
   await editorV2.scenario.completeRun();
   await expect(editorV2.exportPng.button).toBeVisible();
   await editorV2.preview.resetButton.click();

@@ -63,9 +63,7 @@ test("editor v2 real boundary: one model run, preview, and export", async ({
       ),
     )
     .toBe(1);
-  expect((await exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
-  );
+  expect((await exportPng.download()).suggestedFilename()).toBe("cutbg-result.png");
   await expect
     .poll(() =>
       page.evaluate(

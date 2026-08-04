@@ -37,10 +37,7 @@ describe("editor artifact effects", () => {
       documentId: createDocumentId("document-1"),
       revision: 1,
     });
-    expect(download.start).toHaveBeenCalledWith(
-      "blob:result",
-      "portrait-no-background.png",
-    );
+    expect(download.start).toHaveBeenCalledWith("blob:result", "cutbg-result.png");
     await Promise.resolve();
     expect(releaseObjectUrl).toHaveBeenCalledWith("blob:result");
   });

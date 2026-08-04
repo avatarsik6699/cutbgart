@@ -17,6 +17,11 @@ export {
   normalizeModelMode,
   PRODUCTION_MODELS,
 } from "./inference/production-model-config";
+export {
+  QUALITY_MODE_STORAGE_KEY,
+  useAutomaticModelMode,
+} from "./inference/use-automatic-model-mode";
+export type { UseAutomaticModelModeResult } from "./inference/use-automatic-model-mode";
 export type {
   AutomaticModelMode,
   AutomaticQualityMode,

@@ -79,6 +79,7 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/background/background-image-worker-factory.ts",
         "src/v2/runtime-browser/enhancements/enhancement-worker-factory.ts",
         "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
+        "src/v2/runtime-browser/export/export-worker-factory.ts",
       ],
     },
     {
@@ -95,6 +96,8 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
         "src/v2/runtime-browser/snapshot-commit/worker-snapshot-committer.ts",
         "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
+        "src/v2/runtime-browser/export/export-resize-client.ts",
+        "src/v2/runtime-browser/export/export-resize.worker.ts",
       ],
     },
     {
@@ -113,6 +116,7 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/runtime-browser/snapshot-commit/worker/snapshot-commit.worker.ts",
         "src/v2/runtime-browser/background/worker/background-image.worker.ts",
         "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
+        "src/v2/runtime-browser/export/export-resize.worker.ts",
       ],
     },
     {
@@ -127,6 +131,7 @@ describe("v2 shared platform boundaries", () => {
         "src/v2/presentation/magic-cutout/magic-cutout-workspace.tsx",
         "src/v2/runtime-browser/background/worker/background-image.worker.ts",
         "src/v2/runtime-browser/enhancements/worker/enhancement.worker.ts",
+        "src/v2/runtime-browser/export/export-resize.worker.ts",
       ],
     },
     {

@@ -1,5 +1,6 @@
 import type { ArtifactId, DocumentId, Revision, RunId } from "./ids";
 import type { DocumentSnapshot } from "./artifacts";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export type ProcessingBackend = "local" | "remote";
 
@@ -21,6 +22,7 @@ export type RunCorrelation = {
 export type ProcessingRequest = RunCorrelation & {
   operation: "automatic-remove";
   source: ArtifactId;
+  modelMode: AutomaticModelMode;
 };
 
 export type ProcessingProgress = RunCorrelation & {

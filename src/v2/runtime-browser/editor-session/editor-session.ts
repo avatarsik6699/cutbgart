@@ -5,6 +5,7 @@ import {
   createWorkspaceMachine,
   getDocumentActorId,
   type DocumentActorRef,
+  type ProcessingCancellation,
 } from "@/v2/application";
 import {
   createWorkspaceItemId,
@@ -12,11 +13,13 @@ import {
   type DocumentState,
   type WorkspaceItemId,
 } from "@/v2/domain";
+import type { AutomaticModelMode } from "@/shared/lib";
+import type { BrowserInferencePath } from "@/shared/lib";
 
 import { BatchExportCoordinator } from "../batch-export";
 import { BatchImportCoordinator, WORKSPACE_ITEM_LIMIT } from "../batch-import";
 import { MagicPredictionService } from "../magic-cutout";
-import { createNativeProcessingCancellationSource } from "../platform";
+import { createNativeProcessingCancellationSource, startBlobDownload } from "../platform";
 import { createEditorArtifactEffects } from "./editor-artifact-effects";
 import { createEditorSessionDependencies } from "./editor-session-dependencies";
 import type {
@@ -24,10 +27,17 @@ import type {
   EditorSession,
   EditorSessionOptions,
   EditorSessionSnapshot,
+  SingleExportSnapshot,
   EditorWorkspaceSnapshot,
   WorkspaceItemStatus,
 } from "./editor-session.types";
 import { DocumentRuntime } from "./document-runtime";
+import { exportFileName, resizeExportPng, selectedExportDimensions } from "../export";
+import type { ExportSize } from "@/v2/domain";
+import {
+  detectBrowserProcessingCapabilities,
+  resolveUsableInferencePath,
+} from "../processing";
 
 type ItemRecord = {
   itemId: WorkspaceItemId;
@@ -37,6 +47,9 @@ type ItemRecord = {
   error: EditorImportError | null;
   preparing: boolean;
   removed: boolean;
+  modelMode: AutomaticModelMode;
+  requestedModelMode: AutomaticModelMode;
+  inferencePath: BrowserInferencePath | null;
 };
 
 function documentState(
@@ -79,9 +92,26 @@ function itemStatus(item: ItemRecord): WorkspaceItemStatus {
 }
 
 export function createEditorSession(options: EditorSessionOptions = {}): EditorSession {
-  const dependencies = createEditorSessionDependencies(options);
   const listeners = new Set<() => void>();
   const items: ItemRecord[] = [];
+  const dependencies = createEditorSessionDependencies(options, {
+    onExecutionSelected(request, selection) {
+      const item = items.find(
+        (candidate) => !candidate.removed && candidate.documentId === request.documentId,
+      );
+      const activeRun = item?.runtime?.actor.getSnapshot().context.document.activeRun;
+      if (
+        item === undefined ||
+        activeRun == null ||
+        activeRun.runId !== request.runId ||
+        activeRun.expectedRevision !== request.expectedRevision
+      )
+        return;
+      item.modelMode = selection.modelMode;
+      item.inferencePath = selection.inferencePath;
+      publish();
+    },
+  });
   const runtimes = new Map<DocumentId, DocumentRuntime>();
   const imports = new BatchImportCoordinator();
   const batchExport = new BatchExportCoordinator({
@@ -90,6 +120,13 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   });
   let disposed = false;
   let itemSequence = 0;
+  const exportCancellationSource = createNativeProcessingCancellationSource();
+  let exportCancellation: ProcessingCancellation | null = null;
+  let singleExport: SingleExportSnapshot = {
+    status: "idle",
+    error: null,
+    size: null,
+  };
 
   const artifactEffects = createEditorArtifactEffects({
     download: dependencies.download,
@@ -250,6 +287,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   function registerPrepared(
     item: ItemRecord,
     prepared: {
+      file: File;
       mediaType: "image/jpeg" | "image/png" | "image/webp";
       width: number;
       height: number;
@@ -261,13 +299,13 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     let registered = false;
     try {
       source = dependencies.repository.register(
-        item.file,
+        prepared.file,
         {
           kind: "source",
           mediaType: prepared.mediaType,
           width: prepared.width,
           height: prepared.height,
-          estimatedBytes: item.file.size,
+          estimatedBytes: prepared.file.size,
         },
         { kind: "document", documentId },
       );
@@ -306,7 +344,11 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       runtimes.set(documentId, runtime);
       runtime.actor.send({
         type: "DOMAIN_EVENT",
-        event: { type: "PREPARATION_SUCCEEDED", documentId },
+        event: {
+          type: "PREPARATION_SUCCEEDED",
+          documentId,
+          modelMode: item.modelMode,
+        },
       });
     } catch {
       if (registered) workspace.send({ type: "REMOVE_DOCUMENT", documentId });
@@ -316,7 +358,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     }
   }
 
-  async function importImages(files: readonly File[]): Promise<void> {
+  async function importImages(
+    files: readonly File[],
+    modelMode: AutomaticModelMode = "isnet-q8",
+  ): Promise<void> {
     if (disposed || files.length === 0) return;
     const capacity = WORKSPACE_ITEM_LIMIT - items.filter((item) => !item.removed).length;
     const acceptedFiles = files.slice(0, Math.max(0, capacity));
@@ -329,10 +374,25 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
         error: null,
         preparing: true,
         removed: false,
+        modelMode,
+        requestedModelMode: modelMode,
+        inferencePath: null,
       };
       items.push(item);
       return item;
     });
+    publish();
+    const capabilities = detectBrowserProcessingCapabilities();
+    const requestedPath = capabilities.webGpu === "supported" ? "webgpu" : "wasm";
+    const inferencePath = await resolveUsableInferencePath(requestedPath);
+    for (const item of records) {
+      if (disposed || item.removed) continue;
+      item.inferencePath = inferencePath;
+      item.modelMode =
+        item.requestedModelMode === "ben2-fp16" && inferencePath !== "webgpu"
+          ? "isnet-fp32"
+          : item.requestedModelMode;
+    }
     publish();
     const results = await Promise.all(
       records.map((item) => imports.prepare({ itemId: item.itemId, file: item.file })),
@@ -401,6 +461,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       imports.dispose();
       batchExport.dispose();
       stopExport();
+      exportCancellation?.abort();
       for (const item of [...items]) if (!item.removed) removeItem(item.itemId);
       workspace.send({ type: "DISPOSE" });
       workspace.stop();
@@ -414,10 +475,45 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       dependencies.manualDrafts.dispose();
       listeners.clear();
     },
-    exportPng() {
+    async exportPng(size: ExportSize = "original") {
       const runtime = selected();
       if (runtime === null) return;
       const document = runtime.actor.getSnapshot().context.document;
+      if (document.committed === null) return;
+      if (size !== "original") {
+        const value = dependencies.repository.read(document.committed.composite);
+        if (!(value instanceof Blob)) return;
+        exportCancellation?.abort();
+        const cancellation = exportCancellationSource.create();
+        exportCancellation = cancellation;
+        singleExport = { status: "preparing", error: null, size };
+        publish();
+        try {
+          const dimensions = selectedExportDimensions(
+            { width: runtime.getSnapshot().width, height: runtime.getSnapshot().height },
+            size,
+          );
+          const output = await resizeExportPng(value, dimensions, cancellation.signal);
+          if (cancellation.signal.aborted) {
+            singleExport = { status: "cancelled", error: null, size };
+            return;
+          }
+          startBlobDownload(dependencies.download, output, exportFileName(size));
+          singleExport = { status: "succeeded", error: null, size };
+        } catch (error) {
+          singleExport = cancellation.signal.aborted
+            ? { status: "cancelled", error: null, size }
+            : {
+                status: "error",
+                error: error instanceof Error ? error.message : "Export failed",
+                size,
+              };
+        } finally {
+          if (exportCancellation === cancellation) exportCancellation = null;
+          publish();
+        }
+        return;
+      }
       runtime.actor.send({
         type: "COMMAND",
         command: {
@@ -426,6 +522,8 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
           expectedRevision: document.revision,
         },
       });
+      singleExport = { status: "succeeded", error: null, size };
+      publish();
     },
     exportAll() {
       const completed = items.flatMap((item) => {
@@ -437,7 +535,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       return batchExport.export(completed, items.filter((item) => !item.removed).length);
     },
     getSnapshot,
-    importImage: (file) => importImages([file]),
+    importImage: (file, modelMode) => importImages([file], modelMode),
     importImages,
     magicDraft: () => selected()?.magicDraft() ?? null,
     magicViewState: () => selected()?.magicViewState() ?? { mode: "keep", radius: 18 },
@@ -467,6 +565,8 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     },
     removeItem,
     reset() {
+      exportCancellation?.abort();
+      singleExport = { status: "idle", error: null, size: null };
       const item = items.find(
         (candidate) =>
           candidate.documentId === selected()?.documentId && !candidate.removed,
@@ -474,7 +574,24 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       if (item !== undefined) removeItem(item.itemId);
     },
     resources: () => dependencies.repository.stats(),
-    retry() {
+    processingSelection() {
+      const runtime = selected();
+      const item = items.find(
+        (candidate) =>
+          !candidate.removed &&
+          (candidate.documentId === runtime?.documentId ||
+            (runtime === null && candidate.preparing)),
+      );
+      if (item?.inferencePath === null || item === undefined) return null;
+      return {
+        effectiveMode: item.modelMode,
+        fallbackUsed: item.modelMode !== item.requestedModelMode,
+        inferencePath: item.inferencePath,
+        requestedMode: item.requestedModelMode,
+      };
+    },
+    singleExportSnapshot: () => singleExport,
+    retry(modelMode) {
       const runtime = selected();
       if (runtime === null) return;
       runtime.actor.send({
@@ -483,6 +600,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
           type: "START_AUTOMATIC_REMOVAL",
           documentId: runtime.documentId,
           backend: "local",
+          modelMode: modelMode ?? "isnet-q8",
         },
       });
     },
@@ -500,6 +618,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
               type: "START_AUTOMATIC_REMOVAL",
               documentId: document.documentId,
               backend: "local",
+              modelMode: item.modelMode,
             },
           });
         }

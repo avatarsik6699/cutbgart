@@ -23,9 +23,7 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   await expect(page.getByRole("button", { name: "Redo stroke" })).toBeEnabled();
   await page.keyboard.press("Control+Shift+z");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(
-    page.getByRole("img", { name: "Image with background removed" }),
-  ).toBeVisible();
+  await expect(editorV2.preview.image).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo edit" })).toBeDisabled();
 
   await page.getByRole("button", { name: "Manual cutout" }).click();
@@ -42,7 +40,7 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   await page.keyboard.press("Control+y");
   await expect(page.getByRole("button", { name: "Undo edit" })).toBeEnabled();
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
+    "cutbg-result.png",
   );
 
   await editorV2.preview.resetButton.click();

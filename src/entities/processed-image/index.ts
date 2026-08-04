@@ -1,5 +1,6 @@
 export type {
   AutomaticModelMode,
+  ExportSize,
   BackgroundFill,
   BackgroundGradientStop,
   HexColor,
@@ -31,8 +32,10 @@ export type {
   BrushBoundingBox,
   MaskPatch,
 } from "./model/mask-correction";
-export { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
-export type { BeforeAfterSliderProps } from "./ui/BeforeAfterSlider";
+export { BeforeAfterSlider } from "./ui/before-after-slider";
+export type { BeforeAfterSliderProps } from "./ui/before-after-slider";
+export { BeforeAfterUrlSlider } from "./ui/before-after-url-slider";
+export type { BeforeAfterUrlSliderProps } from "./ui/before-after-url-slider";
 export type {
   ExtractAlphaMatteRequest,
   LoadModelRequest,

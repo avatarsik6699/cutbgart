@@ -17,6 +17,7 @@ import type {
 } from "./processing";
 import type { MagicCandidateSummary, MagicPredictionCorrelation } from "./magic-cutout";
 import type { EnhancementOperationId } from "./enhancements";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export type SourceRegisteredEvent = {
   type: "SOURCE_REGISTERED";
@@ -26,7 +27,11 @@ export type SourceRegisteredEvent = {
 
 export type PreparationEvent =
   | { type: "PREPARATION_STARTED"; documentId: DocumentId }
-  | { type: "PREPARATION_SUCCEEDED"; documentId: DocumentId }
+  | {
+      type: "PREPARATION_SUCCEEDED";
+      documentId: DocumentId;
+      modelMode: AutomaticModelMode;
+    }
   | { type: "PREPARATION_FAILED"; documentId: DocumentId; error: ProcessingError };
 
 export type ProcessingLifecycleEvent =

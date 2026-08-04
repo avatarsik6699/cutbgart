@@ -74,4 +74,56 @@ describe("BatchImportCoordinator", () => {
     coordinator.dispose();
     await Promise.all([first, second]);
   });
+
+  it("aborts active preparation when its item is cancelled", async () => {
+    const itemId = createWorkspaceItemId("active");
+    let receivedSignal: AbortSignal | undefined;
+    const coordinator = new BatchImportCoordinator((_file, _runtime, signal) => {
+      receivedSignal = signal;
+      return new Promise<ImageImportPreparation>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("cancelled", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+
+    const result = coordinator.prepare({ itemId, file: png("active.png") });
+    coordinator.cancel(itemId);
+
+    expect(receivedSignal?.aborted).toBe(true);
+    await expect(result).resolves.toMatchObject({ ok: false, error: "cancelled" });
+  });
+
+  it("aborts every active preparation on dispose", async () => {
+    const signals: AbortSignal[] = [];
+    const coordinator = new BatchImportCoordinator((_file, _runtime, signal) => {
+      if (signal !== undefined) signals.push(signal);
+      return new Promise<ImageImportPreparation>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("cancelled", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const first = coordinator.prepare({
+      itemId: createWorkspaceItemId("dispose-first"),
+      file: png("first.png"),
+    });
+    const second = coordinator.prepare({
+      itemId: createWorkspaceItemId("dispose-second"),
+      file: png("second.png"),
+    });
+
+    coordinator.dispose();
+
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ ok: false, error: "cancelled" }),
+      expect.objectContaining({ ok: false, error: "cancelled" }),
+    ]);
+  });
 });

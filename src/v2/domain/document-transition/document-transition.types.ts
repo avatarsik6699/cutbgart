@@ -12,7 +12,7 @@ import type {
   RunId,
 } from "../ids";
 import type { DocumentHistoryEntry } from "../document-history";
-import type { RunCorrelation } from "../processing";
+import type { ProcessingRequest, RunCorrelation } from "../processing";
 
 export type DocumentCommandEnvelope =
   | {
@@ -70,7 +70,7 @@ export type DocumentCommandEnvelope =
     };
 
 export type DocumentEffect =
-  | (RunCorrelation & { type: "start-processing"; source: ArtifactId })
+  | (ProcessingRequest & { type: "start-processing" })
   | (RunCorrelation & { type: "cancel-processing" })
   | (RunCorrelation & { type: "promote-run"; snapshot: DocumentSnapshot })
   | { type: "release-run-if-owned"; documentId: DocumentId; runId: RunId }

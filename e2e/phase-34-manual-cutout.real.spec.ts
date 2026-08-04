@@ -75,9 +75,7 @@ test("real model result accepts one Manual commit without re-running inference",
       })),
     )
     .toEqual({ inference: 1, manual: 1 });
-  expect((await exportPng.download()).suggestedFilename()).toBe(
-    "sample-no-background.png",
-  );
+  expect((await exportPng.download()).suggestedFilename()).toBe("cutbg-result.png");
   await preview.resetButton.click();
   await expect
     .poll(() =>

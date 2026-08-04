@@ -9,9 +9,8 @@ import type {
 import type { ArtifactRepository } from "../artifacts";
 import type { DownloadAdapter } from "../platform";
 
-function exportName(fileName: string | null): string {
-  const base = fileName?.replace(/\.[^.]+$/, "").trim() || "cutbg-result";
-  return `${base}-no-background.png`;
+function exportName(): string {
+  return "cutbg-result.png";
 }
 
 function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
@@ -101,10 +100,7 @@ export function createEditorArtifactEffects(options: {
         documentId: effect.documentId,
       });
       if (objectUrl === null) return;
-      options.download.start(
-        objectUrl.url,
-        exportName(options.fileName(effect.documentId)),
-      );
+      options.download.start(objectUrl.url, exportName());
       queueMicrotask(() => options.repository.releaseObjectUrl(objectUrl.url));
     },
     promoteRun(effect) {

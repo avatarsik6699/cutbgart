@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
-import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
-import { EditorWorkspaceStrip, useEditorSession } from "@/v2/presentation";
-import type { EditorSessionOptions } from "@/v2/runtime-browser";
+import { ModelStorageTrigger } from "@/features/model-storage";
+import { getLocale } from "@/paraglide/runtime";
+import { useAutomaticModelMode } from "@/shared/lib";
+import { SiteShell } from "@/shared/ui";
+import {
+  MainPageEditorView,
+  useEditorSession,
+  type ExportSize,
+  type MainPageEditorIntent,
+  type MainPageEditorProjection,
+} from "@/v2/presentation";
+import type { EditorImportError, EditorSessionOptions } from "@/v2/runtime-browser";
 import { useIsHydrated } from "@/v2/shared/lib";
-import { Typography } from "@/v2/shared/ui";
 
-import { EditorV2ActiveDocument } from "./editor-v2-active-document";
-import { EditorV2Stage } from "./editor-v2-stage";
-import { EditorV2StatusRail } from "./editor-v2-status-rail";
+import { EditorV2MainPageActive } from "./editor-v2-main-page-active";
+import { MainPageDiagnosticsPortal } from "./main-page-diagnostics-portal";
 
 type Props = {
   sessionOptions?: EditorSessionOptions;
@@ -17,86 +23,121 @@ type Props = {
 
 export function EditorV2Page(props: Props) {
   const editor = useEditorSession(props.sessionOptions);
-  const [grid, setGrid] = useState<"fine" | "wide">("fine");
   const hydrated = useIsHydrated();
-  const workspace = editor.session.workspaceSnapshot();
+  const automaticModel = useAutomaticModelMode("isnet-q8");
+  const [exportSize, setExportSize] = useState<ExportSize>("original");
+  const [admissionError, setAdmissionError] = useState<
+    EditorImportError | "multiple-files" | null
+  >(null);
+  const [restoreFocusTool, setRestoreFocusTool] =
+    useState<MainPageEditorProjection["restoreFocusTool"]>(null);
+  const locale = getLocale();
 
-  function toggleGridFx(): void {
-    setGrid((current) => (current === "fine" ? "wide" : "fine"));
-  }
+  const admitFiles = useCallback(
+    async (files: readonly File[]) => {
+      if (files.length !== 1) {
+        setAdmissionError("multiple-files");
+        return;
+      }
+      setAdmissionError(null);
+      await editor.session.importImage(files[0]!, automaticModel.qualityMode);
+    },
+    [automaticModel.qualityMode, editor.session],
+  );
+
+  let inactivePhase: MainPageEditorProjection["phase"] = "empty";
+  if (admissionError !== null || editor.snapshot.error !== null) inactivePhase = "error";
+  else if (editor.snapshot.kind === "preparing") inactivePhase = "preparing";
+
+  const onIntent = useCallback(
+    (intent: MainPageEditorIntent) => {
+      if (intent.type === "choose-quality") {
+        automaticModel.setQualityMode(intent.mode);
+      } else if (intent.type === "choose-files") {
+        void admitFiles(intent.files);
+      } else if (intent.type === "cancel") {
+        editor.session.cancel();
+      } else if (intent.type === "retry") {
+        editor.session.retry(automaticModel.qualityMode);
+      } else if (intent.type === "reset") {
+        setAdmissionError(null);
+        setExportSize("original");
+        setRestoreFocusTool(null);
+        editor.session.reset();
+      } else if (intent.type === "choose-export-size") {
+        setExportSize(intent.size);
+      } else if (intent.type === "download-selected") {
+        void editor.session.exportPng(exportSize);
+      } else if (intent.type === "begin-manual") {
+        setRestoreFocusTool("manual");
+        editor.session.beginManual();
+      } else if (intent.type === "begin-magic") {
+        setRestoreFocusTool("magic");
+        editor.session.beginMagic();
+      } else if (intent.type === "begin-background") {
+        setRestoreFocusTool("background");
+        editor.session.beginBackground();
+      } else if (intent.type === "begin-enhancements") {
+        setRestoreFocusTool("enhancements");
+        editor.session.beginEnhancements();
+      } else if (intent.type === "undo-document") {
+        editor.session.undoDocument();
+      } else if (intent.type === "redo-document") {
+        editor.session.redoDocument();
+      } else if (intent.type === "focus-restored") {
+        setRestoreFocusTool(null);
+      }
+    },
+    [admitFiles, automaticModel, editor.session, exportSize],
+  );
+
+  const projection: MainPageEditorProjection = {
+    admissionError: admissionError ?? editor.snapshot.error,
+    canRedoDocument: false,
+    canUndoDocument: false,
+    exportError: null,
+    exportStatus: "idle",
+    fallbackUsed: false,
+    height: null,
+    inferencePath: "wasm",
+    locale,
+    phase: inactivePhase,
+    qualityMode: automaticModel.qualityMode,
+    exportSize,
+    progressPercent: null,
+    retryable: false,
+    restoreFocusTool: null,
+    revision: 0,
+    sourcePreviewUrl: null,
+    committedResultUrl: null,
+    width: null,
+  };
 
   return (
-    <main
-      className="bg-background text-foreground min-h-screen px-4 py-5 sm:px-6 sm:py-8"
-      data-hydrated={hydrated}
-      data-artifact-count={editor.session.resources().artifacts}
-      data-lease-count={editor.session.resources().leases}
-      data-object-url-count={editor.session.resources().objectUrls}
-    >
-      <div className="mx-auto max-w-[92rem]">
-        <header className="border-border mb-5 flex flex-wrap items-end justify-between gap-4 border-b pb-5">
-          <div>
-            <Typography
-              variant="label"
-              as="p"
-              className="text-local mb-2 font-mono uppercase tracking-[0.18em]"
-            >
-              cutbg / editor v2
-            </Typography>
-            <Typography variant="display" as="h1" className="max-w-4xl text-balance">
-              {m.editorV2Title()}
-            </Typography>
-          </div>
-          <Button variant="outline" size="sm" onClick={toggleGridFx}>
-            {grid === "fine" ? m.editorV2GridFine() : m.editorV2GridWide()}
-          </Button>
-        </header>
-
-        {workspace.items.length > 0 ? (
-          <EditorWorkspaceStrip
-            active={editor.snapshot.kind === "document" ? editor.snapshot : null}
+    <SiteShell headerUtilitySlot={<ModelStorageTrigger />} homeNavigationActive>
+      <MainPageDiagnosticsPortal />
+      <main
+        data-testid="home-page"
+        data-hydrated={hydrated}
+        data-artifact-count={editor.session.resources().artifacts}
+        data-lease-count={editor.session.resources().leases}
+        data-object-url-count={editor.session.resources().objectUrls}
+        className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12"
+      >
+        {editor.snapshot.kind === "document" ? (
+          <EditorV2MainPageActive
+            exportSize={exportSize}
+            locale={locale}
+            onIntent={onIntent}
+            qualityMode={automaticModel.qualityMode}
+            restoreFocusTool={restoreFocusTool}
             session={editor.session}
-            workspace={workspace}
+            snapshot={editor.snapshot}
           />
-        ) : null}
-
-        <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-          {editor.snapshot.kind === "document" ? (
-            <EditorV2ActiveDocument
-              grid={grid}
-              session={editor.session}
-              snapshot={editor.snapshot}
-            />
-          ) : (
-            <>
-              <EditorV2StatusRail
-                status={editor.snapshot.kind === "preparing" ? "preparing" : "empty"}
-              />
-              <EditorV2Stage
-                fileName={editor.snapshot.fileName}
-                grid={grid}
-                height={editor.snapshot.height}
-                onFiles={(files) => void editor.session.importImages(files)}
-                previewUrl={editor.snapshot.previewUrl}
-                resultUrl={editor.snapshot.resultUrl}
-                status={editor.snapshot.kind === "preparing" ? "preparing" : "empty"}
-                width={editor.snapshot.width}
-              />
-            </>
-          )}
-        </div>
-
-        {editor.snapshot.error !== null ? (
-          <Typography
-            variant="body-small"
-            as="p"
-            role="alert"
-            className="text-destructive mt-4"
-          >
-            {m.editorV2InvalidImage()}
-          </Typography>
-        ) : null}
-      </div>
-    </main>
+        ) : (
+          <MainPageEditorView projection={projection} onIntent={onIntent} />
+        )}
+      </main>
+    </SiteShell>
   );
 }

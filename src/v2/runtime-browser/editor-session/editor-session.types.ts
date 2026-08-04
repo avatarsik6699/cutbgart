@@ -16,6 +16,9 @@ import type {
   ManualCutoutMode,
   MagicCutoutMode,
 } from "@/v2/domain";
+import type { AutomaticModelMode } from "@/shared/lib";
+import type { ExportSize } from "@/v2/domain";
+import type { BrowserInferencePath } from "@/shared/lib";
 
 import type { ArtifactRepository } from "../artifacts";
 import type {
@@ -42,7 +45,7 @@ import type { HeavyJobCoordinator } from "../processing";
 import type { SnapshotCommitter } from "../snapshot-commit";
 
 export type EditorImportError =
-  "unsupported-file" | "invalid-image" | "preparation-failed";
+  "unsupported-file" | "exceeds-size-limit" | "invalid-image" | "preparation-failed";
 
 export type EmptyEditorSessionSnapshot = {
   kind: "empty";
@@ -106,6 +109,19 @@ export type BatchExportSnapshot = Readonly<{
   error: string | null;
 }>;
 
+export type SingleExportSnapshot = Readonly<{
+  status: "idle" | "preparing" | "succeeded" | "cancelled" | "error";
+  error: string | null;
+  size: ExportSize | null;
+}>;
+
+export type AutomaticProcessingSelection = Readonly<{
+  effectiveMode: AutomaticModelMode;
+  fallbackUsed: boolean;
+  inferencePath: BrowserInferencePath;
+  requestedMode: AutomaticModelMode;
+}>;
+
 export type EditorWorkspaceSnapshot = Readonly<{
   itemIds: readonly WorkspaceItemId[];
   selectedDocumentId: DocumentId | null;
@@ -130,11 +146,12 @@ export type EditorSession = {
   changeBackground(fill: BackgroundFillDescriptor): void;
   changeEnhancements(operationIds: readonly EnhancementOperationId[]): void;
   dispose(): Promise<void>;
-  exportPng(): void;
+  exportPng(size?: ExportSize): Promise<void>;
+  singleExportSnapshot(): SingleExportSnapshot;
   exportAll(): Promise<void>;
   getSnapshot(): EditorSessionSnapshot;
-  importImage(file: File): Promise<void>;
-  importImages(files: readonly File[]): Promise<void>;
+  importImage(file: File, modelMode?: AutomaticModelMode): Promise<void>;
+  importImages(files: readonly File[], modelMode?: AutomaticModelMode): Promise<void>;
   manualDraft(): ManualDraftEngine | null;
   manualViewState(): Readonly<{
     mode: ManualCutoutMode;
@@ -162,11 +179,12 @@ export type EditorSession = {
   undoDocument(): void;
   redoDocument(): void;
   resources(): ArtifactRepositoryStats;
+  processingSelection(): AutomaticProcessingSelection | null;
   reset(): void;
   removeItem(itemId: WorkspaceItemId): void;
   retryItem(itemId: WorkspaceItemId): Promise<void>;
   selectDocument(documentId: DocumentId): void;
-  retry(): void;
+  retry(modelMode?: AutomaticModelMode): void;
   retryEnhancements(): void;
   selectBackgroundImage(file: File): Promise<void>;
   subscribe(listener: () => void): () => void;

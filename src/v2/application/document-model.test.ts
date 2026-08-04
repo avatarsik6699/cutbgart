@@ -89,6 +89,7 @@ describe("document actor model paths", () => {
           type: "START_AUTOMATIC_REMOVAL",
           documentId: actor.getSnapshot().context.document.documentId,
           backend: "local",
+          modelMode: "isnet-q8",
         },
       });
       await vi.waitFor(() => expect(harness.gateway.runs).toHaveLength(1));
@@ -122,6 +123,7 @@ describe("document actor model paths", () => {
       type: "START_AUTOMATIC_REMOVAL" as const,
       documentId,
       backend: "local" as const,
+      modelMode: "isnet-q8" as const,
     };
     actor.send({ type: "COMMAND", command: start });
     actor.send({ type: "COMMAND", command: start });
@@ -168,7 +170,12 @@ describe("document actor model paths", () => {
     const documentId = firstActor.getSnapshot().context.document.documentId;
     firstActor.send({
       type: "COMMAND",
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
     });
     await vi.waitFor(() => expect(firstHarness.gateway.runs).toHaveLength(1));
     firstActor.send({
@@ -188,7 +195,12 @@ describe("document actor model paths", () => {
     secondActor.start();
     secondActor.send({
       type: "COMMAND",
-      command: { type: "START_AUTOMATIC_REMOVAL", documentId, backend: "local" },
+      command: {
+        type: "START_AUTOMATIC_REMOVAL",
+        documentId,
+        backend: "local",
+        modelMode: "isnet-q8",
+      },
     });
     await vi.waitFor(() => expect(secondHarness.gateway.runs).toHaveLength(1));
     secondHarness.gateway.runs[0]?.succeed(buildDocumentSnapshot());

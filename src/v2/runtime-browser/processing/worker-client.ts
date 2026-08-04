@@ -9,6 +9,8 @@ import {
 import { ArtifactRepository } from "../artifacts";
 import type { LocalProcessingExecutor } from "./local-processing-gateway";
 import type { LocalModelConfig } from "./model-config";
+import type { AutomaticModelMode, BrowserInferencePath } from "@/shared/lib";
+import { selectLocalModelConfig } from "./model-config";
 import type { ProcessingWorker, ProcessingWorkerFactory } from "./worker-factory";
 import {
   PROCESSING_WORKER_PROTOCOL_VERSION,
@@ -34,6 +36,13 @@ export type WorkerProcessingExecutorOptions = {
   factory: ProcessingWorkerFactory;
   model: LocalModelConfig;
   repository: ArtifactRepository;
+  onExecutionSelected?: (
+    request: ProcessingRequest,
+    selection: Readonly<{
+      inferencePath: BrowserInferencePath;
+      modelMode: AutomaticModelMode;
+    }>,
+  ) => void;
 };
 
 function gatewayError(detail: ProcessingError): ProcessingGatewayError {
@@ -44,6 +53,7 @@ export class WorkerProcessingExecutor implements LocalProcessingExecutor {
   readonly #factory: ProcessingWorkerFactory;
   readonly #model: LocalModelConfig;
   readonly #repository: ArtifactRepository;
+  readonly #onExecutionSelected: WorkerProcessingExecutorOptions["onExecutionSelected"];
   #active: ActiveExecution | null = null;
   #claimed = false;
   #disposed = false;
@@ -54,6 +64,7 @@ export class WorkerProcessingExecutor implements LocalProcessingExecutor {
     this.#factory = options.factory;
     this.#model = options.model;
     this.#repository = options.repository;
+    this.#onExecutionSelected = options.onExecutionSelected;
   }
 
   async execute(
@@ -137,7 +148,7 @@ export class WorkerProcessingExecutor implements LocalProcessingExecutor {
               protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
               type: "RUN",
               correlation: request,
-              model: this.#model,
+              model: selectLocalModelConfig(this.#model, request.modelMode),
               source: {
                 bytes,
                 height: sourceMetadata.height,
@@ -262,6 +273,12 @@ export class WorkerProcessingExecutor implements LocalProcessingExecutor {
     switch (event.type) {
       case "ACCEPTED":
         active.publish({ ...active.request, stage: "queued", fraction: null });
+        break;
+      case "EXECUTION_SELECTED":
+        this.#onExecutionSelected?.(active.request, {
+          inferencePath: event.inferencePath,
+          modelMode: event.modelMode,
+        });
         break;
       case "PROGRESS": {
         const progress = acceptWorkerProgress(active, event);

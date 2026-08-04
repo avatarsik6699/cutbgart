@@ -8,6 +8,8 @@ export type {
   EmptyEditorSessionSnapshot,
   PreparingEditorSessionSnapshot,
   BatchExportSnapshot,
+  SingleExportSnapshot,
+  AutomaticProcessingSelection,
   EditorWorkspaceSnapshot,
   WorkspaceItemStatus,
   WorkspaceItemSummary,

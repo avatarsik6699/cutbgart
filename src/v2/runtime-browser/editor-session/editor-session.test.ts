@@ -203,10 +203,10 @@ describe("editor v2 browser session", () => {
     );
     expect(harness.session.getSnapshot().resultUrl).toBe("blob:test-2");
 
-    harness.session.exportPng();
+    void harness.session.exportPng();
     expect(harness.download.start).toHaveBeenCalledWith(
       "blob:test-3",
-      "portrait-no-background.png",
+      "cutbg-result.png",
     );
     await Promise.resolve();
 
@@ -230,6 +230,22 @@ describe("editor v2 browser session", () => {
     });
     expect(harness.gateway.request()).toBeNull();
     harness.repository.assertEmpty();
+    await harness.session.dispose();
+  });
+
+  it("correlates BEN2 fallback to the effective WASM model selected by runtime", async () => {
+    const harness = createHarness();
+
+    await harness.session.importImage(pngFile(), "ben2-fp16");
+
+    expect(harness.session.processingSelection()).toEqual({
+      effectiveMode: "isnet-fp32",
+      fallbackUsed: true,
+      inferencePath: "wasm",
+      requestedMode: "ben2-fp16",
+    });
+    expect(harness.gateway.request()).toMatchObject({ modelMode: "isnet-fp32" });
+    harness.session.reset();
     await harness.session.dispose();
   });
 

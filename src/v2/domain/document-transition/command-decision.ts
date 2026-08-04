@@ -623,14 +623,26 @@ export function decideDocumentCommand(
         outcome: accepted(command.type),
         state: {
           ...state,
-          activeRun: { runId: envelope.runId, expectedRevision: state.revision },
+          activeRun: {
+            runId: envelope.runId,
+            expectedRevision: state.revision,
+            modelMode: command.modelMode,
+          },
           pendingCommit: null,
           status: "queued",
           stage: "queued",
           progress: null,
           error: null,
         },
-        effects: [{ type: "start-processing", source: state.source, ...correlation }],
+        effects: [
+          {
+            type: "start-processing",
+            operation: "automatic-remove",
+            source: state.source,
+            modelMode: command.modelMode,
+            ...correlation,
+          },
+        ],
       };
     }
     case "CANCEL_ACTIVE_RUN": {

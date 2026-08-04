@@ -7,7 +7,7 @@ export { LocalProcessingGateway } from "./local-processing-gateway";
 export type { LocalProcessingExecutor } from "./local-processing-gateway";
 export { HeavyJobCoordinator } from "./heavy-job-coordinator";
 export type { HeavyJobKind, HeavyJobRequest } from "./heavy-job-coordinator";
-export { createLocalModelConfig } from "./model-config";
+export { createLocalModelConfig, selectLocalModelConfig } from "./model-config";
 export type { LocalModelConfig } from "./model-config";
 export { WorkerProcessingExecutor } from "./worker-client";
 export { createNativeProcessingWorkerFactory } from "./worker-factory";

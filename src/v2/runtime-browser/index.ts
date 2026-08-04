@@ -50,6 +50,8 @@ export type {
   EditorSessionOptions,
   EditorSessionSnapshot,
   BatchExportSnapshot,
+  SingleExportSnapshot,
+  AutomaticProcessingSelection,
   EditorWorkspaceSnapshot,
   WorkspaceItemStatus,
   WorkspaceItemSummary,

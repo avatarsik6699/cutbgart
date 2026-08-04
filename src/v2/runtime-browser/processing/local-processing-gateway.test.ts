@@ -21,6 +21,7 @@ const request: ProcessingRequest = {
   expectedRevision: 0,
   operation: "automatic-remove",
   source: createArtifactId("source-1"),
+  modelMode: "isnet-q8",
 };
 const snapshot: DocumentSnapshot = {
   matte: createArtifactId("matte-1"),

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { IMAGE_IMPORT_MAX_BYTES, prepareImageImport } from "./image-import-preparation";
 
@@ -12,14 +12,28 @@ function pngWithDimensions(width: number, height: number): File {
 }
 
 describe("image import preparation", () => {
-  it("accepts bounded PNG dimensions and rejects oversized dimensions", async () => {
+  it("accepts bounded PNG dimensions and downscales oversized dimensions", async () => {
     await expect(prepareImageImport(pngWithDimensions(4096, 1))).resolves.toMatchObject({
       ok: true,
     });
-    await expect(prepareImageImport(pngWithDimensions(4097, 1))).resolves.toEqual({
-      ok: false,
-      error: "invalid-image",
+    const resize = vi.fn(() =>
+      Promise.resolve(new Blob(["scaled"], { type: "image/png" })),
+    );
+    await expect(
+      prepareImageImport(pngWithDimensions(8192, 4096), {
+        resize,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { width: 4096, height: 2048, mediaType: "image/png" },
     });
+    expect(resize).toHaveBeenCalledWith(
+      expect.any(File),
+      4096,
+      2048,
+      "image/png",
+      undefined,
+    );
   });
 
   it("rejects encoded input above twenty MiB before dimension inspection", async () => {
@@ -30,7 +44,7 @@ describe("image import preparation", () => {
     );
     await expect(prepareImageImport(oversized)).resolves.toEqual({
       ok: false,
-      error: "invalid-image",
+      error: "exceeds-size-limit",
     });
   });
 });

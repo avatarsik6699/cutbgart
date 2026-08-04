@@ -3,7 +3,7 @@ import { env, pipeline, type ImageSegmentationPipeline } from "@huggingface/tran
 import { createModelSourceLoader, type ModelSource } from "@/shared/lib";
 
 import type { LocalModelConfig } from "../model-config";
-import { resolveUsableInferencePath } from "../browser-capabilities";
+import { resolveLocalModelConfig, selectLocalModelConfig } from "../model-config";
 import {
   PROCESSING_WORKER_PROTOCOL_VERSION,
   sameCorrelation,
@@ -146,10 +146,14 @@ async function runPipeline(run: ActiveRun): Promise<TransferableArtifactSet> {
     type: run.command.source.mediaType,
   });
   const requestedModel = run.command.model;
-  const model = {
-    ...requestedModel,
-    inferencePath: await resolveUsableInferencePath(requestedModel.inferencePath),
-  };
+  const model = await resolveLocalModelConfig(requestedModel);
+  post({
+    protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
+    type: "EXECUTION_SELECTED",
+    correlation: run.command.correlation,
+    inferencePath: model.inferencePath,
+    modelMode: model.mode ?? "isnet-q8",
+  });
   const segmenter = await measured(run, "model-loading", async () => {
     try {
       return await createSegmenter(model);
@@ -158,7 +162,18 @@ async function runPipeline(run: ActiveRun): Promise<TransferableArtifactSet> {
         throw error;
       }
       await disposeSegmenter();
-      return createSegmenter({ ...model, inferencePath: "wasm" });
+      const fallback = {
+        ...selectLocalModelConfig(model, "isnet-fp32"),
+        inferencePath: "wasm",
+      } as const;
+      post({
+        protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
+        type: "EXECUTION_SELECTED",
+        correlation: run.command.correlation,
+        inferencePath: fallback.inferencePath,
+        modelMode: fallback.mode ?? "isnet-fp32",
+      });
+      return createSegmenter(fallback);
     }
   });
   const output = await measured(run, "automatic-remove", async () => {
@@ -169,10 +184,18 @@ async function runPipeline(run: ActiveRun): Promise<TransferableArtifactSet> {
         throw error;
       }
       await disposeSegmenter();
-      const fallback = await createSegmenter({
-        ...model,
+      const fallbackModel = {
+        ...selectLocalModelConfig(model, "isnet-fp32"),
         inferencePath: "wasm",
+      } as const;
+      post({
+        protocol: PROCESSING_WORKER_PROTOCOL_VERSION,
+        type: "EXECUTION_SELECTED",
+        correlation: run.command.correlation,
+        inferencePath: fallbackModel.inferencePath,
+        modelMode: fallbackModel.mode ?? "isnet-fp32",
       });
+      const fallback = await createSegmenter(fallbackModel);
       return fallback(source);
     }
   });

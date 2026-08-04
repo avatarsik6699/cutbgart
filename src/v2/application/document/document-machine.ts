@@ -79,6 +79,7 @@ function processingRequestFromState(state: DocumentState): ProcessingRequest {
     expectedRevision: state.activeRun.expectedRevision,
     operation: "automatic-remove",
     source: state.source,
+    modelMode: state.activeRun.modelMode,
   };
 }
 
@@ -254,6 +255,7 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
           type: "START_AUTOMATIC_REMOVAL",
           documentId: transition.state.documentId,
           backend: "local",
+          modelMode: event.event.modelMode,
         },
       });
     }

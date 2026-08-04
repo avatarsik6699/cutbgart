@@ -1,12 +1,19 @@
 import type { Page } from "@playwright/test";
 
+export type MockInferenceOptions = {
+  manualAutomaticStages?: boolean;
+};
+
 /**
  * Replaces worker boundaries. Browser rendering, upload controls, state
  * transitions, canvas correction, downloads, and responsive layouts remain
  * real. The external model/CDN path is covered separately by real-model.spec.
  */
-export async function installMockInference(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+export async function installMockInference(
+  page: Page,
+  options: MockInferenceOptions = {},
+): Promise<void> {
+  await page.addInitScript(({ manualAutomaticStages }) => {
     // Keep transitional queue/processing UI observable while remaining much
     // faster than real model inference.
     const PROCESS_DELAY_MS = 800;
@@ -246,13 +253,20 @@ export async function installMockInference(page: Page): Promise<void> {
                   : "webgpu-unavailable",
               });
             }
-            this.emit({
-              type: "model-ready",
-              requestId: message.requestId,
-              qualityMode: message.qualityMode,
-              inferencePath: message.inferencePath ?? "wasm",
-              dtype: "e2e-mock",
-            });
+            const emitModelReady = () => {
+              this.emit({
+                type: "model-ready",
+                requestId: message.requestId,
+                qualityMode: message.qualityMode,
+                inferencePath: message.inferencePath ?? "wasm",
+                dtype: "e2e-mock",
+              });
+            };
+            if (manualAutomaticStages) {
+              (
+                window as unknown as { __completeMockModelLoad?: () => void }
+              ).__completeMockModelLoad = emitModelReady;
+            } else emitModelReady();
             return;
           }
           if (message.type === "encode" && message.source) {
@@ -664,7 +678,11 @@ export async function installMockInference(page: Page): Promise<void> {
                 });
               }, "image/png");
             };
-            window.setTimeout(emitResult, PROCESS_DELAY_MS);
+            if (manualAutomaticStages) {
+              (
+                window as unknown as { __completeMockProcess?: () => void }
+              ).__completeMockProcess = emitResult;
+            } else window.setTimeout(emitResult, PROCESS_DELAY_MS);
             return;
           }
           if (message.type === "extract-alpha-matte" && this.source) {
@@ -763,5 +781,5 @@ export async function installMockInference(page: Page): Promise<void> {
       value: MockInferenceWorker,
       configurable: true,
     });
-  });
+  }, options);
 }

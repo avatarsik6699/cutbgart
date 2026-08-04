@@ -82,6 +82,7 @@ export type {
   EnhancementEvent,
   SourceRegisteredEvent,
 } from "./events";
+export type { ExportSize } from "./export";
 export {
   createArtifactId,
   createBackgroundDraftId,

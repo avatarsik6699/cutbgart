@@ -20,3 +20,17 @@ export function createNativeDownloadAdapter(): DownloadAdapter {
     },
   };
 }
+
+export function startBlobDownload(
+  adapter: DownloadAdapter,
+  blob: Blob,
+  filename: string,
+): void {
+  if (adapter.startBlob !== undefined) {
+    adapter.startBlob(blob, filename);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  adapter.start(url, filename);
+  queueMicrotask(() => URL.revokeObjectURL(url));
+}

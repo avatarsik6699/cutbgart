@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.35` |
+| Version | `v1.36` |
 | Date | `2026-08-04` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -306,6 +306,13 @@ a redesign. The first dependency-complete vertical slice covers:
 - visual-regression baselines and behavioral Playwright evidence against the current v1 reference at
   approved desktop and narrow viewports.
 
+The reference comparison is exact for presentation owned by this slice. Two differences are
+explicitly accepted because exact legacy pixels would contradict the slice boundary: the empty
+workspace uses truthful single-image copy instead of the legacy batch promise, and the result shell
+launches the already accepted v2 tool workspaces without restyling Manual/Magic, Background, or
+Enhancements. Both differences require their own reviewed Phase-39 snapshots; they are not general
+pixel tolerances and do not authorize drift in the shell, processing states, or shared controls.
+
 Presentation may be extracted from legacy components into neutral reusable UI, but v2 may not import
 legacy hooks, controllers, mutable workflow state, worker lifecycle, or stores as its source of
 truth. A narrow typed presentation/controller port maps user intent and v2 projections to the shared
@@ -315,6 +322,14 @@ Phase 39 does not migrate batch UI, Manual/Magic, Background, Enhancements, scen
 public `/` and `/en` route bindings. Those follow as separately accepted vertical slices. The public
 route switches only after every v1-visible state and capability has v2 behavioral, visual,
 accessibility, real-model, and affected-device acceptance with a rollback boundary.
+
+While the isolated routes carry this single-image migration slice, Phase-37/38 browser journeys
+whose sole entry contract is the superseded batch presentation on `/editor-v2` are historical
+evidence rather than Phase-39 gate tests. Their actor, runtime, artifact, scheduling, tool, export,
+SSR, accessibility, and resource contracts remain regression requirements. Batch route-level E2E
+returns with the dedicated batch UI slice. Phase 39 requires a serialized local real-model journey;
+managed-Windows product acceptance remains mandatory for the later complete-UI/cutover gate, where
+all presentation slices can be assessed together.
 
 ### 2.9 Future paid direction
 
@@ -624,6 +639,11 @@ not silently change with them. Capture reference screenshots before each UI slic
 locales at approved desktop and narrow viewports, and treat unexplained visual drift as a failing
 contract rather than a redesign opportunity.
 
+An incremental slice is compared only across presentation it owns. Truthful copy required by that
+slice and UI owned by an explicitly deferred slice may differ only when its active phase contract
+names the difference and retains a reviewed dedicated baseline. This exception is narrow: it never
+permits masking, unexplained tolerance, or silently dropping reachable behavior.
+
 Shared presentation is preferred over copied markup. Legacy visual components may be extracted and
 made controller-neutral, but they may not retain or import legacy hooks, mutable stores, workers, or
 workflow state when rendered by v2. The adapter boundary accepts serializable view projections and
@@ -774,10 +794,12 @@ inference/encoding; per-document or whole-workspace churn leaks actors, controll
 artifacts, URLs, listeners, or sessions; or accepted Phase-33–36 contracts regress.
 
 Phase 39 additionally fails if the noindex v2 main-page slice visibly drifts from the captured v1
-reference without explicit architect approval; picker/drop/paste or quality/export-size controls are
-present but disconnected; shared presentation imports legacy workflow state; processing/export
-reinfers or bypasses accepted v2 ownership; bilingual desktop/narrow visual evidence is missing; or
-the public/scenario routes change before the isolated slice is accepted.
+reference outside its two explicitly accepted slice-boundary differences; either accepted difference
+lacks a dedicated reviewed baseline; picker/drop/paste or quality/export-size controls are present
+but disconnected; shared presentation imports legacy workflow state; processing/export reinfers or
+bypasses accepted v2 ownership; bilingual desktop/narrow visual evidence or the serialized local
+real-model journey is missing; or the public/scenario routes change before the isolated slice is
+accepted.
 
 ## 8. Delivery state and roadmap
 

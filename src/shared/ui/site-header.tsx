@@ -4,63 +4,31 @@ import { Link } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { getLocale, localizeHref, locales } from "@/paraglide/runtime";
-import { useRouter } from "@/shared/lib/use-router";
-import { cn } from "@/shared/lib/utils";
-import { BrandLogo } from "@/shared/ui/brand-logo";
+import { cn } from "@/shared/lib";
+
+import { BrandLogo } from "./brand-logo";
+import { LanguageSwitcher } from "./language-switcher";
 
 const TELEGRAM_FEEDBACK_URL = "https://t.me/+HaqBWI1A3vg4MWJi";
 
-const LOCALE_LABELS = {
-  ru: () => m.navLanguageRu(),
-  en: () => m.navLanguageEn(),
-} satisfies Record<(typeof locales)[number], () => string>;
-
-function LanguageSwitcher() {
-  const router = useRouter();
-  const href = router.location.href;
-  const currentLocale = getLocale();
-
-  return (
-    <div className="flex items-center gap-1 text-sm" aria-label="Language">
-      {locales.map((locale, index) => (
-        <span key={locale} className="flex items-center gap-1">
-          {index > 0 && <span className="text-muted-foreground/50">/</span>}
-          <a
-            href={localizeHref(href, { locale })}
-            aria-current={locale === currentLocale ? "page" : undefined}
-            aria-label={LOCALE_LABELS[locale]()}
-            title={LOCALE_LABELS[locale]()}
-            className={cn(
-              "px-1 uppercase",
-              locale === currentLocale
-                ? "font-semibold text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {locale}
-          </a>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function SiteHeader({
-  className,
-  utilitySlot,
-  workspaceUtilityRef,
-}: {
+type Props = {
   className?: string;
+  homeActive?: boolean;
   /** Page-supplied utility trigger (e.g. model storage) rendered before the
    * language switcher. `shared/ui` stays feature-agnostic — the caller
    * (`pages/*`) composes whatever feature-level content belongs here. */
   utilitySlot?: ReactNode;
-  workspaceUtilityRef?: (node: HTMLSpanElement | null) => void;
-}) {
+  onWorkspaceUtilityChange?: (node: HTMLSpanElement | null) => void;
+};
+
+function SiteHeader(props: Props) {
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
+  function setWorkspaceUtilityFx(node: HTMLSpanElement | null): void {
+    props.onWorkspaceUtilityChange?.(node);
+  }
+
+  useEffect(function markHeaderHydratedFx() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- this marker is intentionally false in SSR and the first client render, then exposes when header links are safe to drive in hydration-sensitive browsers.
     setHydrated(true);
   }, []);
@@ -71,7 +39,7 @@ function SiteHeader({
       data-hydrated={hydrated}
       className={cn(
         "border-b border-border bg-background/90 backdrop-blur-md",
-        className,
+        props.className,
       )}
     >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-4 sm:px-8">
@@ -85,7 +53,11 @@ function SiteHeader({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-6">
             <Link
               to="/"
-              className="text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground"
+              className={cn(
+                "text-muted-foreground hover:text-foreground [&.active]:font-semibold [&.active]:text-foreground",
+                props.homeActive && "font-semibold text-foreground",
+              )}
+              aria-current={props.homeActive ? "page" : undefined}
             >
               {m.navHome()}
             </Link>
@@ -106,9 +78,9 @@ function SiteHeader({
             </a>
           </div>
           <div className="flex shrink-0 items-center gap-x-1">
-            {utilitySlot}
+            {props.utilitySlot}
             <span
-              ref={workspaceUtilityRef}
+              ref={setWorkspaceUtilityFx}
               className="grid min-h-9 min-w-9 shrink-0 place-items-center"
               data-testid="workspace-header-utilities"
             />

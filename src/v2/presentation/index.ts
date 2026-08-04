@@ -5,3 +5,10 @@ export { ManualCutoutWorkspace } from "./manual-cutout";
 export { MagicCutoutWorkspace } from "./magic-cutout";
 export { BackgroundWorkspace } from "./background";
 export { EnhancementWorkspace } from "./enhancements";
+export type {
+  ExportSize,
+  MainPageEditorIntent,
+  MainPageEditorPresentationProps,
+  MainPageEditorProjection,
+} from "./main-page";
+export { MainPageEditorView } from "./main-page";

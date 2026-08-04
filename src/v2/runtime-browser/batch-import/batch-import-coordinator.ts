@@ -1,3 +1,9 @@
+import type {
+  ProcessingCancellation,
+  ProcessingCancellationSource,
+} from "@/v2/application";
+
+import { createNativeProcessingCancellationSource } from "../platform";
 import { prepareImageImport } from "../editor-session/image-import-preparation";
 import {
   IMPORT_PREPARATION_CONCURRENCY,
@@ -13,11 +19,20 @@ type PendingTask = {
 export class BatchImportCoordinator {
   readonly #pending: PendingTask[] = [];
   readonly #prepare: typeof prepareImageImport;
+  readonly #activeControllers = new Map<
+    BatchImportTask["itemId"],
+    ProcessingCancellation
+  >();
+  readonly #cancellation: ProcessingCancellationSource;
   #active = 0;
   #disposed = false;
 
-  constructor(prepare: typeof prepareImageImport = prepareImageImport) {
+  constructor(
+    prepare: typeof prepareImageImport = prepareImageImport,
+    cancellation: ProcessingCancellationSource = createNativeProcessingCancellationSource(),
+  ) {
     this.#prepare = prepare;
+    this.#cancellation = cancellation;
   }
 
   prepare(task: BatchImportTask): Promise<BatchImportResult> {
@@ -31,7 +46,10 @@ export class BatchImportCoordinator {
 
   cancel(itemId: BatchImportTask["itemId"]): void {
     const index = this.#pending.findIndex((entry) => entry.task.itemId === itemId);
-    if (index < 0) return;
+    if (index < 0) {
+      this.#activeControllers.get(itemId)?.abort();
+      return;
+    }
     const [entry] = this.#pending.splice(index, 1);
     entry?.resolve({ ...entry.task, ok: false, error: "cancelled" });
   }
@@ -39,6 +57,7 @@ export class BatchImportCoordinator {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    for (const controller of this.#activeControllers.values()) controller.abort();
     for (const entry of this.#pending.splice(0))
       entry.resolve({ ...entry.task, ok: false, error: "cancelled" });
   }
@@ -52,7 +71,9 @@ export class BatchImportCoordinator {
       const entry = this.#pending.shift();
       if (entry === undefined) return;
       this.#active += 1;
-      void this.#prepare(entry.task.file)
+      const controller = this.#cancellation.create();
+      this.#activeControllers.set(entry.task.itemId, controller);
+      void this.#prepare(entry.task.file, undefined, controller.signal)
         .then((result) => {
           entry.resolve(
             result.ok
@@ -60,10 +81,19 @@ export class BatchImportCoordinator {
               : { ...entry.task, ok: false, error: result.error },
           );
         })
-        .catch(() => {
-          entry.resolve({ ...entry.task, ok: false, error: "preparation-failed" });
+        .catch((error: unknown) => {
+          entry.resolve({
+            ...entry.task,
+            ok: false,
+            error:
+              controller.signal.aborted ||
+              (error instanceof DOMException && error.name === "AbortError")
+                ? "cancelled"
+                : "preparation-failed",
+          });
         })
         .finally(() => {
+          this.#activeControllers.delete(entry.task.itemId);
           this.#active -= 1;
           this.#drain();
         });
