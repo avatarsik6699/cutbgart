@@ -27,7 +27,7 @@ test("Magic strokes predict separately and Apply creates exactly one document ed
   await expect.poll(editorV2.scenario.magicCommitCount).toBe(0);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
 
-  await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
   await canvas.click({ position: { x: 2, y: 2 } });
   await expect(page.getByRole("button", { name: "Candidate 1" })).toBeHidden();
   await expect.poll(editorV2.scenario.magicPredictionCount).toBe(1);

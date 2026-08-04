@@ -489,19 +489,22 @@ to workspace packages without changing their public contracts.
   explicit Apply/Cancel, two-level Undo/Redo, artifact-aware pruning, and no reinference.
 - **Phase 35:** guided Magic Cutout with bounded semantic strokes, runtime-owned prediction/
   candidates, explicit preview/apply separation, and shared automatic/Magic heavy-job admission.
+- **Phase 36:** Background and ordered fine-detail/colour-halo Enhancements with runtime-owned
+  previews/intermediates, atomic document publication, and shared heavy-job admission.
 
 ### Active slice
 
-1. **Phase 36:** Background and local fine-detail/colour-halo Enhancements with runtime-owned
-   previews/intermediates, one atomic history operation per explicit Apply, and shared heavy-job
-   admission for automatic, Magic, and Enhancement work.
+1. **Phase 37:** batch/multi-document orchestration as a parent workspace actor over the proven
+   document actor, with per-document runtime ownership, isolated retry/remove, cached selection,
+   global heavy-job admission, and deterministic Download All.
 
 ### Later slices
 
-1. batch as a parent actor spawning the already-proven per-image actor;
-2. accessibility/device/product validation;
-3. paid backend foundation and one opt-in remote-processing slice;
-4. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
+1. accessibility/device/product parity validation;
+2. public/scenario-route migration with a controlled rollback boundary;
+3. legacy editor removal only after public v2 acceptance;
+4. paid backend foundation and one opt-in remote-processing slice;
+5. generated backgrounds and other paid capabilities only after the backend/data/legal gates.
 
 The old editor is removed only after the replacement has feature parity and the architect has
 verified the target-device experience.
@@ -1259,3 +1262,94 @@ outcome, and resource counts without filenames, colours, images, pixels, or othe
 Acceptance requires one admitted heavy job, no preview/export confusion, no partial Enhancement
 publication, no reinference on Background Apply/history/export, and zero reachable finishing-tool
 leases/sessions/workers after repeated cancel/reset/dispose churn.
+
+## 17. Phase-37 Batch and Multi-Document Boundary
+
+Phase 37 removes the initial one-document guard by completing the actor tree already established in
+Phase 33. The workspace actor becomes a real parent coordinator, but never becomes a second source
+of document truth. It owns ordered membership, selection, aggregate bounded status, and child
+lifecycle; each existing document actor continues to own its revision, processing correlation,
+active draft, committed snapshot, history, and error.
+
+### 17.1 Composition and ownership
+
+| Concern | Owner | Contract |
+|---------|-------|----------|
+| ordered IDs, selected ID, child actor spawn/stop | workspace actor | bounded metadata and actor refs only; no files, pixels, URLs, tool state, or history copies |
+| pending/failed item identity, import preparation and per-file terminal | workspace import coordinator | runtime-only item ID before `DocumentId`; independent correlated preparation; invalid/late results cannot affect siblings |
+| per-document projections/controllers/subscriptions | document runtime | one lifecycle object per document; owns tool adapters and delegates commands to its actor |
+| runtime membership and selected-document facade | editor workspace session | composes workspace actor, document-runtime registry, global collaborators, and subscriptions |
+| automatic/Magic/Enhancement admission | one workspace `HeavyJobCoordinator` | FIFO, one admitted heavy job globally, cancellation by document/run owner |
+| source/result/history/tool artifacts and URLs | `ArtifactRepository` | document-scoped owners; remove releases only one reachability graph, dispose releases all |
+| batch list/filmstrip and selected editor | presentation | selector/external-store reads plus intent commands; no duplicated workflow state |
+| selected PNG and Download All ZIP | export coordinator + download adapter | committed artifacts only; deterministic names/timestamps; no inference or hidden source metadata |
+
+`EditorSession` must not grow a map-shaped version of every existing field. Split its current
+single-document lifecycle into a focused per-document runtime and keep the workspace-facing session
+as a composition facade. This is composition, not inheritance: document runtimes share explicit
+global collaborators but own independent controllers, projections, subscriptions, and disposal.
+
+### 17.2 Actor and runtime lifecycle
+
+```text
+editorV2WorkspaceActor
+  +-- editorV2DocumentActor:<documentId A>
+  +-- editorV2DocumentActor:<documentId B>
+  +-- editorV2DocumentActor:<documentId N>
+
+editorWorkspaceSession
+  +-- documentRuntime:<documentId A>
+  +-- documentRuntime:<documentId B>
+  +-- documentRuntime:<documentId N>
+  +-- shared ArtifactRepository / HeavyJobCoordinator / worker gateways
+```
+
+Each selected input first receives a runtime-owned `WorkspaceItemId`; an invalid/pending item is not
+a fake document and never spawns a child. Registration spawns one stable-ID child and one matching runtime only after source preparation and
+artifact registration succeed. Selection changes only `selectedDocumentId`; it does not recreate,
+stop, decode, infer, materialize, or transfer the child/runtime. Removing a document first
+invalidates its queued/running correlations, then disposes its tool runtimes/projections, stops its
+child, and releases its document-owned artifact graph. Workspace dispose applies that sequence to
+every child before disposing shared workers/coordinators/repositories exactly once.
+
+A document may continue queued/running work while unselected. Its progress and terminal remain
+owned by its actor/runtime and update only its bounded summary. Selecting it later projects the
+already-owned state. A retained dirty tool draft remains attached to that document; selection does
+not silently apply or cancel it. Remove/reset/navigation uses the existing explicit dirty-draft
+guard before destroying its owner.
+
+### 17.3 Batch state and scheduling
+
+Workspace summaries contain item ID, optional document ID, local display label, status, safe error,
+and bounded progress only. Aggregate counts/queue positions are derived selectors, not independently mutable
+truth. The heavy-job coordinator remains the sole admission authority across every document and
+tool. A workspace owns at most 20 live items (pending, failed, or registered) and admits at most two import preparations at a
+time; the existing 512 MiB artifact-repository budget remains the stricter byte-level authority.
+Overflow is rejected before file/artifact ownership. Import decode/preparation cannot create an
+unbounded `Promise.all`, duplicate the model queue, or hold transferable pixels in the actor.
+
+Retry creates a fresh run for one failed document at its current source/revision. Add-image appends
+new children without resetting existing actors, workers, histories, selection, or tool settings.
+One crash may terminalize work owned by the crashed shared worker boundary, but recovery and retry
+must preserve unaffected committed documents and must not relabel a stale terminal for a new run.
+
+Automatic, Magic, and Enhancement gateways are shared at the workspace boundary rather than
+multiplied per document. Their request/cancel/reset APIs must be document/run-scoped: removing one
+owner cannot terminate or relabel a sibling's queued/active work. Shared gateways retain at most the
+already-proven bounded warm worker/session lifecycle instead of one model session per document.
+
+### 17.4 Export and evidence
+
+Selected export delegates to the selected document's existing committed PNG effect. Download All
+leases the current committed PNG artifact of each completed document for the duration of one
+client-side ZIP operation, emits collision-safe privacy-neutral names with fixed timestamps, skips
+unfinished/error items truthfully, and releases every temporary lease/URL on success, failure, or
+cancel. ZIP creation is runtime work behind a narrow port; React receives progress/terminal metadata
+only.
+
+Acceptance adds randomized multi-document actor/runtime churn, cross-item stale-result matrices,
+selection-without-reinference assertions, isolated draft/history restoration, global heavy-job FIFO
+evidence, per-item retry/remove cleanup, deterministic ZIP contracts, bilingual mocked E2E, one
+serialized real multi-document smoke, and affected Windows target-device evidence. No retry-masked
+flake, arbitrary sleep, sibling mutation, unbounded import/scheduling, or residual document runtime
+may pass.

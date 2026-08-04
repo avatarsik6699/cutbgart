@@ -8,6 +8,7 @@ declare const magicCandidateIdBrand: unique symbol;
 declare const backgroundDraftIdBrand: unique symbol;
 declare const enhancementDraftIdBrand: unique symbol;
 declare const editOperationIdBrand: unique symbol;
+declare const workspaceItemIdBrand: unique symbol;
 
 export type ArtifactId = string & { readonly [artifactIdBrand]: "ArtifactId" };
 export type DocumentId = string & { readonly [documentIdBrand]: "DocumentId" };
@@ -28,6 +29,9 @@ export type EditOperationId = string & {
   readonly [editOperationIdBrand]: "EditOperationId";
 };
 export type Revision = number;
+export type WorkspaceItemId = string & {
+  readonly [workspaceItemIdBrand]: "WorkspaceItemId";
+};
 
 function createId<TId extends string>(kind: string, value: string): TId {
   if (value.trim().length === 0) {
@@ -75,6 +79,10 @@ export function createEnhancementDraftId(value: string): EnhancementDraftId {
 
 export function createEditOperationId(value: string): EditOperationId {
   return createId<EditOperationId>("EditOperationId", value);
+}
+
+export function createWorkspaceItemId(value: string): WorkspaceItemId {
+  return createId<WorkspaceItemId>("WorkspaceItemId", value);
 }
 
 export function isRevision(value: number): value is Revision {

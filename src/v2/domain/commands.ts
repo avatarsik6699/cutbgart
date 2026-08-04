@@ -221,3 +221,23 @@ export type CommandRejectionReason =
 export type CommandOutcome =
   | { status: "accepted"; command: EditorCommandType }
   | { status: "rejected"; command: EditorCommandType; reason: CommandRejectionReason };
+
+export type WorkspaceCommand =
+  | { type: "REGISTER_DOCUMENT"; document: import("./document").DocumentState }
+  | { type: "SELECT_DOCUMENT"; documentId: DocumentId }
+  | { type: "REMOVE_DOCUMENT"; documentId: DocumentId }
+  | { type: "DOCUMENT_COMMAND"; documentId: DocumentId; command: DocumentCommand }
+  | { type: "DISPOSE" };
+
+export type WorkspaceCommandOutcome =
+  | {
+      status: "accepted";
+      command: WorkspaceCommand["type"];
+      documentId?: DocumentId;
+    }
+  | {
+      status: "rejected";
+      command: WorkspaceCommand["type"];
+      documentId?: DocumentId;
+      reason: "duplicate-document" | "document-not-found" | "workspace-disposed";
+    };

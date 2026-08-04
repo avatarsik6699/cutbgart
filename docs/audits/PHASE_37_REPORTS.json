@@ -1,0 +1,41 @@
+[
+  {
+    "schemaVersion": "phase-37.batch-workspace.v1",
+    "run": { "id": "mocked-browser" },
+    "documentCount": 3,
+    "maximumImportPreparations": 2,
+    "maximumHeavyJobs": 1,
+    "automaticInferenceCount": 3,
+    "cachedSelectionInferenceCount": 0,
+    "zipIncludedCount": 3,
+    "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "limitations": ["Deterministic worker and 1 px fixtures; no model/CDN timing."]
+  },
+  {
+    "schemaVersion": "phase-37.batch-workspace.v1",
+    "run": { "id": "host-real-model" },
+    "documentCount": 3,
+    "maximumImportPreparations": 2,
+    "maximumHeavyJobs": 1,
+    "automaticInferenceCount": 3,
+    "cachedSelectionInferenceCount": 0,
+    "zipIncludedCount": 3,
+    "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "limitations": ["Instrumented host Chromium smoke measured a 36.0 s total; no Windows paint timing."]
+  },
+  {
+    "schemaVersion": "phase-37.batch-workspace.v1",
+    "run": { "id": "windows-target" },
+    "documentCount": 3,
+    "maximumImportPreparations": 2,
+    "maximumHeavyJobs": 1,
+    "automaticInferenceCount": null,
+    "cachedSelectionInferenceCount": null,
+    "zipIncludedCount": 3,
+    "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+    "limitations": [
+      "Playwright MCP did not expose pre-navigation worker-message instrumentation; exact RUN counts are unsupported.",
+      "Local production analytics emitted known CSP/CORS errors; editor processing remained unaffected."
+    ]
+  }
+]

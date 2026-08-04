@@ -10,6 +10,7 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
+| [`PHASE_37.md`](./PHASE_37.md) | Active v2 batch and multi-document workspace contract |
 | [`PHASE_36.md`](./PHASE_36.md) | Latest completed v2 Background and Enhancements contract and acceptance record |
 | [`PHASE_35.md`](./PHASE_35.md) | Latest completed v2 Magic Cutout contract and acceptance record |
 | [`PHASE_34.md`](./PHASE_34.md) | Completed v2 Manual/history contract and acceptance record |
@@ -24,9 +25,10 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-Phase 36 and its gate/architect acceptance are complete on the isolated v2 route. No later phase is
-initialized; further work requires an approved SPEC/phase contract. `audits/` retains the accepted
-Phase-33–36 evidence; older Phase-31/32 evidence has moved to the archive.
+Phase 37 is initialized for batch/multi-document orchestration on the isolated v2 route. Phase 36
+and its gate/architect acceptance remain complete; implementation is limited to the approved
+[`PHASE_37.md`](./PHASE_37.md) contract. `audits/` retains the accepted Phase-33–36 evidence; older
+Phase-31/32 evidence has moved to the archive.
 
 ## Archive
 

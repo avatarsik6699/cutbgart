@@ -38,8 +38,14 @@ export async function installMockEditorV2Worker(
       };
 
       const testWindow = window as TestWindow;
+      const workers = new Set<MockEditorWorker>();
       class MockEditorWorker extends EventTarget {
         active: RunCommand | null = null;
+
+        constructor() {
+          super();
+          workers.add(this);
+        }
 
         postMessage(command: WorkerCommand): void {
           if (command.type === "RUN" && command.correlation?.operationId !== undefined) {
@@ -112,9 +118,16 @@ export async function installMockEditorV2Worker(
           }
           if (command.type === "RUN") {
             this.active = command as RunCommand;
-            testWindow.__completeV2Run = () => this.complete();
-            testWindow.__advanceV2RunStage = (stage, fraction) =>
-              this.progress(stage, fraction);
+            testWindow.__completeV2Run = () => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor v2 run");
+              activeWorker.complete();
+            };
+            testWindow.__advanceV2RunStage = (stage, fraction) => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor v2 run");
+              activeWorker.progress(stage, fraction);
+            };
             testWindow.__v2RunCount = (testWindow.__v2RunCount ?? 0) + 1;
             this.emit({
               protocol: 1,
@@ -245,6 +258,7 @@ export async function installMockEditorV2Worker(
 
         terminate(): void {
           this.active = null;
+          workers.delete(this);
         }
 
         complete(): void {

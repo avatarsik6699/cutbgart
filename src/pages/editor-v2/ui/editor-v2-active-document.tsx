@@ -171,7 +171,7 @@ export function EditorV2ActiveDocument(props: Props) {
           fileName={props.snapshot.fileName}
           grid={props.grid}
           height={props.snapshot.height}
-          onFile={(file) => void props.session.importImage(file)}
+          onFiles={(files) => void props.session.importImages(files)}
           previewUrl={props.snapshot.previewUrl}
           resultUrl={props.snapshot.resultUrl}
           status={document.status}

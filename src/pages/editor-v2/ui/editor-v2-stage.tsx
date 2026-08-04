@@ -7,7 +7,7 @@ type Props = {
   fileName: string | null;
   grid: "fine" | "wide";
   height: number | null;
-  onFile(file: File): void;
+  onFiles(files: readonly File[]): void;
   previewUrl: string | null;
   resultUrl: string | null;
   status: string;
@@ -16,10 +16,8 @@ type Props = {
 
 function EditorV2Stage(props: Props) {
   function selectFileFx(event: ChangeEvent<HTMLInputElement>): void {
-    const file = event.currentTarget.files?.[0];
-    if (file !== undefined) {
-      props.onFile(file);
-    }
+    const files = [...(event.currentTarget.files ?? [])];
+    if (files.length > 0) props.onFiles(files);
     event.currentTarget.value = "";
   }
 
@@ -52,6 +50,7 @@ function EditorV2Stage(props: Props) {
             {m.editorV2ChooseImage()}
             <input
               type="file"
+              multiple
               accept="image/png,image/jpeg,image/webp"
               className="sr-only"
               onChange={selectFileFx}

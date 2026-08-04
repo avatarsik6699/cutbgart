@@ -76,9 +76,8 @@ test("committed history prunes to twenty operations and releases all churn resou
 
   for (let operation = 0; operation < 22; operation += 1) {
     await page.getByRole("button", { name: "Manual cutout" }).click();
-    if (operation % 2 === 1) {
-      await page.getByRole("button", { name: "Restore" }).click();
-    }
+    const brushMode = operation % 2 === 0 ? "Erase" : "Restore";
+    await page.getByRole("button", { name: brushMode, exact: true }).click();
     await page
       .getByRole("img", { name: "Manual cutout canvas" })
       .click({ position: { x: 1, y: 1 } });

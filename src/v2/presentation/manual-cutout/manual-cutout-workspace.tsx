@@ -27,13 +27,32 @@ type Props = {
 type Cursor = { x: number; y: number } | null;
 
 export function ManualCutoutWorkspace(props: Props) {
-  const [mode, setMode] = useState<ManualCutoutMode>("erase");
-  const [brushSize, setBrushSize] = useState(48);
-  const [zoom, setZoom] = useState(1);
+  const initialView = props.session.manualViewState();
+  const [mode, setMode] = useState<ManualCutoutMode>(initialView.mode);
+  const [brushSize, setBrushSize] = useState(initialView.brushSize);
+  const [zoom, setZoom] = useState(initialView.zoom);
   const [cursor, setCursor] = useState<Cursor>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageDataRef = useRef<ImageData | null>(null);
   const engine = props.session.manualDraft();
+
+  function changeMode(nextMode: ManualCutoutMode): void {
+    setMode(nextMode);
+    props.session.setManualViewState({ mode: nextMode, brushSize, zoom });
+  }
+
+  function changeBrushSize(nextBrushSize: number): void {
+    setBrushSize(nextBrushSize);
+    props.session.setManualViewState({ mode, brushSize: nextBrushSize, zoom });
+  }
+
+  function changeZoom(update: (value: number) => number): void {
+    setZoom((current) => {
+      const nextZoom = update(current);
+      props.session.setManualViewState({ mode, brushSize, zoom: nextZoom });
+      return nextZoom;
+    });
+  }
 
   const repaint = useCallback(
     function repaintManualCanvas(box?: ManualCutoutBox): void {
@@ -204,14 +223,14 @@ export function ManualCutoutWorkspace(props: Props) {
           <Button
             variant={mode === "restore" ? "default" : "outline"}
             size="sm"
-            onClick={() => setMode("restore")}
+            onClick={() => changeMode("restore")}
           >
             {m.editorV2Restore()}
           </Button>
           <Button
             variant={mode === "erase" ? "default" : "outline"}
             size="sm"
-            onClick={() => setMode("erase")}
+            onClick={() => changeMode("erase")}
           >
             {m.editorV2Erase()}
           </Button>
@@ -226,24 +245,24 @@ export function ManualCutoutWorkspace(props: Props) {
             min="8"
             max="180"
             value={brushSize}
-            onChange={(event) => setBrushSize(Number(event.currentTarget.value))}
+            onChange={(event) => changeBrushSize(Number(event.currentTarget.value))}
           />
         </label>
         <div className="flex gap-2" aria-label={m.editorV2ViewportControls()}>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+            onClick={() => changeZoom((value) => Math.max(0.5, value - 0.25))}
           >
             −
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setZoom(1)}>
+          <Button variant="outline" size="sm" onClick={() => changeZoom(() => 1)}>
             {m.editorV2Fit()}
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setZoom((value) => Math.min(3, value + 0.25))}
+            onClick={() => changeZoom((value) => Math.min(3, value + 0.25))}
           >
             +
           </Button>

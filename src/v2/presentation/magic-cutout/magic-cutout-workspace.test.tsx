@@ -39,6 +39,8 @@ function sessionHarness() {
       displayStrokes: () => [],
       snapshot: () => ({ strokeCount: 1, canUndo: true, canRedo: true }),
     }),
+    magicViewState: () => ({ mode: "keep", radius: 18 }),
+    setMagicViewState: vi.fn(),
     paintMagicCandidate: vi.fn(),
     predictMagic: calls.predict,
     redoMagic: calls.redo,

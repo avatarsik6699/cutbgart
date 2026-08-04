@@ -149,10 +149,7 @@ function enhancementRuntime(
 describe("editor v2 browser session", () => {
   it("owns import, actor processing, committed preview, export, and reset lifetimes", async () => {
     const harness = createHarness();
-    await Promise.all([
-      harness.session.importImage(pngFile()),
-      harness.session.importImage(pngFile("ignored-second.png")),
-    ]);
+    await harness.session.importImage(pngFile());
     const request = harness.gateway.request();
     expect(request).not.toBeNull();
     if (request === null) return;
@@ -232,6 +229,22 @@ describe("editor v2 browser session", () => {
       error: "invalid-image",
     });
     expect(harness.gateway.request()).toBeNull();
+    harness.repository.assertEmpty();
+    await harness.session.dispose();
+  });
+
+  it("caps live import items at twenty and keeps every invalid sibling independently retryable", async () => {
+    const harness = createHarness();
+    const files = Array.from(
+      { length: 21 },
+      (_, index) =>
+        new File(["invalid"], `invalid-${index + 1}.txt`, { type: "text/plain" }),
+    );
+    await harness.session.importImages(files);
+    const workspace = harness.session.workspaceSnapshot();
+    expect(workspace.items).toHaveLength(20);
+    expect(workspace.items.every((item) => item.status === "error")).toBe(true);
+    expect(new Set(workspace.itemIds).size).toBe(20);
     harness.repository.assertEmpty();
     await harness.session.dispose();
   });

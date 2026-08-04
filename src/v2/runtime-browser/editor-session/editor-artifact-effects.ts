@@ -85,7 +85,7 @@ function commitDraftHistory(
 
 export function createEditorArtifactEffects(options: {
   download: DownloadAdapter;
-  fileName(): string | null;
+  fileName(documentId: DocumentEffect["documentId"]): string | null;
   repository: ArtifactRepository;
 }): DocumentArtifactEffects {
   return {
@@ -101,7 +101,10 @@ export function createEditorArtifactEffects(options: {
         documentId: effect.documentId,
       });
       if (objectUrl === null) return;
-      options.download.start(objectUrl.url, exportName(options.fileName()));
+      options.download.start(
+        objectUrl.url,
+        exportName(options.fileName(effect.documentId)),
+      );
       queueMicrotask(() => options.repository.releaseObjectUrl(objectUrl.url));
     },
     promoteRun(effect) {

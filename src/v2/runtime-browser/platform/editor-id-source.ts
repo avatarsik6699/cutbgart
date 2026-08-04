@@ -9,6 +9,7 @@ import {
   createMagicDraftId,
   createMagicCandidateId,
   createRunId,
+  createWorkspaceItemId,
   type ArtifactId,
   type BackgroundDraftId,
   type DocumentId,
@@ -19,6 +20,7 @@ import {
   type MagicDraftId,
   type MagicCandidateId,
   type RunId,
+  type WorkspaceItemId,
 } from "@/v2/domain";
 
 export type EditorIdSource = {
@@ -32,6 +34,7 @@ export type EditorIdSource = {
   backgroundDraft: () => BackgroundDraftId;
   enhancementDraft: () => EnhancementDraftId;
   editOperation: () => EditOperationId;
+  workspaceItem?: () => WorkspaceItemId;
 };
 
 export function createNativeEditorIdSource(
@@ -48,5 +51,6 @@ export function createNativeEditorIdSource(
     backgroundDraft: () => createBackgroundDraftId(randomUuid()),
     enhancementDraft: () => createEnhancementDraftId(randomUuid()),
     editOperation: () => createEditOperationId(randomUuid()),
+    workspaceItem: () => createWorkspaceItemId(randomUuid()),
   };
 }

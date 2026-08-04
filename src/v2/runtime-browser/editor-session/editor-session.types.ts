@@ -10,6 +10,11 @@ import type {
   BackgroundFillDescriptor,
   EnhancementOperationId,
   MagicCandidateId,
+  DocumentId,
+  ProcessingError,
+  WorkspaceItemId,
+  ManualCutoutMode,
+  MagicCutoutMode,
 } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
@@ -81,6 +86,33 @@ export type EditorSessionSnapshot =
   | PreparingEditorSessionSnapshot
   | ActiveEditorSessionSnapshot;
 
+export type WorkspaceItemStatus =
+  "preparing" | "queued" | "processing" | "result" | "error";
+
+export type WorkspaceItemSummary = Readonly<{
+  itemId: WorkspaceItemId;
+  documentId: DocumentId | null;
+  fileName: string;
+  status: WorkspaceItemStatus;
+  error: ProcessingError | EditorImportError | null;
+  previewUrl: string | null;
+  queuePosition: number | null;
+}>;
+
+export type BatchExportSnapshot = Readonly<{
+  status: "idle" | "preparing" | "downloading" | "cancelled" | "error";
+  includedCount: number;
+  skippedCount: number;
+  error: string | null;
+}>;
+
+export type EditorWorkspaceSnapshot = Readonly<{
+  itemIds: readonly WorkspaceItemId[];
+  selectedDocumentId: DocumentId | null;
+  items: readonly WorkspaceItemSummary[];
+  export: BatchExportSnapshot;
+}>;
+
 export type EditorSession = {
   applyBackground(): void;
   applyEnhancements(): void;
@@ -99,10 +131,22 @@ export type EditorSession = {
   changeEnhancements(operationIds: readonly EnhancementOperationId[]): void;
   dispose(): Promise<void>;
   exportPng(): void;
+  exportAll(): Promise<void>;
   getSnapshot(): EditorSessionSnapshot;
   importImage(file: File): Promise<void>;
+  importImages(files: readonly File[]): Promise<void>;
   manualDraft(): ManualDraftEngine | null;
+  manualViewState(): Readonly<{
+    mode: ManualCutoutMode;
+    brushSize: number;
+    zoom: number;
+  }>;
+  setManualViewState(
+    state: Readonly<{ mode: ManualCutoutMode; brushSize: number; zoom: number }>,
+  ): void;
   magicDraft(): MagicDraftEngine | null;
+  magicViewState(): Readonly<{ mode: MagicCutoutMode; radius: number }>;
+  setMagicViewState(state: Readonly<{ mode: MagicCutoutMode; radius: number }>): void;
   notifyMagicChanged(): void;
   paintMagicCandidate(
     canvas: HTMLCanvasElement,
@@ -119,10 +163,14 @@ export type EditorSession = {
   redoDocument(): void;
   resources(): ArtifactRepositoryStats;
   reset(): void;
+  removeItem(itemId: WorkspaceItemId): void;
+  retryItem(itemId: WorkspaceItemId): Promise<void>;
+  selectDocument(documentId: DocumentId): void;
   retry(): void;
   retryEnhancements(): void;
   selectBackgroundImage(file: File): Promise<void>;
   subscribe(listener: () => void): () => void;
+  workspaceSnapshot(): EditorWorkspaceSnapshot;
 };
 
 export type EditorSessionOptions = {
@@ -154,6 +202,9 @@ export type EditorSessionDependencies = {
   ids: EditorIdSource;
   enhancementDrafts: EnhancementDraftRepository;
   enhancementService: EnhancementRuntimeService;
+  enhancementServiceFor(documentId: DocumentId): EnhancementRuntimeService;
+  releaseEnhancementService(documentId: DocumentId): void;
+  disposeEnhancementServices(): void;
   repository: ArtifactRepository;
   manualCommitter: ManualCutoutCommitter;
   manualDrafts: ManualDraftRepository;

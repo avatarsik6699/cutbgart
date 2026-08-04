@@ -18,6 +18,7 @@ import {
 import {
   createDocumentMachine,
   createWorkspaceMachine,
+  getDocumentActorId,
   ProcessingGatewayError,
   selectDocumentProgress,
   selectDocumentStatus,
@@ -333,7 +334,7 @@ describe("editor v2 document actor", () => {
 });
 
 describe("editor v2 workspace actor", () => {
-  it("spawns one document child, rejects a second, and removes the child cleanly", () => {
+  it("preserves ordered children, selects explicitly, rejects duplicates, and removes in isolation", () => {
     const gateway = createGatewayHarness();
     const artifacts = createArtifactsHarness();
     const documentMachine = createDocumentMachine({
@@ -358,22 +359,97 @@ describe("editor v2 workspace actor", () => {
       "selectedDocumentId",
     ]);
 
+    const secondDocumentId = createDocumentId("document-2");
     workspace.send({
       type: "REGISTER_DOCUMENT",
       document: {
         ...createDocumentState("ready"),
-        documentId: createDocumentId("document-2"),
+        documentId: secondDocumentId,
+      },
+    });
+    expect(workspace.getSnapshot().context.documentIds).toEqual([
+      documentId,
+      secondDocumentId,
+    ]);
+    expect(selectSelectedDocumentId(workspace.getSnapshot())).toBe(documentId);
+    workspace.send({ type: "SELECT_DOCUMENT", documentId: secondDocumentId });
+    expect(selectSelectedDocumentId(workspace.getSnapshot())).toBe(secondDocumentId);
+
+    workspace.send({
+      type: "REGISTER_DOCUMENT",
+      document: {
+        ...createDocumentState("ready"),
+        documentId: secondDocumentId,
       },
     });
     expect(workspace.getSnapshot().context.lastCommandOutcome).toMatchObject({
       status: "rejected",
-      reason: "document-exists",
+      reason: "duplicate-document",
     });
 
-    workspace.send({ type: "REMOVE_DOCUMENT", documentId });
-    expect(selectWorkspaceDocumentCount(workspace.getSnapshot())).toBe(0);
-    expect(Object.keys(workspace.getSnapshot().children)).toEqual([]);
+    workspace.send({ type: "REMOVE_DOCUMENT", documentId: secondDocumentId });
+    expect(selectWorkspaceDocumentCount(workspace.getSnapshot())).toBe(1);
+    expect(selectSelectedDocumentId(workspace.getSnapshot())).toBe(documentId);
+    expect(Object.keys(workspace.getSnapshot().children)).toEqual([
+      `editor-v2-document:${documentId}`,
+    ]);
     expect(artifacts.releaseDocument).toHaveBeenCalled();
+    workspace.stop();
+  });
+
+  it("survives seeded multi-document membership churn without orphan children", () => {
+    const gateway = createGatewayHarness();
+    const artifacts = createArtifactsHarness();
+    const documentMachine = createDocumentMachine({
+      ...manualDependencies,
+      artifacts,
+      cancellation: createCancellationSource(),
+      gateway: gateway.gateway,
+      runIds: createRunIds(createRunId("unused-run")),
+    });
+    const workspace = createActor(createWorkspaceMachine({ documentMachine }));
+    workspace.start();
+    const expected: ReturnType<typeof createDocumentId>[] = [];
+    let seed = 37;
+    let sequence = 0;
+    function random(): number {
+      seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
+      return seed / 2 ** 32;
+    }
+    for (let step = 0; step < 200; step += 1) {
+      const action = Math.floor(random() * 3);
+      if ((action === 0 && expected.length < 10) || expected.length === 0) {
+        const next = createDocumentId(`churn-${++sequence}`);
+        workspace.send({
+          type: "REGISTER_DOCUMENT",
+          document: { ...createDocumentState("ready"), documentId: next },
+        });
+        expected.push(next);
+      } else if (action === 1) {
+        const selected = expected[Math.floor(random() * expected.length)];
+        if (selected !== undefined)
+          workspace.send({ type: "SELECT_DOCUMENT", documentId: selected });
+      } else {
+        const index = Math.floor(random() * expected.length);
+        const removed = expected[index];
+        if (removed !== undefined) {
+          workspace.send({ type: "REMOVE_DOCUMENT", documentId: removed });
+          expected.splice(index, 1);
+        }
+      }
+      const snapshot = workspace.getSnapshot();
+      expect(snapshot.context.documentIds).toEqual(expected);
+      expect(Object.keys(snapshot.children).sort()).toEqual(
+        expected.map(getDocumentActorId).sort(),
+      );
+      expect(
+        snapshot.context.selectedDocumentId === null ||
+          expected.includes(snapshot.context.selectedDocumentId),
+      ).toBe(true);
+    }
+    workspace.send({ type: "DISPOSE" });
+    expect(workspace.getSnapshot().context.documentIds).toEqual([]);
+    expect(Object.keys(workspace.getSnapshot().children)).toEqual([]);
     workspace.stop();
   });
 });

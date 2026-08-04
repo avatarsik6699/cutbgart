@@ -28,6 +28,7 @@ import {
   WorkerProcessingExecutor,
 } from "../processing";
 import { WorkerSnapshotCommitter } from "../snapshot-commit";
+import type { DocumentId } from "@/v2/domain";
 import type {
   EditorSessionDependencies,
   EditorSessionOptions,
@@ -66,17 +67,43 @@ export function createEditorSessionDependencies(
     options.backgroundDrafts ?? new BackgroundDraftRepository(repository);
   const enhancementDrafts =
     options.enhancementDrafts ?? new EnhancementDraftRepository(repository);
-  const enhancementService =
-    options.enhancementService ??
-    new EnhancementCommitService({
+  const enhancementWorker =
+    options.enhancementService === undefined
+      ? new EnhancementWorkerClient(createNativeEnhancementWorkerFactory())
+      : null;
+  const enhancementServices = new Map<DocumentId, EnhancementCommitService>();
+  function enhancementServiceFor(documentId: DocumentId) {
+    if (options.enhancementService !== undefined) return options.enhancementService;
+    const existing = enhancementServices.get(documentId);
+    if (existing !== undefined) return existing;
+    const service = new EnhancementCommitService({
       artifacts: repository,
       coordinator: heavyJobs,
       drafts: enhancementDrafts,
       requestedMode: () => (inferencePath === "webgpu" ? "maximum" : "balanced"),
       requestedPath: () => inferencePath,
       snapshots: snapshotCommitter,
-      worker: new EnhancementWorkerClient(createNativeEnhancementWorkerFactory()),
+      worker: enhancementWorker!,
+      ownsWorker: false,
     });
+    enhancementServices.set(documentId, service);
+    return service;
+  }
+  const enhancementService = options.enhancementService ?? {
+    commit(input, signal) {
+      return enhancementServiceFor(input.documentId).commit(input, signal);
+    },
+    dispose() {},
+    getSnapshot: () => ({
+      status: "ready" as const,
+      activeOperationId: null,
+      fraction: null,
+      error: null,
+    }),
+    reportError() {},
+    reset() {},
+    subscribe: () => () => undefined,
+  };
   return {
     backgroundCommitter:
       options.backgroundCommitter ?? new WorkerBackgroundCommitter(snapshotCommitter),
@@ -86,6 +113,18 @@ export function createEditorSessionDependencies(
     gateway,
     enhancementDrafts,
     enhancementService,
+    enhancementServiceFor,
+    releaseEnhancementService(documentId) {
+      if (options.enhancementService !== undefined) return;
+      enhancementServices.get(documentId)?.dispose();
+      enhancementServices.delete(documentId);
+    },
+    disposeEnhancementServices() {
+      for (const service of new Set(enhancementServices.values())) service.dispose();
+      enhancementServices.clear();
+      enhancementWorker?.dispose();
+      options.enhancementService?.dispose();
+    },
     ids,
     repository,
     heavyJobs,

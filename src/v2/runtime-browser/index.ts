@@ -4,6 +4,14 @@ export {
   createNativeArtifactIdSource,
   createNativeArtifactUrlAdapter,
 } from "./artifacts";
+export {
+  BatchImportCoordinator,
+  IMPORT_PREPARATION_CONCURRENCY,
+  WORKSPACE_ITEM_LIMIT,
+} from "./batch-import";
+export type { BatchImportResult, BatchImportTask } from "./batch-import";
+export { BatchExportCoordinator } from "./batch-export";
+export type { BatchExportEntry } from "./batch-export";
 export type {
   ArtifactIdSource,
   ArtifactObjectUrl,
@@ -41,6 +49,10 @@ export type {
   EditorSession,
   EditorSessionOptions,
   EditorSessionSnapshot,
+  BatchExportSnapshot,
+  EditorWorkspaceSnapshot,
+  WorkspaceItemStatus,
+  WorkspaceItemSummary,
 } from "./editor-session";
 export {
   createNativeEnhancementWorkerFactory,

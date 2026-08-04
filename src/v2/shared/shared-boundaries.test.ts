@@ -48,7 +48,10 @@ describe("v2 shared platform boundaries", () => {
     {
       title: "native object URL access",
       pattern: /URL\.(?:createObjectURL|revokeObjectURL)/,
-      allowed: ["src/v2/runtime-browser/artifacts/artifact-url-adapter.ts"],
+      allowed: [
+        "src/v2/runtime-browser/artifacts/artifact-url-adapter.ts",
+        "src/v2/runtime-browser/platform/download-adapter.ts",
+      ],
     },
     {
       title: "browser artifact randomness",

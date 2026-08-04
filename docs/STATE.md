@@ -22,8 +22,9 @@
 | 34 | ✅ done | gate passed; tag `v0.34.0` after merge | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
 | 35 | ✅ done | gate passed; tag `v0.35.0` after merge | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
 | 36 | ✅ done | gate passed; tag `v0.36.0` after merge | [`PHASE_36.md`](./PHASE_36.md): Background + Enhancements |
+| 37 | ✅ done | gate passed; tag `v0.37.0` after merge | [`PHASE_37.md`](./PHASE_37.md): batch + multi-document workspace |
 
-**Latest closed phase:** `36`
+**Latest closed phase:** `37`
 
 **Implementation in progress:** None
 
@@ -31,10 +32,10 @@
 
 ## Current contract
 
-This section describes code that exists after Phase 36. The legacy editor remains the public product;
+This section describes code that exists after Phase 37. The legacy editor remains the public product;
 the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
-Cutout, Background, Enhancements, and document history. See
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_36.md`](./PHASE_36.md).
+Cutout, Background, Enhancements, document history, and a batch/multi-document workspace. See
+[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_37.md`](./PHASE_37.md).
 
 ### Runtime status
 
@@ -59,6 +60,9 @@ Cutout, Background, Enhancements, and document history. See
   with immediate uncommitted preview and one atomic materialized Apply.
 - Fine-detail and colour-halo Enhancements run in registry order through the shared heavy-job
   coordinator and publish one changed snapshot or a truthful no-op without partial commits.
+- The v2 workspace now admits up to 20 independently owned documents, prepares at most two imports
+  concurrently, preserves per-document drafts/history/settings during selection, and exports
+  committed results through deterministic privacy-neutral ZIP assembly.
 
 ### Core models
 
@@ -130,6 +134,12 @@ finishing-tool command/event correlations. Background image bytes, preview URLs,
 baselines/intermediates, worker buffers, and model sessions remain runtime-owned. Duplicate or
 stale Apply/Change commands cannot replace the immutable correlation of an in-flight operation.
 
+Phase 37 adds `WorkspaceItemId`, ordered ID-only workspace membership/selection, exhaustive
+`WorkspaceCommand` outcomes, bounded `WorkspaceItemSummary`/`EditorWorkspaceSnapshot` projections,
+and `BatchExportSnapshot`. The workspace actor owns child lifecycle but never document truth;
+per-document runtimes own controllers and local view state, while the artifact repository, one
+FIFO heavy-job coordinator, gateways, and warm workers remain shared collaborators.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -141,7 +151,7 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 automatic removal, Manual/Magic Cutout, Background, Enhancements, and document history slice |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 multi-document workspace with automatic removal, Manual/Magic Cutout, Background, Enhancements, history, selected PNG, and Download All |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
@@ -167,7 +177,7 @@ There is no image-processing API.
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime |
 
-Phases 33–36 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
+Phases 33–37 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
 ### Current Editor v2 contract
@@ -175,12 +185,12 @@ without changing values or exposing server secrets.
 The implemented v2 foundation is intentionally isolated and local-only:
 
 - `src/v2/{domain,application,runtime-browser,presentation,shared/ui,shared/lib,testing}`;
-- one workspace actor and one document actor per image;
+- one workspace actor over ordered membership/selection and one document actor/runtime per image;
 - IDs/revisions in domain state, binary values in `ArtifactRepository`;
 - `{ documentId, runId, expectedRevision }` correlation and explicit terminal outcomes;
 - backend-neutral `ProcessingGateway`, with only a bounded local worker adapter implemented;
 - rewritten Typography/Image primitives and tested platform/config wrappers;
-- one-image import → local automatic removal → preview → PNG export;
+- bounded multi-image import → isolated local editing → selected PNG or deterministic ZIP export;
 - fixture-driven modular Vitest/Playwright architecture with a fast deterministic lane, a small
   serialized real-model lane, and zero tolerance for retry-masked flakes or arbitrary sleeps;
 - a typed reusable performance collector/report contract, with v1 profiling retained only after
@@ -195,11 +205,13 @@ The implemented v2 foundation is intentionally isolated and local-only:
 - Background drafts for transparent/colour/gradient/custom image fills with explicit Apply/Cancel;
 - fine-detail and colour-halo Enhancement drafts with ordered globally admitted heavy stages and
   atomic changed/no-op/failure/cancel outcomes;
-- no batch, auth, billing, upload, remote jobs, or generation;
+- up to 20 live workspace items, at most two concurrent import preparations, and one globally
+  admitted heavy job across all documents;
+- no auth, billing, server upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-Further capabilities are not implied by this foundation. Batch, public-route migration, and legacy
-removal require later accepted slices.
+Further capabilities are not implied by this foundation. Public-route migration, parity closure,
+and legacy removal still require later accepted slices.
 
 ## Phase-34 contract
 
@@ -245,6 +257,21 @@ operation; no-op, cancel, stale, duplicate, and failed work creates none. Undo/R
 the committed descriptor and pixels without reinference. The bilingual noindex route exposes
 accessible controls, dirty-draft guards, truthful stages/progress, retry, and keyboard behavior.
 
+## Phase-37 contract
+
+The completed isolated v2 slice adds ordered multi-document membership and selection while each
+document actor remains the sole writer of its revision, history, draft, processing, and error truth.
+One focused runtime per document owns controllers, projections, labels, dimensions, and view
+settings. Selection changes projection identity only: it does not decode, infer, materialize,
+recreate actors, or churn object URLs.
+
+JPEG/PNG/WebP imports remain bounded by 20 MiB and 4096 px; the workspace holds at most 20 live
+items and prepares at most two concurrently. Automatic, Magic, and Enhancement work across all
+documents shares one FIFO `HeavyJobCoordinator` and bounded warm workers. Remove/reset/dispose
+cancel only correlated owners and release their runtime/artifact graph. Download All leases only
+committed PNG composites, preserves document order, uses privacy-neutral names/fixed timestamps,
+skips unfinished/error items truthfully, and releases temporary leases/URLs on every terminal path.
+
 ## Active blockers and residual risks
 
 | Scope | State |
@@ -254,12 +281,60 @@ accessible controls, dirty-draft guards, truthful stages/progress, retry, and ke
 | Phase 34 | Complete; gate, real-model evidence, and architect acceptance passed |
 | Phase 35 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Phase 36 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
+| Phase 37 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-04 — Phase 37 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_37 gate passed and architect batch/multi-document acceptance completed
+
+#### Changes / Decision
+
+- Added bounded multi-file import and ordered workspace membership/selection over isolated document
+  actors and focused per-document runtimes.
+- Preserved drafts, history, settings, processing ownership, and cleanup across selection/retry/
+  remove/reset while every heavy job continues through one shared FIFO admission boundary.
+- Added accessible bilingual contact-sheet controls, selected PNG and deterministic privacy-neutral
+  Download All, plus mocked/real/Windows evidence and complete production/security gates.
+
+#### Affected Phases / Consequences
+
+- The isolated v2 editor now covers the planned local editing and batch workspace capabilities.
+- Public-route parity validation, cutover, and eventual legacy removal remain later explicitly
+  scoped phases; backend and paid capabilities remain undecided.
+
+### 2026-08-03 — Phase 37 batch and multi-document slice approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed planning of the next v2 migration phase after accepting
+Phase 36
+
+#### Changes / Decision
+
+- SPEC v1.33 records Phase 36 as complete and scopes Phase 37 to batch/multi-document orchestration
+  on the isolated bilingual v2 route.
+- The workspace actor owns ordered membership, selection, aggregate bounded status, and child
+  lifecycle; existing document actors remain sole document writers.
+- Runtime composition splits per-document lifecycle from the workspace facade, retains one global
+  heavy-job boundary, and adds isolated retry/remove plus deterministic Download All.
+
+#### Affected Phases / Consequences
+
+- Phase 37 requires a new phase contract before implementation.
+- Phases 33–36 remain complete and unchanged; parity validation, public-route migration, legacy
+  removal, backend, and paid capabilities remain later slices.
 
 ### 2026-08-03 — Phase 36 complete
 

@@ -42,10 +42,21 @@ function statusLabel(
 }
 
 export function MagicCutoutWorkspace(props: Props) {
-  const [mode, setMode] = useState<MagicCutoutMode>("keep");
-  const [radius, setRadius] = useState(18);
+  const initialView = props.session.magicViewState();
+  const [mode, setMode] = useState<MagicCutoutMode>(initialView.mode);
+  const [radius, setRadius] = useState(initialView.radius);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [, setPaintRevision] = useState(0);
+
+  function changeMode(nextMode: MagicCutoutMode): void {
+    setMode(nextMode);
+    props.session.setMagicViewState({ mode: nextMode, radius });
+  }
+
+  function changeRadius(nextRadius: number): void {
+    setRadius(nextRadius);
+    props.session.setMagicViewState({ mode, radius: nextRadius });
+  }
   const candidateCanvas = useRef<HTMLCanvasElement>(null);
   const strokeCanvas = useRef<HTMLCanvasElement>(null);
   const activePointer = useRef<number | null>(null);
@@ -234,13 +245,13 @@ export function MagicCutoutWorkspace(props: Props) {
         >
           <Button
             variant={mode === "keep" ? "default" : "outline"}
-            onClick={() => setMode("keep")}
+            onClick={() => changeMode("keep")}
           >
             {m.editorV2MagicKeep()}
           </Button>
           <Button
             variant={mode === "remove" ? "default" : "outline"}
-            onClick={() => setMode("remove")}
+            onClick={() => changeMode("remove")}
           >
             {m.editorV2MagicRemove()}
           </Button>
@@ -256,7 +267,7 @@ export function MagicCutoutWorkspace(props: Props) {
           min="2"
           max="80"
           value={radius}
-          onChange={(event) => setRadius(Number(event.currentTarget.value))}
+          onChange={(event) => changeRadius(Number(event.currentTarget.value))}
         />
       </label>
 

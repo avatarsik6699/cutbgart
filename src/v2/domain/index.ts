@@ -53,6 +53,8 @@ export type {
   StartAutomaticRemovalCommand,
   SelectMagicCandidateCommand,
   UndoDocumentCommand,
+  WorkspaceCommand,
+  WorkspaceCommandOutcome,
 } from "./commands";
 export type {
   ActiveRun,
@@ -91,6 +93,7 @@ export {
   createMagicDraftId,
   createManualDraftId,
   createRunId,
+  createWorkspaceItemId,
   isRevision,
 } from "./ids";
 export type {
@@ -105,6 +108,7 @@ export type {
   ManualDraftId,
   Revision,
   RunId,
+  WorkspaceItemId,
 } from "./ids";
 export {
   changeEnhancementDraft,

@@ -34,6 +34,7 @@
     "e2e:phase-34-real": "E2E_PHASE34_REAL=1 tsx scripts/run-e2e.ts e2e/phase-34-manual-cutout.real.spec.ts --project=chromium --workers=1",
     "e2e:phase-35-real": "E2E_PHASE35_REAL=1 tsx scripts/run-e2e.ts e2e/phase-35-magic-cutout.real.spec.ts --project=chromium --workers=1",
     "e2e:phase-36-real": "E2E_PHASE36_REAL=1 tsx scripts/run-e2e.ts e2e/phase-36-finishing-tools.real.spec.ts --project=chromium --workers=1",
+    "e2e:phase-37-real": "E2E_PHASE37_REAL=1 tsx scripts/run-e2e.ts e2e/phase-37-batch-workspace.real.spec.ts --project=chromium --workers=1",
     "e2e:full": "pnpm e2e && pnpm e2e:real-model",
     "release:test": "vitest run tests/release-operations.test.ts tests/operations.test.ts",
     "release:test:docker": "./scripts/release/disposable-test.sh",
@@ -43,6 +44,7 @@
     "profile:phase-34": "node scripts/profiling/v2/run-phase-34.mjs",
     "profile:phase-35": "node scripts/profiling/v2/run-phase-35.mjs",
     "profile:phase-36": "node scripts/profiling/v2/run-phase-36.mjs",
+    "profile:phase-37": "node scripts/profiling/v2/run-phase-37.mjs",
     "prepare": "husky"
   },
   "dependencies": {

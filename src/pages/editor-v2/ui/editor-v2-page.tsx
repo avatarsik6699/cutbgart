@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
-import { useEditorSession } from "@/v2/presentation";
+import { EditorWorkspaceStrip, useEditorSession } from "@/v2/presentation";
 import type { EditorSessionOptions } from "@/v2/runtime-browser";
 import { useIsHydrated } from "@/v2/shared/lib";
 import { Typography } from "@/v2/shared/ui";
@@ -19,6 +19,7 @@ export function EditorV2Page(props: Props) {
   const editor = useEditorSession(props.sessionOptions);
   const [grid, setGrid] = useState<"fine" | "wide">("fine");
   const hydrated = useIsHydrated();
+  const workspace = editor.session.workspaceSnapshot();
 
   function toggleGridFx(): void {
     setGrid((current) => (current === "fine" ? "wide" : "fine"));
@@ -51,6 +52,14 @@ export function EditorV2Page(props: Props) {
           </Button>
         </header>
 
+        {workspace.items.length > 0 ? (
+          <EditorWorkspaceStrip
+            active={editor.snapshot.kind === "document" ? editor.snapshot : null}
+            session={editor.session}
+            workspace={workspace}
+          />
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
           {editor.snapshot.kind === "document" ? (
             <EditorV2ActiveDocument
@@ -67,7 +76,7 @@ export function EditorV2Page(props: Props) {
                 fileName={editor.snapshot.fileName}
                 grid={grid}
                 height={editor.snapshot.height}
-                onFile={(file) => void editor.session.importImage(file)}
+                onFiles={(files) => void editor.session.importImages(files)}
                 previewUrl={editor.snapshot.previewUrl}
                 resultUrl={editor.snapshot.resultUrl}
                 status={editor.snapshot.kind === "preparing" ? "preparing" : "empty"}

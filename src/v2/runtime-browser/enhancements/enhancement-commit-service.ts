@@ -77,6 +77,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
   readonly #requestedPath: () => LocalInferencePath;
   readonly #snapshots: SnapshotCommitter;
   readonly #worker: EnhancementOperationRunner;
+  readonly #ownsWorker: boolean;
   #snapshot: EnhancementRuntimeSnapshot = READY_SNAPSHOT;
 
   constructor(options: {
@@ -87,6 +88,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
     requestedPath: () => LocalInferencePath;
     snapshots: SnapshotCommitter;
     worker: EnhancementOperationRunner;
+    ownsWorker?: boolean;
   }) {
     this.#artifacts = options.artifacts;
     this.#coordinator = options.coordinator;
@@ -95,6 +97,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
     this.#requestedPath = options.requestedPath;
     this.#snapshots = options.snapshots;
     this.#worker = options.worker;
+    this.#ownsWorker = options.ownsWorker ?? true;
   }
 
   getSnapshot = (): EnhancementRuntimeSnapshot => this.#snapshot;
@@ -264,7 +267,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
   }
 
   reset(): void {
-    this.#worker.reset();
+    if (this.#ownsWorker) this.#worker.reset();
     this.#publish(READY_SNAPSHOT);
   }
 
@@ -278,7 +281,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
   }
 
   dispose(): void {
-    this.#worker.dispose();
+    if (this.#ownsWorker) this.#worker.dispose();
     this.#listeners.clear();
     this.#snapshot = READY_SNAPSHOT;
   }

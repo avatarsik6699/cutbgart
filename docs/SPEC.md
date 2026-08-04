@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.32` |
+| Version | `v1.33` |
 | Date | `2026-08-03` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -36,10 +36,11 @@ Three invariants govern every decision:
 3. **Responsiveness, indexability, and accessibility are functionality.** A visually correct result
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
-The accepted v2 implementation now covers one-image local automatic removal, bounded committed
-history, exact Manual Cutout, guided Magic Cutout, preview/export, and safe cancel/retry/reset. The
-next vertical slice migrates Background and Enhancements while preserving those accepted contracts
-and extending shared lifecycle abstractions only where the new tools prove another consumer.
+The accepted v2 implementation now covers the complete one-image local workflow: automatic removal,
+bounded committed history, Manual and Magic Cutout, Background, fine-detail/colour-halo
+Enhancements, preview/export, and safe cancel/retry/reset. The next vertical slice adds
+batch/multi-document orchestration around those proven document actors without importing the legacy
+batch hook, mutable editor state, or worker lifecycle.
 
 ## 2. Scope and boundaries
 
@@ -60,9 +61,9 @@ Phase 32 added useful legacy guards, item-owned edit state, structured batch fai
 work, but did not eliminate real-browser model-load and Magic Apply freezes. It is closed incomplete,
 not evidence that the legacy editor satisfies the responsiveness contract.
 
-### 2.2 Implemented v2 foundation through Phase 35
+### 2.2 Implemented v2 foundation through Phase 36
 
-Phases 33–35 built an isolated implementation under `src/v2/` and a separate noindex route. It
+Phases 33–36 built an isolated implementation under `src/v2/` and a separate noindex route. It
 includes:
 
 - framework-free IDs, snapshots, commands, events, invariants, and processing ports;
@@ -73,11 +74,13 @@ includes:
 - typed SSR-safe `shared/config/env.ts` and `runtime.ts`, plus only consumed/tested wrappers;
 - bounded committed document history and runtime-owned exact Manual Cutout drafts;
 - runtime-owned guided Magic drafts, correlated prediction/candidates, and explicit Apply;
-- one shared FIFO heavy-job coordinator for automatic-removal and Magic model work;
+- runtime-owned Background and Enhancement drafts with explicit atomic Apply/Cancel;
+- one shared FIFO heavy-job coordinator for automatic-removal, Magic, and Enhancement work;
 - deterministic unit, actor, worker, component, Playwright, real-model, and target-device evidence.
 
 Their exact checklists and acceptance gates live in [`PHASE_33.md`](./PHASE_33.md),
-[`PHASE_34.md`](./PHASE_34.md), and [`PHASE_35.md`](./PHASE_35.md).
+[`PHASE_34.md`](./PHASE_34.md), [`PHASE_35.md`](./PHASE_35.md), and
+[`PHASE_36.md`](./PHASE_36.md).
 
 ### 2.3 Implemented v2 slice — Phase 34
 
@@ -149,9 +152,9 @@ Phase 35 did **not** migrate fine-detail/foreground refinement, Enhancements, Ba
 batch/multi-document UI, public routes, accounts, payments, remote processing, or generated
 backgrounds, and it adds no new environment variable or third-party dependency.
 
-### 2.5 Active v2 scope — Phase 36
+### 2.5 Implemented v2 slice — Phase 36
 
-Phase 36 migrates Background and the two existing local Enhancement operations as one finishing-
+Phase 36 migrated Background and the two existing local Enhancement operations as one finishing-
 workflow slice. It does not mechanically copy the legacy React hooks or mutable workspace state:
 
 - `DocumentSnapshot` gains an ID-only `background` descriptor. Transparent, solid-colour, and
@@ -186,17 +189,67 @@ workflow slice. It does not mechanically copy the legacy React hooks or mutable 
 - all accepted Phase-33–35 automatic-removal, Manual, Magic, history, SSR, responsiveness, resource,
   and deterministic cleanup contracts remain green.
 
-Phase 36 may rewrite reviewed pure legacy policies for fill validation/normalization, matte
-refinement, deterministic fusion, and foreground cleanup behind v2 contracts. It reuses the pinned
-model families/revisions and immutable local asset policy; it adds no dependency, environment key,
-server endpoint, storage, or remote fallback. Legacy React hooks, components, mutable editor state,
-and worker lifecycle code must not be imported.
+Phase 36 rewrote or extracted only reviewed pure legacy policies for fill validation/normalization,
+matte refinement, deterministic fusion, and foreground cleanup behind v2 contracts. It reuses the
+pinned model families/revisions and immutable local asset policy; it adds no dependency, environment
+key, server endpoint, storage, or remote fallback. Legacy React hooks, components, mutable editor
+state, and worker lifecycle code must not be imported.
 
-Phase 36 does **not** migrate batch/multi-document UI, public/scenario routes, legacy removal,
+Phase 36 did **not** migrate batch/multi-document UI, public/scenario routes, legacy removal,
 accounts, payments, remote processing, generated backgrounds, arbitrary image adjustments, or a
 new model family. A custom uploaded background is local compositing, not generated content.
 
-### 2.6 Future paid direction
+### 2.6 Active v2 scope — Phase 37
+
+Phase 37 migrates the local batch/multi-document workflow as a parent workspace actor over the
+accepted Phase-33–36 document actor. It removes the intentional one-document cap without copying the
+legacy `useBatchProcessing`/`ToolWorkspace` state graph:
+
+- the workspace actor owns ordered document IDs, selected document ID, bounded aggregate progress,
+  and child actor lifecycle only. Each image still has exactly one document actor and remains the
+  sole writer of its revision, committed snapshot, draft, history, and error state;
+- runtime composition separates the workspace/session facade from per-document runtimes. Each
+  document runtime owns its projections, tool controllers, subscriptions, and cleanup; the parent
+  owns membership/selection and delegates rather than accumulating every tool and item concern in
+  one batch god-object;
+- multiple JPEG/PNG/WebP files may be imported initially and added later. A runtime-only
+  `WorkspaceItemId` owns each pending/failed input until successful preparation creates its
+  `DocumentId` and child actor. Each file independently
+  passes the existing 20 MiB, safe-decode, and 4096 px preparation boundary; one invalid/failed item
+  cannot discard, restart, or block valid siblings. One workspace accepts at most 20 live items
+  (pending, failed, or registered) and prepares at most two imports concurrently; overflow is
+  rejected before ownership;
+- automatic removal for every item enters the existing global FIFO `HeavyJobCoordinator` with one
+  model/memory-heavy job admitted at a time. Selection, cached preview paint, tool controls, removal,
+  and export remain responsive while other items are queued or running;
+- selecting another document is an identity-only workspace transition. It performs no upload,
+  decode, automatic reinference, snapshot materialization, history reconstruction, or object-URL
+  churn. A retained Manual/Magic/Background/Enhancement draft reopens truthfully for its owner;
+- queued/running/error/result status, safe localized error summaries, queue position, and aggregate
+  counts are bounded metadata. Pixels, files, URLs, worker handles, abort controllers, promises, and
+  tool runtimes remain outside React/XState snapshots;
+- shared automatic/Magic/Enhancement gateways accept requests from multiple document runtimes but
+  correlate cancellation and terminals by document/run owner. Cancelling/removing one document
+  cannot reset a sibling's queued/active request, and batch must not create one warm model worker or
+  session per document;
+- retry starts a fresh correlated automatic run for only the failed document. Remove cancels that
+  document's queued/running/tool work and releases only its artifacts, previews, model inputs,
+  histories, and runtime; reset/dispose releases the entire actor/runtime tree exactly once;
+- the bilingual noindex v2 route gains multiple-file/add-image input, an accessible document
+  filmstrip/list, selected-item editing, per-item retry/remove, truthful batch progress, and keyboard
+  selection. Item switches during heavy work must not lose focus intent, drafts, history, or edits;
+- selected-document export keeps reading its committed PNG. Download All creates one deterministic
+  client-side ZIP from completed committed PNG artifacts only, with collision-safe privacy-neutral
+  names and fixed entry timestamps; it does not rerun inference or encode unfinished/error items;
+- batch work adds no server endpoint, persistence, analytics payload, environment key, model change,
+  or remote fallback. It reuses `client-zip` through a narrow export port and adds no generic event
+  bus, base tool class, shared mutable document store, or second workflow source of truth.
+
+Phase 37 does **not** migrate public/scenario routes, remove legacy code, change quality/model
+selection, add arbitrary export formats, accounts, payments, remote processing, or generated
+backgrounds. Public cutover follows a separate parity/accessibility/device/product-validation phase.
+
+### 2.7 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -315,12 +368,42 @@ type DocumentHistory = {
   future: readonly DocumentHistoryEntry[];
   retainedHistoricalBytes: number;
 };
+
+type WorkspaceItemId = string;
+type WorkspaceItemStatus =
+  | "preparing"
+  | "queued"
+  | "processing"
+  | "result"
+  | "error";
+
+type WorkspaceItemSummary = {
+  itemId: WorkspaceItemId;
+  documentId: DocumentId | null;
+  fileName: string;
+  status: WorkspaceItemStatus;
+  error: ProcessingError | null;
+};
+
+type WorkspaceState = {
+  documentIds: readonly DocumentId[];
+  selectedDocumentId: DocumentId | null;
+};
+
+type EditorWorkspaceSnapshot = {
+  itemIds: readonly WorkspaceItemId[];
+  selectedDocumentId: DocumentId | null;
+  items: readonly WorkspaceItemSummary[];
+};
+
+const WORKSPACE_ITEM_LIMIT = 20;
+const IMPORT_PREPARATION_CONCURRENCY = 2;
 ```
 
 Core rules:
 
-- A workspace owns document membership/selection; each document actor is the sole writer for that
-  document and owns at most one active commit.
+- A workspace owns ordered document membership/selection and one child actor per document; each
+  document actor is the sole writer for that document and owns at most one active commit.
 - Commands and terminal events correlate `{ documentId, runId, expectedRevision }`. Stale,
   cancelled, duplicate, cross-document, or wrong-revision results cannot commit.
 - Actor/domain state contains IDs and small serializable metadata only. Blobs, bitmaps, pixel/tensor
@@ -402,7 +485,7 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
 | `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 36 adds Background and Enhancements without changing route identity |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 37 adds batch/multi-document workflow without changing route identity |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -457,6 +540,13 @@ Background or Enhancement draft is active, its controls own only tool-local chan
 Undo/Redo remains unavailable until Apply/Cancel resolves the draft, and reset/navigation cannot
 silently discard it.
 
+For Phase 37, multiple-file/add-image input and document selection are explicit. The filmstrip/list
+announces per-item and aggregate status, keeps selection keyboard reachable, and never substitutes a
+different document while the selected one is queued or fails. Switching items preserves each
+document's committed state, draft, history, viewport, and accessible focus intent without
+reinference. Remove/reset and Download All confirm or disable actions truthfully when dirty,
+running, unfinished, or failed items are involved.
+
 ## 6. Stack and runtime configuration
 
 [`STACK.md`](./STACK.md) is authoritative for versions, commands, repository layout, gates, and
@@ -475,7 +565,7 @@ Current environment contract:
 | `APP_BUILD_ID`, `APP_COMMIT_SHA` | Immutable production release identity |
 | `PORT`, `NODE_ENV` | Standard server runtime configuration |
 
-Phases 33–36 add no environment variable. Future backend technology is deliberately undecided; current
+Phases 33–37 add no environment variable. Future backend technology is deliberately undecided; current
 candidates and decision criteria are recorded in `ARCHITECTURE_V2.md`, not an implementation mandate.
 
 ## 7. Non-functional acceptance
@@ -568,6 +658,13 @@ document state; a no-op/cancelled/failed/stale run changes revision/history; Enh
 shared heavy-job admission; Undo/Redo loses the committed fill descriptor or leaks its image
 artifact; or accepted Phase-33–35 contracts regress.
 
+Phase 37 additionally fails if the workspace becomes a second document-state writer; selecting a
+completed item decodes/reinfers/reconstructs it; one item failure/cancel/remove mutates a sibling;
+queued or active heavy work bypasses global admission; files/pixels/URLs/native runtime values enter
+actor/React batch state; Download All includes unfinished/error/private source metadata or repeats
+inference/encoding; per-document or whole-workspace churn leaks actors, controllers, workers,
+artifacts, URLs, listeners, or sessions; or accepted Phase-33–36 contracts regress.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -577,12 +674,13 @@ artifact; or accepted Phase-33–35 contracts regress.
 | 33 | Complete | Editor v2 foundation and first local vertical slice; gate and architect acceptance passed |
 | 34 | Complete | Bounded document history and exact Manual Cutout on v2; gate and architect acceptance passed |
 | 35 | Complete | Guided Magic Cutout vertical slice; gate and architect acceptance passed |
-| 36 | Approved / active | Background and Enhancements finishing workflow on the isolated v2 editor |
-| Later | Unscheduled | Migrate batch as a parent actor over proven document actors, then run parity/product validation; public-route migration and paid backend remain separately approved work |
+| 36 | Complete | Background and Enhancements finishing workflow; gate and architect acceptance passed |
+| 37 | Approved / active | Batch/multi-document v2 workspace over proven per-document actors; public routes remain unchanged |
+| Later | Unscheduled | Run parity/accessibility/device/product validation, then migrate public/scenario routes and remove legacy only through separately approved phases; paid backend remains separate work |
 
-No v2 capability is migrated merely because legacy code exists. Phase 36 is limited to the explicit
-Background/Enhancements contract above; batch, public migration, and paid work still require their
-own approved phase contracts.
+No v2 capability is migrated merely because legacy code exists. Phase 37 is limited to the explicit
+batch/multi-document contract above; parity validation, public migration, legacy removal, and paid
+work still require their own approved phase contracts.
 
 ## 9. Deferred decisions
 
