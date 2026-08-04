@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-04T08:15:00.000Z",
+  "conclusion": "blocked",
+  "requirements": [
+    { "id": "A11Y-01", "locales": ["ru", "en"], "outcome": "Keyboard and focus remain operable.", "disposition": "required-parity", "rationale": "Architect accessibility acceptance is required.", "evidenceIds": ["A-a11y", "W-keyboard", "H-a11y"], "status": "unsupported" },
+    { "id": "A11Y-02", "locales": ["ru", "en"], "outcome": "Names, roles, and states are exposed.", "disposition": "required-parity", "rationale": "Automated and Windows checks passed.", "evidenceIds": ["A-a11y", "W-keyboard"], "status": "passed" },
+    { "id": "A11Y-03", "locales": ["ru", "en"], "outcome": "Status changes are announced.", "disposition": "required-parity", "rationale": "Architect announcement review is outstanding.", "evidenceIds": ["A-a11y", "W-keyboard", "H-a11y"], "status": "unsupported" },
+    { "id": "A11Y-04", "locales": ["ru", "en"], "outcome": "Pointer and touch controls remain operable.", "disposition": "required-parity", "rationale": "Windows pointer passed; architect touch review is outstanding.", "evidenceIds": ["A-a11y", "W-pointer", "H-a11y"], "status": "unsupported" },
+    { "id": "A11Y-05", "locales": ["ru", "en"], "outcome": "Contrast and reduced motion pass.", "disposition": "required-parity", "rationale": "Scanner and reduced-motion samples passed.", "evidenceIds": ["A-a11y", "W-product"], "status": "passed" },
+    { "id": "AUTO-01", "locales": ["ru", "en"], "outcome": "Automatic removal publishes correlated results once.", "disposition": "required-parity", "rationale": "Mocked, host-real, and Windows journeys passed.", "evidenceIds": ["A-journey", "R-full", "W-product"], "status": "passed" },
+    { "id": "AUTO-02", "locales": ["ru", "en"], "outcome": "Fallback and retry remain truthful.", "disposition": "required-parity", "rationale": "Accepted fallback contracts and deterministic recovery passed.", "evidenceIds": ["A-journey", "H-prior-phases"], "status": "passed" },
+    { "id": "COPY-01", "locales": ["ru", "en"], "outcome": "Bilingual copy and discoverability are equivalent.", "disposition": "required-parity", "rationale": "Catalogs align; architect product-copy acceptance is outstanding.", "evidenceIds": ["A-a11y", "A-journey", "W-product", "H-product"], "status": "unsupported" },
+    { "id": "EXPORT-01", "locales": ["ru", "en"], "outcome": "Selected committed PNG exports privately.", "disposition": "accepted-difference", "rationale": "Committed-only neutral export was accepted in prior phases.", "evidenceIds": ["A-journey", "R-full", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "EXPORT-02", "locales": ["ru", "en"], "outcome": "Download All creates a deterministic private ZIP.", "disposition": "accepted-difference", "rationale": "Phase 37 accepted deterministic ZIP behavior.", "evidenceIds": ["A-journey", "R-full", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "HIST-01", "locales": ["ru", "en"], "outcome": "Bounded document history avoids reinference.", "disposition": "accepted-difference", "rationale": "Phase 34 accepted actor-owned history.", "evidenceIds": ["A-journey", "W-keyboard", "P-resource", "H-prior-phases"], "status": "passed" },
+    { "id": "INPUT-01", "locales": ["ru", "en"], "outcome": "Picker admits multiple valid images.", "disposition": "required-parity", "rationale": "Automated and Windows picker journeys passed.", "evidenceIds": ["A-journey", "W-product"], "status": "passed" },
+    { "id": "INPUT-02", "locales": ["ru", "en"], "outcome": "Drop input matches the picker.", "disposition": "cutover-blocker", "rationale": "V2 has no drop handler and validation cannot add a new capability.", "evidenceIds": ["A-input-audit"], "status": "failed" },
+    { "id": "INPUT-03", "locales": ["ru", "en"], "outcome": "Clipboard input matches the picker.", "disposition": "cutover-blocker", "rationale": "V2 has no paste handler and validation cannot add a new capability.", "evidenceIds": ["A-input-audit"], "status": "failed" },
+    { "id": "INPUT-04", "locales": ["ru", "en"], "outcome": "Invalid inputs fail recoverably per item.", "disposition": "required-parity", "rationale": "Both-locale error states passed scanner and journey checks.", "evidenceIds": ["A-journey", "A-a11y", "W-product"], "status": "passed" },
+    { "id": "INPUT-05", "locales": ["ru", "en"], "outcome": "Large dimensions remain locally bounded.", "disposition": "required-parity", "rationale": "Accepted preparation contracts and deterministic tests passed.", "evidenceIds": ["A-journey", "H-prior-phases"], "status": "passed" },
+    { "id": "LEGACY-01", "locales": ["ru", "en"], "outcome": "Quality and model choice has an explicit disposition.", "disposition": "cutover-blocker", "rationale": "No architect decision accepts removing the legacy choice.", "evidenceIds": ["H-parity"], "status": "unsupported" },
+    { "id": "LEGACY-02", "locales": ["ru", "en"], "outcome": "Export-size choice has an explicit disposition.", "disposition": "cutover-blocker", "rationale": "No architect decision accepts removing the legacy choice.", "evidenceIds": ["H-parity"], "status": "unsupported" },
+    { "id": "LEGACY-03", "locales": ["ru", "en"], "outcome": "The legacy-only control catalog is exhaustive.", "disposition": "cutover-blocker", "rationale": "Source audit completed; architect confirmation is outstanding.", "evidenceIds": ["A-legacy-audit", "H-parity"], "status": "unsupported" },
+    { "id": "LIFE-01", "locales": ["ru", "en"], "outcome": "Single-document lifecycle remains complete.", "disposition": "required-parity", "rationale": "All three environment journeys passed.", "evidenceIds": ["A-journey", "R-full", "W-product"], "status": "passed" },
+    { "id": "LIFE-02", "locales": ["ru", "en"], "outcome": "Batch ownership and admission remain bounded.", "disposition": "accepted-difference", "rationale": "Phase 37 accepted the bounded workspace design.", "evidenceIds": ["A-journey", "R-full", "W-product", "P-resource", "H-prior-phases"], "status": "passed" },
+    { "id": "LIFE-03", "locales": ["ru", "en"], "outcome": "Selection restores state without reinference.", "disposition": "accepted-difference", "rationale": "Phase 37 accepted cached selection; current evidence passed.", "evidenceIds": ["A-journey", "R-full", "W-product", "P-resource", "H-prior-phases"], "status": "passed" },
+    { "id": "PRIV-01", "locales": ["ru", "en"], "outcome": "User content stays browser-local and absent from evidence.", "disposition": "required-parity", "rationale": "Privacy-safe automated, real, Windows, and approved contract evidence passed.", "evidenceIds": ["A-journey", "R-full", "W-product", "H-privacy"], "status": "passed" },
+    { "id": "RECOV-01", "locales": ["ru", "en"], "outcome": "Cancel, retry, reset, and disposal remain isolated.", "disposition": "required-parity", "rationale": "Failure-retry and churn journeys passed.", "evidenceIds": ["A-journey", "R-full", "W-product", "P-resource"], "status": "passed" },
+    { "id": "RES-01", "locales": ["ru", "en"], "outcome": "Repeated churn releases all owned resources.", "disposition": "accepted-difference", "rationale": "V2 ownership was accepted and current resource checks passed.", "evidenceIds": ["A-journey", "P-resource", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "RESP-01", "locales": ["ru", "en"], "outcome": "Actual 200 percent zoom reflows without clipping.", "disposition": "required-parity", "rationale": "Effective-width automation passed; managed Windows zoom was unsupported.", "evidenceIds": ["A-a11y", "W-zoom", "H-a11y"], "status": "unsupported" },
+    { "id": "RESP-02", "locales": ["ru", "en"], "outcome": "Narrow material states remain operable.", "disposition": "required-parity", "rationale": "Both-locale automation and Windows 360 pixel review passed.", "evidenceIds": ["A-a11y", "A-journey", "W-narrow"], "status": "passed" },
+    { "id": "TOOL-01", "locales": ["ru", "en"], "outcome": "Manual Cutout preserves the accepted contract.", "disposition": "accepted-difference", "rationale": "Phase 34 acceptance and current journeys passed.", "evidenceIds": ["A-journey", "A-a11y", "R-full", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "TOOL-02", "locales": ["ru", "en"], "outcome": "Magic Cutout preserves the accepted contract.", "disposition": "accepted-difference", "rationale": "Phase 35 acceptance and current real journeys passed.", "evidenceIds": ["A-journey", "A-a11y", "R-full", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "TOOL-03", "locales": ["ru", "en"], "outcome": "Background preserves the accepted contract.", "disposition": "accepted-difference", "rationale": "Phase 36 acceptance and current journeys passed.", "evidenceIds": ["A-journey", "A-a11y", "R-full", "W-product", "H-prior-phases"], "status": "passed" },
+    { "id": "TOOL-04", "locales": ["ru", "en"], "outcome": "Enhancements preserve the accepted contract.", "disposition": "accepted-difference", "rationale": "Phase 36 acceptance and current failure and real journeys passed.", "evidenceIds": ["A-journey", "A-a11y", "R-full", "W-product", "H-prior-phases"], "status": "passed" }
+  ],
+  "blockerIds": ["A11Y-01", "A11Y-03", "A11Y-04", "COPY-01", "INPUT-02", "INPUT-03", "LEGACY-01", "LEGACY-02", "LEGACY-03", "RESP-01"],
+  "seriousAccessibilityFindingIds": [],
+  "evidenceKinds": ["architect", "automated", "real-model", "target-device"],
+  "limitations": [
+    "Actual 200 percent browser zoom could not be applied in managed Windows Playwright; a 320 effective CSS-pixel automated sample passed.",
+    "Architect accessibility, touch, copy, and legacy-control disposition decisions are outstanding.",
+    "Per-document cold and warm timing and Windows Long Task entries are unsupported; performance evaluation is inconclusive.",
+    "Local analytics produced known CSP and CORS console noise without editor failure."
+  ],
+  "performance": {
+    "schemaVersion": "phase-38.performance.v1",
+    "evaluation": "inconclusive",
+    "runs": [
+      {
+        "schemaVersion": "phase-38.performance.v1",
+        "runId": "mocked-browser",
+        "fullWorkflowMs": 3800,
+        "coldInputMs": null,
+        "warmInputMs": null,
+        "maximumLongTaskMs": 0,
+        "maximumHeavyJobs": 1,
+        "automaticInferenceCount": 6,
+        "cachedSelectionInferenceCount": 0,
+        "churnCycles": 3,
+        "missedActions": 0,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": [
+          "Deterministic worker evidence does not represent model timing; cold and warm input latency are unsupported."
+        ]
+      },
+      {
+        "schemaVersion": "phase-38.performance.v1",
+        "runId": "host-real-model",
+        "fullWorkflowMs": 37700,
+        "coldInputMs": null,
+        "warmInputMs": null,
+        "maximumLongTaskMs": null,
+        "maximumHeavyJobs": 1,
+        "automaticInferenceCount": 2,
+        "cachedSelectionInferenceCount": 0,
+        "churnCycles": 1,
+        "missedActions": 0,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": [
+          "The 37.7-second host value is serialized full-journey duration; per-document cold/warm input latency and Long Task entries were not captured."
+        ]
+      },
+      {
+        "schemaVersion": "phase-38.performance.v1",
+        "runId": "windows-target",
+        "fullWorkflowMs": null,
+        "coldInputMs": null,
+        "warmInputMs": null,
+        "maximumLongTaskMs": null,
+        "maximumHeavyJobs": 1,
+        "automaticInferenceCount": null,
+        "cachedSelectionInferenceCount": null,
+        "churnCycles": 1,
+        "missedActions": 0,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": [
+          "Managed Windows MCP did not capture Worker counts, Long Task entries, or per-document timestamps; selection preserved 9 artifacts, 27 leases, and 5 URLs exactly before and after.",
+          "Managed browser zoom shortcuts did not change zoom state; actual Windows 200% zoom is unsupported."
+        ]
+      }
+    ]
+  }
+}

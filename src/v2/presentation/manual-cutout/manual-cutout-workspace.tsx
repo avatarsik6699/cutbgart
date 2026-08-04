@@ -33,6 +33,7 @@ export function ManualCutoutWorkspace(props: Props) {
   const [zoom, setZoom] = useState(initialView.zoom);
   const [cursor, setCursor] = useState<Cursor>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
   const imageDataRef = useRef<ImageData | null>(null);
   const engine = props.session.manualDraft();
 
@@ -145,6 +146,10 @@ export function ManualCutoutWorkspace(props: Props) {
     [engine, props.session, repaint],
   );
 
+  useEffect(function focusManualWorkspaceFx() {
+    workspaceRef.current?.focus();
+  }, []);
+
   useEffect(
     function loadManualSourceFx() {
       const canvas = canvasRef.current;
@@ -203,6 +208,8 @@ export function ManualCutoutWorkspace(props: Props) {
 
   return (
     <section
+      ref={workspaceRef}
+      tabIndex={-1}
       className="border-border bg-card/70 rounded-xl border p-4 sm:p-5"
       aria-label={m.editorV2ManualWorkspace()}
     >
@@ -268,7 +275,11 @@ export function ManualCutoutWorkspace(props: Props) {
           </Button>
         </div>
       </div>
-      <div className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] relative max-h-[65vh] overflow-auto rounded-lg border p-3">
+      <div
+        className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] focus-visible:ring-ring relative max-h-[65vh] overflow-auto rounded-lg border p-3 focus-visible:ring-2"
+        tabIndex={0}
+        aria-label={m.editorV2ManualViewport()}
+      >
         <div
           className="relative mx-auto origin-top-left"
           style={{ width: `${zoom * 100}%` }}

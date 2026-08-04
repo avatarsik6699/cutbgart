@@ -479,6 +479,11 @@ Legacy FSD slices may be called through adapters, but v2 modules must not import
 their React state as source of truth. When the architecture stabilizes, these directories may move
 to workspace packages without changing their public contracts.
 
+The rendered v1 editor is the migration's visual and interaction contract. Architecture isolation
+does not imply a new product design. Reuse or extract controller-neutral presentation and connect it
+to typed v2 projections/intents; do not fork an independently styled v2 copy, and do not pull legacy
+hooks, stores, controllers, or worker ownership through the presentation seam.
+
 ## 9. Migration roadmap
 
 ### Completed slices
@@ -491,17 +496,26 @@ to workspace packages without changing their public contracts.
   candidates, explicit preview/apply separation, and shared automatic/Magic heavy-job admission.
 - **Phase 36:** Background and ordered fine-detail/colour-halo Enhancements with runtime-owned
   previews/intermediates, atomic document publication, and shared heavy-job admission.
+- **Phase 37:** batch/multi-document orchestration as a parent workspace actor over the proven
+  document actor, with per-document runtime ownership, isolated retry/remove, cached selection,
+  global heavy-job admission, and deterministic Download All.
+
+### Validation result
+
+1. **Phase 38:** produced a blocked readiness report. The isolated v2 workflow architecture passed
+   substantial automation/real-model checks, but its presentation and several legacy-visible
+   capabilities were not ready to replace the public editor.
 
 ### Active slice
 
-1. **Phase 37:** batch/multi-document orchestration as a parent workspace actor over the proven
-   document actor, with per-document runtime ownership, isolated retry/remove, cached selection,
-   global heavy-job admission, and deterministic Download All.
+1. **Phase 39:** reproduce the v1 main-page shell and one complete single-image input, quality,
+   processing, result, export-size, and PNG flow over v2 ownership on the isolated bilingual routes.
+   Public routes remain unchanged.
 
 ### Later slices
 
-1. accessibility/device/product parity validation;
-2. public/scenario-route migration with a controlled rollback boundary;
+1. batch and editor-tool presentation slices using the same v1-faithful adapter boundary;
+2. scenario/public-route migration with a controlled rollback boundary after full UI acceptance;
 3. legacy editor removal only after public v2 acceptance;
 4. paid backend foundation and one opt-in remote-processing slice;
 5. generated backgrounds and other paid capabilities only after the backend/data/legal gates.

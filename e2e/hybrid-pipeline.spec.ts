@@ -252,6 +252,7 @@ test("Background and individual export settings stay isolated across two batch d
     .getByTestId("background-tool-panel")
     .getByRole("button", { name: UI.apply })
     .click();
+  await expect.poll(() => documentRevision(page)).toBe(1);
   await page.getByRole("button", { name: "Output options" }).click();
   await page.getByRole("menuitemradio", { name: "1024 px" }).click();
   await page.keyboard.press("Escape");

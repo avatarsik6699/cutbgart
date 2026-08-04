@@ -385,20 +385,22 @@
 - **Prevention**: retain a parallel RU/EN SSR regression check and do not move locale ownership to a
   process-global mutable value.
 
-### Collecting every Playwright project together can destabilize Paraglide dev SSR
+### Cold localized route compilation can destabilize the Playwright Vite server
 
 - **Symptoms**: `pnpm e2e --project=chromium` is green and production SSR survives concurrent
-  locale stress, but one unfiltered Playwright invocation renders `/en/*` in Russian across every
-  browser project.
+  locale stress, but one unfiltered Playwright invocation renders `/en/*` in Russian or exposes
+  Vite's `socket hang up` overlay while parallel workers first open a lazily compiled route family.
 - **Root cause**: collecting the complete multi-project matrix in one Playwright process can
   invalidate or split Paraglide's Vite development SSR module context. Freshly regenerated
   Paraglide modules can also make the first Vite process hydrate `/en/` from the Russian base
-  locale even when SSR chose English; the transformed module cache is correct after that cold
-  process exits.
-- **Fix**: use a short managed Vite process to hydrate English `/en/` and Russian `/` in isolated
-  service-worker-free browser contexts, stop it completely, then start the test server and verify
-  both hydrated locales before collection. Invoke each configured browser project sequentially
-  with an explicit `--project`; preserve `fullyParallel` and the worker count inside each project.
+  locale even when SSR chose English. Concurrent first SSR compilation of `/editor-v2` and
+  `/en/editor-v2` can likewise terminate one dev-proxy socket; the transformed module cache is
+  correct after a sequential warm-up.
+- **Fix**: use a short managed Vite process to hydrate English/Russian public and v2 route families
+  in isolated service-worker-free browser contexts, stop it completely, then start the test server
+  and verify the same routes before collection. Invoke each configured browser project
+  sequentially with an explicit `--project`; preserve `fullyParallel` and the worker count inside
+  each project.
 - **Prevention**: do not collapse the default matrix back into one Playwright process unless an
   upstream Paraglide/Vite upgrade is verified against parallel RU/EN SSR and the full E2E suite;
   readiness probes must consume response bodies rather than abandon the initial stream.

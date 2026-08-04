@@ -85,8 +85,18 @@ describe("MagicCutoutWorkspace", () => {
     expect(harness.calls.apply).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
-    expect(screen.getByRole("alertdialog")).toBeDefined();
+    const dialog = screen.getByRole("alertdialog");
+    const continueButton = screen.getByRole("button", {
+      name: /Continue editing|Продолжить редактирование/,
+    });
+    expect(document.activeElement).toBe(continueButton);
     expect(harness.calls.cancel).not.toHaveBeenCalled();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
     fireEvent.click(
       screen.getByRole("button", { name: /Discard draft|Отбросить черновик/ }),
     );

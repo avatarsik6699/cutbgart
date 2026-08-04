@@ -10,8 +10,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.33` |
-| Date | `2026-08-03` |
+| Version | `v1.35` |
+| Date | `2026-08-04` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
 | Internal project | `bg_remove_app` / BG Remove App |
@@ -36,11 +36,12 @@ Three invariants govern every decision:
 3. **Responsiveness, indexability, and accessibility are functionality.** A visually correct result
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
-The accepted v2 implementation now covers the complete one-image local workflow: automatic removal,
+The accepted v2 implementation now covers the complete browser-local workflow: automatic removal,
 bounded committed history, Manual and Magic Cutout, Background, fine-detail/colour-halo
-Enhancements, preview/export, and safe cancel/retry/reset. The next vertical slice adds
-batch/multi-document orchestration around those proven document actors without importing the legacy
-batch hook, mutable editor state, or worker lifecycle.
+Enhancements, multi-document orchestration, preview/export, deterministic ZIP export, and safe
+cancel/retry/reset. Migration now proceeds by reconnecting that architecture to the established v1
+presentation in tested vertical slices. The public and scenario routes remain on legacy until the
+complete v1 visual and behavioral contract is reproduced and accepted on v2.
 
 ## 2. Scope and boundaries
 
@@ -61,9 +62,9 @@ Phase 32 added useful legacy guards, item-owned edit state, structured batch fai
 work, but did not eliminate real-browser model-load and Magic Apply freezes. It is closed incomplete,
 not evidence that the legacy editor satisfies the responsiveness contract.
 
-### 2.2 Implemented v2 foundation through Phase 36
+### 2.2 Implemented v2 foundation through Phase 37
 
-Phases 33–36 built an isolated implementation under `src/v2/` and a separate noindex route. It
+Phases 33–37 built an isolated implementation under `src/v2/` and a separate noindex route. It
 includes:
 
 - framework-free IDs, snapshots, commands, events, invariants, and processing ports;
@@ -76,11 +77,13 @@ includes:
 - runtime-owned guided Magic drafts, correlated prediction/candidates, and explicit Apply;
 - runtime-owned Background and Enhancement drafts with explicit atomic Apply/Cancel;
 - one shared FIFO heavy-job coordinator for automatic-removal, Magic, and Enhancement work;
+- bounded multi-document import/selection over independently owned document runtimes and actors;
+- isolated per-item retry/remove plus deterministic committed-result ZIP export;
 - deterministic unit, actor, worker, component, Playwright, real-model, and target-device evidence.
 
 Their exact checklists and acceptance gates live in [`PHASE_33.md`](./PHASE_33.md),
 [`PHASE_34.md`](./PHASE_34.md), [`PHASE_35.md`](./PHASE_35.md), and
-[`PHASE_36.md`](./PHASE_36.md).
+[`PHASE_36.md`](./PHASE_36.md), and [`PHASE_37.md`](./PHASE_37.md).
 
 ### 2.3 Implemented v2 slice — Phase 34
 
@@ -199,7 +202,7 @@ Phase 36 did **not** migrate batch/multi-document UI, public/scenario routes, le
 accounts, payments, remote processing, generated backgrounds, arbitrary image adjustments, or a
 new model family. A custom uploaded background is local compositing, not generated content.
 
-### 2.6 Active v2 scope — Phase 37
+### 2.6 Implemented v2 slice — Phase 37
 
 Phase 37 migrates the local batch/multi-document workflow as a parent workspace actor over the
 accepted Phase-33–36 document actor. It removes the intentional one-document cap without copying the
@@ -249,7 +252,71 @@ Phase 37 does **not** migrate public/scenario routes, remove legacy code, change
 selection, add arbitrary export formats, accounts, payments, remote processing, or generated
 backgrounds. Public cutover follows a separate parity/accessibility/device/product-validation phase.
 
-### 2.7 Future paid direction
+### 2.7 V2 validation result — Phase 38
+
+Phase 38 determines whether the isolated v2 editor is ready to replace the editor embedded in the
+public and scenario routes. It is an evidence and defect-closure slice, not the cutover itself:
+
+- create one bilingual product-parity matrix covering every currently promised public editor
+  outcome: picker/drop/paste input, validation and downscale behavior, automatic removal and
+  fallback, single/batch lifecycle, Manual/Magic Cutout, Background, Enhancements, history,
+  retry/cancel/reset, selected PNG, Download All, privacy, and failure recovery;
+- classify every legacy/v2 difference as required parity, an explicitly accepted product
+  difference, or a cutover blocker. Quality/model choice, export-size choice, and other legacy-only
+  controls may not disappear implicitly; their disposition and evidence must be recorded before
+  readiness can pass;
+- close only defects in the already accepted Phase-33–37 contracts. A newly required capability,
+  persistence rule, model choice, or workflow contract must be scoped in a follow-up phase rather
+  than smuggled into validation;
+- perform an accessibility audit against the applicable WCAG 2.2 AA criteria for keyboard and
+  focus order, names/roles/states, status announcements, pointer alternatives, contrast, reduced
+  motion, 200% zoom/reflow, responsive layout, error recovery, and bilingual copy;
+- exercise the full single- and multi-document workflow with deterministic Playwright, axe-based
+  automated checks, one serialized real-model journey, and architect review on the affected Windows
+  browser/device. Add other supported viewport/input/browser samples where the parity matrix marks
+  them material; unsupported observations remain explicit rather than synthetic;
+- compare cold/warm responsiveness, input latency, long tasks, memory/resource ownership, global
+  heavy-job admission, selection without reinference, and repeated import/edit/remove/reset/dispose
+  churn against the accepted v2 budgets. No freeze, lost command, stale publication, cross-document
+  mutation, retry-masked pass, or reachable resource leak may pass;
+- produce a versioned Phase-38 readiness report whose conclusion is `ready` or `blocked`, with every
+  matrix row linked to automated, real-browser, target-device, or architect evidence. `ready`
+  requires zero unresolved cutover blocker and zero unresolved serious accessibility defect.
+
+The Phase-38 report concluded `blocked`: the isolated v2 presentation is not a visual replacement
+for the established public editor, drop/paste and legacy quality/export-size choices remain absent,
+and some target-device/architect evidence is incomplete. That result remains valid evidence; it is
+not reclassified as ready. It changes the migration plan from one direct cutover to incremental UI
+parity work while public routes remain unchanged.
+
+### 2.8 Active v2 scope — Phase 39
+
+Phase 39 starts the public-UI migration on the separate bilingual noindex v2 surface. The existing
+rendered v1 main page is the design and interaction reference; architecture changes do not authorize
+a redesign. The first dependency-complete vertical slice covers:
+
+- the complete main-page shell and empty workspace presentation in both locales;
+- picker, drag-and-drop, and clipboard image admission with the existing validation/downscale
+  outcomes;
+- the visible legacy quality/model choice connected to an explicit v2 application/runtime policy,
+  retaining stored `fast|max` compatibility while BEN2 remains session-only;
+- truthful preparation, model loading, processing, fallback, cancellation, retry, and single-result
+  states using the accepted v2 actor/artifact/worker ownership;
+- the visible legacy export-size choice and selected transparent PNG export without reinference;
+- visual-regression baselines and behavioral Playwright evidence against the current v1 reference at
+  approved desktop and narrow viewports.
+
+Presentation may be extracted from legacy components into neutral reusable UI, but v2 may not import
+legacy hooks, controllers, mutable workflow state, worker lifecycle, or stores as its source of
+truth. A narrow typed presentation/controller port maps user intent and v2 projections to the shared
+visual components. Do not maintain two independently styled copies of the same public UI.
+
+Phase 39 does not migrate batch UI, Manual/Magic, Background, Enhancements, scenario routes, or the
+public `/` and `/en` route bindings. Those follow as separately accepted vertical slices. The public
+route switches only after every v1-visible state and capability has v2 behavioral, visual,
+accessibility, real-model, and affected-device acceptance with a rollback boundary.
+
+### 2.9 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -271,6 +338,34 @@ type ArtifactId = string;
 type RunId = string;
 type Revision = number;
 type ProcessingBackend = "local" | "remote"; // remote is reserved, not implemented
+type AutomaticModelMode = "isnet-q8" | "isnet-fp32" | "ben2-fp16";
+type ExportSize = "original" | 2048 | 1024;
+
+type MainPageEditorIntent =
+  | { type: "choose-files"; files: readonly File[] }
+  | { type: "choose-quality"; mode: AutomaticModelMode }
+  | { type: "cancel" }
+  | { type: "retry" }
+  | { type: "reset" }
+  | { type: "choose-export-size"; size: ExportSize }
+  | { type: "download-selected" };
+
+type MainPageEditorProjection = {
+  locale: "ru" | "en";
+  phase:
+    | "empty"
+    | "preparing"
+    | "loading-model"
+    | "processing"
+    | "result"
+    | "error";
+  qualityMode: AutomaticModelMode;
+  exportSize: ExportSize;
+  progressPercent: number | null;
+  retryable: boolean;
+  sourcePreviewUrl: string | null;
+  committedResultUrl: string | null;
+};
 
 type HexColor = `#${string}`;
 type BackgroundFillDescriptor =
@@ -485,7 +580,7 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
 | `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 surface; Phase 37 adds batch/multi-document workflow without changing route identity |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 migration surface; Phase 39 begins reproducing the established main-page UI over v2 ownership without changing route identity |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -520,6 +615,19 @@ All frontend work follows [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md)
 Public pages remain fully localized in Russian and English, keyboard operable, screen-reader
 meaningful, responsive, and SSR-safe. No essential action may depend only on hover, color, pointer
 precision, or an unannounced status change.
+
+The rendered v1 public editor is the normative visual and interaction reference for v2 migration.
+Unless a later architect-approved spec change says otherwise, v2 must preserve component placement,
+visual hierarchy, labels, responsive behavior, controls, and reachable states. Internal actors,
+commands, projections, processing, and resource ownership may change; visible product behavior may
+not silently change with them. Capture reference screenshots before each UI slice, compare both
+locales at approved desktop and narrow viewports, and treat unexplained visual drift as a failing
+contract rather than a redesign opportunity.
+
+Shared presentation is preferred over copied markup. Legacy visual components may be extracted and
+made controller-neutral, but they may not retain or import legacy hooks, mutable stores, workers, or
+workflow state when rendered by v2. The adapter boundary accepts serializable view projections and
+emits typed user intents; v2 application/runtime owners remain the only workflow source of truth.
 
 For Phase 34, pointer capture/cancel/lost-capture produces at most one deterministic gesture patch;
 brush edits use source-image coordinates across zoom/pan; Ctrl/Cmd+Z and redo variants affect the
@@ -665,6 +773,12 @@ actor/React batch state; Download All includes unfinished/error/private source m
 inference/encoding; per-document or whole-workspace churn leaks actors, controllers, workers,
 artifacts, URLs, listeners, or sessions; or accepted Phase-33–36 contracts regress.
 
+Phase 39 additionally fails if the noindex v2 main-page slice visibly drifts from the captured v1
+reference without explicit architect approval; picker/drop/paste or quality/export-size controls are
+present but disconnected; shared presentation imports legacy workflow state; processing/export
+reinfers or bypasses accepted v2 ownership; bilingual desktop/narrow visual evidence is missing; or
+the public/scenario routes change before the isolated slice is accepted.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -675,12 +789,14 @@ artifacts, URLs, listeners, or sessions; or accepted Phase-33–36 contracts reg
 | 34 | Complete | Bounded document history and exact Manual Cutout on v2; gate and architect acceptance passed |
 | 35 | Complete | Guided Magic Cutout vertical slice; gate and architect acceptance passed |
 | 36 | Complete | Background and Enhancements finishing workflow; gate and architect acceptance passed |
-| 37 | Approved / active | Batch/multi-document v2 workspace over proven per-document actors; public routes remain unchanged |
-| Later | Unscheduled | Run parity/accessibility/device/product validation, then migrate public/scenario routes and remove legacy only through separately approved phases; paid backend remains separate work |
+| 37 | Complete | Batch/multi-document v2 workspace; gate and architect acceptance passed; public routes remain unchanged |
+| 38 | Complete / blocked result | Validation gate passed; visual/product/evidence blockers remain, so no public cutover |
+| 39 | Approved / active | Reproduce the v1 main-page shell and single-image input/process/export UI over v2 on the isolated routes |
+| Later | Unscheduled | Add batch and editor-tool UI slices, migrate scenario/public routes after full acceptance, then remove legacy; paid backend remains separate work |
 
-No v2 capability is migrated merely because legacy code exists. Phase 37 is limited to the explicit
-batch/multi-document contract above; parity validation, public migration, legacy removal, and paid
-work still require their own approved phase contracts.
+No v2 capability is accepted merely because legacy code exists. Phase 39 is limited to the first
+main-page vertical slice above. Batch, editor tools, public migration, legacy removal, and paid work
+still require their own approved phase contracts.
 
 ## 9. Deferred decisions
 

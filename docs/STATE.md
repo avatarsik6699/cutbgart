@@ -18,21 +18,24 @@
 | 30 | ✅ historical done | `v0.30.0`; gate not run by architect decision | Design system/redesign; T19–T21 deferred |
 | 31 | ✅ historical done | `v0.31.0`; gate passed | Whole-project audit/refactor |
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
-| 33 | ✅ done | gate passed; tag `v0.33.0` after merge | Editor v2 foundation and first local vertical slice |
-| 34 | ✅ done | gate passed; tag `v0.34.0` after merge | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
-| 35 | ✅ done | gate passed; tag `v0.35.0` after merge | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
-| 36 | ✅ done | gate passed; tag `v0.36.0` after merge | [`PHASE_36.md`](./PHASE_36.md): Background + Enhancements |
-| 37 | ✅ done | gate passed; tag `v0.37.0` after merge | [`PHASE_37.md`](./PHASE_37.md): batch + multi-document workspace |
+| 33 | ✅ done | gate passed; no tag | Editor v2 foundation and first local vertical slice |
+| 34 | ✅ done | gate passed; no tag | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
+| 35 | ✅ done | gate passed; no tag | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
+| 36 | ✅ done | gate passed; no tag | [`PHASE_36.md`](./PHASE_36.md): Background + Enhancements |
+| 37 | ✅ done | gate passed; no tag | [`PHASE_37.md`](./PHASE_37.md): batch + multi-document workspace |
+| 38 | ✅ done | gate passed; blocked cutover result; no tag | [`PHASE_38.md`](./PHASE_38.md): validation complete; public cutover not authorized |
+| 39 | ⏳ pending | planned tag `v0.39.0` | [`PHASE_39.md`](./PHASE_39.md): v1-faithful main-page single-image flow on isolated v2 routes |
 
-**Latest closed phase:** `37`
+**Latest closed phase:** `38`
 
-**Implementation in progress:** None
+**Implementation in progress:** None; Phase 39 is initialized and pending
 
-**Only active implementation scope:** None; initialize the next approved phase before implementation
+**Only active implementation scope:** [`PHASE_39.md`](./PHASE_39.md); begin only through
+`/impl-assist 39`
 
 ## Current contract
 
-This section describes code that exists after Phase 37. The legacy editor remains the public product;
+This section describes code that exists after Phase 38. The legacy editor remains the public product;
 the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
 Cutout, Background, Enhancements, document history, and a batch/multi-document workspace. See
 [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_37.md`](./PHASE_37.md).
@@ -63,6 +66,10 @@ Cutout, Background, Enhancements, document history, and a batch/multi-document w
 - The v2 workspace now admits up to 20 independently owned documents, prepares at most two imports
   concurrently, preserves per-document drafts/history/settings during selection, and exports
   committed results through deterministic privacy-neutral ZIP assembly.
+- Phase 38 adds versioned fail-closed readiness/parity reports, bilingual automated accessibility
+  coverage, full-workflow deterministic and real-model evidence, and repeatable performance/resource
+  verification. Its technical gate passed, while its accepted product conclusion remains `blocked`
+  until v1-visible input, quality, export, layout, and target-device evidence gaps are closed.
 
 ### Core models
 
@@ -213,6 +220,12 @@ The implemented v2 foundation is intentionally isolated and local-only:
 Further capabilities are not implied by this foundation. Public-route migration, parity closure,
 and legacy removal still require later accepted slices.
 
+The approved Phase-39 target preserves the rendered v1 main-page UI while replacing its workflow
+ownership with v2. `AutomaticModelMode`, `ExportSize`, `MainPageEditorProjection`, and
+`MainPageEditorIntent` form the planned narrow presentation/controller contract. The isolated
+bilingual noindex routes receive the first single-image slice; public/scenario route bindings remain
+legacy until all UI slices are accepted.
+
 ## Phase-34 contract
 
 The completed isolated v2 slice adds one runtime-owned Manual Cutout draft per document, bounded
@@ -282,12 +295,86 @@ skips unfinished/error items truthfully, and releases temporary leases/URLs on e
 | Phase 35 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Phase 36 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
 | Phase 37 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
+| Phase 38 | Complete; technical gate passed, but public cutover remains blocked by documented product/evidence gaps |
+| Phase 39 | Approved and initialized: isolated v1-faithful main-page single-image slice; implementation begins only through `/impl-assist 39` |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-04 — Phase 38 validation complete with blocked cutover result
+
+**Type:** phase-complete
+
+**Author:** AI (context-update)
+
+**Triggered by:** Phase-38 scope, architect review, and full gate checks completed
+
+#### Changes / Decision
+
+- Published the typed parity matrix, machine-readable report, and human results with one fail-closed
+  `blocked` conclusion; the architect accepted that conclusion and iterative v1-faithful migration.
+- Closed accessibility/focus defects within the Phase-33–37 contracts and added deterministic,
+  real-model, resource/performance, release, and security evidence without changing public routes.
+- The full gate passed. Validation completion is not public-cutover approval: missing v1-visible
+  outcomes and unsupported target-device/performance signals remain explicit blockers.
+
+#### Affected Phases / Consequences
+
+- Phase 38 is complete; its public-cutover conclusion remains `blocked`.
+- Phase 39 is the only active implementation scope and begins the isolated v1-faithful main-page
+  single-image migration. Public/scenario routes remain legacy.
+
+### 2026-08-04 — V1 presentation preserved during v2 migration
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect clarified that v2 rewrites architecture, data flow, and processing while
+the established v1 visual presentation and user-visible capabilities remain the product contract
+
+#### Changes / Decision
+
+- SPEC v1.35 makes the rendered bilingual v1 main page the visual and interaction reference for v2;
+  unexplained UI drift is a contract failure rather than an accepted redesign.
+- Migration proceeds through isolated vertical UI slices over typed v2 projections/intents, without
+  importing legacy hooks, mutable workflow state, stores, or worker ownership.
+- Phase 39 covers the main-page shell plus single-image picker/drop/paste, quality, processing,
+  result, export-size, and PNG flow on the existing noindex v2 routes. Public routes stay legacy.
+
+#### Affected Phases / Consequences
+
+- Phase 38 is `NEEDS_REVIEW`: its blocked evidence remains valid, but any disposition that accepted
+  visible v1/v2 UI drift must be re-evaluated under the stricter preservation contract.
+- Phases 33–37 remain complete because their domain/runtime contracts are not changed.
+- Phase 39 may be initialized by explicit architect direction despite Phase 38 not being complete;
+  it resolves blockers iteratively and does not authorize public cutover.
+
+### 2026-08-04 — Phase 38 cutover-readiness validation approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed continuation of the v2 migration after accepting Phase 37
+
+#### Changes / Decision
+
+- SPEC v1.34 records Phase 37 as complete and scopes Phase 38 to bilingual product-parity,
+  accessibility, responsiveness, resource, real-browser, and target-device validation.
+- Every legacy/v2 difference must be classified as required parity, an explicitly accepted product
+  difference, or a public-cutover blocker; new product capabilities do not enter through a
+  validation-only defect fix.
+- Phase 38 keeps the isolated routes noindex and produces a versioned `ready`/`blocked` report.
+
+#### Affected Phases / Consequences
+
+- Phase 38 requires a new phase contract before implementation.
+- Phases 33–37 remain complete and unchanged. Public-route migration may start only after a `ready`
+  Phase-38 result; legacy removal remains a later post-cutover decision.
 
 ### 2026-08-04 — Phase 37 complete
 

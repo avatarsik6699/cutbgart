@@ -96,7 +96,11 @@ export function EditorWorkspaceStrip(props: Props) {
           </Button>
         </div>
       </div>
-      <ol className="grid grid-flow-col auto-cols-[minmax(10rem,13rem)] gap-2 overflow-x-auto pb-1">
+      <ol
+        className="focus-visible:ring-ring grid grid-flow-col auto-cols-[minmax(10rem,13rem)] gap-2 overflow-x-auto pb-1 focus-visible:ring-2"
+        tabIndex={0}
+        aria-label={m.editorV2BatchTitle()}
+      >
         {props.workspace.items.map((item, index) => {
           const selected = item.documentId === props.workspace.selectedDocumentId;
           return (
@@ -155,7 +159,7 @@ export function EditorWorkspaceStrip(props: Props) {
                 {item.status === "error" ? (
                   <button
                     type="button"
-                    className="text-primary mt-1 text-xs underline underline-offset-2"
+                    className="text-primary mt-1 min-h-6 text-xs underline underline-offset-2"
                     onClick={() => void props.session.retryItem(item.itemId)}
                   >
                     {m.editorV2RetryImage({ name: item.fileName })}
@@ -164,7 +168,7 @@ export function EditorWorkspaceStrip(props: Props) {
               </div>
               <button
                 type="button"
-                className="text-muted-foreground hover:text-destructive focus-visible:ring-ring rounded px-1 font-mono text-sm focus-visible:ring-2"
+                className="text-muted-foreground hover:text-destructive focus-visible:ring-ring size-6 rounded font-mono text-sm focus-visible:ring-2"
                 aria-label={m.editorV2RemoveImage({ name: item.fileName })}
                 onClick={() => removeFx(item)}
               >

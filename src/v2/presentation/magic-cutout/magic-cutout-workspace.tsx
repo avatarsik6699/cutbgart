@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
@@ -47,6 +48,11 @@ export function MagicCutoutWorkspace(props: Props) {
   const [radius, setRadius] = useState(initialView.radius);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [, setPaintRevision] = useState(0);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const discardDialogRef = useRef<HTMLDivElement>(null);
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const previousConfirmDiscardRef = useRef(false);
 
   function changeMode(nextMode: MagicCutoutMode): void {
     setMode(nextMode);
@@ -71,7 +77,7 @@ export function MagicCutoutWorkspace(props: Props) {
     };
   }
 
-  function paintStrokes(): void {
+  function paintStrokesFx(): void {
     const canvas = strokeCanvas.current;
     const engine = props.session.magicDraft();
     if (canvas === null || engine === null) return;
@@ -109,7 +115,7 @@ export function MagicCutoutWorkspace(props: Props) {
     }
   }
 
-  useEffect(paintStrokes, [
+  useEffect(paintStrokesFx, [
     mode,
     props.draft.draftRevision,
     props.height,
@@ -117,6 +123,19 @@ export function MagicCutoutWorkspace(props: Props) {
     props.width,
     radius,
   ]);
+
+  useEffect(function focusMagicWorkspaceFx() {
+    workspaceRef.current?.focus();
+  }, []);
+
+  useEffect(
+    function routeDiscardDialogFocusFx() {
+      if (confirmDiscard) continueButtonRef.current?.focus();
+      else if (previousConfirmDiscardRef.current) cancelButtonRef.current?.focus();
+      previousConfirmDiscardRef.current = confirmDiscard;
+    },
+    [confirmDiscard],
+  );
 
   useEffect(
     function paintCandidateFx() {
@@ -176,7 +195,7 @@ export function MagicCutoutWorkspace(props: Props) {
     activePointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
     cursor.current = point;
-    paintStrokes();
+    paintStrokesFx();
   }
 
   function pointerMoveFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
@@ -185,7 +204,7 @@ export function MagicCutoutWorkspace(props: Props) {
     if (activePointer.current === event.pointerId) {
       props.session.magicDraft()?.appendPoint(point);
     }
-    paintStrokes();
+    paintStrokesFx();
   }
 
   function pointerUpFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
@@ -216,8 +235,32 @@ export function MagicCutoutWorkspace(props: Props) {
 
   const busy = props.draft.status === "encoding" || props.draft.status === "predicting";
 
+  function discardDialogKeyDownFx(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setConfirmDiscard(false);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = discardDialogRef.current?.querySelectorAll<HTMLButtonElement>(
+      "button:not([disabled])",
+    );
+    const first = focusable?.[0];
+    const last = focusable?.[(focusable.length ?? 0) - 1];
+    if (first === undefined || last === undefined) return;
+    if (event.shiftKey && event.target === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && event.target === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <section
+      ref={workspaceRef}
+      tabIndex={-1}
       className="border-border bg-card/60 grid gap-4 rounded-xl border p-4 sm:p-5"
       aria-label={m.editorV2MagicTitle()}
     >
@@ -299,7 +342,7 @@ export function MagicCutoutWorkspace(props: Props) {
           onLostPointerCapture={lostPointerCaptureFx}
           onPointerLeave={() => {
             cursor.current = null;
-            paintStrokes();
+            paintStrokesFx();
           }}
         />
       </div>
@@ -360,6 +403,7 @@ export function MagicCutoutWorkspace(props: Props) {
           {m.editorV2MagicRedo()}
         </Button>
         <Button
+          ref={cancelButtonRef}
           variant="ghost"
           onClick={() => {
             if (props.draft.dirty) setConfirmDiscard(true);
@@ -371,10 +415,13 @@ export function MagicCutoutWorkspace(props: Props) {
       </div>
       {confirmDiscard ? (
         <div
+          ref={discardDialogRef}
           role="alertdialog"
+          aria-modal="true"
           aria-labelledby="magic-discard-title"
           aria-describedby="magic-discard-body"
           className="border-destructive/40 bg-destructive/5 rounded-lg border p-4"
+          onKeyDown={discardDialogKeyDownFx}
         >
           <Typography id="magic-discard-title" variant="heading-3" as="h3">
             {m.editorDraftGuardTitle()}
@@ -388,10 +435,21 @@ export function MagicCutoutWorkspace(props: Props) {
             {m.editorDraftGuardBody()}
           </Typography>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setConfirmDiscard(false)}>
+            <Button
+              ref={continueButtonRef}
+              variant="outline"
+              onClick={() => setConfirmDiscard(false)}
+            >
               {m.editorDraftContinue()}
             </Button>
-            <Button variant="destructive" onClick={() => props.session.cancelMagic()}>
+            <Button
+              variant="destructive"
+              style={{
+                backgroundColor: "var(--destructive)",
+                color: "var(--destructive-foreground)",
+              }}
+              onClick={() => props.session.cancelMagic()}
+            >
               {m.editorDraftDiscard()}
             </Button>
           </div>

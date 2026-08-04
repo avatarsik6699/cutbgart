@@ -52,14 +52,14 @@ export function buildSocialMeta({
       { rel: "canonical", href: url },
       ...alternates.map((alt) => ({
         rel: "alternate",
-        hreflang: alt.locale,
+        hrefLang: alt.locale,
         href: `${SITE_URL}${alt.path}`,
       })),
       ...(defaultAlternate
         ? [
             {
               rel: "alternate",
-              hreflang: "x-default",
+              hrefLang: "x-default",
               href: `${SITE_URL}${defaultAlternate.path}`,
             },
           ]

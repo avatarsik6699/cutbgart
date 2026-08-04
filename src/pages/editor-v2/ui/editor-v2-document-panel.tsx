@@ -17,6 +17,10 @@ type Props = {
   progress: number | null;
   session: EditorSession;
   status: DocumentStatus;
+  onBeginManual(button: HTMLButtonElement): void;
+  onBeginMagic(button: HTMLButtonElement): void;
+  onBeginBackground(button: HTMLButtonElement): void;
+  onBeginEnhancements(button: HTMLButtonElement): void;
 };
 
 function statusMessage(status: DocumentStatus): string {
@@ -64,9 +68,22 @@ export function EditorV2DocumentPanel(props: Props) {
         >
           {m.editorV2Revision({ revision: String(props.revision) })}
         </Typography>
+        <Typography variant="caption" as="p" className="text-muted-foreground mt-2">
+          {m.editorV2Shortcuts()}
+        </Typography>
         {props.progress !== null ? (
-          <div className="mt-4">
-            <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+          <div
+            className="mt-4"
+            role="progressbar"
+            aria-label={m.editorV2Progress()}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(props.progress * 100)}
+          >
+            <div
+              className="bg-muted h-1.5 overflow-hidden rounded-full"
+              aria-hidden="true"
+            >
               <div
                 className="bg-primary h-full transition-[width] duration-200"
                 style={{ width: `${Math.round(props.progress * 100)}%` }}
@@ -95,26 +112,34 @@ export function EditorV2DocumentPanel(props: Props) {
               {draftOpen ? m.editorV2DownloadCommittedPng() : m.editorV2DownloadPng()}
             </Button>
           ) : null}
-          {canOpenTool ? (
-            <Button variant="outline" onClick={() => props.session.beginManual()}>
-              {m.editorV2ManualTitle()}
-            </Button>
-          ) : null}
-          {canOpenTool ? (
-            <Button variant="outline" onClick={() => props.session.beginMagic()}>
-              {m.editorV2MagicTitle()}
-            </Button>
-          ) : null}
-          {canOpenTool ? (
-            <Button variant="outline" onClick={() => props.session.beginBackground()}>
-              {m.editorV2BackgroundTitle()}
-            </Button>
-          ) : null}
-          {canOpenTool ? (
-            <Button variant="outline" onClick={() => props.session.beginEnhancements()}>
-              {m.editorV2EnhancementsTitle()}
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            disabled={!canOpenTool}
+            onClick={(event) => props.onBeginManual(event.currentTarget)}
+          >
+            {m.editorV2ManualTitle()}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!canOpenTool}
+            onClick={(event) => props.onBeginMagic(event.currentTarget)}
+          >
+            {m.editorV2MagicTitle()}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!canOpenTool}
+            onClick={(event) => props.onBeginBackground(event.currentTarget)}
+          >
+            {m.editorV2BackgroundTitle()}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!canOpenTool}
+            onClick={(event) => props.onBeginEnhancements(event.currentTarget)}
+          >
+            {m.editorV2EnhancementsTitle()}
+          </Button>
           <Button
             variant="outline"
             onClick={() => props.session.undoDocument()}

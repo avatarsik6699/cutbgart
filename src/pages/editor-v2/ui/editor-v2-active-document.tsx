@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   BackgroundWorkspace,
@@ -19,8 +19,11 @@ type Props = {
   snapshot: ActiveEditorSessionSnapshot;
 };
 
+type ActiveTool = "manual" | "magic" | "background" | "enhancements" | null;
+
 export function EditorV2ActiveDocument(props: Props) {
   const document = useDocumentActorSelectors(props.snapshot.actor);
+  const lastToolLauncherRef = useRef<HTMLButtonElement>(null);
   const draftOpen =
     document.manualDraft !== null ||
     document.magicDraft !== null ||
@@ -41,6 +44,42 @@ export function EditorV2ActiveDocument(props: Props) {
     document.enhancementDraft.status !== "queued" &&
     document.enhancementDraft.status !== "running" &&
     document.enhancementDraft.status !== "applying";
+  let activeTool: ActiveTool = null;
+  if (document.manualDraft) activeTool = "manual";
+  else if (document.magicDraft) activeTool = "magic";
+  else if (document.backgroundDraft) activeTool = "background";
+  else if (document.enhancementDraft) activeTool = "enhancements";
+  const previousActiveToolRef = useRef<typeof activeTool>(null);
+
+  useEffect(
+    function restoreToolLauncherFocusFx() {
+      const previousActiveTool = previousActiveToolRef.current;
+      if (activeTool === null && previousActiveTool !== null)
+        lastToolLauncherRef.current?.focus();
+      previousActiveToolRef.current = activeTool;
+    },
+    [activeTool],
+  );
+
+  function beginManualFx(button: HTMLButtonElement): void {
+    lastToolLauncherRef.current = button;
+    props.session.beginManual();
+  }
+
+  function beginMagicFx(button: HTMLButtonElement): void {
+    lastToolLauncherRef.current = button;
+    props.session.beginMagic();
+  }
+
+  function beginBackgroundFx(button: HTMLButtonElement): void {
+    lastToolLauncherRef.current = button;
+    props.session.beginBackground();
+  }
+
+  function beginEnhancementsFx(button: HTMLButtonElement): void {
+    lastToolLauncherRef.current = button;
+    props.session.beginEnhancements();
+  }
 
   useEffect(
     function routeDocumentHistoryShortcutsFx() {
@@ -124,6 +163,10 @@ export function EditorV2ActiveDocument(props: Props) {
         backgroundOpen={document.backgroundDraft !== null}
         enhancementOpen={document.enhancementDraft !== null}
         revision={document.revision}
+        onBeginManual={beginManualFx}
+        onBeginMagic={beginMagicFx}
+        onBeginBackground={beginBackgroundFx}
+        onBeginEnhancements={beginEnhancementsFx}
       />
       {document.magicDraft !== null && props.snapshot.previewUrl !== null ? (
         <MagicCutoutWorkspace

@@ -61,9 +61,11 @@ async function waitForServer(server: ChildProcess): Promise<void> {
 async function warmBrowserLocales(verify: boolean): Promise<void> {
   const browser = await chromium.launch();
   try {
-    for (const [path, locale] of [
-      ["/en/", "en"],
-      ["/", "ru"],
+    for (const [path, locale, readySelector] of [
+      ["/en/", "en", '[data-slot="site-header"][data-hydrated="true"]'],
+      ["/", "ru", '[data-slot="site-header"][data-hydrated="true"]'],
+      ["/en/editor-v2", "en", 'main[data-hydrated="true"]'],
+      ["/editor-v2", "ru", 'main[data-hydrated="true"]'],
     ] as const) {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {
@@ -71,9 +73,10 @@ async function warmBrowserLocales(verify: boolean): Promise<void> {
         await page.goto(new URL(path, ROOT_URL).toString(), {
           waitUntil: "domcontentloaded",
         });
-        await page
-          .locator('[data-slot="site-header"][data-hydrated="true"]')
-          .waitFor({ state: "attached", timeout: START_TIMEOUT_MS });
+        await page.locator(readySelector).waitFor({
+          state: "attached",
+          timeout: START_TIMEOUT_MS,
+        });
         const actualLocale = await page.locator("html").getAttribute("lang");
         if (verify && actualLocale !== locale) {
           throw new Error(
