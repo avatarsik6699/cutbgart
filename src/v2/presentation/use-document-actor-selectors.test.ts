@@ -103,6 +103,8 @@ describe("useDocumentActorSelectors", () => {
       magicCandidates: [],
       canUndoDocument: false,
       canRedoDocument: false,
+      hasPastDocumentHistory: false,
+      hasFutureDocumentHistory: false,
       revision: 0,
       backgroundDraft: null,
       enhancementDraft: null,

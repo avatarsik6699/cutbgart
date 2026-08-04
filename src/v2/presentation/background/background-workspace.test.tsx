@@ -6,9 +6,7 @@ import {
   createDocumentId,
   type BackgroundDraft,
 } from "@/v2/domain";
-import type { EditorSession } from "@/v2/runtime-browser";
-
-import { BackgroundWorkspace } from "./background-workspace";
+import { BackgroundWorkspace, type BackgroundInteraction } from "./background-workspace";
 
 afterEach(cleanup);
 
@@ -28,16 +26,16 @@ function sessionHarness() {
     apply: vi.fn(),
     cancel: vi.fn(),
     change: vi.fn(),
-    selectImage: vi.fn(() => Promise.resolve()),
+    selectImage: vi.fn(),
   };
   return {
     calls,
-    session: {
-      applyBackground: calls.apply,
-      cancelBackground: calls.cancel,
-      changeBackground: calls.change,
-      selectBackgroundImage: calls.selectImage,
-    } as unknown as EditorSession,
+    interaction: {
+      apply: calls.apply,
+      cancel: calls.cancel,
+      change: calls.change,
+      selectImage: calls.selectImage,
+    } satisfies BackgroundInteraction,
   };
 }
 
@@ -50,7 +48,8 @@ describe("BackgroundWorkspace", () => {
         foregroundUrl="blob:foreground"
         height={100}
         runtime={{ status: "ready", previewUrl: null, error: null }}
-        session={harness.session}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
         width={100}
       />,
     );
@@ -90,7 +89,8 @@ describe("BackgroundWorkspace", () => {
         foregroundUrl="blob:foreground"
         height={100}
         runtime={{ status: "error", previewUrl: null, error: "too-large" }}
-        session={harness.session}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
         width={100}
       />,
     );

@@ -84,6 +84,14 @@ export function selectCanRedoDocument(snapshot: DocumentSnapshotLike): boolean {
   );
 }
 
+export function selectHasPastDocumentHistory(snapshot: DocumentSnapshotLike): boolean {
+  return snapshot.context.document.history.past.length > 0;
+}
+
+export function selectHasFutureDocumentHistory(snapshot: DocumentSnapshotLike): boolean {
+  return snapshot.context.document.history.future.length > 0;
+}
+
 export function selectDocumentRevision(snapshot: DocumentSnapshotLike): Revision {
   return snapshot.context.document.revision;
 }

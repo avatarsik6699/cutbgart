@@ -11,6 +11,7 @@ it as supporting or historical material—not as an implementation contract.
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
 | [`PHASE_40.md`](./PHASE_40.md) | Latest completed v1-faithful batch workspace migration contract |
+| [`PHASE_41.md`](./PHASE_41.md) | Latest completed v1-faithful editor-tool workspace migration contract |
 | [`PHASE_39.md`](./PHASE_39.md) | Completed v1-faithful single-image main-page UI migration contract |
 | [`PHASE_38.md`](./PHASE_38.md) | Blocked cutover-readiness evidence; parity dispositions need review under the v1-UI preservation decision |
 | [`PHASE_37.md`](./PHASE_37.md) | Completed v2 batch and multi-document workspace contract and acceptance record |
@@ -28,9 +29,9 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-Phase 40 completed the v1-faithful main-page batch workspace on the isolated noindex v2 routes.
-There is no active implementation phase. Editor-tool UI, managed-Windows complete-product
-acceptance, public/scenario route migration, and cutover require a separately approved next phase.
+Phase 41 completed the v1-faithful editor-tool workspace on the isolated noindex v2 routes. There is
+no active implementation phase. Managed-Windows complete-product acceptance, public/scenario route
+migration, cutover, and legacy removal require separately approved follow-up scope.
 
 ## Archive
 

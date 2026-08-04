@@ -9,7 +9,7 @@ import type {
 export type EnhancementPanelOutcome =
   "applied" | "unchanged" | "kept-current" | "cancelled" | null;
 
-export interface EnhancementsToolPanelProps {
+export type EnhancementsToolPanelProps = Readonly<{
   registry: readonly EnhancementOperationDefinition[];
   draft: EnhancementDraft;
   progress: number | null;
@@ -17,29 +17,24 @@ export interface EnhancementsToolPanelProps {
   outcome: EnhancementPanelOutcome;
   errorCode: "out-of-memory" | "failed" | null;
   disabled?: boolean;
+  cancelVisible?: boolean;
+  retryVisible?: boolean;
   onOperationChange: (id: EnhancementOperationId, selected: boolean) => void;
   onApply: () => void;
   onCancel: () => void;
   onRetry: () => void;
-}
+}>;
 
-export function EnhancementsToolPanel({
-  registry,
-  draft,
-  progress,
-  activeOperationId,
-  outcome,
-  errorCode,
-  disabled = false,
-  onOperationChange,
-  onApply,
-  onCancel,
-  onRetry,
-}: EnhancementsToolPanelProps) {
-  const busy = draft.status === "applying";
-  const error = draft.status === "error";
-  const selected = new Set(draft.selectedOperationIds);
-  const activeLabel = registry.find(({ id }) => id === activeOperationId)?.label;
+export function EnhancementsToolPanel(props: EnhancementsToolPanelProps) {
+  const busy = props.draft.status === "applying";
+  const error = props.draft.status === "error";
+  const disabled = props.disabled ?? false;
+  const cancelVisible = props.cancelVisible ?? false;
+  const retryVisible = props.retryVisible ?? false;
+  const selected = new Set(props.draft.selectedOperationIds);
+  const activeLabel = props.registry.find(
+    (operation) => operation.id === props.activeOperationId,
+  )?.label;
 
   return (
     <section
@@ -53,7 +48,7 @@ export function EnhancementsToolPanel({
         <legend className="mb-1 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           {m.enhancementsOptionsLabel()}
         </legend>
-        {registry.map((operation) => (
+        {props.registry.map((operation) => (
           <label
             key={operation.id}
             className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors duration-200 motion-reduce:transition-none hover:border-foreground/30 hover:bg-accent/30 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
@@ -62,7 +57,7 @@ export function EnhancementsToolPanel({
               type="checkbox"
               checked={selected.has(operation.id)}
               onChange={(event) =>
-                onOperationChange(operation.id, event.currentTarget.checked)
+                props.onOperationChange(operation.id, event.currentTarget.checked)
               }
               className="mt-1"
             />
@@ -81,10 +76,10 @@ export function EnhancementsToolPanel({
           <p className="text-sm text-muted-foreground">
             {m.enhancementsProgress({
               operation: activeLabel ?? m.enhancementsTitle(),
-              progress: String(Math.round(progress ?? 0)),
+              progress: String(Math.round(props.progress ?? 0)),
             })}
           </p>
-          {progress !== null && <ProgressBar value={progress} />}
+          {props.progress !== null ? <ProgressBar value={props.progress} /> : null}
         </div>
       )}
 
@@ -94,52 +89,62 @@ export function EnhancementsToolPanel({
           className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
         >
           <p>
-            {errorCode === "out-of-memory"
+            {props.errorCode === "out-of-memory"
               ? m.enhancementsOutOfMemory()
               : m.enhancementsError()}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" onClick={onRetry}>
+            <Button type="button" onClick={props.onRetry}>
               {m.tryAgain()}
             </Button>
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button type="button" variant="outline" onClick={props.onCancel}>
               {m.enhancementsKeepCurrent()}
             </Button>
           </div>
         </div>
       )}
 
-      {!error && outcome && (
+      {!error && props.outcome ? (
         <p
           role="status"
           className="rounded-lg border border-border bg-success p-3 text-sm text-success-foreground"
         >
-          {outcome === "applied"
+          {props.outcome === "applied"
             ? m.enhancementsApplied()
-            : outcome === "unchanged"
+            : props.outcome === "unchanged"
               ? m.enhancementsUnchanged()
-              : outcome === "cancelled"
+              : props.outcome === "cancelled"
                 ? m.enhancementsCancelled()
                 : m.enhancementsCurrentKept()}
         </p>
-      )}
+      ) : null}
 
-      {!error && (
+      {!error ? (
         <div className="mt-auto flex flex-wrap gap-2 pt-4">
           <Button
             type="button"
-            onClick={onApply}
-            disabled={disabled || busy || draft.selectedOperationIds.length === 0}
+            onClick={props.onApply}
+            disabled={disabled || busy || props.draft.selectedOperationIds.length === 0}
           >
             {busy ? m.enhancementsApplying() : m.enhancementsApply()}
           </Button>
-          {busy && (
-            <Button type="button" variant="outline" onClick={onCancel}>
+          {retryVisible ? (
+            <Button type="button" variant="outline" onClick={props.onRetry}>
+              {m.tryAgain()}
+            </Button>
+          ) : null}
+          {cancelVisible && !busy ? (
+            <Button type="button" variant="outline" onClick={props.onCancel}>
+              {m.cancel()}
+            </Button>
+          ) : null}
+          {busy ? (
+            <Button type="button" variant="outline" onClick={props.onCancel}>
               {m.enhancementsStop()}
             </Button>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

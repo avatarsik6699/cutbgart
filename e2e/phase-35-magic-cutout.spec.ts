@@ -11,9 +11,10 @@ test("Magic strokes predict separately and Apply creates exactly one document ed
   await page.goto("/en/editor-v2");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.completeRun();
 
-  await page.getByRole("button", { name: "Magic Cutout" }).click();
+  await expect(page.getByRole("tab", { name: "Magic" })).toBeVisible();
   const canvas = page.getByLabel("Paint Keep and Remove guidance on the image");
   await canvas.click({ position: { x: 1, y: 1 } });
   await expect(page.getByText("1/50 strokes")).toBeVisible();
@@ -43,9 +44,9 @@ test("Magic strokes predict separately and Apply creates exactly one document ed
   await expect.poll(editorV2.scenario.runCount).toBe(1);
 
   await page.keyboard.press("Control+z");
-  await expect(page.getByRole("button", { name: "Redo edit" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Redo document change" })).toBeEnabled();
   await page.keyboard.press("Control+y");
-  await expect(page.getByRole("button", { name: "Undo edit" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Undo document change" })).toBeEnabled();
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",
   );
@@ -65,17 +66,18 @@ test("dirty Magic Cancel asks before discarding and Russian controls are localiz
   await page.goto("/editor-v2");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.completeRun();
-  await page.getByRole("button", { name: "Магическое вырезание" }).click();
+  await expect(page.getByRole("tab", { name: "Магия" })).toBeVisible();
   await page
     .getByLabel("Нарисуйте подсказки «Сохранить» и «Удалить» на изображении")
     .click({ position: { x: 1, y: 1 } });
-  await page.getByRole("button", { name: "Отменить", exact: true }).click();
+  await page.getByRole("button", { name: "Отмена", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.getByRole("button", { name: "Продолжить редактирование" }).click();
   await expect(page.getByRole("alertdialog")).toBeHidden();
-  await page.getByRole("button", { name: "Отменить", exact: true }).click();
+  await page.getByRole("button", { name: "Отмена", exact: true }).click();
   await page.getByRole("button", { name: "Отбросить черновик" }).click();
-  await expect(page.getByRole("button", { name: "Магическое вырезание" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Магия" })).toBeVisible();
   await expect.poll(editorV2.scenario.magicPredictionCount).toBe(0);
 });

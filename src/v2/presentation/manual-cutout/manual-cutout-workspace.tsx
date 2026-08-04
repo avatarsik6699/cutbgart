@@ -5,80 +5,100 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, EditorStage } from "@/shared/ui";
 import type { ManualCutoutMode } from "@/v2/domain";
-import {
-  loadManualSourceBitmap,
-  installManualDraftUnloadGuard,
-  type EditorSession,
-  type ManualCutoutBox,
-} from "@/v2/runtime-browser";
 import { Typography } from "@/v2/shared/ui";
+import {
+  CanvasViewControls,
+  ToolPanelSlot,
+  type CanvasInteractionMode,
+} from "@/widgets/tool-workspace";
+import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
 
 type Props = {
+  documentId: string;
   height: number;
-  session: EditorSession;
+  interaction: ManualCutoutInteraction;
   sourceUrl: string;
   width: number;
+  onCutoutModeChange?(mode: "magic" | "manual"): void;
 };
+
+export type ManualCutoutInteraction = Readonly<{
+  apply(): void;
+  begin(
+    point: Readonly<{ x: number; y: number }>,
+    brush: Readonly<{ mode: ManualCutoutMode; radius: number; hardness: number }>,
+  ): void;
+  cancel(): void;
+  cancelGesture(): void;
+  connectCanvas(
+    canvas: HTMLCanvasElement,
+    sourceUrl: string,
+    width: number,
+    height: number,
+  ): () => void;
+  end(): void;
+  move(
+    point: Readonly<{ x: number; y: number }>,
+    brush: Readonly<{ mode: ManualCutoutMode; radius: number; hardness: number }>,
+  ): void;
+  readViewState(): Readonly<{
+    mode: ManualCutoutMode;
+    brushSize: number;
+    zoom: number;
+  }>;
+  writeViewState(
+    state: Readonly<{
+      mode: ManualCutoutMode;
+      brushSize: number;
+      zoom: number;
+    }>,
+  ): void;
+  redo(): void;
+  snapshot(): Readonly<{ canRedo: boolean; canUndo: boolean; dirty: boolean }> | null;
+  undo(): void;
+}>;
 
 type Cursor = { x: number; y: number } | null;
 
 export function ManualCutoutWorkspace(props: Props) {
-  const initialView = props.session.manualViewState();
+  const initialView = props.interaction.readViewState();
   const [mode, setMode] = useState<ManualCutoutMode>(initialView.mode);
   const [brushSize, setBrushSize] = useState(initialView.brushSize);
   const [zoom, setZoom] = useState(initialView.zoom);
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
+  const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
   const [cursor, setCursor] = useState<Cursor>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const workspaceRef = useRef<HTMLElement>(null);
-  const imageDataRef = useRef<ImageData | null>(null);
-  const engine = props.session.manualDraft();
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const panPointerRef = useRef<Readonly<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  }> | null>(null);
+  const draftState = props.interaction.snapshot();
 
   function changeMode(nextMode: ManualCutoutMode): void {
     setMode(nextMode);
-    props.session.setManualViewState({ mode: nextMode, brushSize, zoom });
+    props.interaction.writeViewState({ mode: nextMode, brushSize, zoom });
   }
 
   function changeBrushSize(nextBrushSize: number): void {
     setBrushSize(nextBrushSize);
-    props.session.setManualViewState({ mode, brushSize: nextBrushSize, zoom });
+    props.interaction.writeViewState({ mode, brushSize: nextBrushSize, zoom });
   }
 
   function changeZoom(update: (value: number) => number): void {
     setZoom((current) => {
       const nextZoom = update(current);
-      props.session.setManualViewState({ mode, brushSize, zoom: nextZoom });
+      props.interaction.writeViewState({ mode, brushSize, zoom: nextZoom });
       return nextZoom;
     });
   }
-
-  const repaint = useCallback(
-    function repaintManualCanvas(box?: ManualCutoutBox): void {
-      const canvas = canvasRef.current;
-      const imageData = imageDataRef.current;
-      if (canvas === null || imageData === null || engine === null) return;
-      const context = canvas.getContext("2d");
-      if (context === null) return;
-      engine.applyAlpha(imageData, box);
-      if (box === undefined) {
-        context.putImageData(imageData, 0, 0);
-      } else {
-        context.putImageData(
-          imageData,
-          0,
-          0,
-          box.minX,
-          box.minY,
-          box.maxX - box.minX + 1,
-          box.maxY - box.minY + 1,
-        );
-      }
-    },
-    [engine],
-  );
 
   function sourcePoint(event: ReactPointerEvent<HTMLCanvasElement>) {
     const box = event.currentTarget.getBoundingClientRect();
@@ -89,102 +109,110 @@ export function ManualCutoutWorkspace(props: Props) {
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (engine === null || event.button !== 0) return;
+    if (draftState === null || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (interactionMode === "hand") {
+      panPointerRef.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      return;
+    }
     const point = sourcePoint(event);
-    repaint(
-      engine.begin(point, { mode, radius: brushSize / 2, hardness: 0.72 }) ?? undefined,
-    );
+    props.interaction.begin(point, { mode, radius: brushSize / 2, hardness: 0.72 });
   }
 
   function pointerMove(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const panPointer = panPointerRef.current;
+    if (panPointer?.pointerId === event.pointerId) {
+      const viewport = viewportRef.current;
+      if (viewport !== null) {
+        viewport.scrollLeft -= event.clientX - panPointer.clientX;
+        viewport.scrollTop -= event.clientY - panPointer.clientY;
+      }
+      panPointerRef.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      return;
+    }
     const point = sourcePoint(event);
     setCursor(point);
-    if (engine === null || !event.currentTarget.hasPointerCapture(event.pointerId))
+    if (draftState === null || !event.currentTarget.hasPointerCapture(event.pointerId))
       return;
-    repaint(
-      engine.move(point, { mode, radius: brushSize / 2, hardness: 0.72 }) ?? undefined,
-    );
+    props.interaction.move(point, { mode, radius: brushSize / 2, hardness: 0.72 });
   }
 
   function pointerUp(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (engine === null || !event.currentTarget.hasPointerCapture(event.pointerId))
+    if (panPointerRef.current?.pointerId === event.pointerId) {
+      panPointerRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
+    if (draftState === null || !event.currentTarget.hasPointerCapture(event.pointerId))
       return;
     event.currentTarget.releasePointerCapture(event.pointerId);
-    engine.end();
-    props.session.notifyManualDirty();
+    props.interaction.end();
   }
 
   function pointerCancel(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (engine === null) return;
-    repaint(engine.cancelGesture() ?? undefined);
+    if (panPointerRef.current?.pointerId === event.pointerId) {
+      panPointerRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
+    if (draftState === null) return;
+    props.interaction.cancelGesture();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    props.session.notifyManualDirty();
   }
 
   const undo = useCallback(
     function undoManualGesture(): void {
-      const box = engine?.undo() ?? null;
-      if (box !== null) {
-        repaint(box);
-        props.session.notifyManualDirty();
-      }
+      props.interaction.undo();
     },
-    [engine, props.session, repaint],
+    [props.interaction],
   );
 
   const redo = useCallback(
     function redoManualGesture(): void {
-      const box = engine?.redo() ?? null;
-      if (box !== null) {
-        repaint(box);
-        props.session.notifyManualDirty();
-      }
+      props.interaction.redo();
     },
-    [engine, props.session, repaint],
+    [props.interaction],
   );
-
-  useEffect(function focusManualWorkspaceFx() {
-    workspaceRef.current?.focus();
-  }, []);
 
   useEffect(
     function loadManualSourceFx() {
       const canvas = canvasRef.current;
-      if (canvas === null || engine === null) return;
-      let active = true;
-      let bitmap: ImageBitmap | null = null;
-      void loadManualSourceBitmap(props.sourceUrl)
-        .then(function drawManualSourceFx(loaded) {
-          if (!active) {
-            loaded.close();
-            return;
-          }
-          bitmap = loaded;
-          const context = canvas.getContext("2d");
-          if (context === null) return;
-          context.drawImage(loaded, 0, 0, props.width, props.height);
-          const imageData = context.getImageData(0, 0, props.width, props.height);
-          imageDataRef.current = imageData;
-          repaint();
-        })
-        .catch(() => undefined);
-      return function clearManualSourceFx() {
-        active = false;
-        bitmap?.close();
-        imageDataRef.current = null;
-      };
+      if (canvas === null || draftState === null) return;
+      return props.interaction.connectCanvas(
+        canvas,
+        props.sourceUrl,
+        props.width,
+        props.height,
+      );
     },
-    [engine, props.height, props.sourceUrl, props.width, repaint],
+    [draftState, props.height, props.interaction, props.sourceUrl, props.width],
   );
 
   useEffect(
     function guardDirtyDraftNavigationFx() {
-      return installManualDraftUnloadGuard(() => engine?.dirty ?? false);
+      function beforeUnloadFx(event: BeforeUnloadEvent): void {
+        if (props.interaction.snapshot()?.dirty !== true) return;
+        event.preventDefault();
+        event.returnValue = "";
+      }
+      globalThis.addEventListener("beforeunload", beforeUnloadFx);
+      return function removeManualUnloadGuardFx() {
+        globalThis.removeEventListener("beforeunload", beforeUnloadFx);
+      };
     },
-    [engine],
+    [props.interaction],
   );
 
   useEffect(
@@ -204,134 +232,158 @@ export function ManualCutoutWorkspace(props: Props) {
     [redo, undo],
   );
 
-  if (engine === null) return null;
+  if (draftState === null) return null;
 
   return (
-    <section
-      ref={workspaceRef}
-      tabIndex={-1}
-      className="border-border bg-card/70 rounded-xl border p-4 sm:p-5"
-      aria-label={m.editorV2ManualWorkspace()}
-    >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Typography variant="heading-2" as="h2">
-            {m.editorV2ManualTitle()}
-          </Typography>
-          <Typography variant="caption" as="p" className="text-muted-foreground mt-1">
-            {m.editorV2ManualHint()}
-          </Typography>
-        </div>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label={m.editorV2ManualMode()}
-        >
-          <Button
-            variant={mode === "restore" ? "default" : "outline"}
-            size="sm"
-            onClick={() => changeMode("restore")}
-          >
-            {m.editorV2Restore()}
-          </Button>
-          <Button
-            variant={mode === "erase" ? "default" : "outline"}
-            size="sm"
-            onClick={() => changeMode("erase")}
-          >
-            {m.editorV2Erase()}
-          </Button>
-        </div>
-      </div>
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <label className="text-muted-foreground font-mono text-xs">
-          {m.editorV2BrushSize()}: {brushSize}
-          <input
-            className="accent-primary mt-2 block w-full"
-            type="range"
-            min="8"
-            max="180"
-            value={brushSize}
-            onChange={(event) => changeBrushSize(Number(event.currentTarget.value))}
-          />
-        </label>
-        <div className="flex gap-2" aria-label={m.editorV2ViewportControls()}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => changeZoom((value) => Math.max(0.5, value - 0.25))}
-          >
-            −
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => changeZoom(() => 1)}>
-            {m.editorV2Fit()}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => changeZoom((value) => Math.min(3, value + 0.25))}
-          >
-            +
-          </Button>
-        </div>
-      </div>
-      <div
-        className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] focus-visible:ring-ring relative max-h-[65vh] overflow-auto rounded-lg border p-3 focus-visible:ring-2"
-        tabIndex={0}
-        aria-label={m.editorV2ManualViewport()}
-      >
-        <div
-          className="relative mx-auto origin-top-left"
-          style={{ width: `${zoom * 100}%` }}
-        >
-          <canvas
-            role="img"
-            ref={canvasRef}
-            width={props.width}
-            height={props.height}
-            className="block h-auto w-full touch-none select-none"
-            onPointerDown={pointerDown}
-            onPointerMove={pointerMove}
-            onPointerUp={pointerUp}
-            onPointerCancel={pointerCancel}
-            onPointerLeave={() => setCursor(null)}
-            aria-label={m.editorV2ManualCanvas()}
-          />
-          {cursor !== null ? (
-            <span
-              className="border-foreground pointer-events-none absolute rounded-full border"
-              style={{
-                width: `${(brushSize / props.width) * 100}%`,
-                aspectRatio: "1",
-                left: `${(cursor.x / props.width) * 100}%`,
-                top: `${(cursor.y / props.height) * 100}%`,
-                transform: "translate(-50%, -50%)",
-              }}
+    <>
+      <div className="[grid-area:surface]">
+        <EditorStage
+          documentId={props.documentId}
+          overlaySlot={({ expanded, toggleFullscreen }) => (
+            <CanvasViewControls
+              interactionMode={interactionMode}
+              onInteractionModeChange={setInteractionMode}
+              zoomPercent={Math.round(zoom * 100)}
+              canZoomIn={zoom < 3}
+              canZoomOut={zoom > 0.5}
+              canPan={zoom > 1}
+              onZoomIn={() => changeZoom((value) => Math.min(3, value + 0.25))}
+              onZoomOut={() => changeZoom((value) => Math.max(0.5, value - 0.25))}
+              onResetView={() => changeZoom(() => 1)}
+              expanded={expanded}
+              onToggleFullscreen={toggleFullscreen}
+              collapsed={viewControlsCollapsed}
+              onCollapsedChange={setViewControlsCollapsed}
             />
-          ) : null}
-        </div>
+          )}
+        >
+          <div
+            ref={viewportRef}
+            className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] focus-visible:ring-ring relative max-h-full w-full overflow-auto rounded-lg border p-3 focus-visible:ring-2"
+            tabIndex={0}
+            aria-label={m.editorV2ManualViewport()}
+          >
+            <div
+              className="relative mx-auto origin-top-left"
+              style={{ width: `${zoom * 100}%` }}
+            >
+              <canvas
+                role="img"
+                ref={canvasRef}
+                width={props.width}
+                height={props.height}
+                className="block h-auto w-full touch-none select-none"
+                onPointerDown={pointerDown}
+                onPointerMove={pointerMove}
+                onPointerUp={pointerUp}
+                onPointerCancel={pointerCancel}
+                onPointerLeave={() => setCursor(null)}
+                aria-label={m.editorV2ManualCanvas()}
+              />
+              {cursor !== null ? (
+                <span
+                  className="border-foreground pointer-events-none absolute rounded-full border"
+                  style={{
+                    width: `${(brushSize / props.width) * 100}%`,
+                    aspectRatio: "1",
+                    left: `${(cursor.x / props.width) * 100}%`,
+                    top: `${(cursor.y / props.height) * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        </EditorStage>
       </div>
-      <div className="mt-4 flex flex-wrap justify-between gap-2">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={undo} disabled={!engine.canUndo}>
-            {m.editorV2DraftUndo()}
-          </Button>
-          <Button variant="outline" onClick={redo} disabled={!engine.canRedo}>
-            {m.editorV2DraftRedo()}
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => props.session.cancelManual()}>
-            {m.editorV2Cancel()}
-          </Button>
-          <Button onClick={() => props.session.applyManual()} disabled={!engine.dirty}>
-            {m.editorV2Apply()}
-          </Button>
-        </div>
+      <div className="[grid-area:rail]">
+        <ToolPanelSlot toolId="cutout" label={m.editorV2ManualWorkspace()} autoFocus>
+          <section className="flex h-full min-h-0 flex-col gap-5">
+            <CutoutModeTabs
+              mode="manual"
+              onModeChange={(mode) => props.onCutoutModeChange?.(mode)}
+            />
+            <div
+              className="grid grid-cols-2 gap-2"
+              role="toolbar"
+              aria-label={m.editorV2ManualMode()}
+            >
+              <Button
+                variant={mode === "restore" ? "default" : "outline"}
+                className={`h-20 flex-col gap-1.5 ${
+                  mode === "restore"
+                    ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                    : "border-emerald-700 text-emerald-800 dark:text-emerald-300"
+                }`}
+                onClick={() => changeMode("restore")}
+              >
+                <CirclePlus className="size-6" aria-hidden="true" />
+                {m.editorV2Restore()}
+              </Button>
+              <Button
+                variant={mode === "erase" ? "default" : "outline"}
+                className={`h-20 flex-col gap-1.5 ${
+                  mode === "erase"
+                    ? "bg-rose-700 text-white hover:bg-rose-800"
+                    : "border-rose-700 text-rose-800 dark:text-rose-300"
+                }`}
+                onClick={() => changeMode("erase")}
+              >
+                <CircleMinus className="size-6" aria-hidden="true" />
+                {m.editorV2Erase()}
+              </Button>
+            </div>
+            <Typography
+              variant="caption"
+              as="p"
+              className="min-h-10 leading-4 text-muted-foreground"
+            >
+              {m.editorV2ManualHint()}
+            </Typography>
+            <div className="grid gap-3">
+              <label className="grid max-w-md gap-2 text-sm font-medium">
+                <span>{m.brushSize()}</span>
+                <input
+                  type="range"
+                  min="8"
+                  max="180"
+                  value={brushSize}
+                  onChange={(event) => changeBrushSize(Number(event.currentTarget.value))}
+                />
+              </label>
+            </div>
+            <div className="mt-auto flex flex-col gap-2 pt-4">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={undo} disabled={!draftState.canUndo}>
+                  {m.editorV2DraftUndo()}
+                </Button>
+                <Button variant="outline" onClick={redo} disabled={!draftState.canRedo}>
+                  {m.editorV2DraftRedo()}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button
+                  className="w-full"
+                  onClick={() => props.interaction.apply()}
+                  disabled={!draftState.dirty}
+                >
+                  {m.cutoutApply()}
+                </Button>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => props.interaction.cancel()}
+                >
+                  {m.cancel()}
+                </Button>
+              </div>
+            </div>
+            <Typography variant="caption" as="p" role="status" className="sr-only">
+              {draftState.dirty ? m.editorV2ManualDirty() : m.editorV2ManualClean()}
+            </Typography>
+          </section>
+        </ToolPanelSlot>
       </div>
-      <Typography variant="caption" as="p" role="status" className="sr-only">
-        {engine.dirty ? m.editorV2ManualDirty() : m.editorV2ManualClean()}
-      </Typography>
-    </section>
+    </>
   );
 }

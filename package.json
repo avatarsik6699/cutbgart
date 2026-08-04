@@ -38,6 +38,7 @@
     "e2e:phase-38-real": "E2E_PHASE38_REAL=1 tsx scripts/run-e2e.ts e2e/phase-38-cutover-readiness.real.spec.ts --project=chromium --workers=1",
     "e2e:phase-39-real": "E2E_PHASE39_REAL=1 tsx scripts/run-e2e.ts e2e/phase-39-main-page-ui.real.spec.ts --project=chromium --workers=1",
     "e2e:phase-40-real": "E2E_PHASE40_REAL=1 tsx scripts/run-e2e.ts e2e/phase-40-batch-main-page-ui.real.spec.ts --project=chromium --workers=1",
+    "e2e:phase-41-real": "E2E_PHASE41_REAL=1 tsx scripts/run-e2e.ts e2e/phase-41-editor-tools-ui.real.spec.ts --project=chromium --workers=1",
     "e2e:full": "pnpm e2e && pnpm e2e:real-model",
     "release:test": "vitest run tests/release-operations.test.ts tests/operations.test.ts",
     "release:test:docker": "./scripts/release/disposable-test.sh",

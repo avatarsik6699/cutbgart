@@ -6,9 +6,10 @@ import {
   createEnhancementDraftId,
   type EnhancementDraft,
 } from "@/v2/domain";
-import type { EditorSession } from "@/v2/runtime-browser";
-
-import { EnhancementWorkspace } from "./enhancement-workspace";
+import {
+  EnhancementWorkspace,
+  type EnhancementInteraction,
+} from "./enhancement-workspace";
 
 afterEach(cleanup);
 
@@ -31,12 +32,12 @@ function sessionHarness() {
   };
   return {
     calls,
-    session: {
-      applyEnhancements: calls.apply,
-      cancelEnhancements: calls.cancel,
-      changeEnhancements: calls.change,
-      retryEnhancements: calls.retry,
-    } as unknown as EditorSession,
+    interaction: {
+      apply: calls.apply,
+      cancel: calls.cancel,
+      change: calls.change,
+      retry: calls.retry,
+    } satisfies EnhancementInteraction,
   };
 }
 
@@ -54,12 +55,17 @@ describe("EnhancementWorkspace", () => {
           fraction: null,
           error: null,
         }}
-        session={harness.session}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
         width={100}
       />,
     );
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Fine detail|Мелкие детали/ }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /Improve fine details|Улучшить мелкие детали/,
+      }),
+    );
     expect(harness.calls.change).toHaveBeenCalledWith(["colour-halo"]);
     fireEvent.click(screen.getByRole("button", { name: /^Apply$|^Применить$/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
@@ -80,15 +86,16 @@ describe("EnhancementWorkspace", () => {
           fraction: null,
           error: null,
         }}
-        session={harness.session}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
         width={100}
       />,
     );
 
     expect(screen.getByRole("status").textContent).toMatch(
-      /Nothing was added|В историю документа ничего не добавлено/,
+      /No safe visible change|Безопасных заметных изменений/,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Retry$|^Повторить$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Try again|Попробовать снова/ }));
     expect(harness.calls.retry).toHaveBeenCalledOnce();
   });
 
@@ -105,7 +112,8 @@ describe("EnhancementWorkspace", () => {
           fraction: 0.42,
           error: null,
         }}
-        session={harness.session}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
         width={100}
       />,
     );

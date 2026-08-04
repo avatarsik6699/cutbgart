@@ -26,19 +26,22 @@
 | 38 | ✅ done | gate passed; blocked cutover result; no tag | [`PHASE_38.md`](./PHASE_38.md): validation complete; public cutover not authorized |
 | 39 | ✅ done | gate passed; `v0.39.0` | [`PHASE_39.md`](./PHASE_39.md): v1-faithful main-page single-image flow on isolated v2 routes |
 | 40 | ✅ done | gate passed; `v0.40.0` | [`PHASE_40.md`](./PHASE_40.md): v1-faithful batch workspace on isolated v2 routes |
+| 41 | ✅ done | `v0.41.0`; gate passed | [`PHASE_41.md`](./PHASE_41.md): v1-faithful editor tools on isolated v2 routes |
 
-**Latest closed phase:** `40`
+**Latest closed phase:** `41`
 
 **Implementation in progress:** —
 
-**Only active implementation scope:** —; the next migration slice requires an approved phase
+**Only active implementation scope:** —; the next phase requires an approved SPEC change and
+`/phase-init`.
 
 ## Current contract
 
-This section describes code that exists after Phase 40. The legacy editor remains the public product;
-the separately reachable v2 foundation now includes automatic removal, Manual Cutout, guided Magic
-Cutout, Background, Enhancements, document history, and a batch/multi-document workspace. See
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and [`PHASE_37.md`](./PHASE_37.md).
+This section describes the accepted contract through Phase 41. The legacy editor remains the
+public product; the separately reachable v2 foundation
+includes automatic removal, Manual Cutout, guided Magic Cutout, Background, Enhancements, document
+history, and a batch/multi-document workspace. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
+[`PHASE_41.md`](./PHASE_41.md).
 
 ### Runtime status
 
@@ -162,6 +165,12 @@ Phase-37 workspace runtime. Item summaries include the captured model mode; capa
 explicit bounded presentation error. Files, pixels, workers, controllers, actors, and mutable
 workflow state remain outside presentation snapshots.
 
+Phase 41 adds immutable `EditorToolWorkspaceProjection` and typed
+`EditorToolWorkspaceIntent` presentation values over the accepted tool controllers. Manual and
+Magic canvas work stays behind bounded semantic interaction ports; pixels, canvases, pointer events,
+mutable draft engines, actors, sessions, workers, and binary values remain outside controller-neutral
+presentation.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -173,7 +182,7 @@ There is no image-processing API.
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
 | `/dev/remove-background` | Internal noindex ML harness |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v1-faithful main-page and batch workspace over v2 automatic removal/export ownership; accepted v2 Manual/Magic/Background/Enhancement workspaces remain reachable with their deferred presentation |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v1-faithful main-page, batch, and complete editor-tool workspace over v2 actor/runtime ownership |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
 
@@ -227,6 +236,9 @@ The implemented v2 foundation is intentionally isolated and local-only:
 - Background drafts for transparent/colour/gradient/custom image fills with explicit Apply/Cancel;
 - fine-detail and colour-halo Enhancement drafts with ordered globally admitted heavy stages and
   atomic changed/no-op/failure/cancel outcomes;
+- the complete v1-faithful result stage, toolbar, tool rail, Cutout Manual/Magic, Background, and
+  Enhancements presentation on the isolated bilingual v2 routes through bounded projection,
+  typed-intent, and tool-interaction seams;
 - up to 20 live workspace items, at most two concurrent import preparations, and one globally
   admitted heavy job across all documents;
 - no auth, billing, server upload, remote jobs, or generation;
@@ -322,6 +334,13 @@ admission, counters, item rail/actions, selection, and Download All over Phase-3
 deferred v2 editor-tool presentation remains the only accepted visual difference; public/scenario
 routes and cutover remain out of scope.
 
+SPEC v1.38 defines Phase 41 as the final isolated presentation slice. The completed phase restores
+the complete v1 editor stage, toolbar, Cutout Manual/Magic, Enhancements, and Background UI over the
+accepted v2 tool controllers through bounded projection/intent and semantic interaction seams. The
+full gate, exact bilingual browser evidence, architecture review, and serialized real-model journey
+passed. Public/scenario routes remain legacy, and managed-Windows acceptance and cutover remain
+separately gated work.
+
 ## Active blockers and residual risks
 
 | Scope | State |
@@ -335,12 +354,86 @@ routes and cutover remain out of scope.
 | Phase 38 | Complete; technical gate passed, but public cutover remains blocked by documented product/evidence gaps |
 | Phase 39 | Complete; gate passed and `v0.39.0` tags the locally merged implementation |
 | Phase 40 | Complete; full gate, exact bilingual batch evidence, and real-model FIFO/export journey passed |
+| Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-04 — Phase 41 complete
+
+**Type:** phase-completion
+
+**Author:** AI (`/context-update 41`)
+
+**Triggered by:** Phase-41 gate passed and architect acceptance completed
+
+#### Changes / Decision
+
+- Restored the complete bilingual v1 result-editor stage, toolbar, tool rail, Manual/Magic Cutout,
+  Background, and Enhancements UI on the isolated v2 routes.
+- Kept actor/session/controller and mutable draft engines in the page/runtime adapter; presentation
+  consumes immutable projections, typed intents, and bounded semantic interaction ports.
+- Full Docker, TypeScript, architecture, unit, exact visual/behavioral browser, and serialized
+  real-model verification passed with all architect review notes resolved.
+
+#### Affected Phases / Consequences
+
+- Phase 41 is complete; the isolated v2 routes now contain all incrementally migrated v1 UI slices.
+- Public/scenario cutover, managed-Windows complete-product acceptance, and legacy removal remain
+  separately scoped decisions; no next implementation phase is active.
+
+### 2026-08-04 — Phase 41 architecture review corrections verified
+
+**Type:** implementation-review
+
+**Author:** AI (`/impl-assist 41 review`)
+
+- Replaced mutable Manual/Magic engine exposure in controller-neutral views with bounded semantic
+  interaction ports; XState/controller commands remain the sole committed-state path.
+- Extracted concrete tool rendering from the page adapter and corrected touched shared components
+  to the frontend conventions without changing accepted screenshots.
+- Typecheck, lint, Steiger, 674 unit tests, exact Phase-41 browser evidence, Phase-38 accessibility/
+  isolation, and the serialized real-model journey pass. Architect manual behavior verification and
+  all review notes are resolved; `/phase-gate 41` is next.
+
+### 2026-08-04 — Phase 41 implementation checkpoint
+
+**Type:** implementation
+
+**Author:** AI (`/impl-assist 41`)
+
+- Restored the v1 editor shell on isolated v2 routes through a bounded projection/intent boundary
+  and tool-specific interaction ports; actor/runtime ownership is unchanged.
+- Exact bilingual desktop/narrow evidence, accessibility, 673 unit tests, the Phase-33–41 browser
+  regression, and one serialized real-model all pass without retries.
+- Architect manual verification is the next lifecycle step. Gate, context update, commit, merge,
+  tag, managed-Windows acceptance, and public cutover have not been performed.
+
+### 2026-08-04 — Phase 41 editor-tool presentation approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect directed continued iterative v1-faithful UI migration after Phase 40
+
+#### Changes / Decision
+
+- SPEC v1.38 makes the complete v1 editor-tool workspace the next isolated v2 slice: shared stage,
+  toolbar, Cutout Manual/Magic, Enhancements, Background, history, draft guards, and responsive UI.
+- The slice consumes the accepted Phase-34–36 controllers through one immutable bounded projection/
+  typed-intent boundary; it does not import legacy workflow state or create per-tab adapters.
+- The deferred-tool visual exception ends inside Phase 41. Public/scenario routes, managed-Windows
+  complete-product acceptance, cutover, and legacy removal remain separately gated follow-up work.
+
+#### Affected Phases / Consequences
+
+- Phase 41 — approved for initialization; its presentation contract and gate boundary are new.
+- Phases 33–40 remain complete and unchanged because the addition consumes, rather than revises,
+  their accepted domain/runtime contracts.
 
 ### 2026-08-04 — Phase 40 complete
 

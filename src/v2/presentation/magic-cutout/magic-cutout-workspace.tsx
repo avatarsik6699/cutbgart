@@ -5,26 +5,69 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, EditorStage } from "@/shared/ui";
 import type {
   MagicCandidateSummary,
+  MagicCandidateId,
   MagicCutoutDraft,
   MagicCutoutMode,
 } from "@/v2/domain";
-import type { EditorSession, MagicRuntimeProgress } from "@/v2/runtime-browser";
+import type { MagicRuntimeProgress } from "@/v2/runtime-browser";
 import { Image, Typography } from "@/v2/shared/ui";
+import {
+  CanvasViewControls,
+  ToolPanelSlot,
+  type CanvasInteractionMode,
+} from "@/widgets/tool-workspace";
+import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
 
 type Props = {
   candidates: readonly MagicCandidateSummary[];
   draft: MagicCutoutDraft;
   height: number;
   runtimeProgress: MagicRuntimeProgress | null;
-  session: EditorSession;
+  interaction: MagicCutoutInteraction;
   sourceUrl: string;
   width: number;
+  onCutoutModeChange?(mode: "magic" | "manual"): void;
 };
+
+export type MagicCutoutInteraction = Readonly<{
+  apply(): void;
+  appendPoint(point: Readonly<{ x: number; y: number }>): void;
+  beginStroke(
+    input: Readonly<{
+      id: string;
+      mode: MagicCutoutMode;
+      point: Readonly<{ x: number; y: number }>;
+      radius: number;
+    }>,
+  ): boolean;
+  cancel(): void;
+  cancelStroke(): void;
+  commitStroke(): boolean;
+  displayStrokes(): readonly Readonly<{
+    id: string;
+    mode: MagicCutoutMode;
+    points: readonly Readonly<{ x: number; y: number }>[];
+    radius: number;
+  }>[];
+  paintCandidate(canvas: HTMLCanvasElement, candidateId: MagicCandidateId | null): void;
+  predict(): void;
+  readViewState(): Readonly<{ mode: MagicCutoutMode; radius: number }>;
+  redo(): void;
+  selectCandidate(candidateId: MagicCandidateId): void;
+  snapshot(): Readonly<{
+    canRedo: boolean;
+    canUndo: boolean;
+    strokeCount: number;
+  }> | null;
+  undo(): void;
+  writeViewState(state: Readonly<{ mode: MagicCutoutMode; radius: number }>): void;
+}>;
 
 function statusLabel(
   draft: MagicCutoutDraft,
@@ -43,12 +86,14 @@ function statusLabel(
 }
 
 export function MagicCutoutWorkspace(props: Props) {
-  const initialView = props.session.magicViewState();
+  const initialView = props.interaction.readViewState();
   const [mode, setMode] = useState<MagicCutoutMode>(initialView.mode);
   const [radius, setRadius] = useState(initialView.radius);
+  const [zoom, setZoom] = useState(1);
+  const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
+  const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [, setPaintRevision] = useState(0);
-  const workspaceRef = useRef<HTMLElement>(null);
   const discardDialogRef = useRef<HTMLDivElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -56,16 +101,22 @@ export function MagicCutoutWorkspace(props: Props) {
 
   function changeMode(nextMode: MagicCutoutMode): void {
     setMode(nextMode);
-    props.session.setMagicViewState({ mode: nextMode, radius });
+    props.interaction.writeViewState({ mode: nextMode, radius });
   }
 
   function changeRadius(nextRadius: number): void {
     setRadius(nextRadius);
-    props.session.setMagicViewState({ mode, radius: nextRadius });
+    props.interaction.writeViewState({ mode, radius: nextRadius });
   }
   const candidateCanvas = useRef<HTMLCanvasElement>(null);
   const strokeCanvas = useRef<HTMLCanvasElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const activePointer = useRef<number | null>(null);
+  const panPointer = useRef<Readonly<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  }> | null>(null);
   const cursor = useRef<{ x: number; y: number } | null>(null);
   const strokeSequence = useRef(0);
 
@@ -79,8 +130,7 @@ export function MagicCutoutWorkspace(props: Props) {
 
   function paintStrokesFx(): void {
     const canvas = strokeCanvas.current;
-    const engine = props.session.magicDraft();
-    if (canvas === null || engine === null) return;
+    if (canvas === null) return;
     canvas.width = props.width;
     canvas.height = props.height;
     const context = canvas.getContext("2d");
@@ -88,7 +138,7 @@ export function MagicCutoutWorkspace(props: Props) {
     context.clearRect(0, 0, props.width, props.height);
     context.lineCap = "round";
     context.lineJoin = "round";
-    for (const stroke of engine.displayStrokes()) {
+    for (const stroke of props.interaction.displayStrokes()) {
       const first = stroke.points[0];
       if (first === undefined) continue;
       context.beginPath();
@@ -119,14 +169,10 @@ export function MagicCutoutWorkspace(props: Props) {
     mode,
     props.draft.draftRevision,
     props.height,
-    props.session,
+    props.interaction,
     props.width,
     radius,
   ]);
-
-  useEffect(function focusMagicWorkspaceFx() {
-    workspaceRef.current?.focus();
-  }, []);
 
   useEffect(
     function routeDiscardDialogFocusFx() {
@@ -140,13 +186,13 @@ export function MagicCutoutWorkspace(props: Props) {
   useEffect(
     function paintCandidateFx() {
       if (candidateCanvas.current !== null) {
-        props.session.paintMagicCandidate(
+        props.interaction.paintCandidate(
           candidateCanvas.current,
           props.draft.selectedCandidateId,
         );
       }
     },
-    [props.draft.selectedCandidateId, props.session],
+    [props.draft.selectedCandidateId, props.interaction],
   );
 
   useEffect(
@@ -161,8 +207,8 @@ export function MagicCutoutWorkspace(props: Props) {
         const key = event.key.toLowerCase();
         if (key !== "z" && key !== "y") return;
         event.preventDefault();
-        if (key === "y" || event.shiftKey) props.session.redoMagic();
-        else props.session.undoMagic();
+        if (key === "y" || event.shiftKey) props.interaction.redo();
+        else props.interaction.undo();
         setPaintRevision((value) => value + 1);
       }
       globalThis.addEventListener("beforeunload", beforeUnloadFx);
@@ -172,7 +218,7 @@ export function MagicCutoutWorkspace(props: Props) {
         globalThis.removeEventListener("keydown", keyDownFx);
       };
     },
-    [props.draft.dirty, props.session],
+    [props.draft.dirty, props.interaction],
   );
 
   function pointerDownFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
@@ -182,10 +228,17 @@ export function MagicCutoutWorkspace(props: Props) {
       props.draft.status === "predicting"
     )
       return;
-    const engine = props.session.magicDraft();
-    if (engine === null) return;
+    if (interactionMode === "hand") {
+      panPointer.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     const point = sourcePoint(event);
-    const started = engine.beginStroke({
+    const started = props.interaction.beginStroke({
       id: `magic-stroke-${++strokeSequence.current}`,
       mode,
       point,
@@ -199,36 +252,62 @@ export function MagicCutoutWorkspace(props: Props) {
   }
 
   function pointerMoveFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const activePan = panPointer.current;
+    if (activePan?.pointerId === event.pointerId) {
+      const viewport = viewportRef.current;
+      if (viewport !== null) {
+        viewport.scrollLeft -= event.clientX - activePan.clientX;
+        viewport.scrollTop -= event.clientY - activePan.clientY;
+      }
+      panPointer.current = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+      return;
+    }
     const point = sourcePoint(event);
     cursor.current = point;
     if (activePointer.current === event.pointerId) {
-      props.session.magicDraft()?.appendPoint(point);
+      props.interaction.appendPoint(point);
     }
     paintStrokesFx();
   }
 
   function pointerUpFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (panPointer.current?.pointerId === event.pointerId) {
+      panPointer.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
     if (activePointer.current !== event.pointerId) return;
-    props.session.magicDraft()?.appendPoint(sourcePoint(event));
-    const committed = props.session.magicDraft()?.commitStroke() ?? null;
+    props.interaction.appendPoint(sourcePoint(event));
+    props.interaction.commitStroke();
     activePointer.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (committed !== null) props.session.notifyMagicChanged();
     setPaintRevision((value) => value + 1);
   }
 
   function pointerCancelFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (panPointer.current?.pointerId === event.pointerId) {
+      panPointer.current = null;
+      return;
+    }
     if (activePointer.current !== event.pointerId) return;
-    props.session.magicDraft()?.cancelStroke();
+    props.interaction.cancelStroke();
     activePointer.current = null;
     setPaintRevision((value) => value + 1);
   }
 
   function lostPointerCaptureFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (panPointer.current?.pointerId === event.pointerId) {
+      panPointer.current = null;
+      return;
+    }
     if (activePointer.current !== event.pointerId) return;
-    props.session.magicDraft()?.cancelStroke();
+    props.interaction.cancelStroke();
     activePointer.current = null;
     setPaintRevision((value) => value + 1);
   }
@@ -258,203 +337,247 @@ export function MagicCutoutWorkspace(props: Props) {
   }
 
   return (
-    <section
-      ref={workspaceRef}
-      tabIndex={-1}
-      className="border-border bg-card/60 grid gap-4 rounded-xl border p-4 sm:p-5"
-      aria-label={m.editorV2MagicTitle()}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Typography variant="heading-2" as="h2">
-            {m.editorV2MagicTitle()}
-          </Typography>
-          <Typography
-            variant="caption"
-            as="p"
-            className="text-muted-foreground mt-1"
-            aria-live="polite"
-          >
-            {statusLabel(props.draft, props.runtimeProgress)} ·{" "}
-            {m.editorV2MagicStrokeCount({
-              count: String(props.session.magicDraft()?.snapshot().strokeCount ?? 0),
-            })}
-          </Typography>
-        </div>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label={m.editorV2MagicMode()}
+    <>
+      <div className="[grid-area:surface]">
+        <EditorStage
+          documentId={props.draft.documentId}
+          overlaySlot={({ expanded, toggleFullscreen }) => (
+            <CanvasViewControls
+              interactionMode={interactionMode}
+              onInteractionModeChange={setInteractionMode}
+              zoomPercent={Math.round(zoom * 100)}
+              canZoomIn={zoom < 3}
+              canZoomOut={zoom > 0.5}
+              canPan={zoom > 1}
+              onZoomIn={() => setZoom((value) => Math.min(3, value + 0.25))}
+              onZoomOut={() => setZoom((value) => Math.max(0.5, value - 0.25))}
+              onResetView={() => setZoom(1)}
+              expanded={expanded}
+              onToggleFullscreen={toggleFullscreen}
+              collapsed={viewControlsCollapsed}
+              onCollapsedChange={setViewControlsCollapsed}
+            />
+          )}
         >
-          <Button
-            variant={mode === "keep" ? "default" : "outline"}
-            onClick={() => changeMode("keep")}
-          >
-            {m.editorV2MagicKeep()}
-          </Button>
-          <Button
-            variant={mode === "remove" ? "default" : "outline"}
-            onClick={() => changeMode("remove")}
-          >
-            {m.editorV2MagicRemove()}
-          </Button>
-        </div>
-      </div>
-
-      <label className="grid gap-2">
-        <Typography variant="label" as="span">
-          {m.editorV2MagicBrushSize({ size: String(radius) })}
-        </Typography>
-        <input
-          type="range"
-          min="2"
-          max="80"
-          value={radius}
-          onChange={(event) => changeRadius(Number(event.currentTarget.value))}
-        />
-      </label>
-
-      <div
-        className="bg-muted relative mx-auto w-full max-w-5xl overflow-hidden rounded-lg"
-        style={{ aspectRatio: `${props.width} / ${props.height}` }}
-      >
-        <Image
-          src={props.sourceUrl}
-          alt={m.editorV2SourceAlt()}
-          preset="preview"
-          width={props.width}
-          height={props.height}
-          className="absolute inset-0 size-full object-contain"
-        />
-        <canvas
-          ref={candidateCanvas}
-          className="pointer-events-none absolute inset-0 size-full"
-          aria-hidden="true"
-        />
-        <canvas
-          ref={strokeCanvas}
-          className="absolute inset-0 size-full touch-none"
-          aria-label={m.editorV2MagicCanvas()}
-          onPointerDown={pointerDownFx}
-          onPointerMove={pointerMoveFx}
-          onPointerUp={pointerUpFx}
-          onPointerCancel={pointerCancelFx}
-          onLostPointerCapture={lostPointerCaptureFx}
-          onPointerLeave={() => {
-            cursor.current = null;
-            paintStrokesFx();
-          }}
-        />
-      </div>
-
-      {props.candidates.length > 0 ? (
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label={m.editorV2MagicCandidates()}
-        >
-          {props.candidates.map((candidate, index) => (
-            <Button
-              key={candidate.candidateId}
-              variant={
-                props.draft.selectedCandidateId === candidate.candidateId
-                  ? "default"
-                  : "outline"
-              }
-              onClick={() => props.session.selectMagicCandidate(candidate.candidateId)}
+          <div ref={viewportRef} className="bg-muted size-full overflow-auto rounded-lg">
+            <div
+              className="relative mx-auto origin-top-left"
+              style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
             >
-              {m.editorV2MagicCandidate({ number: String(index + 1) })}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => props.session.predictMagic()}
-          disabled={!props.draft.dirty || busy}
-        >
-          {busy ? m.editorV2MagicWorking() : m.editorV2MagicPredict()}
-        </Button>
-        <Button
-          onClick={() => props.session.applyMagic()}
-          disabled={props.draft.selectedCandidateId === null || busy}
-        >
-          {m.editorV2MagicApply()}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            props.session.undoMagic();
-            setPaintRevision((value) => value + 1);
-          }}
-          disabled={!props.session.magicDraft()?.snapshot().canUndo}
-        >
-          {m.editorV2MagicUndo()}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            props.session.redoMagic();
-            setPaintRevision((value) => value + 1);
-          }}
-          disabled={!props.session.magicDraft()?.snapshot().canRedo}
-        >
-          {m.editorV2MagicRedo()}
-        </Button>
-        <Button
-          ref={cancelButtonRef}
-          variant="ghost"
-          onClick={() => {
-            if (props.draft.dirty) setConfirmDiscard(true);
-            else props.session.cancelMagic();
-          }}
-        >
-          {m.editorV2Cancel()}
-        </Button>
-      </div>
-      {confirmDiscard ? (
-        <div
-          ref={discardDialogRef}
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="magic-discard-title"
-          aria-describedby="magic-discard-body"
-          className="border-destructive/40 bg-destructive/5 rounded-lg border p-4"
-          onKeyDown={discardDialogKeyDownFx}
-        >
-          <Typography id="magic-discard-title" variant="heading-3" as="h3">
-            {m.editorDraftGuardTitle()}
-          </Typography>
-          <Typography
-            id="magic-discard-body"
-            variant="body-small"
-            as="p"
-            className="mt-2"
-          >
-            {m.editorDraftGuardBody()}
-          </Typography>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              ref={continueButtonRef}
-              variant="outline"
-              onClick={() => setConfirmDiscard(false)}
-            >
-              {m.editorDraftContinue()}
-            </Button>
-            <Button
-              variant="destructive"
-              style={{
-                backgroundColor: "var(--destructive)",
-                color: "var(--destructive-foreground)",
-              }}
-              onClick={() => props.session.cancelMagic()}
-            >
-              {m.editorDraftDiscard()}
-            </Button>
+              <Image
+                src={props.sourceUrl}
+                alt={m.editorV2SourceAlt()}
+                preset="preview"
+                width={props.width}
+                height={props.height}
+                className="absolute inset-0 size-full object-contain"
+              />
+              <canvas
+                ref={candidateCanvas}
+                className="pointer-events-none absolute inset-0 size-full"
+                aria-hidden="true"
+              />
+              <canvas
+                ref={strokeCanvas}
+                className="absolute inset-0 size-full touch-none"
+                aria-label={m.editorV2MagicCanvas()}
+                onPointerDown={pointerDownFx}
+                onPointerMove={pointerMoveFx}
+                onPointerUp={pointerUpFx}
+                onPointerCancel={pointerCancelFx}
+                onLostPointerCapture={lostPointerCaptureFx}
+                onPointerLeave={() => {
+                  cursor.current = null;
+                  paintStrokesFx();
+                }}
+              />
+            </div>
           </div>
-        </div>
-      ) : null}
-    </section>
+        </EditorStage>
+      </div>
+      <div className="[grid-area:rail]">
+        <ToolPanelSlot toolId="cutout" label={m.editorV2MagicTitle()} autoFocus>
+          <section className="flex h-full min-h-0 flex-col gap-5">
+            <CutoutModeTabs
+              mode="magic"
+              onModeChange={(mode) => props.onCutoutModeChange?.(mode)}
+            />
+            <div
+              className="grid grid-cols-2 gap-2"
+              role="toolbar"
+              aria-label={m.editorV2MagicMode()}
+            >
+              <Button
+                variant={mode === "keep" ? "default" : "outline"}
+                className={`h-20 flex-col gap-1.5 ${
+                  mode === "keep"
+                    ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                    : "border-emerald-700 text-emerald-800 dark:text-emerald-300"
+                }`}
+                onClick={() => changeMode("keep")}
+              >
+                <CirclePlus className="size-6" aria-hidden="true" />
+                {m.guidedBrushKeep()}
+              </Button>
+              <Button
+                variant={mode === "remove" ? "default" : "outline"}
+                className={`h-20 flex-col gap-1.5 ${
+                  mode === "remove"
+                    ? "bg-rose-700 text-white hover:bg-rose-800"
+                    : "border-rose-700 text-rose-800 dark:text-rose-300"
+                }`}
+                onClick={() => changeMode("remove")}
+              >
+                <CircleMinus className="size-6" aria-hidden="true" />
+                {m.guidedBrushRemove()}
+              </Button>
+            </div>
+
+            <Typography
+              variant="caption"
+              as="p"
+              className="min-h-10 leading-4 text-muted-foreground"
+              aria-live="polite"
+            >
+              {statusLabel(props.draft, props.runtimeProgress)} ·{" "}
+              {m.editorV2MagicStrokeCount({
+                count: String(props.interaction.snapshot()?.strokeCount ?? 0),
+              })}
+            </Typography>
+
+            <label className="grid max-w-md gap-2 text-sm font-medium">
+              <span>{m.brushSize()}</span>
+              <input
+                type="range"
+                min="2"
+                max="80"
+                value={radius}
+                onChange={(event) => changeRadius(Number(event.currentTarget.value))}
+              />
+            </label>
+
+            {props.candidates.length > 0 ? (
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label={m.editorV2MagicCandidates()}
+              >
+                {props.candidates.map((candidate, index) => (
+                  <Button
+                    key={candidate.candidateId}
+                    variant={
+                      props.draft.selectedCandidateId === candidate.candidateId
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      props.interaction.selectCandidate(candidate.candidateId)
+                    }
+                  >
+                    {m.editorV2MagicCandidate({ number: String(index + 1) })}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-auto flex flex-col gap-2 pt-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => props.interaction.predict()}
+                  disabled={!props.draft.dirty || busy}
+                >
+                  {busy ? m.editorV2MagicWorking() : m.editorV2MagicPredict()}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    props.interaction.undo();
+                    setPaintRevision((value) => value + 1);
+                  }}
+                  disabled={props.interaction.snapshot()?.canUndo !== true}
+                >
+                  {m.editorV2MagicUndo()}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    props.interaction.redo();
+                    setPaintRevision((value) => value + 1);
+                  }}
+                  disabled={props.interaction.snapshot()?.canRedo !== true}
+                >
+                  {m.editorV2MagicRedo()}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button
+                  className="w-full"
+                  onClick={() => props.interaction.apply()}
+                  disabled={props.draft.selectedCandidateId === null || busy}
+                >
+                  {m.cutoutApply()}
+                </Button>
+                <Button
+                  ref={cancelButtonRef}
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    if (props.draft.dirty) setConfirmDiscard(true);
+                    else props.interaction.cancel();
+                  }}
+                >
+                  {m.cancel()}
+                </Button>
+              </div>
+            </div>
+            {confirmDiscard ? (
+              <div
+                ref={discardDialogRef}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="magic-discard-title"
+                aria-describedby="magic-discard-body"
+                className="border-destructive/40 bg-destructive/5 rounded-lg border p-4"
+                onKeyDown={discardDialogKeyDownFx}
+              >
+                <Typography id="magic-discard-title" variant="heading-3" as="h3">
+                  {m.editorDraftGuardTitle()}
+                </Typography>
+                <Typography
+                  id="magic-discard-body"
+                  variant="body-small"
+                  as="p"
+                  className="mt-2"
+                >
+                  {m.editorDraftGuardBody()}
+                </Typography>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    ref={continueButtonRef}
+                    variant="outline"
+                    onClick={() => setConfirmDiscard(false)}
+                  >
+                    {m.editorDraftContinue()}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    style={{
+                      backgroundColor: "var(--destructive)",
+                      color: "var(--destructive-foreground)",
+                    }}
+                    onClick={() => props.interaction.cancel()}
+                  >
+                    {m.editorDraftDiscard()}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </ToolPanelSlot>
+      </div>
+    </>
   );
 }

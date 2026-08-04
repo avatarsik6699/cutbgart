@@ -5,7 +5,7 @@ import {
   type ExportSettings,
 } from "../../../features/download-result";
 import type { EditorToolId } from "../model/editor-tool-registry";
-import type { CanvasInteractionMode } from "./CanvasViewControls";
+import type { CanvasInteractionMode } from "./canvas-view-controls";
 import type { CutoutMode } from "./CutoutToolPanel";
 
 /**

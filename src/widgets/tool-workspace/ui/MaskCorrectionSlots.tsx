@@ -15,7 +15,7 @@ import {
 import { Button } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
 import { BrushSizeStagePreview } from "./BrushSizeStagePreview";
-import type { CanvasInteractionMode } from "./CanvasViewControls";
+import type { CanvasInteractionMode } from "./canvas-view-controls";
 
 export interface MaskCorrectionSlotsProps {
   sourceImage: SourceImage;

@@ -44,6 +44,8 @@ export {
   selectMagicDraft,
   selectCanUndoDocument,
   selectCanRedoDocument,
+  selectHasFutureDocumentHistory,
+  selectHasPastDocumentHistory,
   selectDocumentRevision,
 } from "./document";
 export type { DocumentSnapshotLike } from "./document";

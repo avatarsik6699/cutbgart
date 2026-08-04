@@ -11,6 +11,8 @@ import {
   selectCanUndoDocument,
   selectCanRedoDocument,
   selectDocumentRevision,
+  selectHasFutureDocumentHistory,
+  selectHasPastDocumentHistory,
   selectBackgroundDraft,
   selectEnhancementDraft,
   type DocumentActorRef,
@@ -29,6 +31,8 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
   const revision = useSelector(actor, selectDocumentRevision);
   const backgroundDraft = useSelector(actor, selectBackgroundDraft);
   const enhancementDraft = useSelector(actor, selectEnhancementDraft);
+  const hasPastDocumentHistory = useSelector(actor, selectHasPastDocumentHistory);
+  const hasFutureDocumentHistory = useSelector(actor, selectHasFutureDocumentHistory);
 
   return {
     status,
@@ -43,5 +47,7 @@ export function useDocumentActorSelectors(actor: DocumentActorRef) {
     revision,
     backgroundDraft,
     enhancementDraft,
+    hasPastDocumentHistory,
+    hasFutureDocumentHistory,
   };
 }

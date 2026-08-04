@@ -1,8 +1,8 @@
-import type { CSSProperties } from "react";
-
 import { m } from "@/paraglide/messages";
 import type { BackgroundFillDescriptor } from "@/v2/domain";
 import { Image, Typography } from "@/v2/shared/ui";
+
+import { backgroundFillStyle } from "./background-fill-style";
 
 type Props = {
   fill: BackgroundFillDescriptor;
@@ -12,32 +12,6 @@ type Props = {
   width: number;
 };
 
-function fillStyle(
-  fill: BackgroundFillDescriptor,
-  imageUrl: string | null,
-): CSSProperties {
-  if (fill.type === "transparent") return {};
-  if (fill.type === "color") return { backgroundColor: fill.value };
-  if (fill.type === "image") {
-    return imageUrl === null
-      ? {}
-      : {
-          backgroundImage: `url("${imageUrl.replaceAll('"', '\\"')}")`,
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundSize: "cover",
-        };
-  }
-  const start = fill.stops[0].color;
-  const end = fill.stops[1].color;
-  return {
-    backgroundImage:
-      fill.kind === "linear"
-        ? `linear-gradient(135deg, ${start}, ${end})`
-        : `radial-gradient(circle at 50% 42%, ${start}, ${end})`,
-  };
-}
-
 export function BackgroundPreview(props: Props) {
   return (
     <figure className="grid gap-2">
@@ -46,7 +20,10 @@ export function BackgroundPreview(props: Props) {
         style={{ aspectRatio: `${props.width} / ${props.height}` }}
         aria-label={m.editorV2BackgroundPreview()}
       >
-        <div className="absolute inset-0" style={fillStyle(props.fill, props.imageUrl)} />
+        <div
+          className="absolute inset-0"
+          style={backgroundFillStyle(props.fill, props.imageUrl)}
+        />
         <Image
           src={props.foregroundUrl}
           alt={m.editorV2BackgroundSubjectAlt()}

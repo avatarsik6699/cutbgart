@@ -7,9 +7,10 @@ import {
   createMagicDraftId,
   type MagicCutoutDraft,
 } from "@/v2/domain";
-import type { EditorSession } from "@/v2/runtime-browser";
-
-import { MagicCutoutWorkspace } from "./magic-cutout-workspace";
+import {
+  MagicCutoutWorkspace,
+  type MagicCutoutInteraction,
+} from "./magic-cutout-workspace";
 
 const candidateId = createMagicCandidateId("candidate-1");
 const draft: MagicCutoutDraft = {
@@ -32,22 +33,24 @@ function sessionHarness() {
     select: vi.fn(),
     undo: vi.fn(),
   };
-  const session = {
-    applyMagic: calls.apply,
-    cancelMagic: calls.cancel,
-    magicDraft: () => ({
-      displayStrokes: () => [],
-      snapshot: () => ({ strokeCount: 1, canUndo: true, canRedo: true }),
-    }),
-    magicViewState: () => ({ mode: "keep", radius: 18 }),
-    setMagicViewState: vi.fn(),
-    paintMagicCandidate: vi.fn(),
-    predictMagic: calls.predict,
-    redoMagic: calls.redo,
-    selectMagicCandidate: calls.select,
-    undoMagic: calls.undo,
-  } as unknown as EditorSession;
-  return { calls, session };
+  const interaction = {
+    apply: calls.apply,
+    appendPoint: vi.fn(),
+    beginStroke: vi.fn(() => true),
+    cancel: calls.cancel,
+    cancelStroke: vi.fn(),
+    commitStroke: vi.fn(() => true),
+    displayStrokes: () => [],
+    paintCandidate: vi.fn(),
+    predict: calls.predict,
+    readViewState: () => ({ mode: "keep" as const, radius: 18 }),
+    redo: calls.redo,
+    selectCandidate: calls.select,
+    snapshot: () => ({ strokeCount: 1, canUndo: true, canRedo: true }),
+    undo: calls.undo,
+    writeViewState: vi.fn(),
+  } as unknown as MagicCutoutInteraction;
+  return { calls, interaction };
 }
 
 describe("MagicCutoutWorkspace", () => {
@@ -71,7 +74,7 @@ describe("MagicCutoutWorkspace", () => {
         draft={draft}
         height={10}
         runtimeProgress={null}
-        session={harness.session}
+        interaction={harness.interaction}
         sourceUrl="blob:source"
         width={10}
       />,
@@ -111,7 +114,7 @@ describe("MagicCutoutWorkspace", () => {
         draft={{ ...draft, status: "dirty", selectedCandidateId: null }}
         height={10}
         runtimeProgress={null}
-        session={harness.session}
+        interaction={harness.interaction}
         sourceUrl="blob:source"
         width={10}
       />,

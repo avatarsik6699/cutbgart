@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.37` |
+| Version | `v1.38` |
 | Date | `2026-08-04` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -370,7 +370,46 @@ must be adapted only where the Phase-39 main-page presentation contract changed 
 state entry. Managed-Windows complete-product acceptance remains assigned to the later full-UI
 cutover gate.
 
-### 2.10 Future paid direction
+### 2.10 Active v2 scope — Phase 41
+
+Phase 41 removes the last accepted presentation exception on the separate bilingual noindex v2
+routes by reproducing the established v1 editor-tool workspace over the accepted Phase-34–36
+Manual, Magic, Background, Enhancement, history, artifact, and worker ownership. This is one
+cohesive presentation slice because the v1 stage, toolbar, tool rail, draft guards, history actions,
+and responsive layout are shared by every tool; temporary per-tab shells or duplicated adapters are
+not accepted.
+
+The dependency-complete slice covers:
+
+- the v1 result-editor hierarchy, stage sizing, transparent preview treatment, desktop/narrow tool
+  rail, Cutout/Enhancements/Background navigation, history actions, download placement, focus
+  restoration, dirty-draft guards, and localized status/error presentation;
+- the complete Cutout presentation: Magic Keep/Remove prompting, candidate preview/refinement and
+  explicit Apply/Cancel, plus Manual Restore/Erase, brush sizing, zoom/pan/fit, local draft history,
+  and committed document history without changing the accepted tool semantics;
+- the complete v1 Enhancements and Background panels, including truthful queued/running/no-change/
+  error states, refinement choices, transparent/colour/gradient/custom-image fills, immediate draft
+  preview, explicit Apply/Cancel/retry, and export bound only to the committed document;
+- an immutable bounded `EditorToolWorkspaceProjection` and exhaustive typed
+  `EditorToolWorkspaceIntent` boundary. Shared controller-neutral visual components may be rendered
+  by legacy and v2 adapters, but they may not import legacy hooks, mutable stores, workers, runtime
+  controllers, or become another workflow state owner;
+- deterministic bilingual behavior, accessibility, exact visual comparison, resource lifecycle,
+  and serialized real-model evidence for every tool on approved desktop/narrow viewports, including
+  batch item switching with retained drafts/history and zero sibling mutation or reinference.
+
+The rendered v1 editor-tool workspace is the normative presentation reference. Phase 39/40's
+deferred-tool-UI exception ends in Phase 41; no masked product UI, general pixel tolerance, or
+unexplained layout/copy difference is accepted. Truthful v2-only progress/error detail may differ
+only when the phase records and reviews a dedicated state baseline without changing the surrounding
+v1 hierarchy.
+
+Phase 41 does not migrate `/`, `/en`, or scenario-route bindings; remove legacy behavior; change
+tool algorithms, model families, worker/runtime ownership, persistence, privacy, or export formats;
+add paid/backend behavior; or authorize public cutover. Complete managed-Windows product acceptance
+and route cutover remain separately gated follow-up phases after the isolated full UI is accepted.
+
+### 2.11 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -581,6 +620,38 @@ type BatchMainPageIntent =
   | { type: "cancel-download-all" }
   | { type: "download-all" };
 
+type EditorToolId = "cutout" | "enhance" | "background";
+type CutoutPresentationMode = "magic" | "manual";
+
+type EditorToolWorkspaceProjection = {
+  locale: "ru" | "en";
+  documentId: DocumentId;
+  revision: Revision;
+  activeTool: EditorToolId;
+  cutoutMode: CutoutPresentationMode;
+  canUndoDocument: boolean;
+  canRedoDocument: boolean;
+  dirtyDraft: boolean;
+  busy: boolean;
+  sourcePreviewUrl: string;
+  committedResultUrl: string;
+  width: number;
+  height: number;
+  manualDraft: ManualCutoutDraft | null;
+  magicDraft: MagicCutoutDraft | null;
+  backgroundDraft: BackgroundDraft | null;
+  enhancementDraft: EnhancementDraft | null;
+};
+
+type EditorToolWorkspaceIntent =
+  | { type: "choose-tool"; tool: EditorToolId }
+  | { type: "choose-cutout-mode"; mode: CutoutPresentationMode }
+  | { type: "undo-draft" | "redo-draft" | "undo-document" | "redo-document" }
+  | { type: "predict-magic" | "apply-active-tool" | "cancel-active-tool" |
+      "retry-active-tool" | "download-committed" | "leave-workspace" }
+  | { type: "choose-background"; fill: BackgroundFillDescriptor }
+  | { type: "choose-enhancements"; operationIds: readonly EnhancementOperationId[] };
+
 const WORKSPACE_ITEM_LIMIT = 20;
 const IMPORT_PREPARATION_CONCURRENCY = 2;
 ```
@@ -670,7 +741,7 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
 | `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 migration surface; Phase 39 begins reproducing the established main-page UI over v2 ownership without changing route identity |
+| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 migration surface; Phases 39–41 reproduce the established main-page, batch, and editor-tool UI over v2 ownership without changing route identity |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -884,6 +955,15 @@ runtime values enter presentation or actor snapshots; individual/ZIP export incl
 metadata, unfinished/error items, reinfers, or redundantly re-encodes committed results; route-level
 Phase-37/38 batch evidence remains disabled; resource churn leaks; or public/scenario routes change.
 
+Phase 41 additionally fails if the result-editor stage, toolbar, tool panels, controls, responsive
+layout, focus/keyboard behavior, or reachable tool states visibly drift from v1 without one
+explicitly reviewed truthful-state baseline; shared presentation imports legacy workflow ownership;
+Manual/Magic/Background/Enhancement changes bypass their accepted v2 controllers, correlations,
+draft/history rules, heavy-job coordinator, or artifact lifecycle; a dirty draft is silently lost;
+selection mutates or reinfers a sibling; export includes an uncommitted draft; exact bilingual
+desktop/narrow evidence, serialized real-model evidence, or affected-device review is missing; or
+public/scenario routes change.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -897,12 +977,13 @@ Phase-37/38 batch evidence remains disabled; resource churn leaks; or public/sce
 | 37 | Complete | Batch/multi-document v2 workspace; gate and architect acceptance passed; public routes remain unchanged |
 | 38 | Complete / blocked result | Validation gate passed; visual/product/evidence blockers remain, so no public cutover |
 | 39 | Complete | V1-faithful main-page shell and single-image input/process/export UI over v2; gate and architect acceptance passed |
-| 40 | Approved / active | Restore the v1 batch workspace UI over the accepted v2 workspace runtime on the isolated routes |
-| Later | Unscheduled | Add editor-tool UI slices, migrate scenario/public routes after full acceptance, then remove legacy; paid backend remains separate work |
+| 40 | Complete | V1-faithful batch workspace UI over the accepted v2 workspace runtime; gate and architect acceptance passed |
+| 41 | Approved / active | Restore the complete v1 editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes on isolated routes |
+| Later | Unscheduled | Run complete-product managed-Windows acceptance, migrate scenario/public routes, then remove legacy; paid backend remains separate work |
 
-No v2 capability is accepted merely because legacy code exists. Phase 40 is limited to the batch
-main-page vertical slice above. Editor tools, public migration, legacy removal, and paid work still
-require their own approved phase contracts.
+No v2 capability is accepted merely because legacy code exists. Phase 41 is limited to the complete
+editor-tool presentation slice above. Public migration, legacy removal, and paid work still require
+their own approved phase contracts.
 
 ## 9. Deferred decisions
 

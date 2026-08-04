@@ -1,181 +1,98 @@
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { BeforeAfterUrlSlider } from "@/entities/processed-image";
+import { EditorStage } from "@/shared/ui";
 import type { EnhancementDraft, EnhancementOperationId } from "@/v2/domain";
-import type { EditorSession, EnhancementRuntimeSnapshot } from "@/v2/runtime-browser";
-import { Image, Typography } from "@/v2/shared/ui";
+import type { EnhancementRuntimeSnapshot } from "@/v2/runtime-browser";
+import {
+  createEnhancementOperationRegistry,
+  EnhancementsToolPanel,
+  ToolPanelSlot,
+  type EnhancementPanelOutcome,
+} from "@/widgets/tool-workspace";
+import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-image";
 
 type Props = {
   draft: EnhancementDraft;
   height: number;
   previewUrl: string;
   runtime: EnhancementRuntimeSnapshot;
-  session: EditorSession;
+  sourceUrl: string;
+  interaction: EnhancementInteraction;
   width: number;
 };
 
-function operationLabel(operationId: EnhancementOperationId): string {
-  return operationId === "fine-detail"
-    ? m.editorV2EnhancementsFineDetail()
-    : m.editorV2EnhancementsColourHalo();
-}
-
-function runtimeStatus(props: Props): string {
-  if (props.runtime.status === "queued") return m.editorV2EnhancementsQueued();
-  if (props.runtime.status === "running") {
-    const operation =
-      props.runtime.activeOperationId === null
-        ? m.editorV2EnhancementsRunning()
-        : operationLabel(props.runtime.activeOperationId);
-    return props.runtime.fraction === null
-      ? m.editorV2EnhancementsRunningStage({ stage: operation })
-      : m.editorV2EnhancementsRunningProgress({
-          stage: operation,
-          progress: String(Math.round(props.runtime.fraction * 100)),
-        });
-  }
-  if (props.runtime.status === "applying") return m.editorV2EnhancementsApplying();
-  if (props.runtime.status === "no-change") return m.editorV2EnhancementsNoChange();
-  if (props.runtime.status === "error") return m.editorV2EnhancementsError();
-  return props.draft.selectedOperationIds.length === 0
-    ? m.editorV2EnhancementsEmpty()
-    : m.editorV2EnhancementsReady();
-}
+export type EnhancementInteraction = Readonly<{
+  apply(): void;
+  cancel(): void;
+  change(operationIds: readonly EnhancementOperationId[]): void;
+  retry(): void;
+}>;
 
 export function EnhancementWorkspace(props: Props) {
-  const workspaceRef = useRef<HTMLElement>(null);
   const busy = ["queued", "running", "applying"].includes(props.runtime.status);
+  const registry = useMemo(() => createEnhancementOperationRegistry(), []);
+  const outcome: EnhancementPanelOutcome =
+    props.runtime.status === "no-change" ? "unchanged" : null;
+  let panelStatus: "applying" | "error" | "idle" = "idle";
+  if (props.runtime.status === "error") panelStatus = "error";
+  else if (busy) panelStatus = "applying";
 
   function toggleOperation(operationId: EnhancementOperationId): void {
     const selected = new Set(props.draft.selectedOperationIds);
     if (selected.has(operationId)) selected.delete(operationId);
     else selected.add(operationId);
-    props.session.changeEnhancements([...selected]);
+    props.interaction.change([...selected]);
   }
 
-  useEffect(function focusEnhancementWorkspaceFx() {
-    workspaceRef.current?.focus();
-  }, []);
-
   return (
-    <section
-      ref={workspaceRef}
-      tabIndex={-1}
-      className="border-border bg-card/60 grid gap-4 rounded-xl border p-4 sm:p-5"
-      aria-label={m.editorV2EnhancementsTitle()}
-    >
-      <div>
-        <Typography variant="heading-2" as="h2">
-          {m.editorV2EnhancementsTitle()}
-        </Typography>
-        <Typography variant="caption" as="p" className="text-muted-foreground mt-1">
-          {m.editorV2EnhancementsHint()}
-        </Typography>
-      </div>
-
-      <div
-        className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] relative mx-auto w-full max-w-5xl overflow-hidden rounded-lg border"
-        style={{ aspectRatio: `${props.width} / ${props.height}` }}
-      >
-        <Image
-          src={props.previewUrl}
-          alt={m.editorV2ResultAlt()}
-          preset="preview"
-          width={props.width}
-          height={props.height}
-          className="absolute inset-0 size-full object-contain"
-        />
-      </div>
-
-      <fieldset className="grid gap-3" disabled={busy}>
-        <legend>
-          <Typography variant="label" as="span">
-            {m.editorV2EnhancementsOperations()}
-          </Typography>
-        </legend>
-        <label className="border-border bg-background grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 rounded-lg border p-3">
-          <input
-            type="checkbox"
-            className="accent-primary mt-1 size-4"
-            checked={props.draft.selectedOperationIds.includes("fine-detail")}
-            onChange={() => toggleOperation("fine-detail")}
+    <>
+      <div className="[grid-area:surface]">
+        <EditorStage documentId={props.draft.documentId}>
+          <BeforeAfterUrlSlider
+            afterUrl={props.previewUrl}
+            beforeUrl={props.sourceUrl}
+            width={props.width}
+            height={props.height}
+            renderImage={(image) => (
+              <WorkspaceComparisonImage
+                image={image}
+                width={props.width}
+                height={props.height}
+              />
+            )}
           />
-          <span>
-            <Typography variant="body-small" as="span">
-              {m.editorV2EnhancementsFineDetail()}
-            </Typography>
-            <Typography
-              variant="caption"
-              as="span"
-              className="text-muted-foreground mt-1 block"
-            >
-              {m.editorV2EnhancementsFineDetailHelp()}
-            </Typography>
-          </span>
-        </label>
-        <label className="border-border bg-background grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 rounded-lg border p-3">
-          <input
-            type="checkbox"
-            className="accent-primary mt-1 size-4"
-            checked={props.draft.selectedOperationIds.includes("colour-halo")}
-            onChange={() => toggleOperation("colour-halo")}
-          />
-          <span>
-            <Typography variant="body-small" as="span">
-              {m.editorV2EnhancementsColourHalo()}
-            </Typography>
-            <Typography
-              variant="caption"
-              as="span"
-              className="text-muted-foreground mt-1 block"
-            >
-              {m.editorV2EnhancementsColourHaloHelp()}
-            </Typography>
-          </span>
-        </label>
-      </fieldset>
-
-      {props.runtime.fraction !== null ? (
-        <div className="bg-muted h-1.5 overflow-hidden rounded-full" aria-hidden="true">
-          <div
-            className="bg-primary h-full transition-[width] duration-200"
-            style={{ width: `${Math.round(props.runtime.fraction * 100)}%` }}
-          />
-        </div>
-      ) : null}
-      <Typography
-        variant="body-small"
-        as="p"
-        role={props.runtime.status === "error" ? "alert" : "status"}
-        aria-live="polite"
-        className={
-          props.runtime.status === "error" ? "text-destructive" : "text-muted-foreground"
-        }
-      >
-        {runtimeStatus(props)}
-      </Typography>
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" onClick={() => props.session.cancelEnhancements()}>
-          {m.editorV2Cancel()}
-        </Button>
-        {props.runtime.status === "error" || props.runtime.status === "no-change" ? (
-          <Button
-            variant="outline"
-            onClick={() => props.session.retryEnhancements()}
-            disabled={props.draft.selectedOperationIds.length === 0}
-          >
-            {m.editorV2Retry()}
-          </Button>
-        ) : null}
-        <Button
-          onClick={() => props.session.applyEnhancements()}
-          disabled={busy || props.draft.selectedOperationIds.length === 0}
-        >
-          {m.editorV2Apply()}
-        </Button>
+        </EditorStage>
       </div>
-    </section>
+      <div className="[grid-area:rail]">
+        <ToolPanelSlot toolId="enhance" label={m.editorV2EnhancementsTitle()} autoFocus>
+          <EnhancementsToolPanel
+            registry={registry}
+            draft={{
+              selectedOperationIds: props.draft.selectedOperationIds,
+              improveDetail: props.draft.selectedOperationIds.includes("fine-detail"),
+              removeColourHalo: props.draft.selectedOperationIds.includes("colour-halo"),
+              dirty: props.draft.dirty,
+              status: panelStatus,
+            }}
+            progress={
+              props.runtime.fraction === null
+                ? null
+                : Math.round(props.runtime.fraction * 100)
+            }
+            activeOperationId={props.runtime.activeOperationId}
+            outcome={outcome}
+            errorCode={props.runtime.status === "error" ? "failed" : null}
+            cancelVisible
+            retryVisible={props.runtime.status === "no-change"}
+            onOperationChange={(operationId) => toggleOperation(operationId)}
+            onApply={() => props.interaction.apply()}
+            onCancel={() => props.interaction.cancel()}
+            onRetry={() => props.interaction.retry()}
+          />
+        </ToolPanelSlot>
+      </div>
+    </>
   );
 }

@@ -125,7 +125,7 @@ async function expectV2SliceScreenshot(
   page: Page,
   prefix: string,
   state: string,
-  acceptedDifference: "single-image-copy" | "deferred-tool-ui" | null = null,
+  acceptedDifference: "single-image-copy" | "editor-tools" | null = null,
 ): Promise<void> {
   const suffix = acceptedDifference ? `v2-${acceptedDifference}-${state}` : state;
   await expectReferenceScreenshot(page, `${prefix}-${suffix}.png`);
@@ -267,14 +267,14 @@ test.describe("Phase 39 v2 main-page parity", () => {
         await expectV2SliceScreenshot(page, prefix, "processing");
 
         await completeMockEditorV2Run(page);
-        await expect(page.getByTestId("before-after-frame")).toBeVisible();
-        await expectV2SliceScreenshot(page, prefix, "single-result", "deferred-tool-ui");
+        await expect(page.getByTestId("editor-tool-workspace")).toBeVisible();
+        await expectV2SliceScreenshot(page, prefix, "single-result", "editor-tools");
 
         await page
           .getByRole("button", { name: locale.outputOptions, exact: true })
           .click();
         await expect(page.getByRole("menuitemradio")).toHaveCount(3);
-        await expectV2SliceScreenshot(page, prefix, "export-size", "deferred-tool-ui");
+        await expectV2SliceScreenshot(page, prefix, "export-size", "editor-tools");
         await page.getByRole("menuitemradio", { name: "2048 px" }).click();
         const resizedDownload = page.waitForEvent("download");
         await page
@@ -338,7 +338,7 @@ test.describe("Phase 39 v2 main-page parity", () => {
     await page.getByRole("button", { name: "Try again", exact: true }).click();
     await expect.poll(() => mockEditorV2RunCount(page)).toBe(2);
     await completeMockEditorV2Run(page);
-    await expect(page.getByTestId("before-after-frame")).toBeVisible();
+    await expect(page.getByTestId("editor-tool-workspace")).toBeVisible();
     await page.getByRole("button", { name: "Back to upload", exact: true }).click();
     await expect(page.getByLabel("Upload an image")).toBeVisible();
 

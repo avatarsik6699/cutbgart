@@ -34,6 +34,8 @@ export {
   selectMagicCandidates,
   selectCanUndoDocument,
   selectCanRedoDocument,
+  selectHasFutureDocumentHistory,
+  selectHasPastDocumentHistory,
   selectDocumentRevision,
 } from "./document-selectors";
 export type { BackgroundCommitInput, BackgroundCommitter } from "./background-committer";

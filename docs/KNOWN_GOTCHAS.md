@@ -23,6 +23,28 @@
 
 ## Gotcha Log
 
+### Phase-specific Playwright must run through the repository E2E wrapper
+
+- **Symptoms**: every test times out in `page.goto()` with `net::ERR_ABORTED`, while nothing is
+  listening on port 3000; the failure looks like a route or hydration regression.
+- **Root cause**: `pnpm exec playwright test ...` does not start this repository's managed Vite
+  server. Server ownership lives in `scripts/run-e2e.ts`.
+- **Fix**: run `pnpm e2e <spec> --project=chromium`; use the phase-specific package script for a
+  real-model spec.
+- **Prevention**: phase docs may describe the underlying Playwright selection, but local execution
+  must use the repository wrapper unless an already verified server is intentionally supplied.
+
+### A default-open actor command must be idempotent under React StrictMode
+
+- **Symptoms**: entering a result workspace in development throws that a draft is already active,
+  even though the same flow works in a production-like single mount.
+- **Root cause**: StrictMode replays effect setup. An unconditional default-tool command therefore
+  dispatches `BEGIN_*` twice before React observes the first transition.
+- **Fix**: guard the command with a ref keyed to the document/request identity and verify the actor
+  still has no active draft before sending it.
+- **Prevention**: render default-open workspace integration tests under `StrictMode` and assert one
+  begin command per document identity.
+
 ### Do not pass an optional-argument viewport command directly to a React click prop
 
 - **Symptoms**: the zoom percentage changes, but the canvas stops moving or receives `NaN`

@@ -14,6 +14,7 @@ type LocaleLabels = Readonly<{
   manualRegion: string;
   manualCanvas: string;
   magic: string;
+  magicRegion: string;
   magicCanvas: string;
   cancel: string;
   continueEditing: string;
@@ -29,10 +30,11 @@ const locales: readonly LocaleLabels[] = [
   {
     route: "/en/editor-v2",
     choose: "Upload an image",
-    manual: "Manual cutout",
+    manual: "Manual",
     manualRegion: "Manual cutout workspace",
     manualCanvas: "Manual cutout canvas",
-    magic: "Magic Cutout",
+    magic: "Magic",
+    magicRegion: "Magic Cutout",
     magicCanvas: "Paint Keep and Remove guidance on the image",
     cancel: "Cancel",
     continueEditing: "Continue editing",
@@ -46,12 +48,13 @@ const locales: readonly LocaleLabels[] = [
   {
     route: "/editor-v2",
     choose: "Загрузить изображения",
-    manual: "Ручная коррекция",
+    manual: "Вручную",
     manualRegion: "Ручное редактирование выреза",
     manualCanvas: "Холст ручной коррекции",
-    magic: "Магическое вырезание",
+    magic: "Магия",
+    magicRegion: "Магическое вырезание",
     magicCanvas: "Нарисуйте подсказки «Сохранить» и «Удалить» на изображении",
-    cancel: "Отменить",
+    cancel: "Отмена",
     continueEditing: "Продолжить редактирование",
     discard: "Отбросить черновик",
     background: "Фон",
@@ -103,7 +106,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await expect(page.getByTestId("batch-overview").locator("article")).toHaveCount(2);
     await expectAccessible(page);
 
-    const manualLauncher = page.getByRole("button", { name: labels.manual });
+    const manualLauncher = page.getByRole("tab", { name: labels.manual });
     await manualLauncher.click();
     await expect(page.getByRole("region", { name: labels.manualRegion })).toBeFocused();
     await page
@@ -111,11 +114,11 @@ test("both locales pass the accessibility and responsive material-state matrix",
       .click({ position: { x: 1, y: 1 } });
     await expectAccessible(page);
     await page.getByRole("button", { name: labels.cancel, exact: true }).click();
-    await expect(manualLauncher).toBeFocused();
+    await expect(page.getByRole("region", { name: labels.magicRegion })).toBeFocused();
 
-    const magicLauncher = page.getByRole("button", { name: labels.magic });
+    const magicLauncher = page.getByRole("tab", { name: labels.magic });
     await magicLauncher.click();
-    await expect(page.getByRole("region", { name: labels.magic })).toBeFocused();
+    await expect(magicLauncher).toBeFocused();
     await page.getByLabel(labels.magicCanvas).click({ position: { x: 1, y: 1 } });
     await page.getByRole("button", { name: labels.cancel, exact: true }).click();
     const discardDialog = page.getByRole("alertdialog");
@@ -128,7 +131,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await expect(discardDialog).toBeHidden();
     await page.getByRole("button", { name: labels.cancel, exact: true }).click();
     await page.getByRole("button", { name: labels.discard }).click();
-    await expect(magicLauncher).toBeFocused();
+    await expect(page.getByRole("region", { name: labels.magicRegion })).toBeFocused();
 
     await page.getByRole("button", { name: labels.background, exact: true }).click();
     await page.getByRole("button", { name: labels.ocean }).click();
@@ -191,13 +194,13 @@ test("one full cutover-readiness journey keeps all documents and resources isola
 
   const second = strip.locator("article").nth(1);
   await second.getByRole("button", { name: /Select / }).click();
-  await page.getByRole("button", { name: "Manual cutout" }).click();
+  await page.getByRole("tab", { name: "Manual" }).click();
   await page
     .getByRole("img", { name: "Manual cutout canvas" })
     .click({ position: { x: 1, y: 1 } });
   await page.getByRole("button", { name: "Apply", exact: true }).click();
 
-  await page.getByRole("button", { name: "Magic Cutout" }).click();
+  await page.getByRole("tab", { name: "Magic" }).click();
   await page
     .getByLabel("Paint Keep and Remove guidance on the image")
     .click({ position: { x: 1, y: 1 } });
@@ -212,9 +215,9 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await editorV2.scenario.completeEnhancement();
-  await expect(page.getByText(/Enhancements did not finish/)).toBeVisible();
+  await expect(page.getByText(/Enhancements could not be completed/)).toBeVisible();
   await editorV2.scenario.setEnhancementOutcome("changed");
-  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
   await editorV2.scenario.completeEnhancement();
   await editorV2.scenario.completeEnhancement();
   await page.keyboard.press("Control+z");

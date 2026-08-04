@@ -5,7 +5,7 @@ import {
   createEnhancementDraft,
   createEnhancementOperationRegistry,
 } from "../model/enhancement-operation-registry";
-import { EnhancementsToolPanel } from "./EnhancementsToolPanel";
+import { EnhancementsToolPanel } from "./enhancements-tool-panel";
 
 afterEach(cleanup);
 
