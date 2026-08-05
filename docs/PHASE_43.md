@@ -263,5 +263,5 @@ feat(phase-43): cut over public routes and remove legacy
 - [x] All architect review notes resolved
 - [x] `docs/STATE.md` updated — run `/context-update 43`
 - [x] Committed atomically on `feat/phase-43` branch
-- [ ] Tag created after merge: `git tag -a v0.43.0 -m "Phase 43: final public v2 cutover and legacy removal"`
+- [x] Tag created after merge: `git tag -a v0.43.0 -m "Phase 43: final public v2 cutover and legacy removal"`
 - [ ] Production deploy performed separately by an authorized operator
