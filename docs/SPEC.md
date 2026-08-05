@@ -1105,7 +1105,7 @@ phase and is not authorized by a partial or waived gate.
 | 40 | Complete | V1-faithful batch workspace UI over the accepted v2 workspace runtime; gate and architect acceptance passed |
 | 41 | Complete | V1-faithful editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes; gate and architect acceptance passed |
 | 42 | Complete / blocked result | Regression closure and complete-product evidence finished; one gate timing failure was explicitly waived, unsupported duration signals remain, and no public cutover is authorized |
-| 43 | Approved / pending | Final pre-production phase: close public-path readiness evidence, switch public/scenario routes to v2, remove legacy, and prove release/rollback readiness; no production deploy |
+| 43 | Complete / gate passed | Final pre-production phase: public/scenario routes use v2, legacy is removed, and release/rollback readiness is proven; no production deploy |
 | Later | Unscheduled | Production deployment is an explicit operator action after Phase 43 merge/gate; post-deploy observation and paid backend work remain separately scoped |
 
 No v2 capability is accepted merely because legacy code exists. Phase 43 is the approved final
