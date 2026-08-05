@@ -50,7 +50,7 @@ test("editor v2 real boundary: one model run, preview, and export", async ({
   const upload = uploadComponent(page);
   const preview = previewComponent(page);
   const exportPng = exportComponent(page);
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await upload.choose(phase33ImageCorpus.smoke.path);
   await expect(preview.image).toBeVisible({ timeout: 5 * 60_000 });

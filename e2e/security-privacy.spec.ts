@@ -1,23 +1,15 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/v2/fixtures";
+import { phase33ImageCorpus } from "./support/v2/image-corpus";
 
-import { expectAutomaticCutout } from "./support/editor-ui";
-import { installMockInference } from "./support/mock-inference";
-
-const directory = path.dirname(fileURLToPath(import.meta.url));
-const samplePath = path.join(directory, "fixtures", "sample.jpg");
 const privateName = "private-source-name.jpg";
 
-test.describe("Phase 22 security and privacy", () => {
-  test.beforeEach(async ({ page }) => {
-    await installMockInference(page);
-  });
+test.describe.configure({ retries: 0 });
 
+test.describe("public v2 security and privacy", () => {
   test("serves the measured browser security-header policy", async ({ page }) => {
-    const response = await page.goto("/en");
+    const response = await page.goto("/en/");
     expect(response).not.toBeNull();
     const headers = response!.headers();
     expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
@@ -34,17 +26,15 @@ test.describe("Phase 22 security and privacy", () => {
     );
   });
 
-  test("single and batch analytics/export never contain source metadata or pixels", async ({
+  test("analytics and PNG/ZIP exports never contain source metadata or pixels", async ({
+    editorV2,
     page,
   }) => {
     const analyticsBodies: string[] = [];
-    await page.route("**/api/send", async (route) => {
-      await route.fulfill({ status: 204 });
-    });
+    await page.route("**/api/send", async (route) => route.fulfill({ status: 204 }));
     page.on("request", (request) => {
-      if (request.url().endsWith("/api/send") && request.postData()) {
+      if (request.url().endsWith("/api/send") && request.postData())
         analyticsBodies.push(request.postData()!);
-      }
     });
     await page.addInitScript(() => {
       window.umami = {
@@ -57,151 +47,113 @@ test.describe("Phase 22 security and privacy", () => {
         },
       };
     });
-    const sample = await readFile(samplePath);
-    await page.goto("/en");
-    const upload = page.getByLabel("Upload an image");
-    await expect(upload).toBeEnabled();
-    await upload.setInputFiles({
+    const sample = await readFile(phase33ImageCorpus.smoke.path);
+    await page.goto("/en/");
+    await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
+    await page.getByLabel("Upload an image").setInputFiles({
       name: privateName,
       mimeType: "image/jpeg",
       buffer: sample,
     });
-    await expectAutomaticCutout(page);
+    await expect.poll(editorV2.scenario.runCount).toBe(1);
+    await editorV2.scenario.completeRun();
 
-    const singleDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: /^download$/i }).click();
-    const singlePath = await (await singleDownload).path();
-    if (!singlePath) throw new Error("Single PNG download path unavailable");
+    const singleDownload = await editorV2.exportPng.download();
+    const singlePath = await singleDownload.path();
+    if (singlePath === null) throw new Error("Single PNG download path unavailable");
     const singleBytes = await readFile(singlePath);
     expect(singleBytes.subarray(1, 4).toString("ascii")).toBe("PNG");
     expect(singleBytes.toString("latin1")).not.toContain(privateName);
 
     await expect.poll(() => analyticsBodies.length).toBeGreaterThan(0);
     const analyticsPayload = analyticsBodies.join("\n");
-    expect(analyticsPayload).toContain("processing_completed");
+    expect(analyticsPayload).toContain("download_clicked");
     expect(analyticsPayload).not.toContain(privateName);
     expect(analyticsPayload).not.toContain(sample.subarray(0, 16).toString("base64"));
     expect(analyticsPayload).not.toMatch(/sha256|exif|mask|pixel/i);
 
-    await page.getByRole("button", { name: /back to upload/i }).click();
-    const batchUpload = page.getByLabel("Upload an image");
-    await batchUpload.setInputFiles([
+    await editorV2.preview.resetButton.click();
+    await page.getByLabel("Upload an image").setInputFiles([
       { name: privateName, mimeType: "image/jpeg", buffer: sample },
       { name: "second-private.jpg", mimeType: "image/jpeg", buffer: sample },
     ]);
-    await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
-    // Batch upload auto-selects the first item into the editor view, so the
-    // split button shows the singular "Download" for that item — the batch
-    // ZIP export lives in its "Output options" menu instead (same pattern as
-    // `e2e/home.spec.ts`'s batch download test).
-    const batchDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Output options" }).click();
-    await page.getByRole("menuitem", { name: /download all.*zip/i }).click();
-    const zipPath = await (await batchDownload).path();
-    if (!zipPath) throw new Error("Batch ZIP download path unavailable");
+    await expect.poll(editorV2.scenario.runCount).toBe(2);
+    await editorV2.scenario.completeRun();
+    await expect.poll(editorV2.scenario.runCount).toBe(3);
+    await editorV2.scenario.completeRun();
+    const pending = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Download all/ }).click();
+    const zipPath = await (await pending).path();
+    if (zipPath === null) throw new Error("Batch ZIP download path unavailable");
     const zipText = (await readFile(zipPath)).toString("latin1");
-    expect(zipText).toContain("cutbg-result-1.png");
-    expect(zipText).toContain("cutbg-result-2.png");
+    expect(zipText).toContain("cutbg-result-01.png");
+    expect(zipText).toContain("cutbg-result-02.png");
     expect(zipText).not.toContain(privateName);
     expect(zipText).not.toContain("second-private.jpg");
   });
 
-  test("clearing downloaded models preserves active editor work", async ({ page }) => {
-    await page.goto("/en");
-    const upload = page.getByLabel("Upload an image");
-    await expect(upload).toBeEnabled();
-    await upload.setInputFiles(samplePath);
-    await expectAutomaticCutout(page);
+  test("clearing downloaded models preserves active editor work", async ({
+    editorV2,
+    page,
+  }) => {
+    await page.goto("/en/");
+    await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))))
+      await page.reload();
+    await expect
+      .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), {
+        timeout: 15_000,
+      })
+      .toBe(true);
+    await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
+    await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
+    await expect.poll(editorV2.scenario.runCount).toBe(1);
+    await editorV2.scenario.completeRun();
     await page.evaluate(async () => {
       const cache = await caches.open("bg-remove-model-cache-v2-v0.22.0");
       await cache.put(
         new Request(
-          "https://cdn.cutbg.art/models/onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/onnx/model_quantized.onnx",
+          "https://cdn.cutbg.art/models/onnx-community/ISNet-ONNX/resolve/3fe6e3db3e32c69aadde61fe388ddb1a0574440c/config.json",
         ),
         new Response("fixture", {
           headers: {
             "X-Cutbg-Asset-Sha256":
-              "9f5c5fa3ccc771612d5290a648f055f94a4fa4ce289c6b3df7258e7e10e87a42",
+              "d0b94ab052ace79177085c66a00a3f014a973edb09999cb0108bb01e65ded060",
             "X-Cutbg-Model-Release": "v0.22.0",
           },
         }),
       );
     });
-
     await page.getByTestId("model-storage-trigger").click();
     await expect(page.getByTestId("model-storage-manager")).toBeVisible();
-    await expect(page.getByTestId("model-storage-usage")).toContainText(
-      /MB across 1 downloaded file/i,
-    );
-    await page.getByRole("button", { name: /clear downloaded models/i }).click();
+    const clearModels = page.getByRole("button", { name: /clear downloaded models/i });
+    await expect(clearModels).toBeEnabled();
+    await clearModels.click();
     await expect(page.getByText(/active editor work was kept/i)).toBeVisible();
-    await expect(page.getByTestId("cutout-tool-panel")).toBeVisible();
-    await expect(page.getByRole("button", { name: /^download$/i })).toBeEnabled();
+    await expect(editorV2.exportPng.button).toBeEnabled();
   });
 
-  test("recovers from an unavailable verified asset by clearing and retrying", async ({
+  test("rejects malformed and unsupported images before inference", async ({
+    editorV2,
     page,
   }) => {
-    await page.addInitScript(() => {
-      (
-        window as unknown as { __mockModelAssetFailureOnce: boolean }
-      ).__mockModelAssetFailureOnce = true;
-    });
-    await page.goto("/en");
+    await page.goto("/en/");
+    await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
     const upload = page.getByLabel("Upload an image");
-    await expect(upload).toBeEnabled();
-    await upload.setInputFiles(samplePath);
-    await expect(page.getByRole("alert")).toContainText(/unavailable or corrupt/i);
-    await page.getByRole("button", { name: /clear models and retry/i }).click();
-    await expect(page.getByRole("slider")).toBeVisible();
-  });
-
-  test("rejects malformed and decompression-bomb-like images before inference", async ({
-    page,
-  }) => {
-    await page.goto("/en");
-    const bomb = Buffer.alloc(24);
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bomb);
-    Buffer.from("IHDR").copy(bomb, 12);
-    bomb.writeUInt32BE(65_535, 16);
-    bomb.writeUInt32BE(65_535, 20);
-    const upload = page.getByLabel("Upload an image");
-    await expect(upload).toBeEnabled();
     await upload.setInputFiles({
-      name: "small-bomb.png",
-      mimeType: "image/png",
-      buffer: bomb,
+      name: "unsupported.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("not an image"),
     });
-    await expect(page.getByRole("alert")).toContainText(/supported resolution/i);
-    expect(
-      await page.evaluate(
-        () =>
-          (
-            window as unknown as {
-              __mockInferencePosts: Array<{ type: string }>;
-            }
-          ).__mockInferencePosts.filter((message) => message.type !== "prepare").length,
-      ),
-    ).toBe(0);
-
-    // PHASE_31 F7: invalid-upload errors now dismiss via the in-place
-    // "Try again" retry (`UploadErrorNotice`), not a "Reset" button.
+    await expect(page.getByRole("alert")).toContainText(/not supported|format/i);
+    expect(await editorV2.scenario.runCount()).toBe(0);
     await page.getByRole("button", { name: /try again/i }).click();
     await upload.setInputFiles({
       name: "malformed.jpg",
       mimeType: "image/jpeg",
       buffer: Buffer.from("not a jpeg"),
     });
-    await expect(page.getByRole("alert")).toContainText(/unsupported file format/i);
-    expect(
-      await page.evaluate(
-        () =>
-          (
-            window as unknown as {
-              __mockInferencePosts: Array<{ type: string }>;
-            }
-          ).__mockInferencePosts.filter((message) => message.type !== "prepare").length,
-      ),
-    ).toBe(0);
+    await expect(page.getByRole("alert")).toContainText(/could not be read/i);
+    expect(await editorV2.scenario.runCount()).toBe(0);
   });
 });

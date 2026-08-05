@@ -52,7 +52,7 @@ test("real SlimSAM supports warm re-prediction and one explicit Magic Apply", as
 
   const upload = uploadComponent(page);
   const preview = previewComponent(page);
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await upload.choose(phase33ImageCorpus.smoke.path);
   await expect(preview.image).toBeVisible({ timeout: 5 * 60_000 });

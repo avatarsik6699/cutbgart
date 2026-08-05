@@ -50,7 +50,7 @@ test("cold and warm real-model documents complete the accepted full workflow", a
     };
   });
 
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await page
     .getByLabel("Choose an image")

@@ -64,8 +64,8 @@ async function warmBrowserLocales(verify: boolean): Promise<void> {
     for (const [path, locale, readySelector] of [
       ["/en/", "en", '[data-slot="site-header"][data-hydrated="true"]'],
       ["/", "ru", '[data-slot="site-header"][data-hydrated="true"]'],
-      ["/en/editor-v2", "en", 'main[data-hydrated="true"]'],
-      ["/editor-v2", "ru", 'main[data-hydrated="true"]'],
+      ["/en/", "en", 'main[data-hydrated="true"]'],
+      ["/", "ru", 'main[data-hydrated="true"]'],
     ] as const) {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {

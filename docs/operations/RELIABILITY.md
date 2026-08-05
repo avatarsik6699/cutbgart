@@ -95,6 +95,11 @@ digest switch, forced failure/automatic rollback, idempotency and lock exercise 
 external hostname and a production-parity restore remain explicit operator checks at
 `/phase-gate 23`; local evidence is not presented as production SLO compliance.
 
+Phase 43 keeps rollback release-based after the public cutover: the candidate contains no dormant
+legacy editor or dual-runtime switch. On 2026-08-05 the disposable Docker exercise passed the full
+candidate-to-previous-to-candidate sequence, including identity, health, forced failure, automatic
+rollback, idempotency, and lock behavior. This is pre-production recovery evidence only.
+
 Implementation evidence on 2026-07-24: `pnpm release:test` completed all six release/recovery tests
 in 1.17 seconds; the default capacity exercise completed 20 concurrent SSR probes with zero
 failures and 1,498 ms p95 plus four concurrent CDN range probes with zero failures; the Chromium

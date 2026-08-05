@@ -13,11 +13,7 @@ import { Button, EditorStage } from "@/shared/ui";
 import type { MagicCutoutDraft, MagicCutoutMode } from "@/v2/domain";
 import type { MagicRuntimeProgress } from "@/v2/runtime-browser";
 import { Image, Typography } from "@/v2/shared/ui";
-import {
-  CanvasViewControls,
-  ToolPanelSlot,
-  type CanvasInteractionMode,
-} from "@/widgets/tool-workspace";
+import { CanvasViewControls, ToolPanelSlot, type CanvasInteractionMode } from "../shared";
 import {
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CutoutStagePanController,

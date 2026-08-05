@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "phase-43.readiness.v1",
+  "generatedAt": "2026-08-05T18:30:00.000Z",
+  "conclusion": "ready",
+  "requirements": [
+    { "id": "ACCEPT-01", "status": "passed", "evidenceIds": ["H-cutover", "H-duration"] },
+    { "id": "A11Y-01", "status": "passed", "evidenceIds": ["A-public", "W-current", "W-transfer"] },
+    { "id": "CUTOVER-01", "status": "passed", "evidenceIds": ["A-public", "A-build"] },
+    { "id": "LEGACY-01", "status": "passed", "evidenceIds": ["A-build", "A-graph"] },
+    { "id": "PERF-01", "status": "accepted-disposition", "evidenceIds": ["A-complete", "R-public", "W-transfer", "H-duration"] },
+    { "id": "PRIV-01", "status": "passed", "evidenceIds": ["A-security", "R-public"] },
+    { "id": "PUBLIC-01", "status": "passed", "evidenceIds": ["A-complete", "A-public"] },
+    { "id": "REAL-01", "status": "passed", "evidenceIds": ["R-public"] },
+    { "id": "RELEASE-01", "status": "passed", "evidenceIds": ["A-release", "A-supply"] },
+    { "id": "RES-01", "status": "passed", "evidenceIds": ["A-complete", "R-public", "W-current", "W-transfer"] },
+    { "id": "ROLLBACK-01", "status": "passed", "evidenceIds": ["D-rollback"] },
+    { "id": "ROUTES-01", "status": "passed", "evidenceIds": ["A-public", "A-build"] },
+    { "id": "SEO-01", "status": "passed", "evidenceIds": ["A-public", "A-build"] },
+    { "id": "WINDOWS-01", "status": "passed", "evidenceIds": ["W-current", "W-transfer", "H-cutover"] }
+  ],
+  "evidence": [
+    { "id": "A-build", "kind": "automated", "status": "passed", "summary": "Production build and generated routes contain the public editor, v2 workers, locale redirects, and no removed workflow entry or chunk." },
+    { "id": "A-complete", "kind": "automated", "status": "passed", "summary": "Full Vitest completed 130 files and 438 tests; deterministic Playwright completed 29 tests with 26 passing and three intentional model-lab skips." },
+    { "id": "A-graph", "kind": "automated", "status": "passed", "summary": "Architecture lint and Fallow new-only audit report zero unresolved imports, cycles, boundary violations, introduced dead code, complexity, or duplication." },
+    { "id": "A-public", "kind": "automated", "status": "passed", "summary": "Zero-retry bilingual public-route coverage verifies roots, eight scenario routes, worker boundary, locale redirects, removed development route, SSR, keyboard behavior, tools, recovery, exports, and cleanup." },
+    { "id": "A-release", "kind": "automated", "status": "passed", "summary": "Release unit tests completed six checks and the disposable container release exercise passed candidate, deploy, forced failure, automatic rollback, return, idempotency, and lock behavior." },
+    { "id": "A-security", "kind": "automated", "status": "passed", "summary": "Public v2 privacy/security coverage verifies response policy, analytics payload bounds, PNG and ZIP export, model-cache clearing, invalid input recovery, and browser-local image handling." },
+    { "id": "A-supply", "kind": "automated", "status": "passed", "summary": "Production dependency audit found no high-severity vulnerability, license policy passed, and pinned model assets v0.22.0 passed integrity validation." },
+    { "id": "D-rollback", "kind": "rollback", "status": "passed", "summary": "Disposable container-parity rehearsal selected the previous immutable image and identity, passed health and route smoke, then restored the Phase-43 candidate; no dormant legacy runtime or cutover flag is used." },
+    { "id": "H-cutover", "kind": "architect", "status": "accepted", "summary": "The architect authorized the unconditional public switch, removal of legacy v1 elements, and Phase 43 as the final pre-production phase." },
+    { "id": "H-duration", "kind": "architect", "status": "accepted", "summary": "The architect explicitly closed Phase 42 without repairing unsupported absolute cold, warm, and full-workflow duration fields. Phase 43 preserves the observed no-freeze, no-missed-action, bounded-work and cleanup limits without inventing absolute values." },
+    { "id": "R-public", "kind": "real-model", "status": "passed", "summary": "The serialized public English route completed cold and warm two-document processing plus Magic, Manual, Background, Enhancements, history, downloads, invalid-input recovery, and zero residual ownership using the real model/CDN boundary." },
+    { "id": "W-current", "kind": "target-device", "status": "passed", "summary": "Current Phase-43 production build on managed Windows Chrome/Win32 completed the public real-model result journey, keyboard traversal, responsive 520 CSS-pixel layout, toolbar overflow navigation, Russian hydration, and cleanup with zero artifacts, leases, or object URLs." },
+    { "id": "W-transfer", "kind": "target-device", "status": "passed", "summary": "Same-day Phase-42 managed-Windows evidence for the accepted presentation recorded actual 200 percent browser zoom reflow, complete tool journeys, zero long tasks after the Magic worker move, maximum 144 ms Event Timing, zero missed actions, and three cleanup cycles. Phase 43 moved this presentation without behavioral changes and rechecked the current public build at the resulting narrow width." }
+  ],
+  "blockerIds": [],
+  "missingEvidenceIds": [],
+  "reachableLegacyEntries": [],
+  "seriousAccessibilityFindingIds": [],
+  "evidenceKinds": ["architect", "automated", "real-model", "rollback", "target-device"],
+  "limitations": [
+    "Absolute cold, warm, and full-workflow duration fields remain unsupported under the architect disposition; they are not represented as zero or as measured values.",
+    "The managed Windows target exposes a fine pointer only, so coarse-pointer hardware remains unavailable rather than emulated.",
+    "Actual 200 percent browser zoom and the complete Windows tool matrix are same-day Phase-42 evidence transferred only because the accepted presentation code was moved without behavior changes; Phase 43 freshly rechecked the current public build at the equivalent narrow width.",
+    "Local production serving intentionally cannot load production analytics endpoints because CSP and origin policy reject the local origin; application behavior and privacy payload assertions pass through deterministic interception."
+  ]
+}

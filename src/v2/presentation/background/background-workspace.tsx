@@ -7,7 +7,7 @@ import { BeforeAfterUrlSlider } from "@/entities/processed-image";
 import type { BackgroundDraft, BackgroundFillDescriptor } from "@/v2/domain";
 import type { BackgroundRuntimeSnapshot } from "@/v2/runtime-browser";
 import { Typography } from "@/v2/shared/ui";
-import { ToolPanelSlot } from "@/widgets/tool-workspace";
+import { ToolPanelSlot } from "../shared";
 
 import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-image";
 import { backgroundFillStyle } from "./background-fill-style";

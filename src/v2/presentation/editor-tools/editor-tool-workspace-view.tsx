@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Typography } from "@/v2/shared/ui";
-import { EditorToolbar, createEditorToolRegistry } from "@/widgets/tool-workspace";
+import { EditorToolbar, createEditorToolRegistry } from "../shared";
 
 import type { EditorToolWorkspacePresentationProps } from "./editor-tool-workspace-contract";
 

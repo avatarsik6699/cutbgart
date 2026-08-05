@@ -9,13 +9,9 @@ test("editor v2 runs once, remains interactive, cancels/retries, exports, and re
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 500 });
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
 
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    "noindex, nofollow",
-  );
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.stage("model-loading", 0.5);
@@ -73,18 +69,14 @@ test("editor v2 runs once, remains interactive, cancels/retries, exports, and re
   }
 });
 
-test("editor v2 exposes the Russian noindex surface", async ({ editorV2, page }) => {
-  await page.goto("/editor-v2");
+test("public editor exposes the Russian surface", async ({ editorV2, page }) => {
+  await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
 
   await expect(
     page.getByRole("heading", { name: "Удалите фон с фото за секунды" }),
   ).toBeVisible();
   await expect(page.getByLabel("Загрузить изображения")).toBeVisible();
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    "noindex, nofollow",
-  );
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.stage("model-loading", 1);

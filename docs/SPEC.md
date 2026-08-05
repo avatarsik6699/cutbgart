@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.41` |
+| Version | `v1.42` |
 | Date | `2026-08-05` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -39,9 +39,11 @@ Three invariants govern every decision:
 The accepted v2 implementation now covers the complete browser-local workflow: automatic removal,
 bounded committed history, Manual and Magic Cutout, Background, fine-detail/colour-halo
 Enhancements, multi-document orchestration, preview/export, deterministic ZIP export, and safe
-cancel/retry/reset. Migration now proceeds by reconnecting that architecture to the established v1
-presentation in tested vertical slices. The public and scenario routes remain on legacy until the
-complete v1 visual and behavioral contract is reproduced and accepted on v2.
+cancel/retry/reset. Phases 39–42 reconnected that architecture to the established v1 presentation
+and completed the isolated-route migration evidence. Phase 43 is the final pre-production phase: it
+must close the remaining public-path readiness evidence, switch every public and scenario editor
+route to v2, remove the superseded legacy workflow, and prove release/rollback readiness before any
+production deployment.
 
 ## 2. Scope and boundaries
 
@@ -460,7 +462,46 @@ bindings, indexing, analytics, and legacy ownership remain unchanged. A `ready` 
 authorizes planning a later cutover phase; it does not perform that cutover or authorize legacy
 removal.
 
-### 2.12 Future paid direction
+### 2.12 Final pre-production cutover — Phase 43
+
+Phase 43 is the only authorized public cutover and legacy-removal phase. It converts the accepted
+isolated v2 editor into the sole production editor implementation without redesigning the public
+experience or weakening the Phase-33–42 ownership, privacy, accessibility, responsiveness, and
+resource contracts.
+
+The dependency-complete phase covers:
+
+- freeze a route/component/dependency inventory for `/`, `/en`, all eight localized scenario
+  routes, `/editor-v2`, `/en/editor-v2`, and the legacy editor modules. Every removal must be proven
+  unreachable from retained production, test, internal-tool, and build entry points before deletion;
+- close the Phase-42 unsupported absolute-duration evidence on the actual public v2 route contract,
+  or obtain one explicit architect disposition for each still-unsupported signal. The waived
+  Phase-32 upload-preparation timing belongs to the removed legacy path and does not become v2
+  readiness evidence;
+- bind `/`, `/en`, and all localized scenario pages to the accepted v2 editor composition while
+  preserving their locale, content, metadata, canonical/hreflang, structured data, analytics,
+  privacy, responsive layout, and v1-faithful editor behavior. No route may retain a hidden legacy
+  workflow or select implementations by accidental environment state;
+- retire `/editor-v2` and `/en/editor-v2` as duplicate migration surfaces by deterministic
+  locale-preserving redirects to the corresponding public root after cutover. Keep internal model
+  tooling noindex; remove the legacy `/dev/remove-background` harness with its legacy runtime;
+- delete superseded legacy editor hooks, stores, workers, controllers, components, tests, fixtures,
+  exports, and dependencies once reachability checks prove they have no retained consumer. A pure
+  policy or shared presentation primitive may remain only when it has an explicit current v2,
+  public-page, or internal-tool owner and no legacy workflow state/lifecycle dependency;
+- update route, sitemap/robots, service-worker/cache, CSP/build, E2E, profiling, operations,
+  rollback, and documentation contracts for v2-only production. Rollback uses the previous
+  immutable production image/release, not a dormant legacy implementation or runtime feature flag;
+- run bilingual deterministic public-route journeys, serialized real-model/CDN smoke, managed-
+  Windows accessibility/responsiveness/resource verification, production build/container smoke,
+  security/supply-chain checks, and a rollback rehearsal. The final report must conclude `ready`
+  with no unresolved cutover blocker before deployment is authorized.
+
+Phase 43 adds no account, backend, server image processing, persistence, remote fallback, model-
+family change, export format, environment key, or product redesign. It prepares a release candidate
+but does not deploy it to production; deployment remains an explicit post-merge operator action.
+
+### 2.13 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -750,8 +791,10 @@ Core rules:
   workflow truth.
 
 Legacy runtime models such as `SourceImage`, `AlphaMatte`, `ProcessedImage`, `EditDocumentScope`, and
-`BatchItemError` remain the current-code contract until their capabilities are migrated. Their full
-definitions and history are preserved in the archived v1.27 SPEC and STATE snapshots.
+`BatchItemError` remain historical migration vocabulary through Phase 42. Phase 43 removes their
+production workflow implementations after proving that retained v2/shared/internal-tool code has no
+runtime dependency on them; their definitions and history remain preserved in Git and archived
+SPEC/STATE snapshots.
 
 ## 4. Data, privacy, and security
 
@@ -791,8 +834,8 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | `/`, `/en` | Main localized product page and editor |
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
-| `/dev/remove-background`, `/dev/model-lab` | Internal noindex harnesses; model lab is disabled unless explicitly enabled |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v2 migration surface; Phases 39–41 reproduce the established main-page, batch, and editor-tool UI over v2 ownership without changing route identity |
+| `/dev/remove-background`, `/dev/model-lab` | Current internal noindex harnesses; Phase 43 removes the legacy remove-background harness and retains the explicitly enabled model lab |
+| `/editor-v2`, `/en/editor-v2` | Current bilingual noindex v2 migration surface; Phase 43 replaces these duplicate entry points with locale-preserving redirects to the public roots |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
@@ -871,6 +914,12 @@ different document while the selected one is queued or fails. Switching items pr
 document's committed state, draft, history, viewport, and accessible focus intent without
 reinference. Remove/reset and Download All confirm or disable actions truthfully when dirty,
 running, unfinished, or failed items are involved.
+
+For Phase 43, public and scenario pages compose the same v2 editor implementation and retain their
+existing localized content and SEO contracts. The migration routes redirect to the matching public
+locale, and no retained route, component, test helper, worker, or export may instantiate the legacy
+editor workflow. Removal is reachability-driven: shared visual or pure policy code stays only when a
+current owner is explicit.
 
 ## 6. Stack and runtime configuration
 
@@ -1029,6 +1078,17 @@ Apply/Cancel does not mutate exactly the intended draft/commit; switching or com
 changes stage geometry or implicitly selects Cutout; or a Background/Enhancement commit is not
 retained and displayed through the accepted v2 document actor and artifact ownership.
 
+Phase 43 additionally fails if any public or scenario route still runs legacy workflow ownership;
+route locale/content/metadata/canonical/hreflang/structured-data/analytics behavior regresses; the
+migration routes expose duplicate indexable content instead of deterministic localized redirects;
+the legacy remove-background harness or an unreachable legacy editor dependency remains; retained
+code imports a deleted legacy boundary; the service-worker/cache/build output still references
+removed chunks; a removal lacks reachability evidence; rollback depends on shipping dormant legacy
+code; public-path deterministic, real-model, managed-Windows, accessibility, responsiveness,
+resource, security, build/container, or rollback evidence is missing; the final readiness report is
+not `ready`; or an unresolved architect review note remains. Production deployment is outside the
+phase and is not authorized by a partial or waived gate.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -1045,11 +1105,12 @@ retained and displayed through the accepted v2 document actor and artifact owner
 | 40 | Complete | V1-faithful batch workspace UI over the accepted v2 workspace runtime; gate and architect acceptance passed |
 | 41 | Complete | V1-faithful editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes; gate and architect acceptance passed |
 | 42 | Complete / blocked result | Regression closure and complete-product evidence finished; one gate timing failure was explicitly waived, unsupported duration signals remain, and no public cutover is authorized |
-| Later | Unscheduled | Resolve remaining readiness evidence in a separate phase before any new `ready` decision; scenario/public cutover, rollback observation, legacy removal, and paid backend work remain separately scoped |
+| 43 | Approved / pending | Final pre-production phase: close public-path readiness evidence, switch public/scenario routes to v2, remove legacy, and prove release/rollback readiness; no production deploy |
+| Later | Unscheduled | Production deployment is an explicit operator action after Phase 43 merge/gate; post-deploy observation and paid backend work remain separately scoped |
 
-No v2 capability is accepted merely because legacy code exists. Phase 42 is limited to complete-
-product validation and accepted-contract defect closure. Public migration, legacy removal, and paid
-work still require their own approved phase contracts.
+No v2 capability is accepted merely because legacy code exists. Phase 43 is the approved final
+pre-production migration contract; it may remove legacy only after public v2 readiness and
+reachability evidence are complete. Paid work remains outside this track.
 
 ## 9. Deferred decisions
 

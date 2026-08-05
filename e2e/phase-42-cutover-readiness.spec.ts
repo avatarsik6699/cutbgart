@@ -10,7 +10,7 @@ test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 type LocaleContract = Readonly<{
-  route: "/editor-v2" | "/en/editor-v2";
+  route: "/" | "/en/";
   backToUpload: string;
   upload: string;
   addImages: string;
@@ -29,7 +29,7 @@ type LocaleContract = Readonly<{
 
 const locales: readonly LocaleContract[] = [
   {
-    route: "/en/editor-v2",
+    route: "/en/",
     backToUpload: "Back to upload",
     upload: "Upload an image",
     addImages: "Add images",
@@ -46,7 +46,7 @@ const locales: readonly LocaleContract[] = [
     remove: /Remove image/,
   },
   {
-    route: "/editor-v2",
+    route: "/",
     backToUpload: "К загрузке",
     upload: "Загрузить изображения",
     addImages: "Добавить изображения",

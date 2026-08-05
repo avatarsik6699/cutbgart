@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../app/styles/globals.css?url";
+import { ServiceWorkerRegistration } from "../app/service-worker-registration";
 import { env } from "../shared/config";
 import { getLocale } from "../paraglide/runtime";
 import { TooltipProvider } from "../shared/ui";
@@ -71,6 +72,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <HeadContent />
       </head>
       <body>
+        <ServiceWorkerRegistration />
         <TooltipProvider>{children}</TooltipProvider>
         <Scripts />
       </body>

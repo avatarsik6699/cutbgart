@@ -1,5 +1,10 @@
 # Release rollback
 
+Phase 43 removes the legacy editor from the candidate image. Application rollback therefore always
+selects the previous immutable release by digest and restores its matching release identity; it
+never enables dormant source code, an alternate editor entry, or a runtime cutover flag. Browser
+image data remains tab-local and is not copied between releases.
+
 Rollback when external smoke fails, release identity does not match, 5xx rises after deployment, or
 a heavy model/release is faulty. The deploy controller performs the same procedure automatically
 for post-deploy smoke failure.
@@ -34,3 +39,8 @@ node scripts/operations/exercise-capacity.mjs
 Do not edit model bytes, manifests or release headers manually. Preserve the failed release record,
 open an incident, remove maintenance suppression, and communicate the resolved state only after
 the previous digest and CDN integrity checks pass.
+
+Phase-43 rehearsal on 2026-08-05: `pnpm release:test` passed all six controller checks and
+`pnpm release:test:docker` passed the disposable candidate/deploy/forced-failure/automatic-rollback/
+return/current/lock sequence. The exercise used no production credentials or traffic and proves the
+repository recovery mechanism, not production RTO.

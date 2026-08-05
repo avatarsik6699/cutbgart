@@ -1,0 +1,43 @@
+import { m } from "@/paraglide/messages";
+import { PublicEditorWorkspace } from "@/widgets/public-editor";
+import { SiteShell } from "@/shared/ui";
+
+/**
+ * `/udalit-fon-s-logotipa` (ru) / `/en/remove-background-from-logo` (en) —
+ * logo background-removal scenario. The surrounding content stays
+ * locale-driven while the editor uses the sole public v2 composition.
+ */
+export function LogoPage() {
+  return (
+    <SiteShell>
+      <main
+        data-testid="logo-page"
+        className="mx-auto flex max-w-6xl flex-col gap-6 p-6 sm:p-8"
+      >
+        <header className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold">{m.logoTitle()}</h1>
+          <p className="text-sm text-muted-foreground">{m.logoLead()}</p>
+          <p className="text-xs text-muted-foreground">{m.trustBadge()}</p>
+        </header>
+
+        <p className="text-sm text-muted-foreground">{m.logoBody1()}</p>
+        <p className="text-sm text-muted-foreground">{m.logoBody2()}</p>
+
+        <PublicEditorWorkspace />
+
+        <section className="flex flex-col gap-3 border-t border-border pt-6">
+          <h2 className="text-lg font-medium">{m.scenarioExampleHeading()}</h2>
+          <img
+            src="/images/logo-example.webp"
+            alt={m.logoExampleAlt()}
+            loading="lazy"
+            width={1254}
+            height={1254}
+            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
+          />
+          <p className="text-sm text-muted-foreground">{m.logoExampleCaption()}</p>
+        </section>
+      </main>
+    </SiteShell>
+  );
+}

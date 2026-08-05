@@ -8,7 +8,7 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.representative.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -67,7 +67,7 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
 });
 
 test("Manual cutout controls are localized in Russian", async ({ editorV2, page }) => {
-  await page.goto("/editor-v2");
+  await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -83,7 +83,7 @@ test("committed history prunes to twenty operations and releases all churn resou
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);

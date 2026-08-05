@@ -1,1 +1,1 @@
-export { DocumentPhotoPage } from "./ui/DocumentPhotoPage";
+export { DocumentPhotoPage } from "./ui/document-photo-page";

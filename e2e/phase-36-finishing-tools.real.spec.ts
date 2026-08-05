@@ -104,7 +104,7 @@ test("real Background and cold/warm Enhancement stages stay responsive and bound
 
   const upload = uploadComponent(page);
   const preview = previewComponent(page);
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await upload.choose(phase33ImageCorpus.representative.path);
   await expect(preview.image).toBeVisible({ timeout: 6 * 60_000 });

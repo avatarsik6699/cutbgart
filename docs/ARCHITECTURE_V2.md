@@ -917,12 +917,14 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/v2/presentation/use-document-actor-selectors.ts` | P | selector-only `@xstate/react` binding over narrow application selectors |
 | `src/v2/presentation/use-editor-session.ts` | P | React route-lifetime signal plus external-store subscription; runtime remains owner |
 | `src/v2/presentation/index.ts` | P | explicit presentation public API only |
-| `src/pages/editor-v2/ui/editor-v2-page.tsx` | P | page composition, bilingual copy, and unrelated grid control only |
-| `src/pages/editor-v2/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
-| `src/pages/editor-v2/ui/editor-v2-status-rail.tsx` | P | truthful finite stage presentation only |
-| `src/pages/editor-v2/ui/editor-v2-document-panel.tsx` | P | narrow actor selectors and command translation only |
-| `src/routes/editor-v2.tsx` | R | TanStack filename exception; Russian noindex route delegation only |
-| `src/routes/en/editor-v2.tsx` | R | TanStack filename exception; English noindex route delegation only |
+| `src/widgets/public-editor/ui/public-editor.tsx` | P | sole route-neutral public composition, bilingual copy, and session lifetime |
+| `src/widgets/public-editor/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
+| `src/widgets/public-editor/ui/editor-v2-status-rail.tsx` | P | truthful finite stage presentation only |
+| `src/widgets/public-editor/ui/editor-v2-document-panel.tsx` | P | narrow actor selectors and command translation only |
+| `src/v2/presentation/shared/` | P | controller-neutral accepted toolbar, canvas, panel, diagnostics, and tool presentation |
+| `src/routes/index.tsx` and localized/scenario routes | R | public page/SEO composition; never workflow ownership |
+| `src/routes/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/` only |
+| `src/routes/en/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/en/` only |
 | `src/v2/testing/builders.ts` | T | minimal valid typed values and explicit overrides |
 | `src/v2/testing/fake-clock.ts` | T | deterministic application clock, no ambient fake timer leak |
 | `src/v2/testing/fake-ids.ts` | T | deterministic ID source, reset per test |
@@ -944,7 +946,7 @@ row and review the boundary before creating it; do not create a speculative help
 | `e2e/phase-33-editor-v2.spec.ts` | E | bilingual deterministic parallel-safe journey |
 | `e2e/support/mock-editor-v2-worker.ts` | E | deterministic production-protocol adapter; no model/CDN/GPU dependency |
 | `e2e/phase-33-editor-v2.real.spec.ts` | E | one serialized real boundary smoke; no duplicate UI coverage |
-| `scripts/profiling/v2/run-phase-33.mjs` | M | one report-contract orchestration shell; no product logic |
+| `scripts/profiling/v2/run-phase-43.mjs` | M | final cutover report-contract orchestration shell; no product logic |
 
 Profiles expand to mandatory rules: **D** framework-free pure TypeScript, kebab-case, type aliases,
 no React/browser/worker/provider/binary values; **A** D plus injected ports and XState ID-only

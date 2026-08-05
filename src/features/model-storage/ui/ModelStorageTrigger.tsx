@@ -12,7 +12,7 @@ import { ModelStorageManager } from "./ModelStorageManager";
 
 /**
  * Header entry point for `ModelStorageManager` (Phase 30 `T6`) — replaces the
- * floating `<aside>` that previously sat below `ToolWorkspace` on the home
+ * floating `<aside>` that previously sat below the public editor on the home
  * page. `ModelStorageManager` itself only mounts (and loads cache status)
  * while the popover is open.
  */

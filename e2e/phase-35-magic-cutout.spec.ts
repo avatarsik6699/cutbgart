@@ -8,7 +8,7 @@ test("Magic Apply predicts the best candidate and creates exactly one document e
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -60,7 +60,7 @@ test("Magic keeps a non-square image fully fitted and supports Space panning", a
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.representative.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -135,7 +135,7 @@ test("dirty Magic Cancel asks before discarding and Russian controls are localiz
   editorV2,
   page,
 }) => {
-  await page.goto("/editor-v2");
+  await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);

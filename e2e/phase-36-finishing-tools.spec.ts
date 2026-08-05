@@ -8,7 +8,7 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -89,7 +89,7 @@ test("Enhancement no-op, failure retry, and cancelled stale terminal stay atomic
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
@@ -142,7 +142,7 @@ test("custom Background validation and finishing controls are localized in Russi
   editorV2,
   page,
 }) => {
-  await page.goto("/editor-v2");
+  await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);

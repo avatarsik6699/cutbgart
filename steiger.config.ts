@@ -7,7 +7,7 @@ export default defineConfig([
     rules: {
       // This project's phased delivery plan (docs/SPEC.md §8) deliberately
       // lands each entity/feature slice one phase before its second consumer
-      // exists (e.g. `entities/processed-image` and `features/remove-background`
+      // exists (e.g. `entities/processed-image` and retained shared features
       // are proven in isolation on a dev-only test page in Phase 02, ahead of
       // `pages/home` composing them in Phase 04) — so "only one reference"
       // is expected, not a sign these slices should be merged.

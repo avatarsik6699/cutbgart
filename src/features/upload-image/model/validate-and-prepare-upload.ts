@@ -18,7 +18,7 @@ function isAcceptedFormat(type: string): type is SourceImage["format"] {
  * `SourceImage` the rest of the pipeline consumes (SPEC.md §1.3, §7.1).
  * Exported for unit testing — no DOM/React dependency beyond
  * `createImageBitmap`/`OffscreenCanvas`, both available in jsdom-less Vitest
- * via the same mocking pattern as `features/remove-background`'s
+ * via the same mocking pattern as the public v2 runtime's
  * `buildSourceImage` (SPEC.md §7.7).
  */
 export async function validateAndPrepareUpload(file: File): Promise<UploadResult> {

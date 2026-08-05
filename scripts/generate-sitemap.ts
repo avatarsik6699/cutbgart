@@ -4,7 +4,7 @@
  * Nitro output) so a new static route can't be forgotten in the sitemap.
  *
  * Convention-based, not a `head()`-parsing crawler: TanStack Router's
- * dot-segment file convention (`dev.remove-background.tsx` -> `/dev/remove-background`)
+ * dot-segment file convention (for example, a `dev.example.tsx` file maps to `/dev/example`)
  * maps directly to a URL path, and directory nesting (`en/about.tsx` ->
  * `/en/about`) maps to a path prefix. The `dev/` test harness is excluded
  * (`noindex` in its own `head()`).

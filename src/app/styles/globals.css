@@ -12,18 +12,6 @@
   initial-value: 0deg;
 }
 
-@property --preparing-x {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 30%;
-}
-
-@property --preparing-y {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 30%;
-}
-
 /*
  * Design tokens (Phase 30 `T3`, docs/design/DESIGN_SYSTEM.md §2; palette
  * replaced by `T23`-`T28`, §9 — "System Interface" visual identity).
@@ -49,7 +37,7 @@
  * - Spacing: Tailwind's own `--spacing` base unit (0.25rem) is the token;
  *   `--spacing-stage`/`--spacing-stage-lg` below are the one named exception,
  *   replacing a magic number (`20rem`/`28rem`) that was previously repeated
- *   verbatim across `EditorStage`, `ToolPanelSlot`, and `ToolWorkspace`'s
+ *   verbatim across the public editor stage, tool panel, and workspace
  *   Suspense placeholder.
  * - Radius: `--radius-sm`..`--radius-4xl` (below) were already formalized.
  * - Elevation: `shadow-sm` (raised surfaces: toolbar, batch header, tool
@@ -268,31 +256,6 @@
       calc(var(--transparency-grid-cell) * 2);
   }
 
-  .persistent-preview-layer {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      opacity 160ms ease,
-      visibility 0s linear 160ms;
-  }
-
-  .persistent-preview-layer[data-active="true"] {
-    z-index: 1;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transition:
-      opacity 160ms ease,
-      visibility 0s linear 0s;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .persistent-preview-layer {
-      transition: none;
-    }
-  }
-
   .command-deck-ambient {
     position: absolute;
     z-index: -1;
@@ -402,41 +365,6 @@
       background: conic-gradient(
         var(--primary) 0%,
         color-mix(in oklch, var(--primary) 40%, transparent) 100%
-      );
-    }
-  }
-
-  /* Guided-brush "preparing" state: a soft moving gradient wash over the
-     photo itself instead of a skeleton mockup — enough to read as "busy"
-     without hiding the image or adding boilerplate loading chrome. */
-  .guided-brush-preparing-overlay {
-    background: radial-gradient(
-      120% 120% at var(--preparing-x, 30%) var(--preparing-y, 30%),
-      color-mix(in oklch, var(--primary) 22%, transparent) 0%,
-      color-mix(in oklch, var(--primary) 8%, transparent) 45%,
-      color-mix(in oklch, var(--background) 55%, transparent) 100%
-    );
-    animation: guided-brush-preparing-drift 3.2s ease-in-out infinite alternate;
-  }
-
-  @keyframes guided-brush-preparing-drift {
-    from {
-      --preparing-x: 25%;
-      --preparing-y: 20%;
-    }
-    to {
-      --preparing-x: 75%;
-      --preparing-y: 70%;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .guided-brush-preparing-overlay {
-      animation: none;
-      background: radial-gradient(
-        120% 120% at 50% 50%,
-        color-mix(in oklch, var(--primary) 18%, transparent) 0%,
-        color-mix(in oklch, var(--background) 55%, transparent) 100%
       );
     }
   }

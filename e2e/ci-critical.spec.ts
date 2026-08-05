@@ -1,117 +1,50 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./support/v2/fixtures";
+import { phase33ImageCorpus } from "./support/v2/image-corpus";
 
-import { expectAutomaticCutout, openManualCutout } from "./support/editor-ui";
-import { installMockInference } from "./support/mock-inference";
+test.describe.configure({ retries: 0 });
 
-const SAMPLE_IMAGE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "sample.jpg",
-);
-
-async function makeCorrectionWithUndoRedo(page: Page): Promise<void> {
-  const workspace = page.getByTestId("tool-workspace");
-  const revisionBefore = Number(await workspace.getAttribute("data-document-revision"));
-  const canvas = await openManualCutout(page);
-  const correctionPanel = page.getByTestId("tool-panel-slot");
-  await correctionPanel.getByRole("button", { name: /^erase$/i }).click();
-  await canvas.scrollIntoViewIfNeeded();
-  const readCenterAlpha = () =>
-    canvas.evaluate((element) => {
-      const surface = element as HTMLCanvasElement;
-      return surface
-        .getContext("2d")
-        ?.getImageData(
-          Math.floor(surface.width / 2),
-          Math.floor(surface.height / 2),
-          1,
-          1,
-        ).data[3];
-    });
-  const originalAlpha = await readCenterAlpha();
-  if (originalAlpha === undefined) throw new Error("Mask canvas has no alpha channel");
-  const bounds = await canvas.boundingBox();
-  if (!bounds) throw new Error("Mask correction canvas has no bounds");
-  const point = {
-    clientX: bounds.x + bounds.width / 2,
-    clientY: bounds.y + bounds.height / 2,
-  };
-  // The CI fixture is intentionally 1×1. Chromium/Firefox hit-test its
-  // stretched canvas against the surrounding stage differently, so use an
-  // explicit pointer pair here; the full mask-correction spec covers real
-  // pointer movement on the normal editing surface in every browser.
-  await canvas.dispatchEvent("pointerdown", {
-    ...point,
-    pointerId: 1,
-    pointerType: "mouse",
-    isPrimary: true,
-    button: 0,
-    buttons: 1,
-  });
-  await canvas.dispatchEvent("pointerup", {
-    ...point,
-    pointerId: 1,
-    pointerType: "mouse",
-    isPrimary: true,
-    button: 0,
-    buttons: 0,
-  });
-  await expect.poll(readCenterAlpha).toBeLessThan(originalAlpha);
-
-  const apply = correctionPanel.getByRole("button", { name: /^apply$/i });
-  await expect(apply).toBeEnabled();
-  await expect(correctionPanel.getByRole("button", { name: /^undo$/i })).toHaveCount(0);
-  await page.keyboard.press("ControlOrMeta+z");
-  await expect.poll(readCenterAlpha).toBe(originalAlpha);
-  await page.keyboard.press("ControlOrMeta+Shift+z");
-  await expect.poll(readCenterAlpha).toBeLessThan(originalAlpha);
-  await apply.click();
-  await expect(workspace).toHaveAttribute(
-    "data-document-revision",
-    String(revisionBefore + 1),
-  );
-}
-
-async function expectDownload(page: Page, buttonName: RegExp, filename: string) {
-  const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: buttonName }).click();
-  expect((await pending).suggestedFilename()).toBe(filename);
-}
-
-test("mocked Chromium critical path: single and batch edit, history, switch and download", async ({
+test("mocked Chromium critical path: public single and batch edit, history, and export", async ({
+  editorV2,
   page,
 }) => {
-  await installMockInference(page);
-  await page.goto("/en");
+  await page.goto("/en/");
+  await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
 
-  const singleUpload = page.getByLabel("Upload an image");
-  await expect(singleUpload).toBeEnabled();
-  await singleUpload.setInputFiles(SAMPLE_IMAGE);
-  await expectAutomaticCutout(page);
-  await makeCorrectionWithUndoRedo(page);
-  await expectDownload(page, /^download$/i, "result.png");
+  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await editorV2.scenario.completeRun();
+  await page.getByRole("tab", { name: "Manual" }).click();
+  await page
+    .getByRole("img", { name: "Manual cutout canvas" })
+    .click({ position: { x: 1, y: 1 } });
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByRole("button", { name: "Undo document change" })).toBeEnabled();
+  await page.keyboard.press("Control+z");
+  await expect(page.getByRole("button", { name: "Redo document change" })).toBeEnabled();
+  await page.keyboard.press("Control+y");
+  expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
+    "cutbg-result.png",
+  );
 
-  await page.getByRole("button", { name: /back to upload/i }).click();
-  const batchUpload = page.getByLabel("Upload an image");
-  await expect(batchUpload).toBeAttached();
-  await batchUpload.setInputFiles([SAMPLE_IMAGE, SAMPLE_IMAGE]);
-  await expect(page.getByTestId("scheduler-summary")).toContainText("2 done");
+  await editorV2.preview.resetButton.click();
+  await page
+    .getByLabel("Upload an image")
+    .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
+  await expect.poll(editorV2.scenario.runCount).toBe(2);
+  await editorV2.scenario.completeRun();
+  await expect.poll(editorV2.scenario.runCount).toBe(3);
+  await editorV2.scenario.completeRun();
+  await expect(page.getByTestId("batch-overview").getByText("Result ready")).toHaveCount(
+    2,
+  );
 
-  const items = page.getByRole("button", {
-    name: /select sample\.jpg for review/i,
-  });
-  await items.first().click();
-  await expect(items.first()).toHaveAttribute("aria-pressed", "true");
-  await items.nth(1).click();
-  await expect(items.nth(1)).toHaveAttribute("aria-pressed", "true");
-
-  await makeCorrectionWithUndoRedo(page);
-  await expectDownload(page, /^download$/i, "result.png");
-  await page.getByRole("button", { name: "Output options" }).click();
-  const archive = page.waitForEvent("download");
-  await page.getByRole("menuitem", { name: /download all.*zip/i }).click();
-  expect((await archive).suggestedFilename()).toBe("cutbg-results.zip");
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Download all/ }).click();
+  const archive = await pending;
+  expect(archive.suggestedFilename()).toBe("cutbg-results.zip");
+  const archivePath = await archive.path();
+  if (archivePath === null) throw new Error("Downloaded ZIP path is unavailable");
+  expect((await readFile(archivePath)).toString("utf8")).toContain("cutbg-result-01.png");
 });

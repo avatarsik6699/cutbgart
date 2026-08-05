@@ -10,7 +10,7 @@ import {
   EnhancementsToolPanel,
   ToolPanelSlot,
   type EnhancementPanelOutcome,
-} from "@/widgets/tool-workspace";
+} from "../shared";
 import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-image";
 
 type Props = {

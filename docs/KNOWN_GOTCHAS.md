@@ -23,6 +23,18 @@
 
 ## Gotcha Log
 
+### Service-worker registration must be owned by the application shell
+
+- **Symptoms**: the public v2 editor waits indefinitely for model-cache status or offline actions
+  after a legacy page/controller is deleted, even though the worker and cache code still exist.
+- **Root cause**: service-worker registration was mounted as a side effect of the legacy editor
+  workflow instead of the route-independent application shell.
+- **Fix**: mount `ServiceWorkerRegistration` once from the root route; editor pages consume only the
+  shared service-worker state and messages.
+- **Prevention**: lifecycle infrastructure needed by multiple routes belongs to the application
+  root. Before deleting a former composition owner, trace registrations, providers, listeners, and
+  cleanup effects as well as ordinary imports.
+
 ### Browser MCP launched from WSL is not Windows target-device evidence
 
 - **Symptoms**: Playwright/DevTools reports Linux, a file upload rejects `/home/...` as outside its

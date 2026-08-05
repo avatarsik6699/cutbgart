@@ -28,33 +28,35 @@
 | 40 | ✅ done | gate passed; `v0.40.0` | [`PHASE_40.md`](./PHASE_40.md): v1-faithful batch workspace on isolated v2 routes |
 | 41 | ✅ done | `v0.41.0`; gate passed | [`PHASE_41.md`](./PHASE_41.md): v1-faithful editor tools on isolated v2 routes |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`PHASE_42.md`](./PHASE_42.md): regression closure complete; cutover readiness remains blocked |
+| 43 | ✅ done | gate passed; tag after merge | [`PHASE_43.md`](./PHASE_43.md): final public v2 cutover, legacy removal, and pre-production readiness |
 
-**Latest closed phase:** `42`
+**Latest closed phase:** `43`
 
 **Implementation in progress:** `—`
 
-**Only active implementation scope:** none. A subsequent phase requires `/phase-init`; public
-cutover remains unauthorized.
+**Only active implementation scope:** `—`. Phase 43 is the final completed pre-production phase.
+Production deployment remains a separate authorized-operator workflow.
 
 ## Current contract
 
-This section describes the accepted contract through Phase 42. The legacy editor remains the
-public product; the separately reachable v2 foundation
-includes automatic removal, Manual Cutout, guided Magic Cutout, Background, Enhancements, document
-history, and a batch/multi-document workspace. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
-[`PHASE_41.md`](./PHASE_41.md).
+This section describes the accepted contract through Phase 43. The v2 runtime is the sole public
+editor and includes automatic removal, Manual Cutout, guided Magic Cutout, Background,
+Enhancements, document history, and a batch/multi-document workspace. The superseded legacy
+workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
+[`PHASE_43.md`](./PHASE_43.md).
 
 ### Runtime status
 
-- The deployed legacy editor is anonymous and browser-local. It supports single/batch background
-  removal, correction, enhancements, backgrounds, undo/redo, and PNG/ZIP export.
+- Before Phase 43, the deployed legacy editor was anonymous and browser-local. Its accepted
+  capabilities are now served by the v2 public editor; the legacy implementation is removed.
 - Source images and derived pixels are not sent to an app backend; the app owns no account, payment,
   image API, database, or result storage.
 - Phase 32 added structured batch errors, per-item edit scopes, worker run guards, upload preparation,
   and resource-lifecycle work.
 - Architect verification still reproduces model-load/removal and Magic Apply freezes that block page
   scroll and controls. Phase 32 therefore did not satisfy its responsiveness goal.
-- Legacy remains available while v2 grows one accepted capability slice at a time.
+- Phases 33–42 kept legacy available while v2 grew one accepted capability slice at a time; Phase
+  43 ended that migration state.
 - The noindex v2 surface implements one-image import, local automatic removal, preview, PNG export,
   truthful cancel/retry/reset, and deterministic artifact cleanup. Its gate and architect target-
   device verification passed without reproducing the legacy freeze.
@@ -78,6 +80,16 @@ history, and a batch/multi-document workspace. See [`ARCHITECTURE_V2.md`](./ARCH
   and native-Windows complete-product evidence, and retains a fail-closed `blocked` cutover result.
   The Phase-42 gate had one waived legacy Phase-32 upload-preparation timing failure (129 ms against
   `<100 ms`); public cutover remains unauthorized.
+- SPEC v1.42 authorized Phase 43 as the final pre-production cutover contract: close public-path
+  readiness evidence without a waived gate, bind every public/scenario editor route to v2, remove
+  the legacy workflow by proven reachability, and rehearse rollback to the previous immutable
+  release before deployment.
+- Phase 43 completed that unconditional cutover. `src/widgets/public-editor` owns the sole
+  route-neutral composition; roots and eight scenario routes use it, former v2 routes redirect by
+  locale, and the legacy development harness and workflow graph are removed.
+- The Phase-43 report concludes `ready` with zero blocker, missing evidence, serious accessibility
+  finding, or reachable legacy entry. Full gate, real-model, managed-Windows, security, build,
+  container smoke, and disposable immutable-release rollback evidence passed without waiver.
 
 ### Core models
 
@@ -187,14 +199,23 @@ There is no image-processing API.
 
 | Method/surface | Current behavior |
 |----------------|------------------|
-| `GET /`, `GET /en` | Localized main page and legacy editor |
-| Four Russian scenario routes plus four `/en/...` routes | Localized scenario content reusing the editor |
+| `GET /`, `GET /en` | Localized main page composing the sole v2 public editor |
+| Four Russian scenario routes plus four `/en/...` routes | Localized scenario content composing the same v2 public editor |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized pages |
-| `/dev/remove-background` | Internal noindex ML harness |
+| `/dev/remove-background` | Removed; normal not-found response |
 | `/dev/model-lab` | Internal noindex lab; active only with `VITE_ENABLE_MODEL_LAB=true` |
-| `/editor-v2`, `/en/editor-v2` | Separate bilingual noindex v1-faithful main-page, batch, and complete editor-tool workspace over v2 actor/runtime ownership |
+| `/editor-v2`, `/en/editor-v2` | Permanent locale-preserving redirects to `/` and `/en/` |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery/security assets |
 | `cdn.cutbg.art/models/{manifest-path}` | Immutable public model/runtime assets with CORS and byte ranges |
+
+### Completed Phase-43 public cutover
+
+- `/`, `/en`, and all localized scenario routes compose the accepted v2 editor while retaining
+  existing content, locale, metadata, structured data, analytics, and accessibility contracts.
+- `/editor-v2` and `/en/editor-v2` redirect to the matching public root; the legacy
+  `/dev/remove-background` harness is removed, while the explicitly enabled model lab remains.
+- Superseded legacy workflow code was deleted after retained entry-point reachability was proven.
+  Rollback uses the previous immutable release rather than dormant legacy code.
 
 ### Persistence and ownership
 
@@ -223,7 +244,7 @@ without changing values or exposing server secrets.
 
 ### Current Editor v2 contract
 
-The implemented v2 foundation is intentionally isolated and local-only:
+The implemented v2 editor is public and local-processing-only:
 
 - `src/v2/{domain,application,runtime-browser,presentation,shared/ui,shared/lib,testing}`;
 - one workspace actor over ordered membership/selection and one document actor/runtime per image;
@@ -247,15 +268,15 @@ The implemented v2 foundation is intentionally isolated and local-only:
 - fine-detail and colour-halo Enhancement drafts with ordered globally admitted heavy stages and
   atomic changed/no-op/failure/cancel outcomes;
 - the complete v1-faithful result stage, toolbar, tool rail, Cutout Manual/Magic, Background, and
-  Enhancements presentation on the isolated bilingual v2 routes through bounded projection,
+  Enhancements presentation on every bilingual public editor route through bounded projection,
   typed-intent, and tool-interaction seams;
 - up to 20 live workspace items, at most two concurrent import preparations, and one globally
   admitted heavy job across all documents;
 - no auth, billing, server upload, remote jobs, or generation;
 - deterministic automated tests, serialized real-model smoke, and mandatory target-device evidence.
 
-Further capabilities are not implied by this foundation. Public-route migration, parity closure,
-and legacy removal still require later accepted slices.
+Further capabilities are not implied by this contract. Auth, billing, backend processing, and
+production deployment remain separately authorized work.
 
 The completed Phase-39 slice preserves the rendered v1 main-page UI while replacing its workflow
 ownership with v2. `AutomaticModelMode`, `ExportSize`, `MainPageEditorProjection`, and
@@ -355,7 +376,7 @@ separately gated work.
 
 | Scope | State |
 |-------|-------|
-| Legacy editor | Known main-thread freezes during model load/removal and Magic Apply; retained for comparison, not treated as resolved |
+| Legacy editor | Removed from the Phase-43 source/build graph; previous immutable release remains the rollback unit |
 | Phase 33 | Complete; gate, real-model evidence, and architect target-device acceptance passed |
 | Phase 34 | Complete; gate, real-model evidence, and architect acceptance passed |
 | Phase 35 | Complete; gate, real-model/Windows evidence, security scans, and architect acceptance passed |
@@ -365,12 +386,61 @@ separately gated work.
 | Phase 39 | Complete; gate passed and `v0.39.0` tags the locally merged implementation |
 | Phase 40 | Complete; full gate, exact bilingual batch evidence, and real-model FIFO/export journey passed |
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
+| Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
+| Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-05 — Phase 43 complete: public v2 cutover ready
+
+**Type:** phase-completion
+
+**Author:** AI (`/context-update 43`)
+
+**Triggered by:** Phase-43 gate passed with a `ready` report and no unchecked architect review item
+
+#### Changes / Decision
+
+- Switched both public roots and all eight localized scenario routes to the sole route-neutral v2
+  editor, replaced the former v2 routes with permanent locale redirects, and removed the legacy
+  development harness.
+- Deleted the superseded legacy controller/store/worker/test graph; retained presentation now has
+  explicit v2 ownership, while service-worker registration moved to the application shell.
+- Full deterministic and real-model browser checks, managed-Windows evidence, security/supply-chain,
+  production build/container smoke, and disposable previous-release rollback passed. The versioned
+  Phase-43 report concludes `ready` with zero blocker or reachable legacy entry.
+
+#### Affected Phases / Consequences
+
+- Phase 43 is the final completed pre-production phase. Production deployment remains a separate
+  authorized-operator action; rollback uses the previous immutable release, not dormant legacy code.
+
+### 2026-08-05 — Final public v2 cutover and legacy removal approved
+
+**Type:** spec-change
+
+**Author:** AI (`/spec-sync`)
+
+**Triggered by:** architect designated Phase 43 as the final phase before production deployment
+
+#### Changes / Decision
+
+- SPEC v1.42 authorizes one final pre-production phase to close public-path readiness evidence,
+  switch all public and scenario editor routes to v2, and remove the superseded legacy workflow.
+- Migration routes become locale-preserving public-root redirects; the legacy remove-background
+  harness is removed, while retained internal model tooling stays explicitly noindex.
+- Rollback is release-based through the previous immutable image. Phase 43 prepares but does not
+  execute the production deployment, and its readiness report must conclude `ready` without waiver.
+
+#### Affected Phases / Consequences
+
+- Phase 43 requires a new phase contract before implementation.
+- Phases 33–42 remain completed historical contracts and do not require review; Phase 42's blocked
+  report and waived legacy timing failure remain unchanged evidence.
 
 ### 2026-08-05 — Phase 42 closed with blocked readiness and gate exception
 

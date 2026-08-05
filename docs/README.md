@@ -10,7 +10,8 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
-| [`PHASE_42.md`](./PHASE_42.md) | Active v2 regression-closure and complete-product cutover-readiness validation contract |
+| [`PHASE_43.md`](./PHASE_43.md) | Completed final public v2 cutover, legacy-removal, and pre-production readiness contract |
+| [`PHASE_42.md`](./PHASE_42.md) | Completed v2 regression-closure and architect-accepted blocked readiness record |
 | [`PHASE_40.md`](./PHASE_40.md) | Latest completed v1-faithful batch workspace migration contract |
 | [`PHASE_41.md`](./PHASE_41.md) | Latest completed v1-faithful editor-tool workspace migration contract |
 | [`PHASE_39.md`](./PHASE_39.md) | Completed v1-faithful single-image main-page UI migration contract |
@@ -30,11 +31,10 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-Phase 41 completed the v1-faithful editor-tool workspace on the isolated noindex v2 routes. Phase 42
-is active: it closes architect-reported performance, Cutout interaction, tool-navigation, and
-finishing-result regressions, then repeats complete-product readiness validation with managed-
-Windows, accessibility, real-model, performance, and resource evidence. It does not switch public/
-scenario routes or remove legacy.
+Phase 43 completed the final pre-production cutover with a `ready` report and unwaived gate: every
+public/scenario editor route now uses v2, the superseded legacy workflow is removed, and rollback to
+the previous immutable release is rehearsed. No implementation phase is active. Production
+deployment remains a separate post-merge operator action.
 
 ## Archive
 

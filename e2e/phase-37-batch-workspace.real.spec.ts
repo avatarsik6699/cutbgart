@@ -36,7 +36,7 @@ test("three real documents share one FIFO model runtime and cached selection", a
       );
     };
   });
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await page
     .getByLabel("Choose an image")

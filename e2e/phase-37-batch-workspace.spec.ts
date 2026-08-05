@@ -10,7 +10,7 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   const input = page.getByLabel("Upload an image");
   await input.setInputFiles([
@@ -88,7 +88,7 @@ test("Russian batch controls keep keyboard selection and guarded removal accessi
   editorV2,
   page,
 }) => {
-  await page.goto("/editor-v2");
+  await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   await page
     .getByLabel("Загрузить изображения")

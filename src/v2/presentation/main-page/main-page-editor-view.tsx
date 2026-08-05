@@ -9,7 +9,7 @@ import {
   MainPageIntro,
   Skeleton,
 } from "@/shared/ui";
-import { EditorToolbar, LocalExecutionReadout } from "@/widgets/tool-workspace";
+import { EditorToolbar, LocalExecutionReadout } from "../shared";
 import { Typography } from "@/v2/shared/ui";
 
 import type { MainPageEditorPresentationProps } from "./main-page-editor-contract";

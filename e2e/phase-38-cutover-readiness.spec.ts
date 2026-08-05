@@ -8,7 +8,7 @@ test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 type LocaleLabels = Readonly<{
-  route: "/editor-v2" | "/en/editor-v2";
+  route: "/" | "/en/";
   choose: string;
   manual: string;
   manualRegion: string;
@@ -28,7 +28,7 @@ type LocaleLabels = Readonly<{
 
 const locales: readonly LocaleLabels[] = [
   {
-    route: "/en/editor-v2",
+    route: "/en/",
     choose: "Upload an image",
     manual: "Manual",
     manualRegion: "Manual cutout workspace",
@@ -46,7 +46,7 @@ const locales: readonly LocaleLabels[] = [
     addImages: "Add images",
   },
   {
-    route: "/editor-v2",
+    route: "/",
     choose: "Загрузить изображения",
     manual: "Вручную",
     manualRegion: "Ручное редактирование выреза",
@@ -176,7 +176,7 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   editorV2,
   page,
 }) => {
-  await page.goto("/en/editor-v2");
+  await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
   const input = page.getByLabel("Upload an image");
   await input.setInputFiles([

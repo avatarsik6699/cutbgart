@@ -1,6 +1,50 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
-  "entry": ["scripts/profiling/v2/verify-phase-42-reports.ts"],
+  "entry": ["scripts/profiling/v2/verify-phase-43-reports.ts"],
+  "ignoreDependencies": ["onnxruntime-web"],
+  "health": {
+    "thresholdOverrides": [
+      {
+        "files": ["src/widgets/public-editor/ui/editor-v2-active-document.tsx"],
+        "maxCyclomatic": 31,
+        "maxCognitive": 35,
+        "maxCrap": 198,
+        "reason": "Accepted Phase-42 controller-neutral composition relocated unchanged into the public editor owner during Phase 43.",
+      },
+      {
+        "files": ["src/widgets/public-editor/ui/public-editor.tsx"],
+        "maxCyclomatic": 25,
+        "maxCognitive": 28,
+        "maxCrap": 149,
+        "reason": "Accepted Phase-42 v2 session projection now serves every public route; decomposition is deferred to avoid cutover behavior drift.",
+      },
+      {
+        "files": ["src/v2/presentation/shared/enhancements-tool-panel.tsx"],
+        "maxCyclomatic": 26,
+        "maxCognitive": 27,
+        "reason": "Accepted Phase-42 presentation moved from the deleted legacy-named widget into v2 presentation ownership.",
+      },
+      {
+        "files": ["src/v2/presentation/shared/editor-toolbar.tsx"],
+        "maxCognitive": 28,
+        "reason": "Accepted Phase-42 presentation moved from the deleted legacy-named widget into v2 presentation ownership.",
+      },
+      {
+        "files": ["src/widgets/public-editor/ui/editor-v2-main-page-active.tsx"],
+        "maxCognitive": 21,
+        "reason": "Accepted Phase-42 composition relocated into the public editor owner during Phase 43.",
+      },
+      {
+        "files": [
+          "src/v2/presentation/shared/canvas-view-controls.tsx",
+          "src/widgets/public-editor/ui/editor-v2-document-panel.tsx",
+          "src/widgets/public-editor/ui/editor-v2-status-rail.tsx",
+        ],
+        "maxCrap": 32,
+        "reason": "Accepted Phase-42 presentation relocation is recorded without treating the file move as newly introduced complexity.",
+      },
+    ],
+  },
   "rules": {
     "boundary-violation": "error",
     "private-type-leaks": "warn",
@@ -21,8 +65,8 @@
         "patterns": [
           "src/v2/**/*.test.ts",
           "src/v2/**/*.test.tsx",
-          "src/pages/editor-v2/**/*.test.ts",
-          "src/pages/editor-v2/**/*.test.tsx",
+          "src/widgets/public-editor/**/*.test.ts",
+          "src/widgets/public-editor/**/*.test.tsx",
         ],
       },
       { "name": "v2-domain", "patterns": ["src/v2/domain/**"] },
@@ -31,7 +75,7 @@
       { "name": "v2-presentation", "patterns": ["src/v2/presentation/**"] },
       { "name": "v2-shared", "patterns": ["src/v2/shared/**"] },
       { "name": "v2-testing", "patterns": ["src/v2/testing/**"] },
-      { "name": "editor-v2-page", "patterns": ["src/pages/editor-v2/**"] },
+      { "name": "public-editor", "patterns": ["src/widgets/public-editor/**"] },
     ],
     "rules": [
       {
@@ -44,7 +88,7 @@
           "v2-presentation",
           "v2-shared",
           "v2-testing",
-          "editor-v2-page",
+          "public-editor",
         ],
       },
       { "from": "v2-domain", "allow": ["v2-domain"] },
@@ -72,9 +116,9 @@
         "allow": ["v2-testing", "v2-application", "v2-runtime", "v2-domain", "v2-shared"],
       },
       {
-        "from": "editor-v2-page",
+        "from": "public-editor",
         "allow": [
-          "editor-v2-page",
+          "public-editor",
           "v2-presentation",
           "v2-application",
           "v2-runtime",
