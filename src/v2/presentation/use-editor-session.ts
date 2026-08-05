@@ -6,11 +6,15 @@ import {
   type EditorSessionOptions,
 } from "@/v2/runtime-browser";
 
-export function useEditorSession(options?: EditorSessionOptions) {
+export function useEditorSession(
+  options?: EditorSessionOptions,
+  observeWorkspace = false,
+) {
   const [session] = useState<EditorSession>(() => createEditorSession(options));
   const subscribe = useCallback(
-    (listener: () => void) => session.subscribe(listener),
-    [session],
+    (listener: () => void) =>
+      observeWorkspace ? session.subscribe(listener) : session.subscribeActive(listener),
+    [observeWorkspace, session],
   );
   const getSnapshot = useCallback(() => session.getSnapshot(), [session]);
   const getServerSnapshot = useCallback(() => session.getSnapshot(), [session]);

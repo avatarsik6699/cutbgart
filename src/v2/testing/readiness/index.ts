@@ -1,4 +1,5 @@
 export { assertPrivacySafeReadinessValue, buildPhase38ReadinessReport } from "./evaluate";
+export * from "./phase-42";
 export { PHASE_38_READINESS_SCHEMA_VERSION } from "./contracts";
 export type {
   AccessibilityFinding,

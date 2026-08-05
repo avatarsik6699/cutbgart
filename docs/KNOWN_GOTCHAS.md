@@ -23,6 +23,87 @@
 
 ## Gotcha Log
 
+### Browser MCP launched from WSL is not Windows target-device evidence
+
+- **Symptoms**: Playwright/DevTools reports Linux, a file upload rejects `/home/...` as outside its
+  workspace roots, GPU data uses a Linux backend, or a run is mistakenly described as managed
+  Windows because Codex itself was opened from WSL.
+- **Root cause**: MCP server placement determines browser placement. Registering a browser MCP as
+  `npx ...` in a WSL Codex session launches Linux Node and Linux Chrome. Windows Playwright MCP may
+  still be correct while a separately registered Chrome DevTools MCP silently runs in WSL.
+- **Fix**: launch both Playwright MCP and Chrome DevTools MCP through Windows PowerShell wrapper
+  scripts under `C:\Users\user\AppData\Local\cutbg-tools`. Serve the application from WSL, but
+  drive it from the MCP-owned isolated Windows Chrome. Upload through a Windows fixture path or a
+  `\\wsl.localhost\<distribution>\...` UNC path; never pass a WSL `/home/...` path to Windows MCP.
+- **Prevention**: before every target capture assert `navigator.platform === "Win32"` and record
+  Windows Chrome, viewport, GPU/ANGLE and input details. Treat Linux/WSL browser output as host
+  evidence only. A target run must stop immediately if either browser MCP is registered as WSL
+  `npx`, reports a non-Windows platform, or uses a personal browser/profile.
+
+### Fallow's whole audit can report inherited errors while the new-only gate passes
+
+- **Symptoms**: `fallow audit` reports `verdict: pass` while its summary still contains dead-code
+  errors or complexity findings, or a newly installed audit appears to condemn a large existing
+  backlog.
+- **Root cause**: `--base main --gate new-only` evaluates only findings attributed to the current
+  changes; the JSON deliberately retains inherited findings for context. Dynamic/framework-owned
+  consumers can also require a trace before an apparent unused symbol or dependency is actionable.
+- **Fix**: read `attribution.*_introduced` separately from `*_inherited`, then trace the exact
+  finding before editing. Treat advisory styling rows as review input, not a failed gate.
+- **Prevention**: keep the phase gate on `pnpm quality:fallow`, preserve JSON output, and never run
+  `fallow fix` or delete an inherited finding merely because it appears in the audit summary.
+
+### Do not infer the selected editor tool only from the active actor draft
+
+- **Symptoms**: Apply or Cancel in Manual, Background, or Enhancements visibly jumps to Magic;
+  a successfully committed finishing result looks lost because the newly mounted Magic surface
+  renders the source-oriented cutout view.
+- **Root cause**: accepted v2 Apply/Cancel transitions close the active draft. Presentation code
+  treated `activeDraft === null` as permission to open the default Magic tool and derived the
+  toolbar selection only from the current draft rather than retaining controller-neutral selected
+  tool state.
+- **Fix**: retain the selected tool/cutout mode in presentation state, reopen that same tool against
+  the new committed baseline after a terminal transition, and key the presentation by document
+  actor identity. XState remains the sole draft/commit authority.
+- **Prevention**: test every tool's Apply and Cancel for stable `data-active-tool`, selected Cutout
+  tab, viewport geometry, committed revision/result, and zero implicit navigation.
+
+### Never resize or fully repaint a source-sized canvas on every pointer move
+
+- **Symptoms**: a brush cursor becomes oval, the size slider lags, strokes appear to miss input,
+  and automatic-removal completion freezes as the default editor surface mounts.
+- **Root cause**: CSS stretched a square Magic container over non-square source coordinates, while
+  every pointer move reassigned `canvas.width`/`height` and redrew all source-sized strokes. Canvas
+  dimension assignment clears and reallocates its backing buffer even when the numeric size did not
+  change; the removed candidate overlay also allocated another full-source buffer at mount.
+- **Fix**: preserve source aspect ratio, cap display-only overlay resolution, resize only when the
+  target dimensions change, schedule live repaints by animation frame, and position the circular
+  outline cursor imperatively outside React state. Keep source-space strokes in the runtime.
+- **Prevention**: unit-test non-square cursor geometry and display-buffer caps; browser-test pointer
+  input and toolbar history without per-point React/XState state.
+
+### A Cutout draft must render the committed artifact, not the import preview
+
+- **Symptoms**: Magic shows the original background, Apply completes but appears to do nothing, and
+  the result becomes visible only after another tool mounts.
+- **Root cause**: the document actor and result projection commit the correct artifact, while the
+  Cutout presentation remains bound to the immutable upload preview URL.
+- **Fix**: pass the current committed result URL into every Magic/Manual draft surface. Keep the
+  original preview only for explicit before/after comparisons.
+- **Prevention**: after each tool Apply, browser-test that the same selected tool remains mounted and
+  its rendered image URL changes with the committed document revision.
+
+### Fit view must not be implemented with nested scrolling
+
+- **Symptoms**: portrait or large images are cropped at 100%, stage scrollbars appear, and Hand/Space
+  panning behaves differently between Magic and Manual.
+- **Root cause**: a width-only content box grows beyond the fixed-height editor stage and delegates
+  pan to `scrollLeft`/`scrollTop`, so 100% means container width rather than contain-fit.
+- **Fix**: size the shared Cutout content box from both container width and height, hide overflow,
+  and apply bounded zoom/pan transforms to that box. At Fit, the complete image is always visible.
+- **Prevention**: browser-test non-square images for zero scroll overflow, full bounding-box
+  containment at 100%, Space+left-drag, and stable geometry across Magic/Manual and batch selection.
+
 ### Phase-specific Playwright must run through the repository E2E wrapper
 
 - **Symptoms**: every test times out in `page.goto()` with `net::ERR_ABORTED`, while nothing is
@@ -493,6 +574,22 @@
   limits in the UI rather than silently implying an unlimited session.
 - **Prevention**: every interactive editor needs separate, tested bounds for its live document,
   per-gesture payload, undo/redo metadata, model input, and full-resolution result buffers.
+
+### High-frequency view controls must not sit at a workspace component root
+
+- **Symptoms**: dragging a brush-size range highlights or profiles the complete canvas stage and
+  tool panel even though no document command is sent and no image data changes.
+- **Root cause**: a range value stored with `useState` in the root workspace component re-executes
+  that component and reconciles all descendants on every input step. A second render wave occurs if
+  the selected document actor is also republished through a broad session external store while
+  descendants subscribe to the actor directly.
+- **Fix**: keep high-frequency, view-only values in an imperative ref/native control when they are
+  consumed only by pointer handlers and DOM styling. Split session notification channels so actor
+  selectors own document transitions and the active-shell store publishes only shell/runtime
+  projection changes; retain workspace notifications for batch summaries.
+- **Prevention**: add a React `Profiler` test that records the pre-input commit count and asserts no
+  additional commit for the hot control. Use scalar `useSelector` subscriptions at the component
+  that renders the value; do not introduce a second workflow store to mask broad subscriptions.
 
 ### A hook value derived from a ref read during render silently freezes in `renderHook` tests
 

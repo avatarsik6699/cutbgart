@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEditorToolRegistry } from "../model/editor-tool-registry";
 import { EditorToolbar } from "./EditorToolbar";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("EditorToolbar", () => {
   it("renders registry order and supports roving arrow-key focus", () => {
@@ -68,5 +71,63 @@ describe("EditorToolbar", () => {
     expect(buttons[0]?.getAttribute("aria-label")).toBe("Back to upload");
     fireEvent.click(buttons[0]!);
     expect(onBack).toHaveBeenCalledWith(expect.any(HTMLButtonElement));
+  });
+
+  it("observes scroll boundaries without synchronously measuring layout", () => {
+    let observerCallback: IntersectionObserverCallback | undefined;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const constructObserver = vi.fn();
+    class IntersectionObserverMock {
+      constructor(
+        callback: IntersectionObserverCallback,
+        options?: IntersectionObserverInit,
+      ) {
+        observerCallback = callback;
+        constructObserver(callback, options);
+      }
+
+      disconnect = disconnect;
+      observe = observe;
+      takeRecords = vi.fn();
+      unobserve = vi.fn();
+    }
+    vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
+
+    const view = render(
+      <EditorToolbar
+        tools={createEditorToolRegistry()}
+        activeTool="cutout"
+        onToolChange={vi.fn()}
+      />,
+    );
+    const toolbar = screen.getByRole("toolbar");
+    const leftBoundary = view.container.querySelector('[data-scroll-boundary="left"]');
+    const rightBoundary = view.container.querySelector('[data-scroll-boundary="right"]');
+    const leftFade = view.container.querySelector('[data-scroll-fade="left"]');
+    const rightFade = view.container.querySelector('[data-scroll-fade="right"]');
+
+    expect(constructObserver).toHaveBeenCalledWith(expect.any(Function), {
+      root: toolbar,
+      rootMargin: "0px -4px",
+      threshold: 1,
+    });
+    expect(observe).toHaveBeenCalledWith(leftBoundary);
+    expect(observe).toHaveBeenCalledWith(rightBoundary);
+
+    act(() => {
+      observerCallback?.(
+        [
+          { isIntersecting: false, target: leftBoundary },
+          { isIntersecting: true, target: rightBoundary },
+        ] as IntersectionObserverEntry[],
+        {} as IntersectionObserver,
+      );
+    });
+
+    expect(leftFade?.classList.contains("opacity-100")).toBe(true);
+    expect(rightFade?.classList.contains("opacity-0")).toBe(true);
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
   });
 });

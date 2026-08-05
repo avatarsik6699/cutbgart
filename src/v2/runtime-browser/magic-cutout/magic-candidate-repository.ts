@@ -21,6 +21,10 @@ export type MagicCandidate = Readonly<{
   width: number;
 }>;
 
+function transferableCandidateData(data: Uint8ClampedArray): ArrayBuffer {
+  return data.buffer instanceof ArrayBuffer ? data.buffer : data.slice().buffer;
+}
+
 export class MagicCandidateRepository {
   readonly #candidates = new Map<MagicCandidateId, MagicCandidate>();
   readonly #nextId: () => MagicCandidateId;
@@ -37,19 +41,34 @@ export class MagicCandidateRepository {
     source: ArtifactId;
     strokes: readonly MagicStroke[];
   }): readonly MagicCandidateSummary[] {
-    this.releaseDraft(options.correlation.draftId);
     const ranked = rankAndFuseMagicCandidates({
       base: options.base,
       candidates: options.raw,
       strokes: options.strokes,
     });
-    return ranked.map((candidate) => {
+    return this.replaceRanked({
+      correlation: options.correlation,
+      ranked: ranked.map((candidate) => ({
+        ...candidate,
+        data: transferableCandidateData(candidate.data),
+      })),
+      source: options.source,
+    });
+  }
+
+  replaceRanked(options: {
+    correlation: MagicPredictionCorrelation;
+    ranked: readonly TransferableMagicCandidate[];
+    source: ArtifactId;
+  }): readonly MagicCandidateSummary[] {
+    this.releaseDraft(options.correlation.draftId);
+    return options.ranked.map((candidate) => {
       const candidateId = this.#nextId();
       const stored: MagicCandidate = {
         ...candidate,
         candidateId,
         correlation: { ...options.correlation },
-        data: candidate.data.slice(),
+        data: new Uint8ClampedArray(candidate.data).slice(),
         source: options.source,
       };
       this.#candidates.set(candidateId, stored);

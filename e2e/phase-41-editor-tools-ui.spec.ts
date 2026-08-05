@@ -116,6 +116,8 @@ test("dirty tool draft survives batch selection and guarded tool navigation", as
     await editorV2.scenario.completeRun();
   }
 
+  await expect(page.getByTestId("editor-toolbar")).toHaveCSS("scrollbar-width", "none");
+
   const rail = page.getByTestId("batch-overview");
   const first = rail
     .locator("article")
@@ -128,12 +130,12 @@ test("dirty tool draft survives batch selection and guarded tool navigation", as
   await first.click();
   const canvas = page.getByLabel("Paint Keep and Remove guidance on the image");
   await canvas.click({ position: { x: 8, y: 8 } });
-  await expect(page.getByText("1/50 strokes")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
 
   await second.click();
   await expect(second).toHaveAttribute("aria-pressed", "true");
   await first.click();
-  await expect(page.getByText("1/50 strokes")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
   expect(await editorV2.scenario.runCount()).toBe(2);
 
   await page.getByRole("button", { name: "Background", exact: true }).click();

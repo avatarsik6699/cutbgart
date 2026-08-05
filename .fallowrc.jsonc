@@ -1,0 +1,87 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": ["scripts/profiling/v2/verify-phase-42-reports.ts"],
+  "rules": {
+    "boundary-violation": "error",
+    "private-type-leaks": "warn",
+    "prop-drilling": "warn",
+    "stale-suppressions": "warn",
+  },
+  "duplicates": {
+    "mode": "mild",
+    "minTokens": 50,
+    "minLines": 5,
+    "minOccurrences": 3,
+    "threshold": 0,
+  },
+  "boundaries": {
+    "zones": [
+      {
+        "name": "v2-tests",
+        "patterns": [
+          "src/v2/**/*.test.ts",
+          "src/v2/**/*.test.tsx",
+          "src/pages/editor-v2/**/*.test.ts",
+          "src/pages/editor-v2/**/*.test.tsx",
+        ],
+      },
+      { "name": "v2-domain", "patterns": ["src/v2/domain/**"] },
+      { "name": "v2-application", "patterns": ["src/v2/application/**"] },
+      { "name": "v2-runtime", "patterns": ["src/v2/runtime-browser/**"] },
+      { "name": "v2-presentation", "patterns": ["src/v2/presentation/**"] },
+      { "name": "v2-shared", "patterns": ["src/v2/shared/**"] },
+      { "name": "v2-testing", "patterns": ["src/v2/testing/**"] },
+      { "name": "editor-v2-page", "patterns": ["src/pages/editor-v2/**"] },
+    ],
+    "rules": [
+      {
+        "from": "v2-tests",
+        "allow": [
+          "v2-tests",
+          "v2-domain",
+          "v2-application",
+          "v2-runtime",
+          "v2-presentation",
+          "v2-shared",
+          "v2-testing",
+          "editor-v2-page",
+        ],
+      },
+      { "from": "v2-domain", "allow": ["v2-domain"] },
+      {
+        "from": "v2-application",
+        "allow": ["v2-application", "v2-domain"],
+      },
+      {
+        "from": "v2-runtime",
+        "allow": ["v2-runtime", "v2-application", "v2-domain", "v2-shared"],
+      },
+      {
+        "from": "v2-presentation",
+        "allow": [
+          "v2-presentation",
+          "v2-application",
+          "v2-runtime",
+          "v2-domain",
+          "v2-shared",
+        ],
+      },
+      { "from": "v2-shared", "allow": ["v2-shared"] },
+      {
+        "from": "v2-testing",
+        "allow": ["v2-testing", "v2-application", "v2-runtime", "v2-domain", "v2-shared"],
+      },
+      {
+        "from": "editor-v2-page",
+        "allow": [
+          "editor-v2-page",
+          "v2-presentation",
+          "v2-application",
+          "v2-runtime",
+          "v2-domain",
+          "v2-shared",
+        ],
+      },
+    ],
+  },
+}

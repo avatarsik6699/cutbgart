@@ -62,19 +62,12 @@ test("real SlimSAM supports warm re-prediction and one explicit Magic Apply", as
   if (box === null) throw new Error("Magic canvas has no viewport box");
   const centre = { x: box.width / 2, y: box.height / 2 };
   await canvas.click({ position: centre });
-  await page.getByRole("button", { name: "Predict" }).click();
-  await expect(page.getByRole("button", { name: "Candidate 1" })).toBeVisible({
-    timeout: 5 * 60_000,
-  });
   await page.getByRole("button", { name: "Remove" }).click();
   await canvas.click({ position: centre });
-  await page.getByRole("button", { name: "Predict" }).click();
-  await expect(page.getByRole("button", { name: "Candidate 1" })).toBeVisible({
-    timeout: 2 * 60_000,
-  });
-  await page.getByRole("button", { name: "Candidate 1" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Undo edit" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Undo edit" })).toBeEnabled({
+    timeout: 5 * 60_000,
+  });
 
   await expect
     .poll(() =>
@@ -91,7 +84,7 @@ test("real SlimSAM supports warm re-prediction and one explicit Magic Apply", as
         };
       }),
     )
-    .toEqual({ automatic: 1, commits: 1, predictions: 2 });
+    .toEqual({ automatic: 1, commits: 1, predictions: 1 });
   await preview.resetButton.click();
   await expect
     .poll(() =>

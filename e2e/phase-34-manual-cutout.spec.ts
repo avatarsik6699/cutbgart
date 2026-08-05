@@ -10,7 +10,7 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
 }) => {
   await page.goto("/en/editor-v2");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
+  await editorV2.upload.choose(phase33ImageCorpus.representative.path);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
   await editorV2.scenario.completeRun();
   await expect(page.getByRole("tab", { name: "Manual" })).toBeVisible();
@@ -18,13 +18,23 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   await page.getByRole("tab", { name: "Manual" }).click();
   const canvas = page.getByRole("img", { name: "Manual cutout canvas" });
   await expect(canvas).toBeVisible();
+  await canvas.hover({ position: { x: 80, y: 80 } });
+  const brushCursor = page.getByTestId("manual-brush-cursor");
+  const brushCursorBox = await brushCursor.boundingBox();
+  if (brushCursorBox === null) throw new Error("Manual brush cursor is not visible");
+  expect(Math.abs(brushCursorBox.width - brushCursorBox.height)).toBeLessThanOrEqual(1);
+  await expect(brushCursor).toHaveCSS("border-top-color", "rgb(255, 255, 255)");
+  await expect(brushCursor).toHaveCSS("border-top-style", "solid");
   await canvas.click({ position: { x: 1, y: 1 } });
   await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
   await page.keyboard.press("Control+z");
   await expect(page.getByRole("button", { name: "Redo stroke" })).toBeEnabled();
   await page.keyboard.press("Control+Shift+z");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("tab", { name: "Magic" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Manual" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByRole("button", { name: "Undo document change" })).toBeDisabled();
 
   await page.getByRole("tab", { name: "Manual" }).click();
@@ -32,6 +42,10 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
     .getByRole("img", { name: "Manual cutout canvas" })
     .click({ position: { x: 1, y: 1 } });
   await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByRole("tab", { name: "Manual" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByRole("button", { name: "Undo document change" })).toBeEnabled();
   await expect.poll(editorV2.scenario.manualCommitCount).toBe(1);
   await expect.poll(editorV2.scenario.runCount).toBe(1);

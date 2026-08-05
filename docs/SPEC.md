@@ -10,8 +10,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.38` |
-| Date | `2026-08-04` |
+| Version | `v1.41` |
+| Date | `2026-08-05` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
 | Internal project | `bg_remove_app` / BG Remove App |
@@ -409,7 +409,58 @@ tool algorithms, model families, worker/runtime ownership, persistence, privacy,
 add paid/backend behavior; or authorize public cutover. Complete managed-Windows product acceptance
 and route cutover remain separately gated follow-up phases after the isolated full UI is accepted.
 
-### 2.11 Future paid direction
+### 2.11 Completed v2 validation — Phase 42
+
+Phase 42 repeats cutover-readiness validation against the now presentation-complete isolated v2
+routes. It closes the evidence gaps identified by Phase 38 and produces an explicit `ready` or
+`blocked` decision for planning a later public-route cutover. It is an acceptance and bounded
+defect-closure phase, not the cutover itself.
+
+The dependency-complete validation covers:
+
+- one frozen bilingual complete-product matrix over picker/drop/paste, validation, quality/model
+  selection, automatic removal/fallback, single/batch workflows, Manual/Magic Cutout, Background,
+  Enhancements, history, responsive layout, selected PNG/ZIP export, recovery, privacy, and cleanup;
+- exact v1-faithful desktop/narrow presentation evidence from Phases 39–41 plus truthful v2-only
+  status details; no product control, copy, route, or material state may be masked or silently
+  omitted;
+- one zero-retry deterministic full-workflow journey, one serialized real-model journey, and a
+  managed-Windows Chromium sample covering keyboard, fine/coarse pointer where available, actual
+  200% browser zoom/reflow, announcements, scroll/control responsiveness, cold/warm behavior, and
+  resource ownership;
+- explicit capture of long-task and event-to-next-paint signals where the environment exposes them,
+  plus fail-closed `unsupported` evidence where it does not. Host/WSL timings may not substitute for
+  managed-Windows observations;
+- a versioned Phase-42 report derived from the existing readiness/performance evidence model, with
+  every requirement linked to deterministic, real-model, managed-device, or architect evidence and
+  a final `ready`/`blocked` conclusion.
+
+Architect testing after Phase 41 also makes the following regression closure part of Phase 42:
+
+- automatic-removal and Enhancement heavy stages keep scroll, controls, and unrelated browser
+  interaction responsive; the presentation migration must not reintroduce synchronous full-image
+  work, high-frequency React/XState updates, duplicate subscriptions, or avoidable render churn;
+- Magic and Manual share one stable stage geometry and source-coordinate mapping. Their brush cursor
+  is circular at every rendered scale, pointer strokes remain responsive, and brush-size changes do
+  not rebuild image/runtime state;
+- the user-facing Magic flow exposes only Apply and Cancel. Apply predicts, automatically selects
+  the highest-ranked valid candidate, and commits it through the accepted correlated runtime flow;
+  candidate choice, Predict, local stroke-history buttons, and the stroke/candidate status block are
+  not product UI. The common editor toolbar owns contextual Undo/Redo for active draft gestures and
+  committed document history;
+- switching between Magic and Manual, and applying or cancelling either tool, never changes the
+  stage size/crop or implicitly selects another tool;
+- Background and Enhancement Apply/Cancel keep their current tool selected, and successful Apply
+  remains visible as the committed document result instead of navigating to Cutout or losing it.
+
+Phase 42 may fix only defects that violate the already accepted Phase-33–41 contracts. A new product
+capability, architecture/data/API/env change, model-policy change, route migration, or production
+behavior change becomes a blocker or separately scoped follow-up. Public `/`, `/en`, scenario-route
+bindings, indexing, analytics, and legacy ownership remain unchanged. A `ready` conclusion
+authorizes planning a later cutover phase; it does not perform that cutover or authorize legacy
+removal.
+
+### 2.12 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -964,6 +1015,20 @@ selection mutates or reinfers a sibling; export includes an uncommitted draft; e
 desktop/narrow evidence, serialized real-model evidence, or affected-device review is missing; or
 public/scenario routes change.
 
+Phase 42 additionally fails if the complete-product matrix is incomplete or stale; any required
+outcome lacks deterministic, real-model, managed-Windows, or architect evidence; actual Windows
+200% zoom/reflow, keyboard/focus/announcement, responsive interaction, cold/warm, or resource
+evidence is skipped or replaced with WSL/headless inference; retries or arbitrary sleeps mask a
+failure; any Phase-33–41 actor/runtime/artifact/presentation contract regresses; public/scenario
+routes change; or the report concludes `ready` while any blocker, serious accessibility finding,
+unsupported required signal, freeze, lost command, stale publication, cross-document mutation, or
+reachable resource leak remains. It also fails if automatic removal or Enhancement Apply blocks
+unrelated interaction; a brush is distorted, misses pointer input, or drives full-image projection
+updates; Magic exposes manual prediction/candidate selection or separate stroke-history controls;
+Apply/Cancel does not mutate exactly the intended draft/commit; switching or completing a tool
+changes stage geometry or implicitly selects Cutout; or a Background/Enhancement commit is not
+retained and displayed through the accepted v2 document actor and artifact ownership.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -978,12 +1043,13 @@ public/scenario routes change.
 | 38 | Complete / blocked result | Validation gate passed; visual/product/evidence blockers remain, so no public cutover |
 | 39 | Complete | V1-faithful main-page shell and single-image input/process/export UI over v2; gate and architect acceptance passed |
 | 40 | Complete | V1-faithful batch workspace UI over the accepted v2 workspace runtime; gate and architect acceptance passed |
-| 41 | Approved / active | Restore the complete v1 editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes on isolated routes |
-| Later | Unscheduled | Run complete-product managed-Windows acceptance, migrate scenario/public routes, then remove legacy; paid backend remains separate work |
+| 41 | Complete | V1-faithful editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes; gate and architect acceptance passed |
+| 42 | Complete / blocked result | Regression closure and complete-product evidence finished; one gate timing failure was explicitly waived, unsupported duration signals remain, and no public cutover is authorized |
+| Later | Unscheduled | Resolve remaining readiness evidence in a separate phase before any new `ready` decision; scenario/public cutover, rollback observation, legacy removal, and paid backend work remain separately scoped |
 
-No v2 capability is accepted merely because legacy code exists. Phase 41 is limited to the complete
-editor-tool presentation slice above. Public migration, legacy removal, and paid work still require
-their own approved phase contracts.
+No v2 capability is accepted merely because legacy code exists. Phase 42 is limited to complete-
+product validation and accepted-contract defect closure. Public migration, legacy removal, and paid
+work still require their own approved phase contracts.
 
 ## 9. Deferred decisions
 

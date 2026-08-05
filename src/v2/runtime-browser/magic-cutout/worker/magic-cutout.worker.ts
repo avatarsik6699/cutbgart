@@ -11,6 +11,7 @@ import { env as appEnv } from "@/shared/config";
 import { GUIDED_MODEL } from "@/shared/lib/inference/production-model-config";
 import type { ProcessingError, ProcessingErrorCode } from "@/v2/domain";
 
+import { rankAndFuseMagicCandidates } from "../magic-candidate-policy";
 import { createMagicModelPrompts } from "../magic-prompt-policy";
 import {
   MAGIC_WORKER_PROTOCOL_VERSION,
@@ -43,6 +44,10 @@ type SamInputs = {
   pixel_values: Tensor;
   reshaped_input_sizes: [number, number][];
 };
+
+function transferableCandidateData(data: Uint8ClampedArray): ArrayBuffer {
+  return data.buffer instanceof ArrayBuffer ? data.buffer : data.slice().buffer;
+}
 
 type SamOutputs = { iou_scores: Tensor; pred_masks: Tensor };
 
@@ -310,12 +315,22 @@ async function predict(
       assertCurrent(request);
       const first = masks[0];
       if (first === undefined) throw new Error("SlimSAM returned no masks");
-      const candidates = candidateBuffers(
+      const rawCandidates = candidateBuffers(
         first,
         predictionOutputs.iou_scores,
         command.source.width,
         command.source.height,
       );
+      const candidates = rankAndFuseMagicCandidates({
+        base: command.base === null ? null : new Uint8ClampedArray(command.base),
+        candidates: rawCandidates,
+        strokes: command.strokes,
+      }).map((candidate) => ({
+        data: transferableCandidateData(candidate.data),
+        height: candidate.height,
+        score: candidate.score,
+        width: candidate.width,
+      }));
       post(
         {
           protocol: MAGIC_WORKER_PROTOCOL_VERSION,

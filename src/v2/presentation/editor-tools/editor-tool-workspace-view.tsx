@@ -31,10 +31,26 @@ export function EditorToolWorkspaceView(props: Props) {
           tools={createEditorToolRegistry()}
           activeTool={projection.activeTool}
           onToolChange={(tool) => props.onIntent({ type: "choose-tool", tool })}
-          canUndo={!projection.dirtyDraft && projection.canUndoDocument}
-          canRedo={!projection.dirtyDraft && projection.canRedoDocument}
-          onUndo={() => props.onIntent({ type: "undo-document" })}
-          onRedo={() => props.onIntent({ type: "redo-document" })}
+          canUndo={
+            projection.canUndoDraft ||
+            (!projection.dirtyDraft && projection.canUndoDocument)
+          }
+          canRedo={
+            projection.canRedoDraft ||
+            (!projection.dirtyDraft && projection.canRedoDocument)
+          }
+          undoLabel={projection.canUndoDraft ? m.editorV2DraftUndo() : null}
+          redoLabel={projection.canRedoDraft ? m.editorV2DraftRedo() : null}
+          onUndo={() =>
+            props.onIntent({
+              type: projection.canUndoDraft ? "undo-draft" : "undo-document",
+            })
+          }
+          onRedo={() =>
+            props.onIntent({
+              type: projection.canRedoDraft ? "redo-draft" : "redo-document",
+            })
+          }
           statusSlot={props.statusSlot}
           workspaceActionsSlot={props.workspaceActionsSlot}
           downloadSlot={props.downloadSlot}

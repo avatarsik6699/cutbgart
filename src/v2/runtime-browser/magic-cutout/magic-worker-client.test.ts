@@ -92,6 +92,7 @@ function createHarness() {
   const client = new MagicWorkerClient({ coordinator, factory, repository });
   const input = {
     ...correlation,
+    base: new Uint8ClampedArray([255, 0]),
     source,
     strokes: [
       {
@@ -134,13 +135,17 @@ describe("MagicWorkerClient", () => {
     );
     const worker = await startedWorker(harness);
 
-    expect(worker.messages[0]?.message).toMatchObject({
+    const command = worker.messages[0]?.message;
+    expect(command?.type).toBe("PREDICT");
+    if (command?.type !== "PREDICT") throw new Error("Expected a prediction command");
+    expect(command.base).toBeInstanceOf(ArrayBuffer);
+    expect(command).toMatchObject({
       type: "PREDICT",
       correlation,
       model: GUIDED_MODEL,
       source: { width: 2, height: 1, mediaType: "image/png" },
     });
-    expect(worker.messages[0]?.transfer).toHaveLength(1);
+    expect(worker.messages[0]?.transfer).toHaveLength(2);
     worker.emit(successEvent());
     await expect(result).resolves.toHaveLength(1);
   });

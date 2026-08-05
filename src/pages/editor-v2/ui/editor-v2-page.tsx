@@ -42,14 +42,14 @@ function batchError(
 }
 
 export function EditorV2Page(props: Props) {
-  const editor = useEditorSession(props.sessionOptions);
+  const [batchMode, setBatchMode] = useState(false);
+  const editor = useEditorSession(props.sessionOptions, batchMode);
   const hydrated = useIsHydrated();
   const automaticModel = useAutomaticModelMode("isnet-q8");
   const [exportSize, setExportSize] = useState<ExportSize>("original");
   const [admissionError, setAdmissionError] = useState<
     EditorImportError | "multiple-files" | null
   >(null);
-  const [batchMode, setBatchMode] = useState(false);
   const [batchAdmissionError, setBatchAdmissionError] =
     useState<BatchMainPageProjection["admissionError"]>(null);
   const [restoreFocusTool, setRestoreFocusTool] =

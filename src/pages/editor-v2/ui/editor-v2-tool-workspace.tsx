@@ -1,5 +1,5 @@
 import { m } from "@/paraglide/messages";
-import type { DocumentStatus, MagicCandidateSummary } from "@/v2/domain";
+import type { DocumentStatus } from "@/v2/domain";
 import {
   BackgroundWorkspace,
   EnhancementWorkspace,
@@ -29,7 +29,6 @@ type Props = Readonly<{
   enhancementRuntime: EnhancementRuntimeSnapshot;
   fileName: string;
   foregroundUrl: string | null;
-  magicCandidates: readonly MagicCandidateSummary[];
   magicInteraction: MagicCutoutInteraction;
   magicProgress: MagicRuntimeProgress | null;
   manualInteraction: ManualCutoutInteraction;
@@ -44,12 +43,11 @@ export function EditorV2ToolWorkspace(props: Props) {
   if (projection.magicDraft !== null) {
     return (
       <MagicCutoutWorkspace
-        candidates={props.magicCandidates}
         draft={projection.magicDraft}
         height={projection.height}
         runtimeProgress={props.magicProgress}
         interaction={props.magicInteraction}
-        sourceUrl={projection.sourcePreviewUrl}
+        currentUrl={projection.committedResultUrl}
         width={projection.width}
         onCutoutModeChange={props.onCutoutModeChange}
       />
@@ -61,7 +59,7 @@ export function EditorV2ToolWorkspace(props: Props) {
         documentId={projection.documentId}
         height={projection.height}
         interaction={props.manualInteraction}
-        sourceUrl={projection.sourcePreviewUrl}
+        currentUrl={projection.committedResultUrl}
         width={projection.width}
         onCutoutModeChange={props.onCutoutModeChange}
       />

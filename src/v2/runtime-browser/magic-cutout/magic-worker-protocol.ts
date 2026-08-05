@@ -4,7 +4,7 @@ import type { GuidedModelProfile } from "@/shared/lib/inference/production-model
 
 import type { MagicStroke } from "./magic-cutout.types";
 
-export const MAGIC_WORKER_PROTOCOL_VERSION = 1 as const;
+export const MAGIC_WORKER_PROTOCOL_VERSION = 2 as const;
 
 export type MagicPredictionStage =
   "magic-model-loading" | "magic-encode" | "magic-predict";
@@ -28,6 +28,7 @@ export type MagicWorkerCommand =
       protocol: typeof MAGIC_WORKER_PROTOCOL_VERSION;
       type: "PREDICT";
       correlation: MagicPredictionCorrelation;
+      base: ArrayBuffer | null;
       model: GuidedModelProfile;
       source: TransferableMagicSource;
       strokes: readonly MagicStroke[];

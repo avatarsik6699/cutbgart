@@ -112,13 +112,10 @@ test("real v1-faithful editor completes every v2 tool without automatic reinfere
   await magicCanvas.click({
     position: { x: magicBox.width / 2, y: magicBox.height / 2 },
   });
-  await page.getByRole("button", { name: "Predict", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Candidate 1" })).toBeVisible({
-    timeout: 5 * 60_000,
-  });
-  await page.getByRole("button", { name: "Candidate 1" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect.poll(async () => (await counters(page)).magicCommits).toBe(1);
+  await expect
+    .poll(async () => (await counters(page)).magicCommits, { timeout: 5 * 60_000 })
+    .toBe(1);
 
   await page.getByRole("tab", { name: "Manual", exact: true }).click();
   const manualCanvas = page.getByRole("img", { name: "Manual cutout canvas" });

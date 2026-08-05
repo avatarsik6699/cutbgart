@@ -27,17 +27,18 @@
 | 39 | ✅ done | gate passed; `v0.39.0` | [`PHASE_39.md`](./PHASE_39.md): v1-faithful main-page single-image flow on isolated v2 routes |
 | 40 | ✅ done | gate passed; `v0.40.0` | [`PHASE_40.md`](./PHASE_40.md): v1-faithful batch workspace on isolated v2 routes |
 | 41 | ✅ done | `v0.41.0`; gate passed | [`PHASE_41.md`](./PHASE_41.md): v1-faithful editor tools on isolated v2 routes |
+| 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`PHASE_42.md`](./PHASE_42.md): regression closure complete; cutover readiness remains blocked |
 
-**Latest closed phase:** `41`
+**Latest closed phase:** `42`
 
-**Implementation in progress:** —
+**Implementation in progress:** `—`
 
-**Only active implementation scope:** —; the next phase requires an approved SPEC change and
-`/phase-init`.
+**Only active implementation scope:** none. A subsequent phase requires `/phase-init`; public
+cutover remains unauthorized.
 
 ## Current contract
 
-This section describes the accepted contract through Phase 41. The legacy editor remains the
+This section describes the accepted contract through Phase 42. The legacy editor remains the
 public product; the separately reachable v2 foundation
 includes automatic removal, Manual Cutout, guided Magic Cutout, Background, Enhancements, document
 history, and a batch/multi-document workspace. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
@@ -73,6 +74,10 @@ history, and a batch/multi-document workspace. See [`ARCHITECTURE_V2.md`](./ARCH
   coverage, full-workflow deterministic and real-model evidence, and repeatable performance/resource
   verification. Its technical gate passed, while its accepted product conclusion remains `blocked`
   until v1-visible input, quality, export, layout, and target-device evidence gaps are closed.
+- Phase 42 closes the presentation-era v2 regressions, records bilingual deterministic/real-model
+  and native-Windows complete-product evidence, and retains a fail-closed `blocked` cutover result.
+  The Phase-42 gate had one waived legacy Phase-32 upload-preparation timing failure (129 ms against
+  `<100 ms`); public cutover remains unauthorized.
 
 ### Core models
 
@@ -170,6 +175,11 @@ Phase 41 adds immutable `EditorToolWorkspaceProjection` and typed
 Magic canvas work stays behind bounded semantic interaction ports; pixels, canvases, pointer events,
 mutable draft engines, actors, sessions, workers, and binary values remain outside controller-neutral
 presentation.
+
+Phase 42 versions the internal Magic worker protocol to `v2` so the current base matte crosses the
+transferable boundary and candidate ranking/fusion remains off the interaction thread. It also adds
+versioned privacy-safe Phase-42 readiness/performance evidence files; no domain command, public API,
+endpoint, persistence, environment key, model policy, export format, or public route changes.
 
 ### Active endpoints and pages
 
@@ -361,6 +371,32 @@ separately gated work.
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-05 — Phase 42 closed with blocked readiness and gate exception
+
+**Type:** phase-completion / accepted risk
+
+**Author:** AI (`/context-update 42`)
+
+**Triggered by:** architect accepted the fail-closed `blocked` conclusion and explicitly waived the
+single failed Phase-32 performance-budget gate measurement
+
+#### Changes / Decision
+
+- Closed the architect-reported v2 presentation, Cutout geometry/input, finishing-result,
+  subscription, toolbar-reflow, and Magic candidate main-thread regressions.
+- Captured bilingual deterministic and real-model journeys plus native Windows zoom, interaction,
+  announcement, Long Task, and three-cycle zero-owner evidence; public cutover remains blocked by
+  explicitly unsupported absolute duration signals.
+- `/phase-gate 42` passed every required check except the Phase-32 English upload-preparation sample,
+  which measured 129 ms against `<100 ms`. The architect directed no Phase-42 fix and accepted this
+  recorded FAIL as a closure exception.
+
+#### Affected Phases / Consequences
+
+- Phase 42 is complete with an accepted `blocked` readiness result; it does not authorize public
+  cutover or legacy removal.
+- Any future cutover or performance follow-up requires a separately initialized phase.
 
 ### 2026-08-04 — Phase 41 complete
 

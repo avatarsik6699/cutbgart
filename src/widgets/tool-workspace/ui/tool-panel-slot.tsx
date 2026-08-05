@@ -19,7 +19,9 @@ export function ToolPanelSlot(props: ToolPanelSlotProps) {
 
   useEffect(
     function focusPanelFx() {
-      if (props.autoFocus) panelRef.current?.focus();
+      if (!props.autoFocus) return;
+      const frameId = window.requestAnimationFrame(() => panelRef.current?.focus());
+      return () => window.cancelAnimationFrame(frameId);
     },
     [props.autoFocus],
   );

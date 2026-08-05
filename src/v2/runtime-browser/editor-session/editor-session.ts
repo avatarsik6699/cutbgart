@@ -93,6 +93,7 @@ function itemStatus(item: ItemRecord): WorkspaceItemStatus {
 }
 
 export function createEditorSession(options: EditorSessionOptions = {}): EditorSession {
+  const activeListeners = new Set<() => void>();
   const listeners = new Set<() => void>();
   const items: ItemRecord[] = [];
   const dependencies = createEditorSessionDependencies(options, {
@@ -207,6 +208,12 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   function publish(): void {
     const next = computeSnapshot();
     snapshot = next.kind === "document" ? { ...next } : next;
+    for (const listener of activeListeners) listener();
+    for (const listener of listeners) listener();
+  }
+
+  function publishDocument(): void {
+    if (snapshot.kind === "document") snapshot = { ...snapshot };
     for (const listener of listeners) listener();
   }
 
@@ -336,6 +343,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
         fileName: item.file.name,
         height: prepared.height,
         onChange: publish,
+        onDocumentChange: publishDocument,
         previewUrl: preview?.url ?? null,
         width: prepared.width,
       });
@@ -478,6 +486,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       dependencies.magicDrafts.dispose();
       dependencies.repository.dispose();
       dependencies.manualDrafts.dispose();
+      activeListeners.clear();
       listeners.clear();
     },
     async exportPng(size: ExportSize = "original") {
@@ -669,6 +678,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    subscribeActive(listener) {
+      activeListeners.add(listener);
+      return () => activeListeners.delete(listener);
     },
     undoDocument() {
       const runtime = selected();

@@ -14,6 +14,8 @@ const projection: EditorToolWorkspaceProjection = {
   revision: 3,
   activeTool: "cutout",
   cutoutMode: "magic",
+  canUndoDraft: false,
+  canRedoDraft: false,
   canUndoDocument: true,
   canRedoDocument: false,
   dirtyDraft: false,
@@ -72,5 +74,28 @@ describe("EditorToolWorkspaceView", () => {
         })
         .hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("routes common toolbar history to the active draft", () => {
+    const onIntent = vi.fn();
+    render(
+      <EditorToolWorkspaceView
+        projection={{
+          ...projection,
+          dirtyDraft: true,
+          canUndoDraft: true,
+          canRedoDraft: true,
+        }}
+        onIntent={onIntent}
+      >
+        <div />
+      </EditorToolWorkspaceView>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Undo|Отменить/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Redo|Повторить/ }));
+
+    expect(onIntent).toHaveBeenNthCalledWith(1, { type: "undo-draft" });
+    expect(onIntent).toHaveBeenNthCalledWith(2, { type: "redo-draft" });
   });
 });

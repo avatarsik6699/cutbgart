@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "phase-42.readiness.v1",
+  "generatedAt": "2026-08-05T14:16:29.000Z",
+  "maximumEvidenceAgeMs": 86400000,
+  "conclusion": "blocked",
+  "requirements": [
+    { "id": "ACCEPT-01", "locales": ["ru", "en"], "outcome": "The architect accepts one complete ready or blocked conclusion.", "disposition": "required-parity", "rationale": "Final product acceptance is mandatory before cutover planning.", "evidenceIds": ["H-final"], "status": "passed" },
+    { "id": "A11Y-01", "locales": ["ru", "en"], "outcome": "Keyboard order, focus, shortcuts and dialogs remain operable.", "disposition": "required-parity", "rationale": "WCAG 2.2 AA and architect acceptance are required.", "evidenceIds": ["A-a11y", "W-keyboard", "H-final"], "status": "passed" },
+    { "id": "A11Y-02", "locales": ["ru", "en"], "outcome": "Names, roles, states and values remain complete.", "disposition": "required-parity", "rationale": "Semantic behavior is product functionality.", "evidenceIds": ["A-a11y", "W-keyboard"], "status": "passed" },
+    { "id": "A11Y-03", "locales": ["ru", "en"], "outcome": "Material status changes announce without duplicate noise.", "disposition": "required-parity", "rationale": "Announcements require browser and architect evidence.", "evidenceIds": ["A-a11y", "W-keyboard", "H-final"], "status": "passed" },
+    { "id": "A11Y-04", "locales": ["ru", "en"], "outcome": "Fine and coarse pointer controls and alternatives remain operable.", "disposition": "required-parity", "rationale": "Affected-device interaction is a cutover condition.", "evidenceIds": ["A-a11y", "W-pointer", "H-final"], "status": "passed" },
+    { "id": "A11Y-05", "locales": ["ru", "en"], "outcome": "Contrast and reduced-motion behavior have no serious blocker.", "disposition": "required-parity", "rationale": "Serious and critical accessibility findings fail readiness.", "evidenceIds": ["A-a11y", "W-product"], "status": "passed" },
+    { "id": "AUTO-01", "locales": ["ru", "en"], "outcome": "Automatic removal publishes exactly one correlated result per admission.", "disposition": "required-parity", "rationale": "This is the core complete-product outcome.", "evidenceIds": ["A-complete", "R-full", "W-product", "P-full"], "status": "unsupported" },
+    { "id": "AUTO-02", "locales": ["ru", "en"], "outcome": "Quality choice and WebGPU to WASM fallback remain truthful.", "disposition": "required-parity", "rationale": "Phases 39 and 40 remediated the Phase-38 quality blocker.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" },
+    { "id": "COPY-01", "locales": ["ru", "en"], "outcome": "Product copy and announcements are equivalent in Russian and English.", "disposition": "required-parity", "rationale": "Bilingual parity is an explicit cutover condition.", "evidenceIds": ["A-complete", "A-a11y", "W-product", "H-final"], "status": "passed" },
+    { "id": "EXPORT-01", "locales": ["ru", "en"], "outcome": "Selected Original, 2048 or 1024 PNG export uses only committed output.", "disposition": "required-parity", "rationale": "Phase 39 remediated the Phase-38 export-size blocker.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" },
+    { "id": "EXPORT-02", "locales": ["ru", "en"], "outcome": "ZIP export is deterministic, ordered and committed-only.", "disposition": "required-parity", "rationale": "The complete batch product requires Download All.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" },
+    { "id": "HIST-01", "locales": ["ru", "en"], "outcome": "Contextual draft and document history mutate the intended level without inference.", "disposition": "accepted-difference", "rationale": "Phases 34 and 35 accepted two-level bounded history.", "evidenceIds": ["A-complete", "W-keyboard", "H-prior-contracts"], "status": "passed" },
+    { "id": "INPUT-01", "locales": ["ru", "en"], "outcome": "Picker admission handles valid single and batch input locally.", "disposition": "required-parity", "rationale": "Picker input is a public product capability.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" },
+    { "id": "INPUT-02", "locales": ["ru", "en"], "outcome": "Drop admission matches picker behavior.", "disposition": "required-parity", "rationale": "Phases 39 and 40 remediated this Phase-38 blocker.", "evidenceIds": ["A-complete", "W-pointer"], "status": "passed" },
+    { "id": "INPUT-03", "locales": ["ru", "en"], "outcome": "Clipboard admission matches picker behavior.", "disposition": "required-parity", "rationale": "Phases 39 and 40 remediated this Phase-38 blocker.", "evidenceIds": ["A-complete", "W-keyboard"], "status": "passed" },
+    { "id": "INPUT-04", "locales": ["ru", "en"], "outcome": "Invalid and over-capacity items fail recoverably without poisoning siblings.", "disposition": "required-parity", "rationale": "Validation and sibling isolation are public outcomes.", "evidenceIds": ["A-complete", "A-a11y", "W-product"], "status": "passed" },
+    { "id": "INPUT-05", "locales": ["ru", "en"], "outcome": "Oversized dimensions remain locally bounded with aspect ratio retained.", "disposition": "required-parity", "rationale": "The accepted preparation contract must not regress.", "evidenceIds": ["A-complete", "R-full", "P-full"], "status": "unsupported" },
+    { "id": "LIFE-01", "locales": ["ru", "en"], "outcome": "The complete single-document lifecycle remains coherent.", "disposition": "required-parity", "rationale": "This is the minimum public workflow.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" },
+    { "id": "LIFE-02", "locales": ["ru", "en"], "outcome": "Batch admission and heavy work remain bounded and isolated.", "disposition": "accepted-difference", "rationale": "Phase 37 accepted the bounded v2 scheduler and workspace ownership.", "evidenceIds": ["A-complete", "R-full", "W-product", "P-full", "H-prior-contracts"], "status": "unsupported" },
+    { "id": "LIFE-03", "locales": ["ru", "en"], "outcome": "Document selection restores cached state without reinference.", "disposition": "accepted-difference", "rationale": "Phase 37 accepted cached per-document runtime ownership.", "evidenceIds": ["A-complete", "R-full", "W-product", "P-full", "H-prior-contracts"], "status": "unsupported" },
+    { "id": "PARITY-01", "locales": ["ru", "en"], "outcome": "The complete desktop and narrow presentation retains every visible v1 control and state.", "disposition": "required-parity", "rationale": "Phases 39 through 41 remediated the Phase-38 visible-control catalog blocker.", "evidenceIds": ["A-visual", "W-product", "H-final"], "status": "passed" },
+    { "id": "PERF-01", "locales": ["ru", "en"], "outcome": "Heavy stages, brush input, scrolling and unrelated controls remain responsive.", "disposition": "required-parity", "rationale": "Phase-42 regressions require target and performance evidence.", "evidenceIds": ["A-complete", "R-full", "W-product", "P-full"], "status": "unsupported" },
+    { "id": "PRIV-01", "locales": ["ru", "en"], "outcome": "User content remains browser-local and absent from evidence.", "disposition": "required-parity", "rationale": "Privacy is a product invariant.", "evidenceIds": ["A-complete", "R-full", "W-product", "H-final"], "status": "passed" },
+    { "id": "RECOV-01", "locales": ["ru", "en"], "outcome": "Cancel, retry, reset and dirty guards reject stale work and restore focus.", "disposition": "required-parity", "rationale": "Recovery is a public outcome and ownership invariant.", "evidenceIds": ["A-complete", "A-a11y", "R-full", "W-product", "P-full"], "status": "unsupported" },
+    { "id": "RES-01", "locales": ["ru", "en"], "outcome": "Three churn cycles finish with zero residual owners.", "disposition": "accepted-difference", "rationale": "Phases 33 through 37 accepted explicit v2 resource ownership.", "evidenceIds": ["A-complete", "R-full", "W-product", "P-full", "H-prior-contracts"], "status": "unsupported" },
+    { "id": "RESP-01", "locales": ["ru", "en"], "outcome": "Actual managed-Windows 200 percent zoom reflows without clipping.", "disposition": "required-parity", "rationale": "This Phase-38 blocker cannot be replaced by WSL or effective-width emulation.", "evidenceIds": ["A-a11y", "W-zoom", "H-final"], "status": "passed" },
+    { "id": "RESP-02", "locales": ["ru", "en"], "outcome": "Every material narrow state remains visible and operable.", "disposition": "required-parity", "rationale": "Responsive product parity is required.", "evidenceIds": ["A-complete", "A-a11y", "W-product"], "status": "passed" },
+    { "id": "TOOL-01", "locales": ["ru", "en"], "outcome": "Manual uses the stable stage, white cursor, contextual history and atomic Apply or Cancel.", "disposition": "required-parity", "rationale": "Phase-42 regression closure requires complete-product proof.", "evidenceIds": ["A-complete", "A-a11y", "R-full", "W-product"], "status": "passed" },
+    { "id": "TOOL-02", "locales": ["ru", "en"], "outcome": "Magic uses Apply or Cancel and automatically commits the highest-ranked valid prediction.", "disposition": "required-parity", "rationale": "The Phase-42 product contract narrows UI without changing runtime ownership.", "evidenceIds": ["A-complete", "A-a11y", "R-full", "W-product"], "status": "passed" },
+    { "id": "TOOL-03", "locales": ["ru", "en"], "outcome": "Background Apply or Cancel retains the tool and committed result.", "disposition": "required-parity", "rationale": "A reported finishing-result regression was fixed and must be re-proven.", "evidenceIds": ["A-complete", "A-a11y", "R-full", "W-product"], "status": "passed" },
+    { "id": "TOOL-04", "locales": ["ru", "en"], "outcome": "Enhancement Apply remains responsive and retains the tool and committed result.", "disposition": "required-parity", "rationale": "A reported responsiveness and navigation regression was fixed and must be re-proven.", "evidenceIds": ["A-complete", "A-a11y", "R-full", "W-product", "P-full"], "status": "unsupported" },
+    { "id": "TOOL-05", "locales": ["ru", "en"], "outcome": "Tool changes never alter stage geometry, navigate implicitly or target a sibling document.", "disposition": "required-parity", "rationale": "Stable tool identity and correlated publication are Phase-42 requirements.", "evidenceIds": ["A-complete", "R-full", "W-product"], "status": "passed" }
+  ],
+  "evidence": [
+    { "id": "A-a11y", "kind": "automated", "capturedAt": "2026-08-05T10:21:11.000Z", "status": "passed", "limitation": null },
+    { "id": "A-complete", "kind": "automated", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null },
+    { "id": "A-visual", "kind": "automated", "capturedAt": "2026-08-05T10:21:11.000Z", "status": "passed", "limitation": null },
+    { "id": "H-final", "kind": "architect", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null },
+    { "id": "H-prior-contracts", "kind": "architect", "capturedAt": "2026-08-05T10:21:11.000Z", "status": "passed", "limitation": null },
+    { "id": "P-full", "kind": "automated", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "unsupported", "limitation": "Required responsiveness, one-heavy-job, cached-selection, three-cycle target cleanup, Long Task and Event Timing observations passed, including zero Long Tasks after moving Magic candidate reconstruction into its worker. Absolute mocked, host and target duration fields remain unsupported, so the versioned evaluator remains inconclusive." },
+    { "id": "R-full", "kind": "real-model", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null },
+    { "id": "W-keyboard", "kind": "target-device", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null },
+    { "id": "W-pointer", "kind": "target-device", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": "Fine-pointer editing and keyboard alternatives passed; the managed Windows device exposed no coarse pointer, which remains explicitly unavailable rather than emulated." },
+    { "id": "W-product", "kind": "target-device", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null },
+    { "id": "W-zoom", "kind": "target-device", "capturedAt": "2026-08-05T14:16:29.000Z", "status": "passed", "limitation": null }
+  ],
+  "accessibilityFindings": [],
+  "blockerIds": ["AUTO-01", "INPUT-05", "LIFE-02", "LIFE-03", "PERF-01", "RECOV-01", "RES-01", "TOOL-04"],
+  "unsupportedSignalIds": ["AUTO-01", "INPUT-05", "LIFE-02", "LIFE-03", "PERF-01", "RECOV-01", "RES-01", "TOOL-04"],
+  "seriousAccessibilityFindingIds": [],
+  "evidenceKinds": ["architect", "automated", "real-model", "target-device"],
+  "limitations": [
+    "Fine-pointer editing and keyboard alternatives passed; the managed Windows device exposed no coarse pointer, which remains explicitly unavailable rather than emulated.",
+    "Required responsiveness, one-heavy-job, cached-selection, three-cycle target cleanup, Long Task and Event Timing observations passed, including zero Long Tasks after moving Magic candidate reconstruction into its worker. Absolute mocked, host and target duration fields remain unsupported, so the versioned evaluator remains inconclusive."
+  ],
+  "performance": {
+    "schemaVersion": "phase-42.performance.v1",
+    "evaluation": "inconclusive",
+    "runs": [
+      {
+        "schemaVersion": "phase-42.performance.v1", "runId": "mocked-browser", "buildMode": "production",
+        "fullWorkflowMs": null, "coldInputMs": null, "warmInputMs": null, "maximumLongTaskMs": null, "maximumEventToNextPaintMs": null,
+        "maximumHeavyJobs": 1, "automaticInferenceCount": null, "cachedSelectionInferenceCount": null,
+        "interactionSamples": 0, "missedActions": 0, "unresponsiveInteractions": 0, "churnCycles": 0,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": ["Current deterministic performance capture is pending; null values are unsupported, not zero."]
+      },
+      {
+        "schemaVersion": "phase-42.performance.v1", "runId": "host-real-model", "buildMode": "production",
+        "fullWorkflowMs": null, "coldInputMs": null, "warmInputMs": null, "maximumLongTaskMs": null, "maximumEventToNextPaintMs": null,
+        "maximumHeavyJobs": 1, "automaticInferenceCount": null, "cachedSelectionInferenceCount": null,
+        "interactionSamples": 0, "missedActions": 0, "unresponsiveInteractions": 0, "churnCycles": 0,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": ["Current serialized real-model performance capture is pending; null values are unsupported, not zero."]
+      },
+      {
+        "schemaVersion": "phase-42.performance.v1", "runId": "windows-target", "buildMode": "production",
+        "fullWorkflowMs": null, "coldInputMs": null, "warmInputMs": null, "maximumLongTaskMs": 0, "maximumEventToNextPaintMs": 144,
+        "maximumHeavyJobs": 1, "automaticInferenceCount": 1, "cachedSelectionInferenceCount": 0,
+        "interactionSamples": 13, "missedActions": 0, "unresponsiveInteractions": 0, "churnCycles": 3,
+        "resourcesAfterChurn": { "artifacts": 0, "leases": 0, "objectUrls": 0 },
+        "residualOwnership": { "actors": 0, "runtimes": 0, "listeners": 0, "sessions": 0 },
+        "limitations": ["Chrome 150 on Win32/AMD RDNA3 completed three bilingual churn cycles with zero residual owners and at most 144 ms Event Timing. Actual 200 percent browser zoom reflow passed. The post-fix Magic sample recorded zero Long Tasks after candidate ranking/fusion moved into the existing worker; absolute cold, warm and full-workflow durations remain unsupported."]
+      }
+    ]
+  }
+}

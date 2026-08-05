@@ -644,8 +644,12 @@
   }
 
   .editor-toolbar {
-    scrollbar-width: thin;
+    scrollbar-width: none;
     overscroll-behavior-inline: contain;
+  }
+
+  .editor-toolbar::-webkit-scrollbar {
+    display: none;
   }
 }
 

@@ -81,7 +81,10 @@ describe("EditorV2ActiveDocument", () => {
     const beginMagic = vi.fn();
     const session = {
       beginMagic,
+      magicDraft: () => null,
+      manualDraft: () => null,
       processingSelection: () => null,
+      subscribeActive: () => () => undefined,
       workspaceSnapshot: () => ({ selectedDocumentId: buildDocumentState().documentId }),
     } as unknown as EditorSession;
     const snapshot: ActiveEditorSessionSnapshot = {
@@ -129,7 +132,10 @@ describe("EditorV2ActiveDocument", () => {
     const session = {
       applyBackground: calls.apply,
       cancelBackground: calls.cancel,
+      magicDraft: () => null,
+      manualDraft: () => null,
       processingSelection: () => null,
+      subscribeActive: () => () => undefined,
       workspaceSnapshot: () => ({ selectedDocumentId: buildDocumentState().documentId }),
       undoDocument: calls.undo,
     } as unknown as EditorSession;

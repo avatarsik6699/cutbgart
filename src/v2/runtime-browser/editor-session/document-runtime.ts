@@ -29,6 +29,7 @@ export class DocumentRuntime {
   readonly #enhancements: EnhancementController;
   readonly #magic: MagicCutoutController;
   readonly #manual: ManualCutoutController;
+  readonly #onDocumentChange: () => void;
   readonly #onChange: () => void;
   readonly #projection: DocumentResultProjection;
   readonly #stops: (() => void)[] = [];
@@ -51,6 +52,7 @@ export class DocumentRuntime {
     fileName: string;
     height: number;
     onChange(): void;
+    onDocumentChange(): void;
     previewUrl: string | null;
     width: number;
   }) {
@@ -58,6 +60,7 @@ export class DocumentRuntime {
     this.#dependencies = options.dependencies;
     this.#documentId = options.documentId;
     this.#onChange = () => options.onChange();
+    this.#onDocumentChange = () => options.onDocumentChange();
     const currentActor = () => (this.#disposed ? null : this.#actor);
     this.#manual = new ManualCutoutController({
       actor: currentActor,
@@ -117,6 +120,7 @@ export class DocumentRuntime {
       this.#background.reconcile();
       this.#enhancements.reconcile();
       this.#publishControllerState();
+      this.#onDocumentChange();
     });
     this.#stops.push(() => subscription.unsubscribe());
   }
@@ -248,10 +252,17 @@ export class DocumentRuntime {
 
   #publishControllerState(): void {
     if (this.#disposed) return;
+    const backgroundRuntime = this.#background.getSnapshot();
+    const enhancementRuntime = this.#enhancements.getSnapshot();
+    if (
+      backgroundRuntime === this.#snapshot.backgroundRuntime &&
+      enhancementRuntime === this.#snapshot.enhancementRuntime
+    )
+      return;
     this.#snapshot = {
       ...this.#snapshot,
-      backgroundRuntime: this.#background.getSnapshot(),
-      enhancementRuntime: this.#enhancements.getSnapshot(),
+      backgroundRuntime,
+      enhancementRuntime,
     };
     this.#onChange();
   }

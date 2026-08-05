@@ -86,7 +86,7 @@ export class MagicPredictionService implements MagicCutoutPredictor {
     this.#publish(input, { stage: "magic-queued", fraction: null });
     try {
       const raw = await this.#client.predict(
-        { ...input, source: artifacts.source, strokes },
+        { ...input, base: artifacts.baseMatte, source: artifacts.source, strokes },
         signal,
         (progress) => this.#publish(input, progress),
       );
@@ -102,12 +102,10 @@ export class MagicPredictionService implements MagicCutoutPredictor {
       ) {
         throw staleError();
       }
-      return this.#candidates.replace({
-        base: artifacts.baseMatte,
+      return this.#candidates.replaceRanked({
         correlation: input,
-        raw,
+        ranked: raw,
         source: artifacts.source,
-        strokes,
       });
     } finally {
       this.#publish(input, null);

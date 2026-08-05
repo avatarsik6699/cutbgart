@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review V2 Architecture"
+  short_description: "Audit v2 ownership and performance boundaries"
+  default_prompt: "Use $review-v2-architecture to review the current changes against the v2 architecture and performance contracts."

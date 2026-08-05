@@ -201,21 +201,21 @@ export async function installMockEditorV2Worker(
             const correlation = command.correlation;
             queueMicrotask(() => {
               this.emit({
-                protocol: 1,
+                protocol: command.protocol,
                 type: "PROGRESS",
                 correlation,
                 stage: "magic-encode",
                 fraction: null,
               });
               this.emit({
-                protocol: 1,
+                protocol: command.protocol,
                 type: "PROGRESS",
                 correlation,
                 stage: "magic-predict",
                 fraction: null,
               });
               this.emit({
-                protocol: 1,
+                protocol: command.protocol,
                 type: "SUCCEEDED",
                 correlation,
                 candidates: [

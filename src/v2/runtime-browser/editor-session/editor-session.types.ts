@@ -191,6 +191,7 @@ export type EditorSession = {
   retryEnhancements(): void;
   selectBackgroundImage(file: File): Promise<void>;
   subscribe(listener: () => void): () => void;
+  subscribeActive(listener: () => void): () => void;
   workspaceSnapshot(): EditorWorkspaceSnapshot;
 };
 

@@ -16,13 +16,19 @@ import {
   ToolPanelSlot,
   type CanvasInteractionMode,
 } from "@/widgets/tool-workspace";
+import {
+  CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
+  CutoutStagePanController,
+  cutoutStageContentStyle,
+  isEditableCanvasShortcutTarget,
+} from "../cutout-stage";
 import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
 
 type Props = {
   documentId: string;
   height: number;
   interaction: ManualCutoutInteraction;
-  sourceUrl: string;
+  currentUrl: string;
   width: number;
   onCutoutModeChange?(mode: "magic" | "manual"): void;
 };
@@ -63,39 +69,60 @@ export type ManualCutoutInteraction = Readonly<{
   undo(): void;
 }>;
 
-type Cursor = { x: number; y: number } | null;
-
 export function ManualCutoutWorkspace(props: Props) {
   const initialView = props.interaction.readViewState();
   const [mode, setMode] = useState<ManualCutoutMode>(initialView.mode);
-  const [brushSize, setBrushSize] = useState(initialView.brushSize);
+  const brushSizeRef = useRef(initialView.brushSize);
   const [zoom, setZoom] = useState(initialView.zoom);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
+  const [spacePanning, setSpacePanning] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const [panController] = useState(() => new CutoutStagePanController(initialView.zoom));
+  const spacePanningRef = useRef(false);
   const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
-  const [cursor, setCursor] = useState<Cursor>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const panPointerRef = useRef<Readonly<{
-    pointerId: number;
-    clientX: number;
-    clientY: number;
-  }> | null>(null);
+  const cursorRef = useRef<HTMLSpanElement>(null);
   const draftState = props.interaction.snapshot();
+
+  const connectContent = useCallback(
+    function connectManualStageContent(element: HTMLDivElement | null): void {
+      panController.connect(element);
+    },
+    [panController],
+  );
 
   function changeMode(nextMode: ManualCutoutMode): void {
     setMode(nextMode);
-    props.interaction.writeViewState({ mode: nextMode, brushSize, zoom });
+    props.interaction.writeViewState({
+      mode: nextMode,
+      brushSize: brushSizeRef.current,
+      zoom,
+    });
   }
 
   function changeBrushSize(nextBrushSize: number): void {
-    setBrushSize(nextBrushSize);
-    props.interaction.writeViewState({ mode, brushSize: nextBrushSize, zoom });
+    brushSizeRef.current = nextBrushSize;
+    const cursor = cursorRef.current;
+    if (cursor !== null) {
+      cursor.style.width = `${(nextBrushSize * 100) / props.width}%`;
+      cursor.style.height = `${(nextBrushSize * 100) / props.height}%`;
+    }
+    props.interaction.writeViewState({
+      mode,
+      brushSize: nextBrushSize,
+      zoom,
+    });
   }
 
-  function changeZoom(update: (value: number) => number): void {
-    setZoom((current) => {
-      const nextZoom = update(current);
-      props.interaction.writeViewState({ mode, brushSize, zoom: nextZoom });
+  function changeZoom(update: (zoom: number) => number): void {
+    setZoom((currentZoom) => {
+      const nextZoom = update(currentZoom);
+      panController.setZoom(nextZoom);
+      props.interaction.writeViewState({
+        mode,
+        brushSize: brushSizeRef.current,
+        zoom: nextZoom,
+      });
       return nextZoom;
     });
   }
@@ -108,47 +135,54 @@ export function ManualCutoutWorkspace(props: Props) {
     };
   }
 
+  function positionCursor(point: Readonly<{ x: number; y: number }>): void {
+    const cursor = cursorRef.current;
+    if (cursor === null) return;
+    cursor.style.left = `${(point.x / props.width) * 100}%`;
+    cursor.style.top = `${(point.y / props.height) * 100}%`;
+    cursor.hidden = false;
+  }
+
   function pointerDown(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (draftState === null || event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    if (interactionMode === "hand") {
-      panPointerRef.current = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      };
+    if (draftState === null) return;
+    const handGesture =
+      interactionMode === "hand" || spacePanningRef.current || event.button === 1;
+    if (handGesture && (event.button === 0 || event.button === 1)) {
+      event.preventDefault();
+      panController.start(event);
+      setPanning(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (cursorRef.current !== null) cursorRef.current.hidden = true;
       return;
     }
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
     const point = sourcePoint(event);
-    props.interaction.begin(point, { mode, radius: brushSize / 2, hardness: 0.72 });
+    props.interaction.begin(point, {
+      mode,
+      radius: brushSizeRef.current / 2,
+      hardness: 0.72,
+    });
   }
 
   function pointerMove(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    const panPointer = panPointerRef.current;
-    if (panPointer?.pointerId === event.pointerId) {
-      const viewport = viewportRef.current;
-      if (viewport !== null) {
-        viewport.scrollLeft -= event.clientX - panPointer.clientX;
-        viewport.scrollTop -= event.clientY - panPointer.clientY;
-      }
-      panPointerRef.current = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      };
-      return;
-    }
+    if (panController.move(event)) return;
     const point = sourcePoint(event);
-    setCursor(point);
+    if (interactionMode === "brush" && !spacePanning) positionCursor(point);
     if (draftState === null || !event.currentTarget.hasPointerCapture(event.pointerId))
       return;
-    props.interaction.move(point, { mode, radius: brushSize / 2, hardness: 0.72 });
+    props.interaction.move(point, {
+      mode,
+      radius: brushSizeRef.current / 2,
+      hardness: 0.72,
+    });
   }
 
   function pointerUp(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panPointerRef.current?.pointerId === event.pointerId) {
-      panPointerRef.current = null;
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (panController.stop(event.pointerId)) {
+      setPanning(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
     if (draftState === null || !event.currentTarget.hasPointerCapture(event.pointerId))
@@ -158,11 +192,10 @@ export function ManualCutoutWorkspace(props: Props) {
   }
 
   function pointerCancel(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panPointerRef.current?.pointerId === event.pointerId) {
-      panPointerRef.current = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (panController.stop(event.pointerId)) {
+      setPanning(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
-      }
       return;
     }
     if (draftState === null) return;
@@ -192,12 +225,12 @@ export function ManualCutoutWorkspace(props: Props) {
       if (canvas === null || draftState === null) return;
       return props.interaction.connectCanvas(
         canvas,
-        props.sourceUrl,
+        props.currentUrl,
         props.width,
         props.height,
       );
     },
-    [draftState, props.height, props.interaction, props.sourceUrl, props.width],
+    [draftState, props.currentUrl, props.height, props.interaction, props.width],
   );
 
   useEffect(
@@ -232,7 +265,49 @@ export function ManualCutoutWorkspace(props: Props) {
     [redo, undo],
   );
 
+  useEffect(
+    function routeManualSpacePanFx() {
+      function keyDownFx(event: KeyboardEvent): void {
+        if (
+          event.key !== " " ||
+          event.repeat ||
+          isEditableCanvasShortcutTarget(event.target)
+        )
+          return;
+        event.preventDefault();
+        spacePanningRef.current = true;
+        setSpacePanning(true);
+      }
+      function releaseSpacePanFx(event?: KeyboardEvent): void {
+        if (event !== undefined && event.key !== " ") return;
+        spacePanningRef.current = false;
+        setSpacePanning(false);
+        panController.stop();
+        setPanning(false);
+      }
+      function keyUpFx(event: KeyboardEvent): void {
+        releaseSpacePanFx(event);
+      }
+      function blurFx(): void {
+        releaseSpacePanFx();
+      }
+      globalThis.addEventListener("keydown", keyDownFx);
+      globalThis.addEventListener("keyup", keyUpFx);
+      globalThis.addEventListener("blur", blurFx);
+      return function removeManualSpacePanFx() {
+        globalThis.removeEventListener("keydown", keyDownFx);
+        globalThis.removeEventListener("keyup", keyUpFx);
+        globalThis.removeEventListener("blur", blurFx);
+      };
+    },
+    [panController],
+  );
+
   if (draftState === null) return null;
+
+  let canvasCursorClassName = "cursor-none";
+  if (interactionMode === "hand" || spacePanning)
+    canvasCursorClassName = panning ? "cursor-grabbing" : "cursor-grab";
 
   return (
     <>
@@ -246,10 +321,18 @@ export function ManualCutoutWorkspace(props: Props) {
               zoomPercent={Math.round(zoom * 100)}
               canZoomIn={zoom < 3}
               canZoomOut={zoom > 0.5}
-              canPan={zoom > 1}
+              canPan
               onZoomIn={() => changeZoom((value) => Math.min(3, value + 0.25))}
               onZoomOut={() => changeZoom((value) => Math.max(0.5, value - 0.25))}
-              onResetView={() => changeZoom(() => 1)}
+              onResetView={() => {
+                panController.reset();
+                setZoom(1);
+                props.interaction.writeViewState({
+                  mode,
+                  brushSize: brushSizeRef.current,
+                  zoom: 1,
+                });
+              }}
               expanded={expanded}
               onToggleFullscreen={toggleFullscreen}
               collapsed={viewControlsCollapsed}
@@ -258,40 +341,47 @@ export function ManualCutoutWorkspace(props: Props) {
           )}
         >
           <div
-            ref={viewportRef}
-            className="border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] focus-visible:ring-ring relative max-h-full w-full overflow-auto rounded-lg border p-3 focus-visible:ring-2"
+            className={CUTOUT_STAGE_VIEWPORT_CLASS_NAME}
             tabIndex={0}
             aria-label={m.editorV2ManualViewport()}
+            data-testid="cutout-stage-viewport"
+            data-space-panning={spacePanning}
+            data-panning={panning}
+            data-zoom={zoom}
           >
             <div
-              className="relative mx-auto origin-top-left"
-              style={{ width: `${zoom * 100}%` }}
+              ref={connectContent}
+              className="relative shrink-0"
+              data-testid="cutout-stage-content"
+              style={cutoutStageContentStyle(props.width, props.height)}
             >
               <canvas
                 role="img"
                 ref={canvasRef}
                 width={props.width}
                 height={props.height}
-                className="block h-auto w-full touch-none select-none"
+                className={`block size-full touch-none select-none ${canvasCursorClassName}`}
                 onPointerDown={pointerDown}
                 onPointerMove={pointerMove}
                 onPointerUp={pointerUp}
                 onPointerCancel={pointerCancel}
-                onPointerLeave={() => setCursor(null)}
+                onPointerLeave={() => {
+                  if (cursorRef.current !== null) cursorRef.current.hidden = true;
+                }}
                 aria-label={m.editorV2ManualCanvas()}
               />
-              {cursor !== null ? (
-                <span
-                  className="border-foreground pointer-events-none absolute rounded-full border"
-                  style={{
-                    width: `${(brushSize / props.width) * 100}%`,
-                    aspectRatio: "1",
-                    left: `${(cursor.x / props.width) * 100}%`,
-                    top: `${(cursor.y / props.height) * 100}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                />
-              ) : null}
+              <span
+                ref={cursorRef}
+                data-testid="manual-brush-cursor"
+                hidden
+                aria-hidden="true"
+                className="pointer-events-none absolute rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.8)]"
+                style={{
+                  width: `${(initialView.brushSize * 100) / props.width}%`,
+                  height: `${(initialView.brushSize * 100) / props.height}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
             </div>
           </div>
         </EditorStage>
@@ -347,21 +437,13 @@ export function ManualCutoutWorkspace(props: Props) {
                   type="range"
                   min="8"
                   max="180"
-                  value={brushSize}
+                  defaultValue={initialView.brushSize}
                   onChange={(event) => changeBrushSize(Number(event.currentTarget.value))}
                 />
               </label>
             </div>
             <div className="mt-auto flex flex-col gap-2 pt-4">
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={undo} disabled={!draftState.canUndo}>
-                  {m.editorV2DraftUndo()}
-                </Button>
-                <Button variant="outline" onClick={redo} disabled={!draftState.canRedo}>
-                  {m.editorV2DraftRedo()}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   className="w-full"
                   onClick={() => props.interaction.apply()}

@@ -58,10 +58,24 @@ function sameIds(
   );
 }
 
-function sameMatte(left: Uint8ClampedArray, right: Uint8ClampedArray): boolean {
-  return (
-    left.length === right.length && left.every((value, index) => value === right[index])
-  );
+async function sameMatte(
+  left: Uint8ClampedArray,
+  right: Uint8ClampedArray,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (left.length !== right.length) return false;
+  const chunkSize = 256 * 1024;
+  for (let start = 0; start < left.length; start += chunkSize) {
+    if (signal.aborted) throw abortError();
+    const end = Math.min(left.length, start + chunkSize);
+    for (let index = start; index < end; index += 1) {
+      if (left[index] !== right[index]) return false;
+    }
+    if (end < left.length) {
+      await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+    }
+  }
+  return true;
 }
 
 function abortError(): DOMException {
@@ -170,7 +184,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
           currentForeground = result.foreground;
       }
       if (signal.aborted) throw abortError();
-      const matteChanged = !sameMatte(pixels.matte, currentMatte);
+      const matteChanged = !(await sameMatte(pixels.matte, currentMatte, signal));
       const foregroundChanged = currentForeground !== pixels.foreground;
       if (!matteChanged && !foregroundChanged) {
         this.#publish({

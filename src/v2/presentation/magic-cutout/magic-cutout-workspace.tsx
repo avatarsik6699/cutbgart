@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,12 +10,7 @@ import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { Button, EditorStage } from "@/shared/ui";
-import type {
-  MagicCandidateSummary,
-  MagicCandidateId,
-  MagicCutoutDraft,
-  MagicCutoutMode,
-} from "@/v2/domain";
+import type { MagicCutoutDraft, MagicCutoutMode } from "@/v2/domain";
 import type { MagicRuntimeProgress } from "@/v2/runtime-browser";
 import { Image, Typography } from "@/v2/shared/ui";
 import {
@@ -22,15 +18,20 @@ import {
   ToolPanelSlot,
   type CanvasInteractionMode,
 } from "@/widgets/tool-workspace";
+import {
+  CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
+  CutoutStagePanController,
+  cutoutStageContentStyle,
+  isEditableCanvasShortcutTarget,
+} from "../cutout-stage";
 import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
 
 type Props = {
-  candidates: readonly MagicCandidateSummary[];
   draft: MagicCutoutDraft;
   height: number;
   runtimeProgress: MagicRuntimeProgress | null;
   interaction: MagicCutoutInteraction;
-  sourceUrl: string;
+  currentUrl: string;
   width: number;
   onCutoutModeChange?(mode: "magic" | "manual"): void;
 };
@@ -55,11 +56,8 @@ export type MagicCutoutInteraction = Readonly<{
     points: readonly Readonly<{ x: number; y: number }>[];
     radius: number;
   }>[];
-  paintCandidate(canvas: HTMLCanvasElement, candidateId: MagicCandidateId | null): void;
-  predict(): void;
   readViewState(): Readonly<{ mode: MagicCutoutMode; radius: number }>;
   redo(): void;
-  selectCandidate(candidateId: MagicCandidateId): void;
   snapshot(): Readonly<{
     canRedo: boolean;
     canUndo: boolean;
@@ -88,12 +86,15 @@ function statusLabel(
 export function MagicCutoutWorkspace(props: Props) {
   const initialView = props.interaction.readViewState();
   const [mode, setMode] = useState<MagicCutoutMode>(initialView.mode);
-  const [radius, setRadius] = useState(initialView.radius);
+  const radiusRef = useRef(initialView.radius);
   const [zoom, setZoom] = useState(1);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
+  const [spacePanning, setSpacePanning] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const [panController] = useState(() => new CutoutStagePanController(1));
+  const spacePanningRef = useRef(false);
   const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [, setPaintRevision] = useState(0);
   const discardDialogRef = useRef<HTMLDivElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -101,24 +102,61 @@ export function MagicCutoutWorkspace(props: Props) {
 
   function changeMode(nextMode: MagicCutoutMode): void {
     setMode(nextMode);
-    props.interaction.writeViewState({ mode: nextMode, radius });
+    props.interaction.writeViewState({ mode: nextMode, radius: radiusRef.current });
   }
 
   function changeRadius(nextRadius: number): void {
-    setRadius(nextRadius);
+    radiusRef.current = nextRadius;
+    const cursor = cursorRef.current;
+    if (cursor !== null) {
+      cursor.style.width = `${(nextRadius * 2 * 100) / props.width}%`;
+      cursor.style.height = `${(nextRadius * 2 * 100) / props.height}%`;
+    }
     props.interaction.writeViewState({ mode, radius: nextRadius });
   }
-  const candidateCanvas = useRef<HTMLCanvasElement>(null);
   const strokeCanvas = useRef<HTMLCanvasElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<HTMLSpanElement>(null);
   const activePointer = useRef<number | null>(null);
-  const panPointer = useRef<Readonly<{
-    pointerId: number;
-    clientX: number;
-    clientY: number;
-  }> | null>(null);
-  const cursor = useRef<{ x: number; y: number } | null>(null);
+  const paintFrame = useRef<number | null>(null);
   const strokeSequence = useRef(0);
+
+  const connectContent = useCallback(
+    function connectMagicStageContent(element: HTMLDivElement | null): void {
+      panController.connect(element);
+    },
+    [panController],
+  );
+
+  function changeZoom(update: (zoom: number) => number): void {
+    setZoom((currentZoom) => {
+      const nextZoom = update(currentZoom);
+      panController.setZoom(nextZoom);
+      return nextZoom;
+    });
+  }
+
+  function beginPan(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
+    const handGesture =
+      interactionMode === "hand" || spacePanningRef.current || event.button === 1;
+    if (!handGesture || (event.button !== 0 && event.button !== 1)) return false;
+    event.preventDefault();
+    panController.start(event);
+    setPanning(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    return true;
+  }
+
+  function movePan(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
+    return panController.move(event);
+  }
+
+  function endPan(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
+    if (!panController.stop(event.pointerId)) return false;
+    setPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    return true;
+  }
 
   function sourcePoint(event: ReactPointerEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -131,48 +169,119 @@ export function MagicCutoutWorkspace(props: Props) {
   function paintStrokesFx(): void {
     const canvas = strokeCanvas.current;
     if (canvas === null) return;
-    canvas.width = props.width;
-    canvas.height = props.height;
+    const scale = Math.min(1, 1600 / Math.max(props.width, props.height));
+    const canvasWidth = Math.max(1, Math.round(props.width * scale));
+    const canvasHeight = Math.max(1, Math.round(props.height * scale));
+    if (canvas.width !== canvasWidth) canvas.width = canvasWidth;
+    if (canvas.height !== canvasHeight) canvas.height = canvasHeight;
     const context = canvas.getContext("2d");
     if (context === null) return;
-    context.clearRect(0, 0, props.width, props.height);
+    const scaleX = canvas.width / props.width;
+    const scaleY = canvas.height / props.height;
+    context.clearRect(0, 0, canvas.width, canvas.height);
     context.lineCap = "round";
     context.lineJoin = "round";
     for (const stroke of props.interaction.displayStrokes()) {
       const first = stroke.points[0];
       if (first === undefined) continue;
       context.beginPath();
-      context.moveTo(first.x, first.y);
-      for (const point of stroke.points.slice(1)) context.lineTo(point.x, point.y);
+      context.moveTo(first.x * scaleX, first.y * scaleY);
+      for (const point of stroke.points.slice(1))
+        context.lineTo(point.x * scaleX, point.y * scaleY);
       context.strokeStyle = stroke.mode === "keep" ? "#22c55e" : "#ef4444";
       context.globalAlpha = 0.78;
-      context.lineWidth = stroke.radius * 2;
+      context.lineWidth = stroke.radius * 2 * scaleX;
       context.stroke();
       if (stroke.points.length === 1) {
         context.beginPath();
-        context.arc(first.x, first.y, stroke.radius, 0, Math.PI * 2);
+        context.arc(
+          first.x * scaleX,
+          first.y * scaleY,
+          stroke.radius * scaleX,
+          0,
+          Math.PI * 2,
+        );
         context.fillStyle = context.strokeStyle;
         context.fill();
       }
     }
     context.globalAlpha = 1;
-    if (cursor.current !== null) {
-      context.beginPath();
-      context.arc(cursor.current.x, cursor.current.y, radius, 0, Math.PI * 2);
-      context.strokeStyle = mode === "keep" ? "#16a34a" : "#dc2626";
-      context.lineWidth = Math.max(1, props.width / 700);
-      context.stroke();
+  }
+
+  function scheduleStrokePaint(): void {
+    if (paintFrame.current !== null) return;
+    if (typeof globalThis.requestAnimationFrame !== "function") {
+      paintStrokesFx();
+      return;
     }
+    paintFrame.current = globalThis.requestAnimationFrame(function paintMagicFrameFx() {
+      paintFrame.current = null;
+      paintStrokesFx();
+    });
+  }
+
+  function positionCursor(point: Readonly<{ x: number; y: number }>): void {
+    const cursor = cursorRef.current;
+    if (cursor === null) return;
+    cursor.style.left = `${(point.x / props.width) * 100}%`;
+    cursor.style.top = `${(point.y / props.height) * 100}%`;
+    cursor.hidden = false;
   }
 
   useEffect(paintStrokesFx, [
-    mode,
     props.draft.draftRevision,
     props.height,
     props.interaction,
     props.width,
-    radius,
   ]);
+
+  useEffect(function cancelScheduledMagicPaintFx() {
+    return () => {
+      if (
+        paintFrame.current !== null &&
+        typeof globalThis.cancelAnimationFrame === "function"
+      )
+        globalThis.cancelAnimationFrame(paintFrame.current);
+    };
+  }, []);
+
+  useEffect(
+    function routeMagicSpacePanFx() {
+      function keyDownFx(event: KeyboardEvent): void {
+        if (
+          event.key !== " " ||
+          event.repeat ||
+          isEditableCanvasShortcutTarget(event.target)
+        )
+          return;
+        event.preventDefault();
+        spacePanningRef.current = true;
+        setSpacePanning(true);
+      }
+      function releaseSpacePanFx(event?: KeyboardEvent): void {
+        if (event !== undefined && event.key !== " ") return;
+        spacePanningRef.current = false;
+        setSpacePanning(false);
+        panController.stop();
+        setPanning(false);
+      }
+      function keyUpFx(event: KeyboardEvent): void {
+        releaseSpacePanFx(event);
+      }
+      function blurFx(): void {
+        releaseSpacePanFx();
+      }
+      globalThis.addEventListener("keydown", keyDownFx);
+      globalThis.addEventListener("keyup", keyUpFx);
+      globalThis.addEventListener("blur", blurFx);
+      return function removeMagicSpacePanFx() {
+        globalThis.removeEventListener("keydown", keyDownFx);
+        globalThis.removeEventListener("keyup", keyUpFx);
+        globalThis.removeEventListener("blur", blurFx);
+      };
+    },
+    [panController],
+  );
 
   useEffect(
     function routeDiscardDialogFocusFx() {
@@ -181,18 +290,6 @@ export function MagicCutoutWorkspace(props: Props) {
       previousConfirmDiscardRef.current = confirmDiscard;
     },
     [confirmDiscard],
-  );
-
-  useEffect(
-    function paintCandidateFx() {
-      if (candidateCanvas.current !== null) {
-        props.interaction.paintCandidate(
-          candidateCanvas.current,
-          props.draft.selectedCandidateId,
-        );
-      }
-    },
-    [props.draft.selectedCandidateId, props.interaction],
   );
 
   useEffect(
@@ -209,7 +306,6 @@ export function MagicCutoutWorkspace(props: Props) {
         event.preventDefault();
         if (key === "y" || event.shiftKey) props.interaction.redo();
         else props.interaction.undo();
-        setPaintRevision((value) => value + 1);
       }
       globalThis.addEventListener("beforeunload", beforeUnloadFx);
       globalThis.addEventListener("keydown", keyDownFx);
@@ -228,13 +324,8 @@ export function MagicCutoutWorkspace(props: Props) {
       props.draft.status === "predicting"
     )
       return;
-    if (interactionMode === "hand") {
-      panPointer.current = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
+    if (beginPan(event)) {
+      if (cursorRef.current !== null) cursorRef.current.hidden = true;
       return;
     }
     const point = sourcePoint(event);
@@ -242,44 +333,27 @@ export function MagicCutoutWorkspace(props: Props) {
       id: `magic-stroke-${++strokeSequence.current}`,
       mode,
       point,
-      radius,
+      radius: radiusRef.current,
     });
     if (!started) return;
     activePointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
-    cursor.current = point;
-    paintStrokesFx();
+    positionCursor(point);
+    scheduleStrokePaint();
   }
 
   function pointerMoveFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    const activePan = panPointer.current;
-    if (activePan?.pointerId === event.pointerId) {
-      const viewport = viewportRef.current;
-      if (viewport !== null) {
-        viewport.scrollLeft -= event.clientX - activePan.clientX;
-        viewport.scrollTop -= event.clientY - activePan.clientY;
-      }
-      panPointer.current = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-      };
-      return;
-    }
+    if (movePan(event)) return;
     const point = sourcePoint(event);
-    cursor.current = point;
+    if (interactionMode === "brush" && !spacePanning) positionCursor(point);
     if (activePointer.current === event.pointerId) {
       props.interaction.appendPoint(point);
+      scheduleStrokePaint();
     }
-    paintStrokesFx();
   }
 
   function pointerUpFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panPointer.current?.pointerId === event.pointerId) {
-      panPointer.current = null;
-      event.currentTarget.releasePointerCapture(event.pointerId);
-      return;
-    }
+    if (endPan(event)) return;
     if (activePointer.current !== event.pointerId) return;
     props.interaction.appendPoint(sourcePoint(event));
     props.interaction.commitStroke();
@@ -287,32 +361,29 @@ export function MagicCutoutWorkspace(props: Props) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    setPaintRevision((value) => value + 1);
+    scheduleStrokePaint();
   }
 
   function pointerCancelFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panPointer.current?.pointerId === event.pointerId) {
-      panPointer.current = null;
-      return;
-    }
+    if (endPan(event)) return;
     if (activePointer.current !== event.pointerId) return;
     props.interaction.cancelStroke();
     activePointer.current = null;
-    setPaintRevision((value) => value + 1);
+    scheduleStrokePaint();
   }
 
   function lostPointerCaptureFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panPointer.current?.pointerId === event.pointerId) {
-      panPointer.current = null;
-      return;
-    }
+    if (endPan(event)) return;
     if (activePointer.current !== event.pointerId) return;
     props.interaction.cancelStroke();
     activePointer.current = null;
-    setPaintRevision((value) => value + 1);
+    scheduleStrokePaint();
   }
 
   const busy = props.draft.status === "encoding" || props.draft.status === "predicting";
+  let canvasCursorClassName = "cursor-none";
+  if (interactionMode === "hand" || spacePanning)
+    canvasCursorClassName = panning ? "cursor-grabbing" : "cursor-grab";
 
   function discardDialogKeyDownFx(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (event.key === "Escape") {
@@ -348,10 +419,13 @@ export function MagicCutoutWorkspace(props: Props) {
               zoomPercent={Math.round(zoom * 100)}
               canZoomIn={zoom < 3}
               canZoomOut={zoom > 0.5}
-              canPan={zoom > 1}
-              onZoomIn={() => setZoom((value) => Math.min(3, value + 0.25))}
-              onZoomOut={() => setZoom((value) => Math.max(0.5, value - 0.25))}
-              onResetView={() => setZoom(1)}
+              canPan
+              onZoomIn={() => changeZoom((value) => Math.min(3, value + 0.25))}
+              onZoomOut={() => changeZoom((value) => Math.max(0.5, value - 0.25))}
+              onResetView={() => {
+                panController.reset();
+                setZoom(1);
+              }}
               expanded={expanded}
               onToggleFullscreen={toggleFullscreen}
               collapsed={viewControlsCollapsed}
@@ -359,27 +433,32 @@ export function MagicCutoutWorkspace(props: Props) {
             />
           )}
         >
-          <div ref={viewportRef} className="bg-muted size-full overflow-auto rounded-lg">
+          <div
+            className={CUTOUT_STAGE_VIEWPORT_CLASS_NAME}
+            tabIndex={0}
+            aria-label={m.editorV2MagicTitle()}
+            data-testid="cutout-stage-viewport"
+            data-space-panning={spacePanning}
+            data-panning={panning}
+            data-zoom={zoom}
+          >
             <div
-              className="relative mx-auto origin-top-left"
-              style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
+              ref={connectContent}
+              className="relative shrink-0"
+              data-testid="cutout-stage-content"
+              style={cutoutStageContentStyle(props.width, props.height)}
             >
               <Image
-                src={props.sourceUrl}
-                alt={m.editorV2SourceAlt()}
+                src={props.currentUrl}
+                alt={m.editorV2ResultAlt()}
                 preset="preview"
                 width={props.width}
                 height={props.height}
                 className="absolute inset-0 size-full object-contain"
               />
               <canvas
-                ref={candidateCanvas}
-                className="pointer-events-none absolute inset-0 size-full"
-                aria-hidden="true"
-              />
-              <canvas
                 ref={strokeCanvas}
-                className="absolute inset-0 size-full touch-none"
+                className={`absolute inset-0 block h-full w-full touch-none ${canvasCursorClassName}`}
                 aria-label={m.editorV2MagicCanvas()}
                 onPointerDown={pointerDownFx}
                 onPointerMove={pointerMoveFx}
@@ -387,8 +466,21 @@ export function MagicCutoutWorkspace(props: Props) {
                 onPointerCancel={pointerCancelFx}
                 onLostPointerCapture={lostPointerCaptureFx}
                 onPointerLeave={() => {
-                  cursor.current = null;
-                  paintStrokesFx();
+                  if (cursorRef.current !== null) cursorRef.current.hidden = true;
+                }}
+              />
+              <span
+                ref={cursorRef}
+                data-testid="magic-brush-cursor"
+                hidden
+                aria-hidden="true"
+                className={`pointer-events-none absolute rounded-full border-2 ${
+                  mode === "keep" ? "border-emerald-700" : "border-rose-700"
+                }`}
+                style={{
+                  width: `${(initialView.radius * 2 * 100) / props.width}%`,
+                  height: `${(initialView.radius * 2 * 100) / props.height}%`,
+                  transform: "translate(-50%, -50%)",
                 }}
               />
             </div>
@@ -433,16 +525,8 @@ export function MagicCutoutWorkspace(props: Props) {
               </Button>
             </div>
 
-            <Typography
-              variant="caption"
-              as="p"
-              className="min-h-10 leading-4 text-muted-foreground"
-              aria-live="polite"
-            >
-              {statusLabel(props.draft, props.runtimeProgress)} ·{" "}
-              {m.editorV2MagicStrokeCount({
-                count: String(props.interaction.snapshot()?.strokeCount ?? 0),
-              })}
+            <Typography variant="caption" as="p" className="sr-only" aria-live="polite">
+              {statusLabel(props.draft, props.runtimeProgress)}
             </Typography>
 
             <label className="grid max-w-md gap-2 text-sm font-medium">
@@ -451,74 +535,19 @@ export function MagicCutoutWorkspace(props: Props) {
                 type="range"
                 min="2"
                 max="80"
-                value={radius}
+                defaultValue={initialView.radius}
                 onChange={(event) => changeRadius(Number(event.currentTarget.value))}
               />
             </label>
 
-            {props.candidates.length > 0 ? (
-              <div
-                className="flex flex-wrap gap-2"
-                role="group"
-                aria-label={m.editorV2MagicCandidates()}
-              >
-                {props.candidates.map((candidate, index) => (
-                  <Button
-                    key={candidate.candidateId}
-                    variant={
-                      props.draft.selectedCandidateId === candidate.candidateId
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      props.interaction.selectCandidate(candidate.candidateId)
-                    }
-                  >
-                    {m.editorV2MagicCandidate({ number: String(index + 1) })}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-
             <div className="mt-auto flex flex-col gap-2 pt-4">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => props.interaction.predict()}
-                  disabled={!props.draft.dirty || busy}
-                >
-                  {busy ? m.editorV2MagicWorking() : m.editorV2MagicPredict()}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    props.interaction.undo();
-                    setPaintRevision((value) => value + 1);
-                  }}
-                  disabled={props.interaction.snapshot()?.canUndo !== true}
-                >
-                  {m.editorV2MagicUndo()}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    props.interaction.redo();
-                    setPaintRevision((value) => value + 1);
-                  }}
-                  disabled={props.interaction.snapshot()?.canRedo !== true}
-                >
-                  {m.editorV2MagicRedo()}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   className="w-full"
                   onClick={() => props.interaction.apply()}
-                  disabled={props.draft.selectedCandidateId === null || busy}
+                  disabled={!props.draft.dirty || busy}
                 >
-                  {m.cutoutApply()}
+                  {busy ? m.editorV2MagicWorking() : m.cutoutApply()}
                 </Button>
                 <Button
                   ref={cancelButtonRef}

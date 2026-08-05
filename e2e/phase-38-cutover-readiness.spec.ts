@@ -114,11 +114,11 @@ test("both locales pass the accessibility and responsive material-state matrix",
       .click({ position: { x: 1, y: 1 } });
     await expectAccessible(page);
     await page.getByRole("button", { name: labels.cancel, exact: true }).click();
-    await expect(page.getByRole("region", { name: labels.magicRegion })).toBeFocused();
+    await expect(page.getByRole("region", { name: labels.manualRegion })).toBeFocused();
 
     const magicLauncher = page.getByRole("tab", { name: labels.magic });
     await magicLauncher.click();
-    await expect(magicLauncher).toBeFocused();
+    await expect(page.getByRole("region", { name: labels.magicRegion })).toBeFocused();
     await page.getByLabel(labels.magicCanvas).click({ position: { x: 1, y: 1 } });
     await page.getByRole("button", { name: labels.cancel, exact: true }).click();
     const discardDialog = page.getByRole("alertdialog");
@@ -204,8 +204,6 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   await page
     .getByLabel("Paint Keep and Remove guidance on the image")
     .click({ position: { x: 1, y: 1 } });
-  await page.getByRole("button", { name: "Predict" }).click();
-  await page.getByRole("button", { name: "Candidate 1" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
 
   await page.getByRole("button", { name: "Background", exact: true }).click();

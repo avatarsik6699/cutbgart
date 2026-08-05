@@ -23,6 +23,7 @@ import {
 } from "./magic-worker-protocol";
 
 export type MagicWorkerPredictionInput = MagicPredictionCorrelation & {
+  base: Uint8ClampedArray | null;
   source: ArtifactId;
   strokes: readonly MagicStroke[];
 };
@@ -106,6 +107,7 @@ export class MagicWorkerClient {
       });
     }
     const bytes = await transferableBytes(sourceValue);
+    const base = input.base?.slice().buffer ?? null;
     if (signal.aborted) throw this.#aborted();
 
     return new Promise((resolve, reject) => {
@@ -133,6 +135,7 @@ export class MagicWorkerClient {
           {
             protocol: MAGIC_WORKER_PROTOCOL_VERSION,
             type: "PREDICT",
+            base,
             correlation: input,
             model: GUIDED_MODEL,
             source: {
@@ -143,7 +146,7 @@ export class MagicWorkerClient {
             },
             strokes: input.strokes,
           },
-          [bytes],
+          base === null ? [bytes] : [bytes, base],
         );
       } catch (error) {
         this.#takeActive(active)?.reject(

@@ -155,3 +155,5 @@ exists only for what git can't tell you.
 | `docs/STATE.md` | Compact phase tracker, current technical contract, blockers, and current decisions; full rotated history lives in `docs/archive/contracts/` | During phase lifecycle |
 | `docs/KNOWN_GOTCHAS.md` | Recurring pitfall log | When new traps are discovered |
 | `docs/archive/` | Immutable contract snapshots, historical phases, superseded plans, and audit/research/legal/design evidence; never active scope by itself | Append/move only during approved cleanup |
+
+## Imported Claude Cowork project instructions

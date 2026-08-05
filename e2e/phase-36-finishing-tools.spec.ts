@@ -34,6 +34,11 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Document revision 2")).toBeVisible();
   await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(1);
+  await expect(page.getByTestId("editor-tool-workspace")).toHaveAttribute(
+    "data-active-tool",
+    "background",
+  );
+  await expect(page.getByRole("region", { name: "Background" })).toBeVisible();
 
   await page.keyboard.press("Control+z");
   await expect(page.getByRole("button", { name: "Redo document change" })).toBeEnabled();
@@ -63,6 +68,11 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await expect.poll(editorV2.scenario.enhancementRunCount).toBe(2);
   await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(1);
   await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect(page.getByTestId("editor-tool-workspace")).toHaveAttribute(
+    "data-active-tool",
+    "enhance",
+  );
+  await expect(page.getByTestId("enhancements-tool-panel")).toBeVisible();
 
   expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",

@@ -1,14 +1,24 @@
+import { useSelector } from "@xstate/react";
+
 import {
   MainPageBatchActions,
   MainPageBatchRail,
   MainPageEditorView,
-  useDocumentActorSelectors,
   type ExportSize,
   type BatchMainPageIntent,
   type BatchMainPageProjection,
   type MainPageEditorIntent,
   type MainPageEditorProjection,
 } from "@/v2/presentation";
+import {
+  selectCanRedoDocument,
+  selectCanUndoDocument,
+  selectDocumentProgress,
+  selectDocumentRevision,
+  selectDocumentStatus,
+  type DocumentSnapshotLike,
+} from "@/v2/application";
+import type { DocumentStatus } from "@/v2/domain";
 import type { ActiveEditorSessionSnapshot, EditorSession } from "@/v2/runtime-browser";
 import { availableExportSizes, DownloadSplitControl } from "@/features/download-result";
 
@@ -26,23 +36,25 @@ type Props = Readonly<{
   snapshot: ActiveEditorSessionSnapshot;
 }>;
 
-function phaseForStatus(
-  status: ReturnType<typeof useDocumentActorSelectors>["status"],
-): MainPageEditorProjection["phase"] {
+function phaseForStatus(status: DocumentStatus): MainPageEditorProjection["phase"] {
   if (status === "model-loading") return "loading-model";
   if (status === "result") return "result";
   if (status === "error" || status === "ready") return "error";
   return "processing";
 }
 
+function selectHasActiveDraft(snapshot: DocumentSnapshotLike): boolean {
+  return snapshot.context.document.activeDraft !== null;
+}
+
 export function EditorV2MainPageActive(props: Props) {
-  const document = useDocumentActorSelectors(props.snapshot.actor);
-  const draftOpen =
-    document.manualDraft !== null ||
-    document.magicDraft !== null ||
-    document.backgroundDraft !== null ||
-    document.enhancementDraft !== null;
-  if (draftOpen || document.status === "result") {
+  const status = useSelector(props.snapshot.actor, selectDocumentStatus);
+  const progress = useSelector(props.snapshot.actor, selectDocumentProgress);
+  const revision = useSelector(props.snapshot.actor, selectDocumentRevision);
+  const canUndoDocument = useSelector(props.snapshot.actor, selectCanUndoDocument);
+  const canRedoDocument = useSelector(props.snapshot.actor, selectCanRedoDocument);
+  const draftOpen = useSelector(props.snapshot.actor, selectHasActiveDraft);
+  if (draftOpen || status === "result") {
     const sizes = availableExportSizes({
       width: props.snapshot.width,
       height: props.snapshot.height,
@@ -55,6 +67,7 @@ export function EditorV2MainPageActive(props: Props) {
           <MainPageBatchRail batch={props.batch} onIntent={props.onBatchIntent} />
         ) : null}
         <EditorV2ActiveDocument
+          key={props.snapshot.actor.id}
           locale={props.locale}
           onLeave={() => {
             if (props.batch && props.onBatchIntent)
@@ -98,22 +111,21 @@ export function EditorV2MainPageActive(props: Props) {
   const singleExport = props.session.singleExportSnapshot();
   const projection: MainPageEditorProjection = {
     admissionError: null,
-    canRedoDocument: document.canRedoDocument,
-    canUndoDocument: document.canUndoDocument,
+    canRedoDocument,
+    canUndoDocument,
     exportError: singleExport.error,
     exportStatus: singleExport.status,
     fallbackUsed: processingSelection?.fallbackUsed ?? false,
     height: props.snapshot.height,
     inferencePath: processingSelection?.inferencePath ?? "wasm",
     locale: props.locale,
-    phase: phaseForStatus(document.status),
+    phase: phaseForStatus(status),
     qualityMode: props.qualityMode,
     exportSize: props.exportSize,
-    progressPercent:
-      document.progress === null ? null : Math.round(document.progress * 100),
-    retryable: document.status === "error" || document.status === "ready",
+    progressPercent: progress === null ? null : Math.round(progress * 100),
+    retryable: status === "error" || status === "ready",
     restoreFocusTool: props.restoreFocusTool,
-    revision: document.revision,
+    revision,
     sourcePreviewUrl: props.snapshot.previewUrl,
     committedResultUrl: props.snapshot.resultUrl,
     width: props.snapshot.width,

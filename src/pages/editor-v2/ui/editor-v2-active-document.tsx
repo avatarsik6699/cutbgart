@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
@@ -42,10 +50,24 @@ type PendingNavigation =
 
 export function EditorV2ActiveDocument(props: Props) {
   const document = useDocumentActorSelectors(props.snapshot.actor);
+  let initialTool: EditorToolId = "cutout";
+  if (document.backgroundDraft !== null) initialTool = "background";
+  else if (document.enhancementDraft !== null) initialTool = "enhance";
+  const initialCutoutMode: CutoutPresentationMode = document.manualDraft
+    ? "manual"
+    : "magic";
+  const [selectedTool, setSelectedTool] = useState<EditorToolId>(initialTool);
+  const [selectedCutoutMode, setSelectedCutoutMode] =
+    useState<CutoutPresentationMode>(initialCutoutMode);
   const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation | null>(
     null,
   );
   const defaultToolRequestedRef = useRef(false);
+  const magicApplyRequestedRef = useRef<string | null>(null);
+  const magicStateRef = useRef({
+    draft: document.magicDraft,
+    candidates: document.magicCandidates,
+  });
   const manualCanvasBindingRef = useRef<Readonly<{
     bitmap: ImageBitmap;
     canvas: HTMLCanvasElement;
@@ -53,6 +75,25 @@ export function EditorV2ActiveDocument(props: Props) {
     version: number;
   }> | null>(null);
   const manualCanvasVersionRef = useRef(0);
+  const subscribeActive = useCallback(
+    function subscribeActiveDocument(listener: () => void): () => void {
+      return props.session.subscribeActive(listener);
+    },
+    [props.session],
+  );
+  const draftHistoryFlags = useSyncExternalStore(
+    subscribeActive,
+    function readActiveDraftHistoryFlags(): number {
+      const manual = props.session.manualDraft();
+      const magic = props.session.magicDraft()?.snapshot() ?? null;
+      const canUndo = manual?.canUndo === true || magic?.canUndo === true;
+      const canRedo = manual?.canRedo === true || magic?.canRedo === true;
+      return Number(canUndo) | (Number(canRedo) << 1);
+    },
+    function readServerDraftHistoryFlags(): number {
+      return 0;
+    },
+  );
   const draftOpen =
     document.manualDraft !== null ||
     document.magicDraft !== null ||
@@ -63,16 +104,27 @@ export function EditorV2ActiveDocument(props: Props) {
     document.magicDraft?.dirty === true ||
     document.backgroundDraft?.dirty === true ||
     document.enhancementDraft?.dirty === true;
-  let activeTool: EditorToolId = "cutout";
-  if (document.backgroundDraft !== null) activeTool = "background";
-  else if (document.enhancementDraft !== null) activeTool = "enhance";
-  const cutoutMode: CutoutPresentationMode = document.manualDraft ? "manual" : "magic";
+  const activeTool = selectedTool;
+  const cutoutMode = selectedCutoutMode;
   const documentId =
     document.manualDraft?.documentId ??
     document.magicDraft?.documentId ??
     document.backgroundDraft?.documentId ??
     document.enhancementDraft?.documentId ??
     props.session.workspaceSnapshot().selectedDocumentId;
+  const requestMagicApply = useCallback(
+    function requestMagicApplyCommand(): void {
+      const draft = magicStateRef.current.draft;
+      if (draft === null || !draft.dirty) return;
+      if (draft.selectedCandidateId !== null) {
+        props.session.applyMagic();
+        return;
+      }
+      magicApplyRequestedRef.current = `${draft.draftId}:${draft.draftRevision}`;
+      props.session.predictMagic();
+    },
+    [props.session],
+  );
   const toolInteractions = useMemo(
     function createToolInteractions() {
       function repaintManualCanvas(box?: ManualCutoutBox): void {
@@ -178,7 +230,7 @@ export function EditorV2ActiveDocument(props: Props) {
         writeViewState: (state) => props.session.setManualViewState(state),
       };
       const magic: MagicCutoutInteraction = {
-        apply: () => props.session.applyMagic(),
+        apply: requestMagicApply,
         appendPoint: (point) => {
           props.session.magicDraft()?.appendPoint(point);
         },
@@ -193,12 +245,8 @@ export function EditorV2ActiveDocument(props: Props) {
           return committed !== null;
         },
         displayStrokes: () => props.session.magicDraft()?.displayStrokes() ?? [],
-        paintCandidate: (canvas, candidateId) =>
-          props.session.paintMagicCandidate(canvas, candidateId),
-        predict: () => props.session.predictMagic(),
         readViewState: () => props.session.magicViewState(),
         redo: () => props.session.redoMagic(),
-        selectCandidate: (candidateId) => props.session.selectMagicCandidate(candidateId),
         snapshot: () => props.session.magicDraft()?.snapshot() ?? null,
         undo: () => props.session.undoMagic(),
         writeViewState: (state) => props.session.setMagicViewState(state),
@@ -217,20 +265,58 @@ export function EditorV2ActiveDocument(props: Props) {
       };
       return { background, enhancement, magic, manual } as const;
     },
-    [props.session],
+    [props.session, requestMagicApply],
   );
 
   useEffect(
-    function openDefaultToolFx() {
+    function syncMagicApplyStateFx() {
+      magicStateRef.current = {
+        draft: document.magicDraft,
+        candidates: document.magicCandidates,
+      };
+    },
+    [document.magicCandidates, document.magicDraft],
+  );
+
+  useEffect(
+    function completeAutomaticMagicApplyFx() {
+      const request = magicApplyRequestedRef.current;
+      const draft = document.magicDraft;
+      if (request === null) return;
+      if (
+        draft === null ||
+        request !== `${draft.draftId}:${draft.draftRevision}` ||
+        draft.status === "error"
+      ) {
+        magicApplyRequestedRef.current = null;
+        return;
+      }
+      if (draft.status !== "preview") return;
+      if (draft.selectedCandidateId === null) {
+        const best = document.magicCandidates[0];
+        if (best !== undefined) props.session.selectMagicCandidate(best.candidateId);
+        return;
+      }
+      magicApplyRequestedRef.current = null;
+      props.session.applyMagic();
+    },
+    [document.magicCandidates, document.magicDraft, props.session],
+  );
+
+  useEffect(
+    function openSelectedToolFx() {
       if (draftOpen) {
         defaultToolRequestedRef.current = false;
         return;
       }
       if (document.status !== "result" || defaultToolRequestedRef.current) return;
       defaultToolRequestedRef.current = true;
-      props.session.beginMagic();
+      if (selectedTool === "background") props.session.beginBackground();
+      else if (selectedTool === "enhance") props.session.beginEnhancements();
+      else if (selectedCutoutMode === "manual") props.session.beginManual();
+      else props.session.beginMagic();
     },
-    [document.status, draftOpen, props.session],
+    [document.status, draftOpen, props.session, selectedCutoutMode, selectedTool],
   );
 
   useEffect(
@@ -325,12 +411,15 @@ export function EditorV2ActiveDocument(props: Props) {
   }
 
   function startTool(tool: EditorToolId): void {
+    setSelectedTool(tool);
     if (tool === "background") props.session.beginBackground();
     else if (tool === "enhance") props.session.beginEnhancements();
     else props.session.beginMagic();
   }
 
   function startCutoutMode(mode: CutoutPresentationMode): void {
+    setSelectedTool("cutout");
+    setSelectedCutoutMode(mode);
     if (mode === "manual") props.session.beginManual();
     else props.session.beginMagic();
   }
@@ -360,8 +449,13 @@ export function EditorV2ActiveDocument(props: Props) {
     } else if (intent.type === "redo-document") {
       if (draftOpen && !dirtyDraft) cancelActiveDraft();
       props.session.redoDocument();
-    } else if (intent.type === "predict-magic") props.session.predictMagic();
-    else if (intent.type === "apply-active-tool") {
+    } else if (intent.type === "undo-draft") {
+      if (document.manualDraft) toolInteractions.manual.undo();
+      else if (document.magicDraft) toolInteractions.magic.undo();
+    } else if (intent.type === "redo-draft") {
+      if (document.manualDraft) toolInteractions.manual.redo();
+      else if (document.magicDraft) toolInteractions.magic.redo();
+    } else if (intent.type === "apply-active-tool") {
       if (document.manualDraft) props.session.applyManual();
       else if (document.magicDraft) props.session.applyMagic();
       else if (document.backgroundDraft) props.session.applyBackground();
@@ -399,6 +493,8 @@ export function EditorV2ActiveDocument(props: Props) {
     revision: document.revision,
     activeTool,
     cutoutMode,
+    canUndoDraft: (draftHistoryFlags & 1) !== 0,
+    canRedoDraft: (draftHistoryFlags & 2) !== 0,
     canUndoDocument: document.hasPastDocumentHistory,
     canRedoDocument: document.hasFutureDocumentHistory,
     dirtyDraft,
@@ -450,7 +546,6 @@ export function EditorV2ActiveDocument(props: Props) {
         enhancementRuntime={props.snapshot.enhancementRuntime}
         fileName={props.snapshot.fileName}
         foregroundUrl={props.snapshot.foregroundUrl}
-        magicCandidates={document.magicCandidates}
         magicInteraction={toolInteractions.magic}
         magicProgress={props.snapshot.magicProgress}
         manualInteraction={toolInteractions.manual}

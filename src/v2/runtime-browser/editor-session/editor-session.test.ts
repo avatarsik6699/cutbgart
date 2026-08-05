@@ -203,6 +203,17 @@ describe("editor v2 browser session", () => {
     );
     expect(harness.session.getSnapshot().resultUrl).toBe("blob:test-2");
 
+    const workspaceListener = vi.fn();
+    const activeListener = vi.fn();
+    const stopWorkspace = harness.session.subscribe(workspaceListener);
+    const stopActive = harness.session.subscribeActive(activeListener);
+    harness.session.beginMagic();
+    expect(workspaceListener).toHaveBeenCalled();
+    expect(activeListener).not.toHaveBeenCalled();
+    harness.session.cancelMagic();
+    stopWorkspace();
+    stopActive();
+
     void harness.session.exportPng();
     expect(harness.download.start).toHaveBeenCalledWith(
       "blob:test-3",

@@ -34,7 +34,7 @@ for (const locale of locales) {
     }) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.clock.install({ time: new Date("2026-08-04T12:00:00Z") });
+      await page.clock.install({ time: new Date("2026-08-04T11:00:00Z") });
       await installMockInference(page, { manualAutomaticStages: true });
       await page.goto(locale.route === "/en/editor-v2" ? "/en" : "/");
       await expect(

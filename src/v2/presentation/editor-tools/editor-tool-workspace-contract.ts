@@ -17,6 +17,8 @@ export type EditorToolWorkspaceProjection = Readonly<{
   revision: number;
   activeTool: EditorToolId;
   cutoutMode: CutoutPresentationMode;
+  canUndoDraft: boolean;
+  canRedoDraft: boolean;
   canUndoDocument: boolean;
   canRedoDocument: boolean;
   dirtyDraft: boolean;
@@ -39,7 +41,6 @@ export type EditorToolWorkspaceIntent =
     }>
   | Readonly<{
       type:
-        | "predict-magic"
         | "apply-active-tool"
         | "cancel-active-tool"
         | "retry-active-tool"

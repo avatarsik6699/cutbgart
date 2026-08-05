@@ -79,11 +79,6 @@ test("cold and warm real-model documents complete the accepted full workflow", a
   await page.getByRole("button", { name: "Magic Cutout" }).click();
   const magicCanvas = page.getByLabel("Paint Keep and Remove guidance on the image");
   await magicCanvas.click({ position: { x: 1, y: 1 } });
-  await page.getByRole("button", { name: "Predict" }).click();
-  await expect(page.getByRole("button", { name: "Candidate 1" })).toBeVisible({
-    timeout: 6 * 60_000,
-  });
-  await page.getByRole("button", { name: "Candidate 1" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
 
   await page.getByRole("button", { name: "Background", exact: true }).click();

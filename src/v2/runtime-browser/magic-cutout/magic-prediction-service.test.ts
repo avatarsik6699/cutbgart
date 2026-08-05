@@ -98,7 +98,11 @@ describe("MagicPredictionService", () => {
       { candidateId: createMagicCandidateId("candidate-1"), score: 0.9 },
     ]);
     expect(harness.predict).toHaveBeenCalledWith(
-      expect.objectContaining({ ...correlation, source: createArtifactId("source-1") }),
+      expect.objectContaining({
+        ...correlation,
+        base: null,
+        source: createArtifactId("source-1"),
+      }),
       expect.any(AbortSignal),
       expect.any(Function),
     );

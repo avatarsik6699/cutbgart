@@ -134,6 +134,7 @@ STACK.md` for those.
 | Frontend prep | `pnpm generate:code` | Paraglide output in `src/paraglide/` and TanStack Router's `src/routeTree.gen.ts` are generated and gitignored. Run this before type-aware lint/type-check on a clean checkout; their Vite plugins still regenerate both for `dev`/`build`. |
 | Frontend type-check | `pnpm tsc --noEmit` | Strict mode (SPEC.md §6); mirrors the `build` step's typecheck |
 | Frontend unit tests | `pnpm vitest run` | Covers `features/remove-background` unit tests + `useBackgroundRemoval` integration tests (SPEC.md §7.7) |
+| Changed-code quality | `pnpm quality:fallow` | Fallow audit against local `main`, new findings only. Static graph/complexity/duplication/style evidence complements TypeScript, ESLint, Steiger, browser profiling, and human architecture review; it does not replace them. |
 | E2E lint / determinism | `n/a` | No dedicated determinism-lint tool specified in SPEC.md §6; e2e spec files are covered by the project's regular `eslint.config.js` |
 | E2E | `pnpm e2e:full` — **run locally from the host only** | Runs the deterministic Chromium UI suite under one managed Vite server (tests remain fully parallel), then one serialized Chromium real-model/CDN smoke. As of Phase 31, Chromium is the only configured Playwright project — Firefox/WebKit/Mobile Safari were dropped from the fast gate (SPEC.md §7.4, PHASE_31_FINDINGS.md F-18); Phase 33's physical-device sample is the only remaining evidence for those engines. The sole CI exception is `pnpm e2e:ci-critical`: mocked Chromium, one worker, no model/CDN/WebGPU dependency. Never run Playwright in Docker. |
 | Smoke | `docker compose exec -T app node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` | Deterministic, container-network-native — doesn't need port 3000 published to the host or TLS/nginx up. `app` also has a Docker `healthcheck` (docker-compose.yml) doing the same check on a 10s interval; `docker compose ps app` should show `(healthy)`. Phase files may override with a phase-specific check. |
@@ -143,6 +144,61 @@ Architecture lint (run in CI before tests, not part of the standard gate rows ab
 ```bash
 pnpm exec steiger ./src
 ```
+
+Fallow is a development-only changed-code and architecture diagnostic. Its repository config
+enforces v2 role boundaries and keeps cleanup/style heuristics advisory. Use `pnpm quality:fallow`
+before commit, `pnpm quality:fallow:review` to orient a human/agent review, and
+`pnpm quality:fallow:health` only for explicitly scoped refactoring research. Fallow findings do
+not authorize automatic deletion or work outside the active phase; trace a finding and review the
+diff before any fix. The optional local Codex MCP runs the same pinned dev dependency and enables
+structured read-only analysis. Product telemetry remains disabled unless the architect explicitly
+enables it.
+
+### Codex web-development diagnostics
+
+The architect's local Codex environment uses three complementary development integrations. They
+do not ship in the application and must not become runtime dependencies:
+
+```bash
+codex plugin add build-web-apps@openai-curated --json
+codex mcp add playwright -- \
+  /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
+  -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+  -File 'C:\Users\user\AppData\Local\cutbg-tools\start-playwright-mcp.ps1'
+codex mcp add chrome-devtools -- \
+  /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
+  -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+  -File 'C:\Users\user\AppData\Local\cutbg-tools\start-chrome-devtools-mcp.ps1'
+codex mcp add fallow -- pnpm --dir "$PWD" exec fallow-mcp
+```
+
+**Mandatory Windows browser boundary:** WSL owns the repository, package commands, application
+server, and Linux host-only evidence. Playwright MCP and Chrome DevTools MCP must both be launched
+through Windows PowerShell and must own isolated native Windows Chrome processes. Never launch a
+browser MCP with WSL `npx`, never attach to a personal profile, and never classify Linux/WSL Chrome
+as managed-Windows or target-device evidence. Before capturing target evidence, record and verify
+`navigator.platform === "Win32"`, the Windows Chrome version, viewport, GPU/ANGLE backend, input
+capabilities, and the application URL. A non-Windows platform is a hard stop, not an unsupported
+Windows sample.
+
+The Windows MCP fixture directory is
+`C:\Users\user\AppData\Local\cutbg-tools\fixtures`. When the source lives in WSL, access it from
+Windows through `\\wsl.localhost\<distribution>\...` or copy the exact fixture into that managed
+directory and record its hash. Do not pass `/home/...` paths to a Windows browser MCP.
+
+- Build Web Apps supplies current React performance-review and browser-debugging workflows; repo
+  SDD, `ARCHITECTURE_V2.md`, and `FRONTEND_CONVENTIONS.md` remain authoritative.
+- Chrome DevTools MCP owns runtime traces, long-task/main-thread attribution, network evidence, and
+  heap diagnostics. It must use the same native-Windows boundary as Playwright MCP. Keep the
+  isolated profile and privacy flags; Playwright remains the behavioral E2E owner.
+- Fallow MCP exposes the pinned repository dev dependency as structured static analysis. The CLI
+  scripts remain the reproducible gate and fallback.
+- `review-v2-architecture` under `.agents/skills/` composes these layers into this repository's
+  ownership/performance review. Start a new Codex conversation after installing or changing a
+  plugin/MCP so the tool and skill inventory is refreshed.
+
+Verify local discovery with `codex plugin list` and `codex mcp list`. Never enable Fallow telemetry
+or relax Chrome profile/network privacy settings on the user's behalf.
 
 ### Security and supply-chain gate (Phase 22)
 
