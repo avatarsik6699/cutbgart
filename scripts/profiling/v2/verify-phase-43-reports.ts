@@ -56,7 +56,7 @@ function sorted(values: readonly string[]): string[] {
   return [...values].sort();
 }
 
-const reportPath = path.resolve("docs/audits/PHASE_43_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_43_REPORTS.json");
 const value = JSON.parse(await readFile(reportPath, "utf8")) as Report;
 
 assert.equal(value.schemaVersion, "phase-43.readiness.v1");

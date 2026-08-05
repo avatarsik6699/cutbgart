@@ -1,105 +1,70 @@
 ---
 name: review-v2-architecture
-description: Review BG Remove App v2 changes for architecture, XState/data-flow, artifact ownership, React render ownership, browser performance, resource lifecycle, legacy leakage, and verification gaps. Use before merging v2 work, after migrating UI into v2, when diagnosing render or main-thread regressions, or when asked whether a diff follows ARCHITECTURE_V2.md and frontend best practices.
+description: Review BG Remove App frontend changes with a lightweight changed-surface mode during implementation and a full evidence mode before a phase gate or when diagnosing a reproduced runtime problem. Use for v2 ownership, React render boundaries, XState/data flow, browser-resource lifecycle, and final performance verification without forcing full-project diagnostics on every refactor.
 ---
 
 # Review V2 Architecture
 
-Produce an evidence-backed review of the changed v2 surface. Keep static findings, runtime
-measurements, and architectural judgment separate; no one tool proves all three.
+Protect the few ownership rules whose violation creates correctness or lifecycle bugs. Allow broad
+refactoring freedom inside those boundaries. Keep static analysis, runtime evidence, and
+architectural judgment distinct.
 
-## 1. Establish the contract
+## Choose the review mode
 
-1. Read `AGENTS.md`, `docs/STACK.md`, `docs/FRONTEND_CONVENTIONS.md`,
-   `docs/ARCHITECTURE_V2.md`, `docs/STATE.md` Current Contract, the active `docs/PHASE_XX.md`, and
-   relevant `docs/KNOWN_GOTCHAS.md` entries.
-2. Inspect `git status`, the diff against local `main`, and recent history. Preserve unrelated and
-   user-owned changes.
-3. Reject findings or fixes outside the active phase. Record new capability or contract work as a
-   blocker/follow-up instead of implementing it.
-4. Consult current primary documentation before judging third-party React, XState, Vite, TanStack,
-   Playwright, or browser APIs, following `AGENTS.md`'s documentation lookup order and call cap.
+- **Focused** — default for an implementation task or checkpoint. Review only changed files, their
+  direct callers, and the behavior being changed. Do not require a pre-change trace, whole-project
+  audit, real-model run, heap snapshot, or full phase gate.
+- **Final** — use before the phase gate or when explicitly requested. Review the complete changed
+  phase surface and collect the performance/resource evidence required by the phase contract.
+- **Diagnostic** — use for a reproduced freeze, render storm, long task, or leak. Reproduce the
+  exact interaction and collect only the runtime evidence needed to attribute that problem.
 
-## 2. Collect deterministic evidence
+## Establish scope
 
-Run read-only checks from the repository root. Fallow exit code 1 means findings, not tool failure.
+Read the active phase, relevant current contracts and frontend conventions, then inspect the diff
+and preserve unrelated changes. Consult current primary documentation before judging a
+third-party API. A phase may explicitly defer broad performance measurement to its final task.
 
-```bash
-pnpm arch:lint
-pnpm quality:fallow
-pnpm quality:fallow:review
-```
+## Minimum invariants
 
-Before changing or judging a v2 file, run `fallow guard <changed-files> --format json --quiet` and
-read the applicable boundary rules. Trace a reported symbol, dependency, or duplicate before
-recommending deletion or consolidation. Never run `fallow fix` during review.
+1. Keep one workflow source of truth. XState/application owns commands and durable document state;
+   presentation must not mirror it in React, MobX, or another store.
+2. Keep browser resources outside React and actor snapshots. Runtime-browser owns blobs, pixels,
+   canvases, object URLs, workers, cancellation, correlation, and cleanup.
+3. Prevent stale publication. Async completion must not apply after cancellation, replacement,
+   reset, disposal, revision change, or document/tool switch.
+4. Subscribe near the consumer. Prefer primitive or stable-identity selectors; do not make a large
+   parent observe state needed only by one leaf.
+5. Keep high-frequency interaction state local or imperative when no other React consumer needs it.
+6. Preserve deterministic release paths when changed code touches artifacts, URLs, workers,
+   listeners, subscriptions, or canvases.
+7. Add focused automated coverage for changed behavior; user-visible changes require a narrow
+   Playwright journey unless the active phase explicitly assigns it to a later integration task.
 
-Treat Fallow as graph/complexity/duplication/style evidence, Steiger as FSD enforcement, TypeScript
-as compiler evidence, and ESLint as source-rule evidence. Do not present any one as proof of runtime
-correctness.
+Do not reject a refactor merely because it changes component boundaries, introduces a small
+adapter, or lacks pre-change measurements. Recommend memoization, a compiler, or another state
+manager only when it has a clear owner, does not duplicate workflow truth, and addresses an
+observed remaining problem.
 
-## 3. Review the ownership boundaries
+## Focused review
 
-Check every changed path and its callers for these invariants:
+1. Run `fallow guard <changed-files> --format json --quiet` when architecture-zoned files change.
+2. Inspect changed subscriptions, projections, callback identities, resource ownership, and direct
+   callers.
+3. Run only the tests and lint/type checks relevant to the checkpoint.
+4. Report findings with file/line, impact, and the smallest in-scope remediation. State which broad
+   checks were intentionally deferred; their absence is not a finding.
 
-- `domain` stays framework/platform/binary-free and owns pure commands, events, policies, and legal
-  transitions.
-- `application` owns XState workflow and ports; actor snapshots contain IDs and metadata, never
-  `Blob`, `File`, pixels, canvas, object URLs, workers, or mutable drafts.
-- `runtime-browser` owns artifacts, object URLs, browser workers, canvas-heavy processing,
-  correlation, cancellation, cleanup, and external-store publication.
-- `presentation` and `pages/editor-v2` select the narrowest scalar/identity state and emit semantic
-  intents. They do not recreate workflow truth, retain binary state, or import legacy hooks,
-  controllers, stores, worker ownership, or processing logic.
-- `v2/shared` remains dependency-light and consumer-proven. External callers use semantic public
-  APIs rather than deep imports.
-- A tool always reads the current committed artifact. Async completion is correlated to document,
-  revision, run, and draft identities and cannot publish after cancellation, replacement, reset,
-  disposal, or tool/document switch.
+## Final or diagnostic evidence
 
-Search changed v2 production files for legacy imports and direct platform ownership. Explain every
-match; do not accept an adapter merely because its name contains `v2`.
+In final mode, run the checks required by the phase and `docs/STACK.md`, including architecture and
+Fallow gates. Exercise the accepted user flows with Playwright. Use Chrome DevTools traces or heap
+evidence only for the final performance/resource acceptance contract or to attribute a reproduced
+problem. Distinguish React rendering, JavaScript, layout/paint, canvas, worker messaging, decode,
+and inference costs.
 
-## 4. Review React and interaction performance
+## Report
 
-Require measured evidence before recommending memoization, React Compiler, another state manager,
-or a Vite plugin.
-
-- Keep durable workflow state in XState and runtime resources outside React.
-- Select primitive or stable-identity actor/external-store values. Flag subscriptions returning
-  broad snapshots or freshly allocated objects without equality control.
-- Keep pointer movement, brush preview, pan/zoom, animation frames, and other high-frequency
-  transient values imperative or locally isolated when no other React consumer needs them.
-- Flag render-time mutation, duplicated subscriptions/publications, unstable prop fan-out, and
-  synchronous full-image work on input handlers.
-- Distinguish StrictMode/development diagnostics from production behavior.
-
-For a reported runtime problem, reproduce the exact interaction with Playwright and capture a
-Chrome DevTools performance trace. Attribute long tasks to React commit/render work, JavaScript,
-layout/paint, canvas, decode, worker messaging, or inference before proposing a fix. Capture heap
-evidence for suspected leaks. If Chrome DevTools MCP is unavailable, report the missing evidence;
-do not infer a trace from wall-clock command duration.
-
-## 5. Review lifecycle and verification
-
-Check artifact leases, object URL revocation, worker/canvas disposal, stale async settlement,
-listener/subscription cleanup, and repeated import/edit/reset/dispose churn. Require:
-
-- focused Vitest coverage for changed contracts and failure paths;
-- Playwright coverage for changed user-visible behavior;
-- zero arbitrary sleeps and retry-dependent success;
-- real-model and managed-device evidence when the phase contract requires them;
-- privacy-safe diagnostics with no filenames, image content, prompts, pixels, or object URLs.
-
-## 6. Report
-
-Lead with findings ordered by severity. For each finding provide the file/line, violated contract,
-concrete evidence, user or architecture impact, and smallest in-scope remediation. Then list:
-
-1. checks run and their results;
-2. runtime evidence captured or explicitly missing;
-3. verified strengths that materially reduce risk;
-4. residual risks and phase blockers.
-
-If no material finding remains, state that explicitly without claiming that static analysis proves
-runtime performance or manual product acceptance.
+Lead with material findings ordered by severity. Then list checks run, runtime evidence collected
+or intentionally deferred, verified strengths, and remaining final-gate work. If no material
+finding remains, say so without claiming that focused static checks prove runtime performance.

@@ -193,7 +193,7 @@ None.
 ## Gate Checks
 
 Run `/phase-gate 41` before committing. In addition to every command in
-[`docs/STACK.md`](./STACK.md#gate-commands), run:
+[`docs/STACK.md`](../../STACK.md#gate-commands), run:
 
 ```bash
 pnpm e2e e2e/phase-41-editor-tools-ui.spec.ts --project=chromium

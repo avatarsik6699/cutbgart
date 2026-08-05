@@ -269,7 +269,7 @@ None.
 ## Gate Checks
 
 Run focused checks after each dependency-complete group, then `/phase-gate 37`. The complete
-[`STACK.md`](./STACK.md#gate-commands) gate applies, plus:
+[`STACK.md`](../../STACK.md#gate-commands) gate applies, plus:
 
 ```bash
 pnpm lint

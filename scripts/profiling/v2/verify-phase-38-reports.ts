@@ -79,7 +79,7 @@ function assertRequirement(requirement: ParityRequirement): void {
   assert.ok(["passed", "failed", "unsupported"].includes(requirement.status));
 }
 
-const reportPath = path.resolve("docs/audits/PHASE_38_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_38_REPORTS.json");
 const value = JSON.parse(await readFile(reportPath, "utf8")) as Bundle;
 assert.equal(value.schemaVersion, PHASE_38_READINESS_SCHEMA_VERSION);
 assert.equal(value.conclusion, "blocked");

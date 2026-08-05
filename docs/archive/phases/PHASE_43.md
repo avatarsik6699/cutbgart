@@ -200,7 +200,7 @@ feature flag. Existing release identity, model CDN, analytics, and model-lab con
 ## Gate Checks
 
 Run focused checks after each dependency-complete group, then `/phase-gate 43`. The complete
-[`STACK.md`](./STACK.md#gate-commands) gate applies, plus:
+[`STACK.md`](../../STACK.md#gate-commands) gate applies, plus:
 
 ```bash
 pnpm lint

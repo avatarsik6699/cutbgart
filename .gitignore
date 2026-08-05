@@ -22,6 +22,9 @@ playwright-report
 test-results
 .playwright-mcp
 
+# Per-machine Claude Code permissions and tool settings
+.claude/settings.local.json
+
 # Host-only Phase 23 release records and encrypted operational backups
 .ops/
 

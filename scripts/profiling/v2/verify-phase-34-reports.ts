@@ -24,7 +24,7 @@ type Phase34Report = {
   limitations: string[];
 };
 
-const reportPath = path.resolve("docs/audits/PHASE_34_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_34_REPORTS.json");
 const value: unknown = JSON.parse(await readFile(reportPath, "utf8"));
 assert(Array.isArray(value), "Phase-34 report bundle must be an array");
 assert.equal(

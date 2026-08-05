@@ -379,7 +379,7 @@ pnpm profile:phase-33     # validates the stored fake + cold/warm real-model
 ```
 
 The physical-target capture itself is driven by the configured Playwright MCP in a managed,
-isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS.md` and
+isolated browser. Its durable observations live in `docs/archive/audits/phases-33-43/PHASE_33_RESULTS.md` and
 `PHASE_33_REPORTS.json`; repository scripts do not attach to a personal browser or debugging port.
 
 ### Phase-35 Magic Cutout reports
@@ -388,7 +388,7 @@ isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS
 pnpm profile:phase-35 -- --verify  # validates mocked, host real-model, and Windows target evidence
 ```
 
-The versioned report bundle lives in `docs/audits/PHASE_35_REPORTS.json`. Values not captured by
+The versioned report bundle lives in `docs/archive/audits/phases-33-43/PHASE_35_REPORTS.json`. Values not captured by
 the host runner or Windows Playwright MCP are recorded as unsupported with limitations rather than
 inferred from command duration.
 

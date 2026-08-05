@@ -8,7 +8,7 @@ import {
   type PerformanceReportV1,
 } from "../../../src/v2/testing/performance/index";
 
-const reportPath = path.resolve("docs/audits/PHASE_33_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_33_REPORTS.json");
 const value: unknown = JSON.parse(await readFile(reportPath, "utf8"));
 
 assert(Array.isArray(value), "Phase-33 report bundle must be an array");

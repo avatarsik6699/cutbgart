@@ -245,7 +245,7 @@ but must never satisfy `W-*` rows or managed-Windows acceptance.
 ## Gate Checks
 
 Run `/phase-gate 42` before committing. In addition to every command in
-[`docs/STACK.md`](./STACK.md#gate-commands), run:
+[`docs/STACK.md`](../../STACK.md#gate-commands), run:
 
 ```bash
 pnpm lint

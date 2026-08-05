@@ -10,17 +10,7 @@ it as supporting or historical material—not as an implementation contract.
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
 | [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
-| [`PHASE_43.md`](./PHASE_43.md) | Completed final public v2 cutover, legacy-removal, and pre-production readiness contract |
-| [`PHASE_42.md`](./PHASE_42.md) | Completed v2 regression-closure and architect-accepted blocked readiness record |
-| [`PHASE_40.md`](./PHASE_40.md) | Latest completed v1-faithful batch workspace migration contract |
-| [`PHASE_41.md`](./PHASE_41.md) | Latest completed v1-faithful editor-tool workspace migration contract |
-| [`PHASE_39.md`](./PHASE_39.md) | Completed v1-faithful single-image main-page UI migration contract |
-| [`PHASE_38.md`](./PHASE_38.md) | Blocked cutover-readiness evidence; parity dispositions need review under the v1-UI preservation decision |
-| [`PHASE_37.md`](./PHASE_37.md) | Completed v2 batch and multi-document workspace contract and acceptance record |
-| [`PHASE_36.md`](./PHASE_36.md) | Latest completed v2 Background and Enhancements contract and acceptance record |
-| [`PHASE_35.md`](./PHASE_35.md) | Latest completed v2 Magic Cutout contract and acceptance record |
-| [`PHASE_34.md`](./PHASE_34.md) | Completed v2 Manual/history contract and acceptance record |
-| [`PHASE_33.md`](./PHASE_33.md) | Latest completed v2 foundation contract and acceptance record |
+| [`PHASE_44.md`](./PHASE_44.md) | Active checkpoint-driven frontend decomposition and render-ownership contract |
 | [`STACK.md`](./STACK.md) | Current/planned technologies, commands, gates, deployment |
 | [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md) | Hard React/TypeScript/frontend requirements |
 | [`KNOWN_GOTCHAS.md`](./KNOWN_GOTCHAS.md) | Recurring project-specific failure modes and fixes |
@@ -31,10 +21,9 @@ it as supporting or historical material—not as an implementation contract.
 
 ## Current phase boundary
 
-Phase 43 completed the final pre-production cutover with a `ready` report and unwaived gate: every
-public/scenario editor route now uses v2, the superseded legacy workflow is removed, and rollback to
-the previous immutable release is rehearsed. No implementation phase is active. Production
-deployment remains a separate post-merge operator action.
+Phase 44 is the only active implementation scope. It refactors the accepted Phase-43 public
+frontend through architect-approved checkpoints in order `T2` through `T8`, followed by final
+evidence and gate task `T1`. Production deployment remains a separate post-merge operator action.
 
 ## Archive
 

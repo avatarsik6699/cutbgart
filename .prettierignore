@@ -3,6 +3,7 @@ dist
 .nitro
 node_modules
 pnpm-lock.yaml
+.claude/settings.local.json
 src/routeTree.gen.ts
 src/paraglide/
 project.inlang/.meta.json

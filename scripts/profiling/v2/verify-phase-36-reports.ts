@@ -30,7 +30,7 @@ type Phase36Report = {
   limitations: string[];
 };
 
-const reportPath = path.resolve("docs/audits/PHASE_36_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_36_REPORTS.json");
 const value: unknown = JSON.parse(await readFile(reportPath, "utf8"));
 assert(Array.isArray(value), "Phase-36 report bundle must be an array");
 assert.equal(value.length, 3, "Expected mocked, host real-model, and Windows reports");

@@ -204,7 +204,7 @@ None.
 ## Gate Checks
 
 Run `/phase-gate 38` before committing. In addition to every command in
-[`docs/STACK.md`](./STACK.md#gate-commands), run:
+[`docs/STACK.md`](../../STACK.md#gate-commands), run:
 
 ```bash
 pnpm e2e e2e/phase-38-cutover-readiness.spec.ts --project=chromium

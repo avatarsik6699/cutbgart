@@ -15,7 +15,7 @@ type Report = {
   limitations: string[];
 };
 
-const reportPath = path.resolve("docs/audits/PHASE_37_REPORTS.json");
+const reportPath = path.resolve("docs/archive/audits/phases-33-43/PHASE_37_REPORTS.json");
 const value: unknown = JSON.parse(await readFile(reportPath, "utf8"));
 assert(Array.isArray(value));
 assert.equal(value.length, 3, "Expected mocked, host real-model, and Windows reports");

@@ -17,7 +17,7 @@
 ## Phase Goal
 
 Extend the accepted one-document v2 editor with guided Magic Cutout as specified by
-[`SPEC.md`](./SPEC.md#24-active-v2-scope--phase-35). Keep semantic strokes, embeddings, prompts,
+[`SPEC.md`](../../SPEC.md#24-active-v2-scope--phase-35). Keep semantic strokes, embeddings, prompts,
 candidate mattes, and pixels outside React/XState; separate draft input, prediction, preview, and
 explicit Apply; and make Apply exactly one artifact-aware document-history commit. Use the second
 tool to extract only proven shared lifecycle/scheduling boundaries while keeping `EditorSession` a
@@ -278,7 +278,7 @@ policy; add no Magic, worker, backend, or feature flag.
 ## Gate Checks
 
 Run focused checks after each dependency-complete group, then `/phase-gate 35`. The complete
-[`STACK.md`](./STACK.md#gate-commands) gate applies, plus:
+[`STACK.md`](../../STACK.md#gate-commands) gate applies, plus:
 
 ```bash
 pnpm lint

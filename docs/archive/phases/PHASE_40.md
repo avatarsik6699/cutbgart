@@ -186,7 +186,7 @@ None.
 ## Gate Checks
 
 Run `/phase-gate 40` before committing. In addition to every command in
-[`docs/STACK.md`](./STACK.md#gate-commands), run:
+[`docs/STACK.md`](../../STACK.md#gate-commands), run:
 
 ```bash
 pnpm e2e e2e/phase-40-batch-main-page-ui.spec.ts --project=chromium

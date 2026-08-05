@@ -17,7 +17,7 @@
 ## Phase Goal
 
 Complete the isolated one-document v2 finishing workflow with Background and the existing local
-fine-detail/colour-halo Enhancements defined in [`SPEC.md`](./SPEC.md#25-active-v2-scope--phase-36).
+fine-detail/colour-halo Enhancements defined in [`SPEC.md`](../../SPEC.md#25-active-v2-scope--phase-36).
 Keep previews and intermediate pixels runtime-owned, make each explicit Apply one atomic document-
 history operation, and route heavy Enhancement work through the proven global admission boundary
 without turning `EditorSession` or a generic tool abstraction into a god-object.
@@ -308,7 +308,7 @@ Background, Enhancement, worker, backend, or feature flag.
 ## Gate Checks
 
 Run focused checks after each dependency-complete group, then `/phase-gate 36`. The complete
-[`STACK.md`](./STACK.md#gate-commands) gate applies, plus:
+[`STACK.md`](../../STACK.md#gate-commands) gate applies, plus:
 
 ```bash
 pnpm lint

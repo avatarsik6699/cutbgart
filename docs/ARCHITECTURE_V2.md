@@ -919,8 +919,9 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/v2/presentation/index.ts` | P | explicit presentation public API only |
 | `src/widgets/public-editor/ui/public-editor.tsx` | P | sole route-neutral public composition, bilingual copy, and session lifetime |
 | `src/widgets/public-editor/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
-| `src/widgets/public-editor/ui/editor-v2-status-rail.tsx` | P | truthful finite stage presentation only |
-| `src/widgets/public-editor/ui/editor-v2-document-panel.tsx` | P | narrow actor selectors and command translation only |
+| `src/widgets/public-editor/ui/editor-v2-active-document.tsx` | P | active-document connector and accepted tool/canvas composition |
+| `src/widgets/public-editor/ui/editor-v2-main-page-active.tsx` | P | main-page result and processing composition |
+| `src/widgets/public-editor/ui/editor-v2-tool-workspace.tsx` | P | active tool workspace composition |
 | `src/v2/presentation/shared/` | P | controller-neutral accepted toolbar, canvas, panel, diagnostics, and tool presentation |
 | `src/routes/index.tsx` and localized/scenario routes | R | public page/SEO composition; never workflow ownership |
 | `src/routes/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/` only |
