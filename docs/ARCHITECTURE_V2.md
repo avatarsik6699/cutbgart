@@ -323,8 +323,9 @@ they do not branch on HTTP or model-provider details.
 
 ### 5.5 V2 presentation and shared foundation
 
-V2 owns `src/v2/shared/ui` and `src/v2/shared/lib` instead of composing the legacy editor's bespoke
-components. It may reuse stable repository-wide primitives (for example `Button`) only after a
+V2 consumes repository-wide presentation primitives from `src/shared/ui` and generic hooks from
+the repository-wide `src/shared/lib` public API instead of composing the legacy editor's bespoke
+components. A stable repository-wide primitive is reused only after a
 Phase-33 compliance inventory confirms their API and implementation satisfy
 `FRONTEND_CONVENTIONS.md`. Reuse happens through the module public API; legacy feature hooks and
 state never cross into v2.
@@ -359,7 +360,7 @@ new namespaced API. Secrets are never exposed through client config.
 | TanStack Start/Router | Keep for SSR, SEO pages, routing, and web delivery |
 | Tailwind + shadcn/ui/Base UI | Keep for presentation primitives |
 | Paraglide | Keep bilingual URL/message contract |
-| FSD | Keep for UI-facing source organization; add domain/application/runtime packages beneath it |
+| FSD | Keep one-way UI layer dependencies and strict entity/feature slice isolation; allow direct widget/page same-layer composition when it removes adapter-only indirection |
 | Transformers.js + ONNX Runtime Web | Keep as the free local processing adapter |
 | Vitest + Playwright | Keep; reorganize tests around contracts and vertical slices |
 
@@ -469,10 +470,10 @@ src/v2/domain/             # pure entities, value objects, commands, events, inv
 src/v2/application/        # actors/use cases, ports, policies, selectors
 src/v2/runtime-browser/    # worker pool, local processing adapter, artifact repository adapters
 src/v2/presentation/       # React bindings and v2 UI composition
-src/v2/shared/ui/          # v2 Typography, Image, and reviewed generic primitives
-src/v2/shared/lib/         # consumer-driven browser/image/general utilities
 src/v2/testing/            # deterministic fakes, model-based test helpers
 src/shared/config/         # one repository-wide SSR-safe env/runtime boundary
+src/shared/lib/react/      # repository-wide SSR-safe React utilities
+src/shared/ui/{media,typography}/ # repository-wide Image and Typography primitives
 ```
 
 Legacy FSD slices may be called through adapters, but v2 modules must not import legacy hooks or use
@@ -860,8 +861,9 @@ PNG encode remain inside the worker; capability-gated `OffscreenCanvas` has a te
 | Capability observation | v2 browser-capability adapter | direct `navigator.gpu`, `OffscreenCanvas`, observer probing |
 | Persisted JSON/storage | existing `@/shared/lib/storage` public API | direct localStorage/raw persisted JSON; v2 adds no key |
 | Routing | existing `@/shared/lib/use-router` | direct TanStack routing hooks in page/feature code |
-| Typography styles | `src/v2/shared/ui/typography.tsx` | repeated text-style clusters in v2 presentation |
-| Content images | `src/v2/shared/ui/image.tsx` | raw `<img>` in v2 presentation; object-URL ownership in Image |
+| UI date/time formatting | `src/shared/lib/formatting` | direct native date construction/formatting in presentation components |
+| Typography styles | `src/shared/ui/typography` | repeated text-style clusters in presentation |
+| Content images | `src/shared/ui/media` | raw `<img>` in presentation; object-URL ownership in Image |
 | Performance APIs | v2 performance collector/mark adapter | free-form marks or observer setup in pages/tests |
 
 `src/shared/config/index.ts` keeps current legacy exports while adding typed `env` and `runtime`.
@@ -904,11 +906,13 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/v2/runtime-browser/model-config.ts` | D | immutable existing model asset configuration only |
 | `src/v2/runtime-browser/worker/processing.worker.ts` | W | sole worker implementation and full-resolution compute owner |
 | `src/v2/runtime-browser/index.ts` | B | explicit runtime public API; no leaked native worker/repository internals |
-| `src/v2/shared/ui/typography.tsx` | U | one function component, finite variants, explicit semantics/ref/attributes |
-| `src/v2/shared/ui/typography.test.tsx` | X | semantic element/variant/ref/attribute behavior |
-| `src/v2/shared/ui/image.tsx` | U | one function component, sole raw `<img>`, no URL lifetime |
-| `src/v2/shared/ui/image.test.tsx` | X | preset/accessibility/loading/decoding/fetch-priority behavior |
-| `src/v2/shared/ui/index.ts` | U | explicit v2 UI public API only |
+| `src/shared/ui/typography/typography.tsx` | U | one function component, finite variants, explicit semantics/ref/attributes |
+| `src/shared/ui/typography/typography.test.tsx` | X | semantic element/variant/ref/attribute behavior |
+| `src/shared/ui/media/image.tsx` | U | one function component, sole presentation-owned raw `<img>`, no URL lifetime |
+| `src/shared/ui/media/image.test.tsx` | X | preset/accessibility/loading/decoding/fetch-priority behavior |
+| `src/shared/ui/{media,typography}/index.ts` | U | explicit capability public APIs re-exported by root `shared/ui` |
+| `src/shared/ui/data-display/` | U | reusable semantic description-list primitives with native `dl`/`dt`/`dd` ownership |
+| `src/shared/lib/formatting/` | U | validated presentation date/time and byte formatting behind the root `shared/lib` API |
 | `src/shared/config/env.ts` | C | sole Vite env parser; typed client/server separation; no secret export |
 | `src/shared/config/env.test.ts` | X | valid/invalid values and client/server separation |
 | `src/shared/config/runtime.ts` | C | sole dynamic SSR/client/window/mode detection owner |
@@ -917,12 +921,22 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/v2/presentation/use-document-actor-selectors.ts` | P | selector-only `@xstate/react` binding over narrow application selectors |
 | `src/v2/presentation/use-editor-session.ts` | P | React route-lifetime signal plus external-store subscription; runtime remains owner |
 | `src/v2/presentation/index.ts` | P | explicit presentation public API only |
-| `src/widgets/public-editor/ui/public-editor.tsx` | P | sole route-neutral public composition, bilingual copy, and session lifetime |
+| `src/widgets/public-editor/ui/public-editor.tsx` | P | sole public editor session lifetime and workspace composition |
+| `src/widgets/public-editor/ui/public-editor-diagnostics.tsx` | P | editor-owned diagnostics trigger composed into the site header without portal state |
 | `src/widgets/public-editor/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
 | `src/widgets/public-editor/ui/editor-v2-active-document.tsx` | P | active-document connector and accepted tool/canvas composition |
 | `src/widgets/public-editor/ui/editor-v2-main-page-active.tsx` | P | main-page result and processing composition |
 | `src/widgets/public-editor/ui/editor-v2-tool-workspace.tsx` | P | active tool workspace composition |
-| `src/v2/presentation/shared/` | P | controller-neutral accepted toolbar, canvas, panel, diagnostics, and tool presentation |
+| `src/shared/ui/scenario/` | U | shared static localized scenario layout with an explicit editor slot |
+| `src/widgets/site-shell/` | P | route-neutral application shell that composes the site header/footer widgets directly |
+| `src/widgets/site-header/` | P | application brand, navigation, locale, and PascalCase header-composition slot |
+| `src/widgets/site-footer/` | P | application footer navigation, trust, and feedback composition |
+| `src/shared/ui/site/site-link.tsx` | U | typed TanStack `createLink` boundary with finite presentation presets |
+| `src/shared/ui/site/feedback-link.tsx` | U | sole Telegram URL, safe external attributes, icon, and presentation variants |
+| `src/shared/lib/react/use-is-hydrated.ts` | U | repository-wide SSR/client hydration snapshot via `useSyncExternalStore` |
+| `src/v2/presentation/shared/diagnostics/` | P | main diagnostics overlay plus capability-root API/types/utils; child UI in `components/`, including declarative `react-error-boundary` plus React `lazy`/`Suspense` chunk containment |
+| `src/v2/presentation/shared/tests/` | X | shared-presentation unit/component tests kept outside production capability folders |
+| `src/v2/presentation/shared/` | P | remaining controller-neutral toolbar, canvas, panel, registry, and execution presentation pending consumer-led grouping in T5/T6 |
 | `src/routes/index.tsx` and localized/scenario routes | R | public page/SEO composition; never workflow ownership |
 | `src/routes/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/` only |
 | `src/routes/en/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/en/` only |

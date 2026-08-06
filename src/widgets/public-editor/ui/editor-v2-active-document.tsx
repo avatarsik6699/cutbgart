@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, Typography } from "@/shared/ui";
 import {
   EditorToolDraftGuard,
   EditorToolWorkspaceView,
@@ -29,18 +29,17 @@ import {
   type EditorSession,
   type ManualCutoutBox,
 } from "@/v2/runtime-browser";
-import { Typography } from "@/v2/shared/ui";
 import { LocalExecutionReadout } from "@/v2/presentation/shared";
 
 import { EditorV2ToolWorkspace } from "./editor-v2-tool-workspace";
 
 export type EditorV2ActiveDocumentProps = Readonly<{
-  downloadSlot?: ReactNode;
+  DownloadSlot?: ReactNode;
   locale: "ru" | "en";
   onLeave(): void;
   session: EditorSession;
   snapshot: ActiveEditorSessionSnapshot;
-  workspaceActionsSlot?: ReactNode;
+  WorkspaceActionsSlot?: ReactNode;
 }>;
 
 type PendingNavigation =
@@ -512,21 +511,21 @@ export function EditorV2ActiveDocument(props: EditorV2ActiveDocumentProps) {
     <EditorToolWorkspaceView
       projection={projection}
       onIntent={handleIntent}
-      downloadSlot={
-        props.downloadSlot ?? (
+      DownloadSlot={
+        props.DownloadSlot ?? (
           <Button onClick={() => handleIntent({ type: "download-committed" })}>
             {m.editorV2DownloadPng()}
           </Button>
         )
       }
-      statusSlot={
+      StatusSlot={
         <LocalExecutionReadout
           busy={busy}
           inferencePath={props.session.processingSelection()?.inferencePath ?? "wasm"}
         />
       }
-      workspaceActionsSlot={props.workspaceActionsSlot}
-      guardSlot={
+      WorkspaceActionsSlot={props.WorkspaceActionsSlot}
+      GuardSlot={
         pendingNavigation ? (
           <EditorToolDraftGuard
             onContinue={() => setPendingNavigation(null)}

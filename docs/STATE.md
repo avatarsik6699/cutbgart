@@ -29,15 +29,15 @@
 | 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
 | 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
-| 44 | 🔄 in-progress | `v0.44.0`; T2 awaiting architect review | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
+| 44 | 🔄 in-progress | `v0.44.0`; T3 awaiting architect review | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
 
 **Latest closed phase:** `43`
 
-**Implementation in progress:** Phase 44 checkpoint `T2`; implementation and focused checks are
+**Implementation in progress:** Phase 44 checkpoint `T3`; implementation and focused checks are
 complete, awaiting architect review before commit.
 
-**Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), pending its first targeted
-`/impl-assist 44 <ID>` checkpoint. Production deployment remains a separate authorized-operator
+**Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), executed through targeted
+`/impl-assist 44 <ID>` checkpoints. Production deployment remains a separate authorized-operator
 workflow.
 
 ## Current contract
@@ -93,10 +93,12 @@ workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and the ar
 - The Phase-43 report concludes `ready` with zero blocker, missing evidence, serious accessibility
   finding, or reachable legacy entry. Full gate, real-model, managed-Windows, security, build,
   container smoke, and disposable immutable-release rollback evidence passed without waiver.
-- SPEC v1.43 scopes one checkpoint-driven Phase 44 to decompose the retained public frontend,
+- SPEC v1.44 scopes one checkpoint-driven Phase 44 to decompose the retained public frontend,
   narrow React/XState/external-store render ownership, remove reachability-proven obsolete code,
-  and run end-state performance/resource evidence only in the final task. Product behavior, routes,
-  domain/runtime ownership, privacy, models, exports, and deployment remain unchanged.
+  and run end-state performance/resource evidence only in the final task. It keeps one-way layer
+  dependencies and entity/feature slice isolation while allowing direct same-layer widget/page
+  composition. Product behavior, routes, domain/runtime ownership, privacy, models, exports, and
+  deployment remain unchanged.
 
 ### Core models
 

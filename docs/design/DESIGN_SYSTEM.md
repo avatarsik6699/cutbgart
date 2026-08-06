@@ -123,7 +123,7 @@ and animations to near-zero duration (`globals.css`, pre-existing).
 ## 3. Background Pattern (`T4`)
 
 Implemented as `.site-background-pattern` (`globals.css`), rendered once at the `site-shell` level
-(`src/shared/ui/site-shell.tsx`) so every page gets it without per-page wiring:
+(`src/widgets/site-shell/ui/site-shell.tsx`) so every page gets it without per-page wiring:
 
 - A static engineering-line grid uses 32px minor and 160px major cells. The second architect
   review reduces the foreground mix to 3%/6% respectively and narrows the radial/vertical mask so
@@ -405,7 +405,7 @@ Checklist from `docs/archive/phases/PHASE_30.md` `T16`, each verified against cu
 
 Final second-review verification: `pnpm tsc --noEmit`, `pnpm exec steiger ./src`,
 `pnpm vitest run` (86 files, 363 tests), `pnpm lint` (no errors; one pre-existing Fast Refresh
-warning in `shared/ui/button.tsx`), and the full deterministic `pnpm e2e` result recorded in §5c.
+warning in `shared/ui/controls/button.tsx`), and the full deterministic `pnpm e2e` result recorded in §5c.
 
 ## 7. Before/After Screenshots
 

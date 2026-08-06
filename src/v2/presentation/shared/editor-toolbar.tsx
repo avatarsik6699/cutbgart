@@ -16,9 +16,9 @@ export interface EditorToolbarProps {
   redoLabel?: string | null;
   onUndo?: () => void;
   onRedo?: () => void;
-  workspaceActionsSlot?: ReactNode;
-  downloadSlot?: ReactNode;
-  statusSlot?: ReactNode;
+  WorkspaceActionsSlot?: ReactNode;
+  DownloadSlot?: ReactNode;
+  StatusSlot?: ReactNode;
   onBack?: (trigger: HTMLButtonElement) => void;
 }
 
@@ -32,9 +32,9 @@ export function EditorToolbar({
   redoLabel,
   onUndo = () => undefined,
   onRedo = () => undefined,
-  workspaceActionsSlot,
-  downloadSlot,
-  statusSlot,
+  WorkspaceActionsSlot,
+  DownloadSlot,
+  StatusSlot,
   onBack,
 }: EditorToolbarProps) {
   const toolRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -42,9 +42,9 @@ export function EditorToolbar({
   const leftBoundaryRef = useRef<HTMLSpanElement | null>(null);
   const rightBoundaryRef = useRef<HTMLSpanElement | null>(null);
   const [scrollFade, setScrollFade] = useState({ left: false, right: false });
-  const hasStatusSlot = Boolean(statusSlot);
-  const hasWorkspaceActionsSlot = Boolean(workspaceActionsSlot);
-  const hasDownloadSlot = Boolean(downloadSlot);
+  const hasStatusSlot = Boolean(StatusSlot);
+  const hasWorkspaceActionsSlot = Boolean(WorkspaceActionsSlot);
+  const hasDownloadSlot = Boolean(DownloadSlot);
 
   useEffect(
     function observeScrollBoundariesFx() {
@@ -199,9 +199,9 @@ export function EditorToolbar({
             </>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {statusSlot}
-            {workspaceActionsSlot}
-            {downloadSlot && <div data-testid="editor-download-slot">{downloadSlot}</div>}
+            {StatusSlot}
+            {WorkspaceActionsSlot}
+            {DownloadSlot && <div data-testid="editor-download-slot">{DownloadSlot}</div>}
           </div>
           <span
             ref={rightBoundaryRef}

@@ -8,9 +8,8 @@ import {
 import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button, EditorStage } from "@/shared/ui";
+import { Button, EditorStage, Typography } from "@/shared/ui";
 import type { ManualCutoutMode } from "@/v2/domain";
-import { Typography } from "@/v2/shared/ui";
 import { CanvasViewControls, ToolPanelSlot, type CanvasInteractionMode } from "../shared";
 import {
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
@@ -310,7 +309,7 @@ export function ManualCutoutWorkspace(props: Props) {
       <div className="[grid-area:surface]">
         <EditorStage
           documentId={props.documentId}
-          overlaySlot={({ expanded, toggleFullscreen }) => (
+          OverlaySlot={({ expanded, toggleFullscreen }) => (
             <CanvasViewControls
               interactionMode={interactionMode}
               onInteractionModeChange={setInteractionMode}

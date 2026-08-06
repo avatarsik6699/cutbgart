@@ -9,10 +9,9 @@ import {
 import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button, EditorStage } from "@/shared/ui";
+import { Button, EditorStage, Image, Typography } from "@/shared/ui";
 import type { MagicCutoutDraft, MagicCutoutMode } from "@/v2/domain";
 import type { MagicRuntimeProgress } from "@/v2/runtime-browser";
-import { Image, Typography } from "@/v2/shared/ui";
 import { CanvasViewControls, ToolPanelSlot, type CanvasInteractionMode } from "../shared";
 import {
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
@@ -408,7 +407,7 @@ export function MagicCutoutWorkspace(props: Props) {
       <div className="[grid-area:surface]">
         <EditorStage
           documentId={props.draft.documentId}
-          overlaySlot={({ expanded, toggleFullscreen }) => (
+          OverlaySlot={({ expanded, toggleFullscreen }) => (
             <CanvasViewControls
               interactionMode={interactionMode}
               onInteractionModeChange={setInteractionMode}

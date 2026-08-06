@@ -1,6 +1,6 @@
 import { BeforeAfterUrlSlider } from "@/entities/processed-image";
 import { m } from "@/paraglide/messages";
-import { Image, Typography } from "@/v2/shared/ui";
+import { Image, Typography } from "@/shared/ui";
 
 import type { MainPageEditorProjection } from "./main-page-editor-contract";
 

@@ -17,7 +17,7 @@ import type {
   EnhancementRuntimeSnapshot,
   MagicRuntimeProgress,
 } from "@/v2/runtime-browser";
-import { Typography } from "@/v2/shared/ui";
+import { Typography } from "@/shared/ui";
 import { ToolPanelSlot } from "@/v2/presentation/shared";
 
 import { EditorV2Stage } from "./editor-v2-stage";

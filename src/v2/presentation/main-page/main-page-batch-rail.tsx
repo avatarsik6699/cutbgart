@@ -1,7 +1,11 @@
 import { m } from "@/paraglide/messages";
 import { memo } from "react";
-import { BatchWorkspaceRail, Skeleton, type BatchWorkspaceRailItem } from "@/shared/ui";
-import { Image } from "@/v2/shared/ui";
+import {
+  BatchWorkspaceRail,
+  Image,
+  Skeleton,
+  type BatchWorkspaceRailItem,
+} from "@/shared/ui";
 import { batchMainPageProjectionEqual } from "./main-page-editor-contract";
 
 import type {
@@ -44,7 +48,7 @@ function MainPageBatchRailView(props: Props) {
       item.status === "error" ? (item.error?.message ?? m.editorV2BatchError()) : null,
     id: item.itemId,
     name: item.fileName,
-    previewSlot:
+    PreviewSlot:
       item.previewUrl !== null &&
       (item.status === "result" || item.status === "error") ? (
         <Image

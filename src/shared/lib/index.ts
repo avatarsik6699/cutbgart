@@ -1,6 +1,11 @@
 export { inspectEncodedImageDimensions } from "./image-file-inspection";
 export type { EncodedImageDimensions } from "./image-file-inspection";
-export { formatBytesLadder, formatMegabytes } from "./format-bytes";
+export {
+  currentLocalYear,
+  formatBytesLadder,
+  formatLocalTime,
+  formatMegabytes,
+} from "./formatting";
 export { BACKGROUND_GRADIENT_PRESETS } from "./background-gradient-presets";
 export type { BackgroundGradientPreset } from "./background-gradient-presets";
 export { createModelSourceLoader } from "./inference/model-source-loader";
@@ -30,4 +35,5 @@ export type {
   ProductionModelProfile,
 } from "./inference/production-model-config";
 export { useRouter } from "./use-router";
+export { useIsHydrated } from "./react";
 export { cn } from "./utils";

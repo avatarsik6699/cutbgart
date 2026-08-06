@@ -1,6 +1,5 @@
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
-import { Typography } from "@/v2/shared/ui";
+import { Button, Typography } from "@/shared/ui";
 
 type Props = Readonly<{
   onContinue(): void;

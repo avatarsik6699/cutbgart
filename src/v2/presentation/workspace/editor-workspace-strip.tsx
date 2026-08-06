@@ -1,14 +1,13 @@
 import type { ChangeEvent } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, Image, Typography } from "@/shared/ui";
 import type {
   ActiveEditorSessionSnapshot,
   EditorSession,
   EditorWorkspaceSnapshot,
   WorkspaceItemSummary,
 } from "@/v2/runtime-browser";
-import { Image, Typography } from "@/v2/shared/ui";
 
 type Props = {
   active: ActiveEditorSessionSnapshot | null;

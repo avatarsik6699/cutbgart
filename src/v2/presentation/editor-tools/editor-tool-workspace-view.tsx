@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Typography } from "@/v2/shared/ui";
+import { Typography } from "@/shared/ui";
 import { EditorToolbar, createEditorToolRegistry } from "../shared";
 
 import type { EditorToolWorkspacePresentationProps } from "./editor-tool-workspace-contract";
@@ -9,10 +9,10 @@ import type { EditorToolWorkspacePresentationProps } from "./editor-tool-workspa
 type Props = EditorToolWorkspacePresentationProps &
   Readonly<{
     children: ReactNode;
-    downloadSlot?: ReactNode;
-    guardSlot?: ReactNode;
-    statusSlot?: ReactNode;
-    workspaceActionsSlot?: ReactNode;
+    DownloadSlot?: ReactNode;
+    GuardSlot?: ReactNode;
+    StatusSlot?: ReactNode;
+    WorkspaceActionsSlot?: ReactNode;
   }>;
 
 export function EditorToolWorkspaceView(props: Props) {
@@ -51,14 +51,14 @@ export function EditorToolWorkspaceView(props: Props) {
               type: projection.canRedoDraft ? "redo-draft" : "redo-document",
             })
           }
-          statusSlot={props.statusSlot}
-          workspaceActionsSlot={props.workspaceActionsSlot}
-          downloadSlot={props.downloadSlot}
+          StatusSlot={props.StatusSlot}
+          WorkspaceActionsSlot={props.WorkspaceActionsSlot}
+          DownloadSlot={props.DownloadSlot}
           onBack={() => props.onIntent({ type: "leave-workspace" })}
         />
       </div>
-      {props.guardSlot ? (
-        <div className="[grid-area:guard]">{props.guardSlot}</div>
+      {props.GuardSlot ? (
+        <div className="[grid-area:guard]">{props.GuardSlot}</div>
       ) : null}
       <Typography variant="caption" as="p" className="sr-only">
         {m.editorV2Revision({ revision: String(projection.revision) })}

@@ -1,6 +1,7 @@
 import { m } from "@/paraglide/messages";
-import { PublicEditorWorkspace } from "@/widgets/public-editor";
-import { SiteShell } from "@/shared/ui";
+import { ScenarioPageLayout } from "@/shared/ui";
+import { PublicEditorDiagnostics, PublicEditorWorkspace } from "@/widgets/public-editor";
+import { SiteShell } from "@/widgets/site-shell";
 
 /**
  * `/udalit-fon-dlya-avatarki` (ru) / `/en/remove-background-from-avatar`
@@ -9,35 +10,24 @@ import { SiteShell } from "@/shared/ui";
  */
 export function AvatarPage() {
   return (
-    <SiteShell>
-      <main
-        data-testid="avatar-page"
-        className="mx-auto flex max-w-6xl flex-col gap-6 p-6 sm:p-8"
+    <SiteShell HeaderUtilities={<PublicEditorDiagnostics />}>
+      <ScenarioPageLayout
+        body={[m.avatarBody1(), m.avatarBody2()]}
+        example={{
+          alt: m.avatarExampleAlt(),
+          caption: m.avatarExampleCaption(),
+          height: 1254,
+          src: "/images/avatar-example.webp",
+          width: 1254,
+        }}
+        exampleHeading={m.scenarioExampleHeading()}
+        lead={m.avatarLead()}
+        testId="avatar-page"
+        title={m.avatarTitle()}
+        trust={m.trustBadge()}
       >
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold">{m.avatarTitle()}</h1>
-          <p className="text-sm text-muted-foreground">{m.avatarLead()}</p>
-          <p className="text-xs text-muted-foreground">{m.trustBadge()}</p>
-        </header>
-
-        <p className="text-sm text-muted-foreground">{m.avatarBody1()}</p>
-        <p className="text-sm text-muted-foreground">{m.avatarBody2()}</p>
-
         <PublicEditorWorkspace />
-
-        <section className="flex flex-col gap-3 border-t border-border pt-6">
-          <h2 className="text-lg font-medium">{m.scenarioExampleHeading()}</h2>
-          <img
-            src="/images/avatar-example.webp"
-            alt={m.avatarExampleAlt()}
-            loading="lazy"
-            width={1254}
-            height={1254}
-            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
-          />
-          <p className="text-sm text-muted-foreground">{m.avatarExampleCaption()}</p>
-        </section>
-      </main>
+      </ScenarioPageLayout>
     </SiteShell>
   );
 }

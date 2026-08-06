@@ -1,4 +1,4 @@
-export { DiagnosticsSheet } from "./diagnostics-sheet";
+export { DiagnosticsSheet } from "./diagnostics";
 export { EditorToolbar } from "./editor-toolbar";
 export { ToolPanelSlot } from "./tool-panel-slot";
 export { CanvasViewControls } from "./canvas-view-controls";

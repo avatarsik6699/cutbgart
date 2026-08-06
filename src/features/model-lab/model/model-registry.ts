@@ -1,4 +1,4 @@
-import { formatMegabytes } from "@/shared/lib/format-bytes";
+import { formatMegabytes } from "@/shared/lib";
 import type {
   EvaluationModelId,
   EvaluationModelProfile,

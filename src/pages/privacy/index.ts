@@ -1,1 +1,1 @@
-export { PrivacyPage } from "./ui/PrivacyPage";
+export { PrivacyPage } from "./ui/privacy-page";

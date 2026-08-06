@@ -1,7 +1,7 @@
 import type { ChangeEvent } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Image, Typography } from "@/v2/shared/ui";
+import { Image, Typography } from "@/shared/ui";
 
 export type EditorV2StageProps = {
   fileName: string | null;

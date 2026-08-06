@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.43` |
+| Version | `v1.44` |
 | Date | `2026-08-05` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -902,6 +902,9 @@ All frontend work follows [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md)
 
 - modules expose intentional public APIs and depend inward; domain/application do not import React,
   router, browser globals, inference providers, or UI libraries;
+- source layers keep one-way dependencies from higher layers to lower layers. Same-layer slice
+  composition is allowed for `widgets` and `pages` when it makes an application composition
+  materially simpler; cross-slice imports remain forbidden for `entities` and `features`;
 - `Typography` separates semantic element from finite visual variants;
 - `Image` has typed content/hero/preview/thumbnail presets, intrinsic/aspect/object-fit policy,
   accessible alt/decorative semantics, and explicit loading/decoding/fetch-priority defaults;

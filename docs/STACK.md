@@ -38,9 +38,9 @@ stack while the noindex v2 route grows through later accepted slices.
 | Domain/application | Framework-free TypeScript commands, events, transitions, ports, policies | No React, worker, HTTP, provider, or binary values |
 | Binary ownership | Explicit artifact repository with opaque IDs and leases | Browser-tab memory only |
 | Local runtime | Unified typed protocol and bounded browser worker gateway | Existing model/assets; no remote processing |
-| V2 shared UI | Rewritten Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; no blanket legacy component import |
+| Shared UI | Repository-wide Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; capability-owned public modules under `src/shared/ui` |
 | SSR/config | Typed `shared/config/env.ts` + `runtime.ts`, adapted from `patient_tracker` | Sole environment/runtime boundary; backward-compatible legacy exports during migration |
-| V2 utilities | `src/v2/shared/lib` plus reviewed repository-wide public APIs | Only utilities with a concrete Phase-33 consumer and tests; direct platform access forbidden |
+| Shared React utilities | `src/shared/lib/react` through the repository-wide `shared/lib` public API | Consumer-proven, SSR-safe hooks such as `useIsHydrated`; direct platform access from components is forbidden |
 | Test architecture | Vitest contract/model tests + Playwright typed fixtures and narrow component/page objects | Fast deterministic lane is parallel-safe; real-model lane is small and serialized; no sleeps/retry-masked flakes |
 | Performance evidence | Typed v2 User Timing/PerformanceObserver/resource collector and versioned reports | Rebuild useful v1 probes behind shared contracts; target-device evidence remains mandatory |
 | Worker/canvas tooling | Native typed Dedicated Worker protocol, imperative Canvas 2D, and capability-gated OffscreenCanvas | Comlink, workerpool/threads.js, and canvas frameworks are documented future candidates only; no Phase-33 evaluation or dependency |

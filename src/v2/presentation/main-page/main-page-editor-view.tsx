@@ -8,9 +8,9 @@ import {
   MainPageEmptySurface,
   MainPageIntro,
   Skeleton,
+  Typography,
 } from "@/shared/ui";
 import { EditorToolbar, LocalExecutionReadout } from "../shared";
-import { Typography } from "@/v2/shared/ui";
 
 import type { MainPageEditorPresentationProps } from "./main-page-editor-contract";
 import { MainPageBatchActions } from "./main-page-batch-actions";
@@ -109,7 +109,7 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
               if (batchActive && batch !== null) batch.onIntent({ type: "clear-batch" });
               else props.onIntent({ type: busy ? "cancel" : "reset" });
             }}
-            downloadSlot={
+            DownloadSlot={
               projection.phase === "result" ? (
                 <DownloadSplitControl
                   busy={projection.exportStatus === "preparing"}
@@ -127,13 +127,13 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
                 />
               ) : undefined
             }
-            statusSlot={
+            StatusSlot={
               <LocalExecutionReadout
                 busy={busy}
                 inferencePath={projection.inferencePath}
               />
             }
-            workspaceActionsSlot={
+            WorkspaceActionsSlot={
               batchActive && batch !== null ? (
                 <MainPageBatchActions
                   batch={batch.projection}
@@ -172,7 +172,7 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
       {emptyLike ? (
         <div className="[grid-area:surface]">
           <MainPageEmptySurface
-            qualitySlot={
+            QualitySlot={
               <QualityModeToggle
                 qualityMode={projection.qualityMode}
                 onQualityModeChange={(mode) =>
@@ -181,7 +181,7 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
                 disabled={busy}
               />
             }
-            uploadDropzoneSlot={
+            UploadDropzoneSlot={
               <FileDropzone
                 className="command-deck-dropzone border border-border bg-background/50 backdrop-blur-sm"
                 disabled={busy}
@@ -189,14 +189,14 @@ export function MainPageEditorView(props: MainPageEditorPresentationProps) {
                 onFiles={(files) => props.onIntent({ type: "choose-files", files })}
               />
             }
-            uploadButtonSlot={
+            UploadButtonSlot={
               <ChooseFilesButton
                 disabled={busy}
                 multiple
                 onFiles={(files) => props.onIntent({ type: "choose-files", files })}
               />
             }
-            errorSlot={
+            ErrorSlot={
               projection.phase === "error" ? (
                 <div
                   role="alert"

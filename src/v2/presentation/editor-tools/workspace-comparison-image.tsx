@@ -1,4 +1,4 @@
-import { Image } from "@/v2/shared/ui";
+import { Image } from "@/shared/ui";
 
 type Props = Readonly<{
   height: number;

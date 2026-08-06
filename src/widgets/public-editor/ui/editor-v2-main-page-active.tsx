@@ -76,7 +76,7 @@ export function EditorV2MainPageActive(props: EditorV2MainPageActiveProps) {
           }}
           session={props.session}
           snapshot={props.snapshot}
-          downloadSlot={
+          DownloadSlot={
             <DownloadSplitControl
               busy={singleExport.status === "preparing"}
               error={singleExport.error}
@@ -92,7 +92,7 @@ export function EditorV2MainPageActive(props: EditorV2MainPageActiveProps) {
               sizes={sizes}
             />
           }
-          workspaceActionsSlot={
+          WorkspaceActionsSlot={
             props.batch && props.onBatchIntent ? (
               <MainPageBatchActions
                 batch={props.batch}

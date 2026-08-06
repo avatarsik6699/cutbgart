@@ -46,14 +46,69 @@ export default tseslint.config(
     },
   },
   {
-    // Primitive prop filters intentionally omit consumed sibling properties
-    // before forwarding the safe remainder to the underlying DOM element.
-    files: ["src/v2/shared/ui/**/*.{ts,tsx}"],
+    // Rendered JSX slots are PascalCase so they are visually distinct from
+    // ordinary data and callback props at both declaration and call sites.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "TSPropertySignature[key.type='Identifier'][key.name=/^[a-z].*Slot$/]",
+          message: "Renderable slot props must use a PascalCase name.",
+        },
+        {
+          selector: "JSXAttribute[name.name=/^[a-z].*Slot$/]",
+          message: "Renderable slot props must use a PascalCase name.",
+        },
+      ],
+    },
+  },
+  {
+    // Primitive/trigger prop filters intentionally omit consumed sibling
+    // properties before forwarding the safe remainder to the underlying element.
+    files: [
+      "src/shared/ui/media/**/*.{ts,tsx}",
+      "src/shared/ui/site/site-link-anchor.tsx",
+      "src/shared/ui/typography/**/*.{ts,tsx}",
+      "src/v2/presentation/shared/diagnostics/components/diagnostics-trigger-button.tsx",
+    ],
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
       // React 19 exposes ref as a normal prop. The hooks plugin currently marks
       // the complete props object as ref-tainted and reports ordinary fields.
       "react-hooks/refs": "off",
+    },
+  },
+  {
+    files: [
+      "src/v2/presentation/shared/*.test.{ts,tsx}",
+      "src/v2/presentation/shared/diagnostics/**/*.test.{ts,tsx}",
+    ],
+    ignores: ["src/v2/presentation/shared/tests/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Program",
+          message:
+            "Shared presentation tests belong in src/v2/presentation/shared/tests.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/v2/presentation/shared/diagnostics/*.tsx"],
+    ignores: ["src/v2/presentation/shared/diagnostics/diagnostics-sheet.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Program",
+          message:
+            "Diagnostics child components belong in diagnostics/components; keep only the main component at the capability root.",
+        },
+      ],
     },
   },
   {

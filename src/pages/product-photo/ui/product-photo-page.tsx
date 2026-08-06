@@ -1,6 +1,7 @@
 import { m } from "@/paraglide/messages";
-import { PublicEditorWorkspace } from "@/widgets/public-editor";
-import { SiteShell } from "@/shared/ui";
+import { ScenarioPageLayout } from "@/shared/ui";
+import { PublicEditorDiagnostics, PublicEditorWorkspace } from "@/widgets/public-editor";
+import { SiteShell } from "@/widgets/site-shell";
 
 /**
  * `/udalit-fon-s-foto-tovara` (ru) / `/en/remove-background-from-product-photo`
@@ -9,37 +10,24 @@ import { SiteShell } from "@/shared/ui";
  */
 export function ProductPhotoPage() {
   return (
-    <SiteShell>
-      <main
-        data-testid="product-photo-page"
-        className="mx-auto flex max-w-6xl flex-col gap-6 p-6 sm:p-8"
+    <SiteShell HeaderUtilities={<PublicEditorDiagnostics />}>
+      <ScenarioPageLayout
+        body={[m.productPhotoBody1(), m.productPhotoBody2()]}
+        example={{
+          alt: m.productPhotoExampleAlt(),
+          caption: m.productPhotoExampleCaption(),
+          height: 1254,
+          src: "/images/product-photo-example.webp",
+          width: 1254,
+        }}
+        exampleHeading={m.scenarioExampleHeading()}
+        lead={m.productPhotoLead()}
+        testId="product-photo-page"
+        title={m.productPhotoTitle()}
+        trust={m.trustBadge()}
       >
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold">{m.productPhotoTitle()}</h1>
-          <p className="text-sm text-muted-foreground">{m.productPhotoLead()}</p>
-          <p className="text-xs text-muted-foreground">{m.trustBadge()}</p>
-        </header>
-
-        <p className="text-sm text-muted-foreground">{m.productPhotoBody1()}</p>
-        <p className="text-sm text-muted-foreground">{m.productPhotoBody2()}</p>
-
         <PublicEditorWorkspace />
-
-        <section className="flex flex-col gap-3 border-t border-border pt-6">
-          <h2 className="text-lg font-medium">{m.scenarioExampleHeading()}</h2>
-          <img
-            src="/images/product-photo-example.webp"
-            alt={m.productPhotoExampleAlt()}
-            loading="lazy"
-            width={1254}
-            height={1254}
-            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
-          />
-          <p className="text-sm text-muted-foreground">
-            {m.productPhotoExampleCaption()}
-          </p>
-        </section>
-      </main>
+      </ScenarioPageLayout>
     </SiteShell>
   );
 }

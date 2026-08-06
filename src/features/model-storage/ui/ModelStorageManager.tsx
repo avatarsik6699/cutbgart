@@ -1,24 +1,19 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
 import {
   clearModelCache,
-  formatStorageBytes,
   getModelCacheStatus,
   type ModelCacheStatus,
 } from "../model/model-cache";
+import { ModelStorageDetails } from "./model-storage-details";
+import { ModelStorageEmpty, ModelStorageLoading } from "./model-storage-states";
 
-/**
- * Popover content for the model-storage trigger in `site-header` (Phase 30
- * `T6`). Mounted only while the popover is open (Base UI `Popover.Portal`
- * doesn't render its content while closed), so the mount-time effect below
- * replaces the previous `<details onToggle>` "load on first expand" behavior.
- */
+/** Content mounted only while the downloaded-model popover is open. */
 export function ModelStorageManager() {
   const [status, setStatus] = useState<ModelCacheStatus | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cleared, setCleared] = useState(false);
 
@@ -38,8 +33,6 @@ export function ModelStorageManager() {
 
   useEffect(() => {
     const refreshTimer = window.setTimeout(() => void refresh(), 0);
-    // Load once per mount (i.e. once per popover open) — not on every
-    // `refresh` identity change.
     return () => window.clearTimeout(refreshTimer);
   }, []);
 
@@ -58,27 +51,30 @@ export function ModelStorageManager() {
     }
   }
 
+  const hasStatus = status !== null;
+
   return (
     <div
       data-testid="model-storage-manager"
-      className="flex max-w-xs flex-col gap-3 text-sm text-muted-foreground"
+      className="flex max-h-[min(32rem,70dvh)] flex-col gap-3 overflow-y-auto text-sm text-muted-foreground"
     >
-      <p>{m.modelStoragePrivacy()}</p>
-      {busy && <p role="status">{m.modelStorageLoading()}</p>}
-      {status && !busy && (
-        <p data-testid="model-storage-usage" aria-live="polite">
-          {m.modelStorageUsage({
-            usage: formatStorageBytes(status.usageBytes),
-            count: String(status.assetCount),
-          })}
-        </p>
-      )}
+      <p className="text-xs leading-relaxed">{m.modelStoragePrivacy()}</p>
+
+      {busy && !hasStatus && <ModelStorageLoading />}
+      {!busy && status?.assetCount === 0 && <ModelStorageEmpty />}
+      {status && status.assetCount > 0 && <ModelStorageDetails status={status} />}
+      {busy && hasStatus && <span className="sr-only">{m.modelStorageLoading()}</span>}
+
       {cleared && <p role="status">{m.modelStorageCleared()}</p>}
       {error && (
-        <p role="alert" className="text-destructive">
-          {m.modelStorageError()}
-        </p>
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive"
+        >
+          <p className="font-medium">{m.modelStorageError()}</p>
+        </div>
       )}
+
       {error && !status ? (
         <Button
           type="button"
@@ -97,7 +93,6 @@ export function ModelStorageManager() {
           onClick={() => void clear()}
           className="self-start"
         >
-          <Trash2 aria-hidden="true" />
           {m.modelStorageClear()}
         </Button>
       )}

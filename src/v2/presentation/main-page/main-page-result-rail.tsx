@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
-import { Typography } from "@/v2/shared/ui";
+import { Button, Typography } from "@/shared/ui";
 
 import type { MainPageEditorPresentationProps } from "./main-page-editor-contract";
 

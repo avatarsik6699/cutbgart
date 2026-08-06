@@ -90,10 +90,10 @@ useEffect(function syncActiveToolFx() {
 }, [activeTool]);
 ```
 
-### 2.8 V2 typography primitive
+### 2.8 Typography primitive
 
-New v2 presentation code must render reusable text styles through
-`src/v2/shared/ui/typography.tsx`, not repeat heading/body/caption Tailwind clusters in pages. The
+New presentation code must render reusable text styles through
+`src/shared/ui/typography`, not repeat heading/body/caption Tailwind clusters in pages. The
 component has a finite typed variant registry, requires an explicit semantic `as` element when the
 variant alone cannot determine it, forwards safe HTML attributes/ref, and never infers heading
 level from visual size. Page-specific layout classes may be added through `className`; typography
@@ -102,9 +102,9 @@ classes remain owned by the primitive.
 Do not migrate untouched legacy pages mechanically. This rule applies to all v2 code and to any
 legacy component deliberately migrated into v2.
 
-### 2.9 V2 image primitive
+### 2.9 Image primitive
 
-New v2 presentation code must use `src/v2/shared/ui/image.tsx` for content/preview images. Its typed
+New presentation code must use `src/shared/ui/media` for content/preview images. Its typed
 presets own aspect-ratio/object-fit and loading policy, require meaningful `alt` text or explicit
 decorative intent, preserve intrinsic dimensions where known, and set deliberate `loading`,
 `decoding`, and fetch-priority defaults. The component receives a URL whose lifetime is already
@@ -112,6 +112,23 @@ owned by the artifact/static-asset layer; it must never call `URL.createObjectUR
 
 Raw `<img>` remains allowed only inside the primitive itself or for a documented framework/tooling
 exception. Canvas drawing surfaces are not images and are unaffected.
+
+### 2.10 Navigation and external-link primitives
+
+Repeated internal navigation markup must use the typed `shared/ui` router-link primitive built
+with TanStack Router `createLink`. Presentation presets may own stable class clusters and active
+styling, while route `to`, params, search, native anchor attributes, and refs remain type-safe.
+
+Do not combine router navigation and ordinary external anchors behind an `as`/URL heuristic.
+Semantic external actions shared across surfaces (for example the Telegram feedback link) own
+their URL, safe `target`/`rel`, icon, and finite presentation variants in a separate component.
+
+### 2.11 Renderable prop names
+
+Props whose value is rendered as a React component, element, node, or render function use a
+PascalCase name so JSX-bearing composition is visible at the call site: `HeaderUtilities`,
+`DownloadSlot`, `OverlaySlot`, or `EmptyState`. This applies to optional and required slots and to
+component-type props. React's conventional `children` prop is the sole naming exception.
 
 ---
 
@@ -121,9 +138,47 @@ Each feature/widget slice follows FSD (`model/`, `ui/`, `lib/`, `worker/` — cr
 needed). V2 core code uses the same cohesion rule without pretending that application/runtime
 modules are UI slices: top-level folders name an architectural role, while subdirectories name a
 business capability or owned resource (`application/document/`, `runtime-browser/artifacts/`).
-Avoid generic catch-all directories such as `types/`, `utils/`, or `services/`; a segment must say
-what it owns. Every semantic module exposes an `index.ts` public API, and callers outside that
-module import through it.
+Every semantic module exposes an `index.ts` public API, and callers outside that module import
+through it.
+
+### 3.1 Capability-internal layout
+
+Do not leave a growing capability as a flat file list. Its root contains only the main public file,
+`index.ts`, and narrowly shared `<capability>.types.ts` / `<capability>.utils.ts` files. Organize
+everything else by role:
+
+```text
+capability/
+  capability-view.tsx       # main public component
+  capability.types.ts       # types shared across capability files
+  capability.utils.ts       # pure capability-local helpers
+  components/               # child React components, one component per file
+  hooks/                    # capability-local React hooks
+  model/                    # classes, stores, services, loaders, lifecycle/state owners
+  index.ts                  # intentional public API
+```
+
+`components/`, `hooks/`, and `model/` are mandatory once those roles have more than the main file;
+they are not optional aesthetic grouping. They are allowed only inside a specifically named
+capability, never as anonymous repository- or layer-wide dumping grounds. Do not put components,
+hooks, stores, services, and pure helpers beside each other in the capability root.
+
+Unit/component tests live in the owning module's dedicated `tests/` directory, not beside
+production files. For the controller-neutral shared presentation module this is
+`src/v2/presentation/shared/tests/`; test names retain the production capability prefix.
+
+The layer direction remains strict: a lower layer must never import a higher layer. Cross-slice
+imports on the same layer remain forbidden for `entities` and `features`, where isolation protects
+domain ownership and user actions. They are allowed for `widgets` and `pages` when direct
+composition is clearer than adapter props, portals, context bridges, or artificial relocation.
+Such imports still go through the target slice's public `index.ts` API.
+
+`shared/ui` follows the same rule: its root contains the public `index.ts` plus capability modules
+such as `controls`, `data-display`, `editor-workspace`, `media`, `overlays`, `scenario`, `site`,
+`status`, `surfaces`, and `typography`.
+Add a component to its nearest existing owner or create a specifically named owner. Public/main
+primitives may stay at that capability root; their child components follow the capability-local
+`components/` rule above.
 
 Use the lightest construct that expresses the ownership:
 
@@ -153,7 +208,7 @@ Types reused **across slices** belong in:
   `entities/processed-image`)
 - `shared/lib/` or a dedicated `shared/types` module for cross-cutting non-domain types
 
-### 3.1 Shared module types
+### 3.2 Shared module types and utilities
 
 Keep a type next to its only consumer. Create `<module-name>.types.ts` only when several files in
 the same semantic module share the contract. Export ordinary TypeScript types from that file;
@@ -170,9 +225,11 @@ When dot-qualified ownership materially improves a large consumer, use an ES-mod
 import: `import type * as CorrectMaskTypes from "./correct-mask.types"`, then
 `CorrectMaskTypes.BrushStroke`. This preserves standard module semantics and tree-safe imports.
 
-Use semantic suffixes where they make a role clearer: `.types.ts` for shared type contracts,
-`.config.ts` for declarative configuration, and `.policy.ts` for domain decisions. Do not add
-`.utils.ts` or `.lib.ts` as a substitute for naming the capability.
+Use `.types.ts` for contracts shared by several files inside one capability and `.utils.ts` for
+pure capability-local helpers. Keep both at the capability root so their ownership is visible.
+Use `.config.ts` for declarative configuration and `.policy.ts` only for actual domain policy.
+Never create layer-wide or repository-wide `types/`, `utils/`, or `components/` dumping grounds;
+the named capability remains the ownership boundary.
 
 ---
 
@@ -180,7 +237,7 @@ Use semantic suffixes where they make a role clearer: `.types.ts` for shared typ
 
 ### 4.1 Location and granularity
 
-- Hooks used only within one slice: `<slice>/model/use-xxx.ts`.
+- Hooks used only within one capability: `<capability>/hooks/use-xxx.ts`.
 - Hooks used across slices: `shared/lib/use-xxx.ts` (or `entities/<name>/model/` if entity-owned).
 - **Compose, don't accumulate.** A hook that would otherwise own a state machine *and* worker
   orchestration *and* derived selectors *and* effect wiring must split those concerns into smaller
@@ -219,7 +276,7 @@ router.params.someParam;
 ```
 
 Created in PHASE_31 (`src/shared/lib/use-router.ts`); the one pre-existing direct call site
-(`shared/ui/site-header.tsx`'s `LanguageSwitcher`) has been migrated. New code must use it —
+(`widgets/site-header/ui/language-switcher.tsx`) has been migrated. New code must use it —
 this is no longer a "when it lands" note.
 
 ### 5.2 Typed search params
@@ -267,10 +324,14 @@ actually consumes. Do not add speculative API/payment/provider variables before 
 
 ## 7. Date Formatting
 
-If a feature ever needs to display a date (none do today), never inline `new Date(...)`,
-`Intl.DateTimeFormat(...)`, or `toLocaleDateString` in a component. Add a `shared/lib/date.ts`
-helper keyed off the active Paraglide locale, matching how `shared/lib/seo` centralizes other
-locale-sensitive formatting.
+Presentation components must use the validated `shared/lib/formatting` date boundary for current calendar
+values and localized date/time formatting. Never inline `new Date(...)`, `Date.now()`,
+`Intl.DateTimeFormat(...)`, or `toLocaleDateString`/`toLocaleTimeString` in a component.
+
+Native date construction remains allowed inside that boundary and at non-presentation ownership
+boundaries that require a `Date` value or injected clock: deterministic ZIP metadata, explicit
+test fixtures, model-lab report timestamps, and runtime performance collectors. Do not route those
+through a display formatter or mechanically replace them merely to eliminate the token `new Date`.
 
 ---
 
@@ -318,6 +379,8 @@ Docker or (beyond the mocked `ci-critical` exception) in CI. No change here.
 ### 10.3 Unit test conventions
 
 - Vitest (`pnpm vitest run`) for all unit/integration tests; Testing Library for hooks/components.
+- Keep tests in the owning module's `tests/` directory; do not mix `*.test.*` files into production
+  `components/`, `hooks/`, or `model/` directories.
 - Use `vi.stubGlobal`/`vi.unstubAllGlobals` in `beforeEach`/`afterEach` to isolate globals
   (`navigator.gpu`, `Worker`, `OffscreenCanvas`, etc. — this project stubs these heavily already).
 - Use `vi.useFakeTimers()` + `vi.setSystemTime()` for any code touching `new Date()`; always restore

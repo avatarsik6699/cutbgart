@@ -1,11 +1,9 @@
 import { useCallback, useState } from "react";
 
-import { ModelStorageTrigger } from "@/features/model-storage";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
-import { useAutomaticModelMode } from "@/shared/lib";
+import { useAutomaticModelMode, useIsHydrated } from "@/shared/lib";
 import { trackEvent } from "@/shared/lib/analytics";
-import { SiteShell } from "@/shared/ui";
 import {
   MainPageEditorView,
   useEditorSession,
@@ -20,10 +18,8 @@ import type {
   EditorSessionOptions,
   WorkspaceItemSummary,
 } from "@/v2/runtime-browser";
-import { useIsHydrated } from "@/v2/shared/lib";
 
 import { EditorV2MainPageActive } from "./editor-v2-main-page-active";
-import { MainPageDiagnosticsPortal } from "./main-page-diagnostics-portal";
 
 export type PublicEditorProps = {
   as?: "div" | "main";
@@ -229,49 +225,34 @@ export function PublicEditorWorkspace(props: PublicEditorProps) {
   };
 
   return (
-    <>
-      <MainPageDiagnosticsPortal />
-      <Container
-        data-testid="home-page"
-        data-hydrated={hydrated}
-        data-artifact-count={editor.session.resources().artifacts}
-        data-lease-count={editor.session.resources().leases}
-        data-object-url-count={editor.session.resources().objectUrls}
-        className={props.className}
-      >
-        {editor.snapshot.kind === "document" ? (
-          <EditorV2MainPageActive
-            batch={batchMode ? batchProjection : undefined}
-            exportSize={exportSize}
-            locale={locale}
-            onIntent={onIntent}
-            onBatchIntent={batchMode ? onBatchIntent : undefined}
-            qualityMode={automaticModel.qualityMode}
-            restoreFocusTool={restoreFocusTool}
-            session={editor.session}
-            snapshot={editor.snapshot}
-          />
-        ) : (
-          <MainPageEditorView
-            batch={batchMode ? batchProjection : undefined}
-            onBatchIntent={batchMode ? onBatchIntent : undefined}
-            projection={projection}
-            onIntent={onIntent}
-          />
-        )}
-      </Container>
-    </>
-  );
-}
-
-export function PublicEditorPage(props: PublicEditorProps) {
-  return (
-    <SiteShell headerUtilitySlot={<ModelStorageTrigger />} homeNavigationActive>
-      <PublicEditorWorkspace
-        as="main"
-        className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-12"
-        sessionOptions={props.sessionOptions}
-      />
-    </SiteShell>
+    <Container
+      data-testid="home-page"
+      data-hydrated={hydrated}
+      data-artifact-count={editor.session.resources().artifacts}
+      data-lease-count={editor.session.resources().leases}
+      data-object-url-count={editor.session.resources().objectUrls}
+      className={props.className}
+    >
+      {editor.snapshot.kind === "document" ? (
+        <EditorV2MainPageActive
+          batch={batchMode ? batchProjection : undefined}
+          exportSize={exportSize}
+          locale={locale}
+          onIntent={onIntent}
+          onBatchIntent={batchMode ? onBatchIntent : undefined}
+          qualityMode={automaticModel.qualityMode}
+          restoreFocusTool={restoreFocusTool}
+          session={editor.session}
+          snapshot={editor.snapshot}
+        />
+      ) : (
+        <MainPageEditorView
+          batch={batchMode ? batchProjection : undefined}
+          onBatchIntent={batchMode ? onBatchIntent : undefined}
+          projection={projection}
+          onIntent={onIntent}
+        />
+      )}
+    </Container>
   );
 }

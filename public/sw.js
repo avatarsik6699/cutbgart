@@ -84,15 +84,17 @@ async function cacheStatus() {
       return asset ? [asset.path] : [];
     }),
   );
-  const usageBytes = manifest.assets
+  const cachedAssets = manifest.assets
     .filter((asset) => paths.has(asset.path))
-    .reduce((sum, asset) => sum + asset.byteSize, 0);
+    .map(({ path, revision, byteSize }) => ({ path, revision, byteSize }));
+  const usageBytes = cachedAssets.reduce((sum, asset) => sum + asset.byteSize, 0);
   const estimate = await self.navigator.storage?.estimate?.();
   return {
     type: "MODEL_CACHE_STATUS",
     release: manifest.release,
-    assetCount: paths.size,
+    assetCount: cachedAssets.length,
     usageBytes,
+    cachedAssets,
     quotaBytes: estimate?.quota ?? null,
     totalOriginUsageBytes: estimate?.usage ?? null,
   };

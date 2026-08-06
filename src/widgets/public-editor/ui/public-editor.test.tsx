@@ -1,14 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
-
-vi.mock("@/shared/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/shared/ui")>();
-  return {
-    ...actual,
-    SiteShell: ({ children }: { children: ReactNode }) => children,
-  };
-});
 
 import type { ProcessingGateway } from "@/v2/application";
 import {
@@ -25,7 +16,7 @@ import {
 } from "@/v2/domain";
 import { ArtifactRepository, type EditorSessionOptions } from "@/v2/runtime-browser";
 
-import { PublicEditorPage } from "./public-editor";
+import { PublicEditorWorkspace } from "./public-editor";
 
 afterEach(cleanup);
 
@@ -60,9 +51,9 @@ function sessionOptions(): EditorSessionOptions {
   };
 }
 
-describe("PublicEditorPage", () => {
+describe("PublicEditorWorkspace", () => {
   it("renders the shared main-page controls and directs invalid input", async () => {
-    render(<PublicEditorPage sessionOptions={sessionOptions()} />);
+    render(<PublicEditorWorkspace sessionOptions={sessionOptions()} />);
 
     const heading = screen.getByRole("heading", {
       name: /Remove image backgrounds in seconds|Уберите фон с изображения за секунды/,
@@ -92,7 +83,7 @@ describe("PublicEditorPage", () => {
   });
 
   it("admits a bounded batch and reports files rejected beyond capacity", async () => {
-    render(<PublicEditorPage sessionOptions={sessionOptions()} />);
+    render(<PublicEditorWorkspace sessionOptions={sessionOptions()} />);
     const files = Array.from(
       { length: 21 },
       (_, index) =>

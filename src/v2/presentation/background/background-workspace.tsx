@@ -2,11 +2,10 @@ import { type ChangeEvent } from "react";
 
 import { m } from "@/paraglide/messages";
 import { BACKGROUND_GRADIENT_PRESETS } from "@/shared/lib";
-import { Button, buttonVariants, EditorStage } from "@/shared/ui";
+import { Button, buttonVariants, EditorStage, Typography } from "@/shared/ui";
 import { BeforeAfterUrlSlider } from "@/entities/processed-image";
 import type { BackgroundDraft, BackgroundFillDescriptor } from "@/v2/domain";
 import type { BackgroundRuntimeSnapshot } from "@/v2/runtime-browser";
-import { Typography } from "@/v2/shared/ui";
 import { ToolPanelSlot } from "../shared";
 
 import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-image";
