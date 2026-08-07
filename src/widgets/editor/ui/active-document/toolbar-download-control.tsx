@@ -3,6 +3,7 @@ import { availableExportSizes, DownloadControl } from "@/features/download-resul
 import {
   selectActiveHeight,
   selectActiveWidth,
+  selectSingleExportSnapshot,
   useActiveDocumentModel,
   useEditorSessionValue,
   useEditorViewSelector,
@@ -16,7 +17,7 @@ export function ToolbarDownloadControl() {
   const exportSize = useEditorViewSelector(selectExportSize);
   const width = useEditorSessionValue(selectActiveWidth);
   const height = useEditorSessionValue(selectActiveHeight);
-  const singleExport = useEditorSessionValue((session) => session.singleExportSnapshot());
+  const singleExport = useEditorSessionValue(selectSingleExportSnapshot);
   const sizes = availableExportSizes({ width, height });
   const selectedSize = sizes.includes(exportSize) ? exportSize : "original";
 

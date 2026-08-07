@@ -5,6 +5,11 @@ import { m } from "@/paraglide/messages";
 import { Typography } from "@/shared/ui";
 
 import {
+  selectActiveFileName,
+  selectActiveHeight,
+  selectActivePreviewUrl,
+  selectActiveResultUrl,
+  selectActiveWidth,
   useActiveDocumentActorSelector,
   useActiveDocumentModel,
   useActiveDocumentViewSelector,
@@ -20,13 +25,13 @@ import { ToolPanelSlot } from "../editor-tools";
 
 const selectActiveTool = (snapshot: ActiveDocumentViewSnapshot) => snapshot.activeTool;
 const selectCutoutMode = (snapshot: ActiveDocumentViewSnapshot) => snapshot.cutoutMode;
+const selectDraftKind = (snapshot: Parameters<typeof selectDocumentStatus>[0]) =>
+  snapshot.context.document.activeDraft?.kind ?? null;
 
 export function ActiveTool() {
   const model = useActiveDocumentModel();
   const status = useActiveDocumentActorSelector(selectDocumentStatus);
-  const draftKind = useActiveDocumentActorSelector(
-    (snapshot) => snapshot.context.document.activeDraft?.kind ?? null,
-  );
+  const draftKind = useActiveDocumentActorSelector(selectDraftKind);
   const activeTool = useActiveDocumentViewSelector(selectActiveTool);
   const cutoutMode = useActiveDocumentViewSelector(selectCutoutMode);
 
@@ -47,25 +52,25 @@ export function ActiveTool() {
 function CommittedDocumentStage() {
   const model = useActiveDocumentModel();
   const status = useActiveDocumentActorSelector(selectDocumentStatus);
-  const snapshot = useEditorSessionValue((session) => {
-    const current = session.getSnapshot();
-    return current.kind === "document" ? current : null;
-  });
-  if (snapshot === null || snapshot.previewUrl === null || snapshot.resultUrl === null)
-    return null;
+  const fileName = useEditorSessionValue(selectActiveFileName);
+  const height = useEditorSessionValue(selectActiveHeight);
+  const previewUrl = useEditorSessionValue(selectActivePreviewUrl);
+  const resultUrl = useEditorSessionValue(selectActiveResultUrl);
+  const width = useEditorSessionValue(selectActiveWidth);
+  if (fileName === null || previewUrl === null || resultUrl === null) return null;
 
   return (
     <>
       <div className="[grid-area:surface]">
         <ImageStage
-          fileName={snapshot.fileName}
+          fileName={fileName}
           grid="fine"
-          height={snapshot.height}
+          height={height}
           onFiles={(files) => void model.editor.session.importImages(files)}
-          previewUrl={snapshot.previewUrl}
-          resultUrl={snapshot.resultUrl}
+          previewUrl={previewUrl}
+          resultUrl={resultUrl}
           status={status}
-          width={snapshot.width}
+          width={width}
         />
       </div>
       <div className="[grid-area:rail]">

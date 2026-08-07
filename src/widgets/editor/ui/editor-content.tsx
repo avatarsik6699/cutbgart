@@ -5,9 +5,8 @@ import {
   type DocumentMachineTypes,
   type DocumentSnapshotLike,
 } from "@/editor/application";
-import type { EditorSessionTypes } from "@/editor/runtime";
-
 import {
+  selectActiveActor,
   useEditorSessionSelector,
   useEditorViewSelector,
   type EditorViewSnapshot,
@@ -16,10 +15,6 @@ import { AutomaticProcessingConnector } from "./connectors/automatic-processing-
 import { CompletedDocumentConnector } from "./connectors/completed-document-connector";
 import { ImageAdmissionConnector } from "./connectors/image-admission-connector";
 
-const selectActiveActor = (
-  snapshot: EditorSessionTypes.Snapshot,
-): DocumentMachineTypes.ActorRef | null =>
-  snapshot.kind === "document" ? snapshot.actor : null;
 const selectBatchMode = (snapshot: EditorViewSnapshot) => snapshot.batchMode;
 const selectShowsDocumentWorkspace = (snapshot: DocumentSnapshotLike) =>
   snapshot.context.document.activeDraft !== null ||

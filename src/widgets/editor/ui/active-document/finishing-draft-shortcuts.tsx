@@ -5,11 +5,14 @@ import type { BackgroundTypes, EnhancementTypes } from "@/editor/domain";
 import type { EditorSessionTypes } from "@/editor/runtime";
 
 import {
-  selectActiveSessionSnapshot,
+  selectActiveBackgroundRuntime,
   useActiveDocumentActorSelector,
   useActiveDocumentModel,
   useEditorSessionValue,
 } from "../../model";
+
+const selectBackgroundRuntimeStatus = (session: EditorSessionTypes.Session): string =>
+  selectActiveBackgroundRuntime(session)?.status ?? "idle";
 
 function cancelFinishingDraft(
   session: EditorSessionTypes.Session,
@@ -51,9 +54,7 @@ export function FinishingDraftShortcuts() {
   const model = useActiveDocumentModel();
   const backgroundDraft = useActiveDocumentActorSelector(selectBackgroundDraft);
   const enhancementDraft = useActiveDocumentActorSelector(selectEnhancementDraft);
-  const backgroundRuntimeStatus = useEditorSessionValue(
-    (session) => selectActiveSessionSnapshot(session)?.backgroundRuntime.status ?? "idle",
-  );
+  const backgroundRuntimeStatus = useEditorSessionValue(selectBackgroundRuntimeStatus);
 
   useEffect(
     function routeFinishingDraftGuardsFx() {

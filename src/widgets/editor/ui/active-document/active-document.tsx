@@ -1,5 +1,5 @@
 import { selectDocumentRevision, selectDocumentState } from "@/editor/application";
-import type { DocumentMachineTypes } from "@/editor/application";
+import type { DocumentMachineTypes, DocumentSnapshotLike } from "@/editor/application";
 import { m } from "@/paraglide/messages";
 import { Typography } from "@/shared/ui";
 
@@ -17,6 +17,8 @@ import { FinishingDraftShortcuts } from "./finishing-draft-shortcuts";
 import { NavigationGuard } from "./navigation-guard";
 
 const selectActiveTool = (snapshot: ActiveDocumentViewSnapshot) => snapshot.activeTool;
+const selectDocumentId = (snapshot: DocumentSnapshotLike) =>
+  selectDocumentState(snapshot).documentId;
 
 export function ActiveDocument(props: { actor: DocumentMachineTypes.ActorRef }) {
   return (
@@ -27,10 +29,7 @@ export function ActiveDocument(props: { actor: DocumentMachineTypes.ActorRef }) 
 }
 
 function ActiveDocumentWorkspace() {
-  const documentId = useActiveDocumentActorSelector(
-    (snapshot) => selectDocumentState(snapshot).documentId,
-  );
-  const revision = useActiveDocumentActorSelector(selectDocumentRevision);
+  const documentId = useActiveDocumentActorSelector(selectDocumentId);
   const activeTool = useActiveDocumentViewSelector(selectActiveTool);
 
   return (
@@ -38,20 +37,31 @@ function ActiveDocumentWorkspace() {
       className="tool-workspace-grid"
       data-testid="editor-tool-workspace"
       data-document-id={documentId}
-      data-document-revision={revision}
       data-active-tool={activeTool}
     >
       <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
         <EditorToolbarConnector />
       </div>
       <NavigationGuard />
-      <Typography variant="caption" as="p" className="sr-only">
-        {m.editorRevision({ revision: String(revision) })}
-      </Typography>
+      <DocumentRevisionStatus />
       <ActiveTool />
       <DocumentError />
       <DocumentHistoryShortcuts />
       <FinishingDraftShortcuts />
     </div>
+  );
+}
+
+function DocumentRevisionStatus() {
+  const revision = useActiveDocumentActorSelector(selectDocumentRevision);
+  return (
+    <Typography
+      variant="caption"
+      as="p"
+      className="sr-only"
+      data-document-revision={revision}
+    >
+      {m.editorRevision({ revision: String(revision) })}
+    </Typography>
   );
 }

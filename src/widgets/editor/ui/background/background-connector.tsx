@@ -3,6 +3,12 @@ import { useMemo } from "react";
 import { selectBackgroundDraft } from "@/editor/application";
 
 import {
+  selectActiveBackgroundRuntime,
+  selectActiveForegroundUrl,
+  selectActiveHeight,
+  selectActivePreviewUrl,
+  selectActiveResultUrl,
+  selectActiveWidth,
   useActiveDocumentActorSelector,
   useActiveDocumentModel,
   useEditorSessionValue,
@@ -12,10 +18,12 @@ import { BackgroundWorkspace, type BackgroundInteraction } from "./background-wo
 export function BackgroundConnector() {
   const model = useActiveDocumentModel();
   const draft = useActiveDocumentActorSelector(selectBackgroundDraft);
-  const snapshot = useEditorSessionValue((session) => {
-    const current = session.getSnapshot();
-    return current.kind === "document" ? current : null;
-  });
+  const foregroundUrl = useEditorSessionValue(selectActiveForegroundUrl);
+  const height = useEditorSessionValue(selectActiveHeight);
+  const previewUrl = useEditorSessionValue(selectActivePreviewUrl);
+  const resultUrl = useEditorSessionValue(selectActiveResultUrl);
+  const runtime = useEditorSessionValue(selectActiveBackgroundRuntime);
+  const width = useEditorSessionValue(selectActiveWidth);
   const interaction = useMemo<BackgroundInteraction>(() => {
     const session = model.editor.session;
     return {
@@ -26,16 +34,16 @@ export function BackgroundConnector() {
     };
   }, [model]);
 
-  if (draft === null || snapshot === null || snapshot.foregroundUrl === null) return null;
+  if (draft === null || foregroundUrl === null || runtime === null) return null;
   return (
     <BackgroundWorkspace
       draft={draft}
-      foregroundUrl={snapshot.foregroundUrl}
-      height={snapshot.height}
-      runtime={snapshot.backgroundRuntime}
-      sourceUrl={snapshot.previewUrl ?? snapshot.resultUrl ?? ""}
+      foregroundUrl={foregroundUrl}
+      height={height}
+      runtime={runtime}
+      sourceUrl={previewUrl ?? resultUrl ?? ""}
       interaction={interaction}
-      width={snapshot.width}
+      width={width}
     />
   );
 }

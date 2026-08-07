@@ -19,8 +19,16 @@ export type {
 } from "./active-document-model";
 export type { EditorViewSnapshot } from "./editor-model";
 export {
+  selectActiveActor,
+  selectActiveBackgroundRuntime,
+  selectActiveEnhancementRuntime,
+  selectActiveFileName,
+  selectActiveForegroundUrl,
   selectActiveHeight,
+  selectActiveMagicProgress,
+  selectActivePreviewUrl,
   selectActiveResultUrl,
-  selectActiveSessionSnapshot,
   selectActiveWidth,
+  selectInferencePath,
+  selectSingleExportSnapshot,
 } from "./editor-session-selectors";

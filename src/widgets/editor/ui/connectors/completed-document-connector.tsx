@@ -1,6 +1,5 @@
-import type { EditorSessionTypes } from "@/editor/runtime";
-
 import {
+  selectActiveActor,
   useEditorSessionSelector,
   useEditorViewSelector,
   type EditorViewSnapshot,
@@ -8,21 +7,17 @@ import {
 import { ActiveDocument } from "../active-document";
 import { BatchRailConnector } from "./batch-connectors";
 
-const selectActiveSnapshot = (
-  snapshot: EditorSessionTypes.Snapshot,
-): EditorSessionTypes.ActiveSnapshot | null =>
-  snapshot.kind === "document" ? snapshot : null;
 const selectBatchMode = (snapshot: EditorViewSnapshot) => snapshot.batchMode;
 
 export function CompletedDocumentConnector() {
-  const snapshot = useEditorSessionSelector(selectActiveSnapshot);
+  const actor = useEditorSessionSelector(selectActiveActor);
   const batchMode = useEditorViewSelector(selectBatchMode);
-  if (snapshot === null) return null;
+  if (actor === null) return null;
 
   return (
     <div className="space-y-4">
       {batchMode ? <BatchRailConnector /> : null}
-      <ActiveDocument key={snapshot.actor.id} actor={snapshot.actor} />
+      <ActiveDocument key={actor.id} actor={actor} />
     </div>
   );
 }

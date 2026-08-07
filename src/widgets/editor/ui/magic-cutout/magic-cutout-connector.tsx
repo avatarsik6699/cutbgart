@@ -8,6 +8,7 @@ import {
   useActiveDocumentModel,
   useEditorSessionValue,
   selectActiveHeight,
+  selectActiveMagicProgress,
   selectActiveResultUrl,
   selectActiveWidth,
 } from "../../model";
@@ -80,10 +81,7 @@ export function MagicCutoutConnector() {
   const currentUrl = useEditorSessionValue(selectActiveResultUrl);
   const width = useEditorSessionValue(selectActiveWidth);
   const height = useEditorSessionValue(selectActiveHeight);
-  const runtimeProgress = useEditorSessionValue((session) => {
-    const snapshot = session.getSnapshot();
-    return snapshot.kind === "document" ? snapshot.magicProgress : null;
-  });
+  const runtimeProgress = useEditorSessionValue(selectActiveMagicProgress);
   const requestApply = useMagicApply(model, draft, candidates);
 
   const interaction = useMemo<MagicCutoutInteraction>(() => {

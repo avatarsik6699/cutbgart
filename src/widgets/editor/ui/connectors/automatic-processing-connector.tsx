@@ -20,6 +20,7 @@ import { Skeleton, Typography } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
 
 import {
+  selectInferencePath,
   useEditorSessionSelector,
   useEditorSessionValue,
   useEditorModel,
@@ -27,8 +28,6 @@ import {
   type EditorViewSnapshot,
 } from "../../model";
 import { BatchActionsConnector, BatchRailConnector } from "./batch-connectors";
-
-type Props = Readonly<{ actor: DocumentMachineTypes.ActorRef | null }>;
 
 const selectSnapshotKind = (snapshot: EditorSessionTypes.Snapshot) => snapshot.kind;
 const selectAdmissionError = (snapshot: EditorSessionTypes.Snapshot) => snapshot.error;
@@ -38,8 +37,6 @@ const selectResultUrl = (snapshot: EditorSessionTypes.Snapshot) => snapshot.resu
 const selectWidth = (snapshot: EditorSessionTypes.Snapshot) => snapshot.width;
 const selectFallbackUsed = (session: EditorSessionTypes.Session) =>
   session.processingSelection()?.fallbackUsed ?? false;
-const selectInferencePath = (session: EditorSessionTypes.Session) =>
-  session.processingSelection()?.inferencePath ?? "wasm";
 const selectBatchMode = (snapshot: EditorViewSnapshot) => snapshot.batchMode;
 const selectQualityMode = (snapshot: EditorViewSnapshot) => snapshot.qualityMode;
 
@@ -68,34 +65,20 @@ function inactivePhase(
 
 function AutomaticDocumentWorkspace(props: { actor: DocumentMachineTypes.ActorRef }) {
   const status = useSelector(props.actor, selectDocumentStatus);
-  const progress = useSelector(props.actor, selectDocumentProgress);
   return (
     <AutomaticProcessingContent
+      actor={props.actor}
       phase={automaticProcessingPhase(status)}
-      progress={progress}
     />
   );
 }
 
 function AutomaticProcessingContent(props: {
+  actor: DocumentMachineTypes.ActorRef | null;
   phase: MainPageEditorTypes.Phase;
-  progress: number | null;
 }) {
-  const model = useEditorModel();
   const batchMode = useEditorViewSelector(selectBatchMode);
-  const qualityMode = useEditorViewSelector(selectQualityMode);
-  const fallbackUsed = useEditorSessionValue(selectFallbackUsed);
-  const inferencePath = useEditorSessionValue(selectInferencePath);
-  const height = useEditorSessionSelector(selectHeight);
-  const width = useEditorSessionSelector(selectWidth);
-  const previewUrl = useEditorSessionSelector(selectPreviewUrl);
-  const resultUrl = useEditorSessionSelector(selectResultUrl);
   const busy = isAutomaticProcessingPhase(props.phase);
-  const statusText = processingStatusText(
-    props.phase,
-    qualityMode,
-    props.progress === null ? null : Math.round(props.progress * 100),
-  );
 
   return (
     <div
@@ -103,46 +86,20 @@ function AutomaticProcessingContent(props: {
       data-main-page-phase={props.phase}
       className={`tool-workspace-grid ${batchMode ? "tool-workspace-batch" : ""}`}
     >
-      <ProcessingStatus fallbackUsed={fallbackUsed} statusText={statusText} />
+      <ProcessingStatusConnector actor={props.actor} phase={props.phase} />
       {batchMode ? (
         <div className="[grid-area:batch]">
           <BatchRailConnector />
         </div>
       ) : null}
       <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
-        <EditorToolbar
-          onBack={busy ? model.cancelProcessing : model.reset}
-          StatusSlot={<LocalExecutionReadout busy={busy} inferencePath={inferencePath} />}
-          WorkspaceActionsSlot={
-            batchMode ? <BatchActionsConnector disabled={busy} /> : undefined
-          }
-        />
+        <AutomaticToolbar batchMode={batchMode} busy={busy} />
       </div>
-      {props.phase === "error" ? (
-        <ProcessingRecovery
-          onReset={model.reset}
-          onRetry={model.retryProcessing}
-          retryable
-        />
-      ) : null}
-      <SingleImageStage
-        committedResultUrl={resultUrl}
-        EmptyState={
-          batchMode ? (
-            <Typography
-              variant="body-small"
-              as="p"
-              className="max-w-sm text-center text-muted-foreground"
-            >
-              {m.batchEditorEmpty()}
-            </Typography>
-          ) : undefined
-        }
-        height={height}
-        loadingText={statusText}
+      {props.phase === "error" ? <AutomaticProcessingRecovery /> : null}
+      <SingleImageStageConnector
+        actor={props.actor}
+        batchMode={batchMode}
         phase={props.phase}
-        sourcePreviewUrl={previewUrl}
-        width={width}
       />
       <div className="[grid-area:rail]">
         <Skeleton className="min-h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border" />
@@ -151,11 +108,142 @@ function AutomaticProcessingContent(props: {
   );
 }
 
-export function AutomaticProcessingConnector(props: Props) {
+function useProcessingStatusText(
+  phase: MainPageEditorTypes.Phase,
+  progress: number | null,
+): string {
+  const qualityMode = useEditorViewSelector(selectQualityMode);
+  return processingStatusText(
+    phase,
+    qualityMode,
+    progress === null ? null : Math.round(progress * 100),
+  );
+}
+
+function AutomaticProcessingStatus(props: {
+  actor: DocumentMachineTypes.ActorRef;
+  phase: MainPageEditorTypes.Phase;
+}) {
+  const progress = useSelector(props.actor, selectDocumentProgress);
+  return <ProcessingStatusView phase={props.phase} progress={progress} />;
+}
+
+function ProcessingStatusConnector(props: {
+  actor: DocumentMachineTypes.ActorRef | null;
+  phase: MainPageEditorTypes.Phase;
+}) {
+  if (props.actor !== null)
+    return <AutomaticProcessingStatus actor={props.actor} phase={props.phase} />;
+  return <ProcessingStatusView phase={props.phase} progress={null} />;
+}
+
+function ProcessingStatusView(props: {
+  phase: MainPageEditorTypes.Phase;
+  progress: number | null;
+}) {
+  const fallbackUsed = useEditorSessionValue(selectFallbackUsed);
+  const statusText = useProcessingStatusText(props.phase, props.progress);
+  return <ProcessingStatus fallbackUsed={fallbackUsed} statusText={statusText} />;
+}
+
+function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {
+  const model = useEditorModel();
+  const inferencePath = useEditorSessionValue(selectInferencePath);
+  return (
+    <EditorToolbar
+      onBack={props.busy ? model.cancelProcessing : model.reset}
+      StatusSlot={
+        <LocalExecutionReadout busy={props.busy} inferencePath={inferencePath} />
+      }
+      WorkspaceActionsSlot={
+        props.batchMode ? <BatchActionsConnector disabled={props.busy} /> : undefined
+      }
+    />
+  );
+}
+
+function AutomaticProcessingRecovery() {
+  const model = useEditorModel();
+  return (
+    <ProcessingRecovery onReset={model.reset} onRetry={model.retryProcessing} retryable />
+  );
+}
+
+function AutomaticSingleImageStage(props: {
+  actor: DocumentMachineTypes.ActorRef;
+  batchMode: boolean;
+  phase: MainPageEditorTypes.Phase;
+}) {
+  const progress = useSelector(props.actor, selectDocumentProgress);
+  return (
+    <SingleImageStageView
+      batchMode={props.batchMode}
+      phase={props.phase}
+      progress={progress}
+    />
+  );
+}
+
+function SingleImageStageConnector(props: {
+  actor: DocumentMachineTypes.ActorRef | null;
+  batchMode: boolean;
+  phase: MainPageEditorTypes.Phase;
+}) {
+  if (props.actor !== null)
+    return (
+      <AutomaticSingleImageStage
+        actor={props.actor}
+        batchMode={props.batchMode}
+        phase={props.phase}
+      />
+    );
+  return (
+    <SingleImageStageView
+      batchMode={props.batchMode}
+      phase={props.phase}
+      progress={null}
+    />
+  );
+}
+
+function SingleImageStageView(props: {
+  batchMode: boolean;
+  phase: MainPageEditorTypes.Phase;
+  progress: number | null;
+}) {
+  const height = useEditorSessionSelector(selectHeight);
+  const width = useEditorSessionSelector(selectWidth);
+  const previewUrl = useEditorSessionSelector(selectPreviewUrl);
+  const resultUrl = useEditorSessionSelector(selectResultUrl);
+  const statusText = useProcessingStatusText(props.phase, props.progress);
+  return (
+    <SingleImageStage
+      committedResultUrl={resultUrl}
+      EmptyState={
+        props.batchMode ? (
+          <Typography
+            variant="body-small"
+            as="p"
+            className="max-w-sm text-center text-muted-foreground"
+          >
+            {m.batchEditorEmpty()}
+          </Typography>
+        ) : undefined
+      }
+      height={height}
+      loadingText={statusText}
+      phase={props.phase}
+      sourcePreviewUrl={previewUrl}
+      width={width}
+    />
+  );
+}
+
+export function AutomaticProcessingConnector(
+  props: Readonly<{ actor: DocumentMachineTypes.ActorRef | null }>,
+) {
   const kind = useEditorSessionSelector(selectSnapshotKind);
   const error = useEditorSessionSelector(selectAdmissionError);
   if (props.actor !== null) return <AutomaticDocumentWorkspace actor={props.actor} />;
-  return (
-    <AutomaticProcessingContent phase={inactivePhase(kind, error)} progress={null} />
-  );
+  return <AutomaticProcessingContent actor={null} phase={inactivePhase(kind, error)} />;
 }

@@ -3,6 +3,11 @@ import { useMemo } from "react";
 import { selectEnhancementDraft } from "@/editor/application";
 
 import {
+  selectActiveEnhancementRuntime,
+  selectActiveHeight,
+  selectActivePreviewUrl,
+  selectActiveResultUrl,
+  selectActiveWidth,
   useActiveDocumentActorSelector,
   useActiveDocumentModel,
   useEditorSessionValue,
@@ -15,10 +20,11 @@ import {
 export function EnhancementConnector() {
   const model = useActiveDocumentModel();
   const draft = useActiveDocumentActorSelector(selectEnhancementDraft);
-  const snapshot = useEditorSessionValue((session) => {
-    const current = session.getSnapshot();
-    return current.kind === "document" ? current : null;
-  });
+  const height = useEditorSessionValue(selectActiveHeight);
+  const previewUrl = useEditorSessionValue(selectActivePreviewUrl);
+  const resultUrl = useEditorSessionValue(selectActiveResultUrl);
+  const runtime = useEditorSessionValue(selectActiveEnhancementRuntime);
+  const width = useEditorSessionValue(selectActiveWidth);
   const interaction = useMemo<EnhancementInteraction>(() => {
     const session = model.editor.session;
     return {
@@ -29,22 +35,17 @@ export function EnhancementConnector() {
     };
   }, [model]);
 
-  if (
-    draft === null ||
-    snapshot === null ||
-    snapshot.previewUrl === null ||
-    snapshot.resultUrl === null
-  )
+  if (draft === null || previewUrl === null || resultUrl === null || runtime === null)
     return null;
   return (
     <EnhancementWorkspace
       draft={draft}
-      height={snapshot.height}
-      previewUrl={snapshot.resultUrl}
-      runtime={snapshot.enhancementRuntime}
-      sourceUrl={snapshot.previewUrl}
+      height={height}
+      previewUrl={resultUrl}
+      runtime={runtime}
+      sourceUrl={previewUrl}
       interaction={interaction}
-      width={snapshot.width}
+      width={width}
     />
   );
 }

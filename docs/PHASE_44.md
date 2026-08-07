@@ -100,7 +100,7 @@ render isolation.
   artifact/resource lifecycle, per-document isolation, and one workflow source of truth —
   apply the prospective decomposition contract above to every touched capability — _Depends on:_
   `T5A`
-- [ ] `T7` Audit the decomposed surface for remaining broad subscriptions, unstable projections,
+- [x] `T7` Audit the decomposed surface for remaining broad subscriptions, unstable projections,
   callback/slot fan-out, and unrelated subtree invalidation. Move XState/external-store selectors
   to leaf connectors, stabilize identities, and add `memo`/`useMemo`/`useCallback` only across
   meaningful stable boundaries; add focused render-regression tests where deterministic and retain
@@ -436,6 +436,12 @@ waiver.
   cleanup paths in focused canvas owners rather than splitting one imperative lifecycle across
   components.
 - T6 was manually accepted by the architect before the T7 audit began.
+- T7 retains the batch-rail projection because that direct connector/view boundary consumes the
+  complete workspace membership, status, selection, admission, and export contract with a stable
+  memo comparator. Toolbar and stage slots likewise terminate at the layout owner rather than
+  relaying through intermediate components. Whole active-document subscriptions and root-level
+  progress/revision invalidation were removed instead.
+- T7 was manually accepted by the architect before the T8 state-manager decision began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

@@ -1,6 +1,10 @@
 import { selectDocumentStatus } from "@/editor/application";
 
-import { useActiveDocumentActorSelector, useEditorSessionValue } from "../../model";
+import {
+  selectInferencePath,
+  useActiveDocumentActorSelector,
+  useEditorSessionValue,
+} from "../../model";
 import { LocalExecutionReadout } from "../editor-tools";
 
 const BUSY_STATUSES = new Set([
@@ -15,9 +19,7 @@ const BUSY_STATUSES = new Set([
 
 export function ToolbarRuntimeStatus() {
   const status = useActiveDocumentActorSelector(selectDocumentStatus);
-  const inferencePath = useEditorSessionValue(
-    (session) => session.processingSelection()?.inferencePath ?? "wasm",
-  );
+  const inferencePath = useEditorSessionValue(selectInferencePath);
   return (
     <LocalExecutionReadout
       busy={BUSY_STATUSES.has(status)}
