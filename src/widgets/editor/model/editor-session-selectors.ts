@@ -1,4 +1,5 @@
 import type { EditorSessionTypes } from "@/editor/runtime";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export function selectActiveActor(
   snapshot: EditorSessionTypes.Snapshot,
@@ -71,4 +72,22 @@ export function selectInferencePath(
   session: EditorSessionTypes.Session,
 ): EditorSessionTypes.ProcessingSelection["inferencePath"] {
   return session.processingSelection()?.inferencePath ?? "wasm";
+}
+
+export function selectAvailableModelModes(
+  session: EditorSessionTypes.Session,
+): readonly AutomaticModelMode[] {
+  return session.availableModelModes();
+}
+
+export function selectCurrentModelMode(
+  session: EditorSessionTypes.Session,
+): AutomaticModelMode | null {
+  return session.currentModelMode();
+}
+
+export function selectProcessingModelMode(
+  session: EditorSessionTypes.Session,
+): AutomaticModelMode | null {
+  return session.processingModelMode();
 }

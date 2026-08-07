@@ -187,11 +187,15 @@ export declare namespace EditorSessionTypes {
     redoDocument(): void;
     resources(): ArtifactRepositoryStats;
     processingSelection(): ProcessingSelection | null;
+    availableModelModes(): readonly AutomaticModelMode[];
+    currentModelMode(): AutomaticModelMode | null;
+    processingModelMode(): AutomaticModelMode | null;
     reset(): void;
     removeItem(itemId: WorkspaceItemId): void;
     retryItem(itemId: WorkspaceItemId): Promise<void>;
     selectDocument(documentId: DocumentId): void;
     retry(modelMode?: AutomaticModelMode): void;
+    reprocess(modelMode: AutomaticModelMode): boolean;
     retryEnhancements(): void;
     selectBackgroundImage(file: File): Promise<void>;
     subscribe(listener: () => void): () => void;

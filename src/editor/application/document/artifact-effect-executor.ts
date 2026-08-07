@@ -7,6 +7,9 @@ export function executeArtifactEffect(
   effect: DocumentTransitionTypes.Effect,
 ): boolean | null {
   switch (effect.type) {
+    case "commit-automatic-history":
+      dependencies.artifacts.commitAutomaticHistory?.(effect);
+      return null;
     case "export-png":
       dependencies.artifacts.exportPng(effect);
       return null;

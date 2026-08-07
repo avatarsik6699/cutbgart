@@ -66,6 +66,7 @@ function harness() {
     repository,
     source,
     snapshot: {
+      automaticModelMode: "isnet-q8" as const,
       matte,
       foreground: null,
       composite,

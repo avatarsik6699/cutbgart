@@ -29,6 +29,12 @@ export declare namespace DocumentMachineTypes {
   };
 
   type ArtifactEffects = {
+    commitAutomaticHistory?(
+      effect: Extract<
+        DocumentTransitionTypes.Effect,
+        { type: "commit-automatic-history" }
+      >,
+    ): void;
     estimateHistoricalBytes(snapshot: import("@/editor/domain").DocumentSnapshot): number;
     exportPng(
       effect: Extract<DocumentTransitionTypes.Effect, { type: "export-png" }>,

@@ -469,10 +469,10 @@ export function transitionDocument(
       if (!matchesCorrelation(state, event)) {
         return staleTerminalTransition(state, event);
       }
+      const activeRun = state.activeRun;
       if (state.status === "cancelling" && event.type !== "PROCESSING_CANCELLED") {
         return staleTerminalTransition(state, event);
       }
-
       if (event.type === "PROCESSING_QUEUED") {
         return state.status === "queued"
           ? { outcome: "applied", state, effects: [] }
@@ -518,6 +518,12 @@ export function transitionDocument(
           : { outcome: "rejected", state, effects: [], reason: "illegal-transition" };
       }
       if (event.type === "PROCESSING_SUCCEEDED") {
+        if (
+          activeRun === null ||
+          event.snapshot.automaticModelMode !== activeRun.modelMode
+        ) {
+          return staleTerminalTransition(state, event);
+        }
         return {
           outcome: "applied",
           state: {
@@ -528,13 +534,15 @@ export function transitionDocument(
             pendingCommit: {
               runId: event.runId,
               expectedRevision: event.expectedRevision,
-              modelMode: state.activeRun?.modelMode ?? "isnet-q8",
+              modelMode: activeRun.modelMode,
+              operationId: activeRun.operationId,
               snapshot: event.snapshot,
             },
           },
           effects: [
             {
               type: "promote-run",
+              initial: state.committed === null,
               documentId: event.documentId,
               runId: event.runId,
               expectedRevision: event.expectedRevision,
@@ -544,9 +552,13 @@ export function transitionDocument(
         };
       }
       if (event.type === "PROCESSING_FAILED") {
+        const reprocessing = state.committed !== null;
         return {
           outcome: "applied",
-          state: clearRun(state, "error", event.error),
+          state: {
+            ...clearRun(state, reprocessing ? "result" : "error", event.error),
+            automaticReprocessError: reprocessing ? event.error : null,
+          },
           effects: [
             {
               type: "release-run-if-owned",
@@ -583,15 +595,40 @@ export function transitionDocument(
       }
 
       const snapshot = state.pendingCommit.snapshot;
+      const previous = state.committed;
+      const entry =
+        previous === null
+          ? null
+          : {
+              operationId: state.pendingCommit.operationId,
+              kind: "automatic-remove" as const,
+              before: previous,
+              after: snapshot,
+              estimatedHistoricalBytes: event.estimatedHistoricalBytes,
+            };
+      const committedHistory =
+        entry === null ? null : commitDocumentHistory(state.history, entry);
       return {
         outcome: "applied",
         state: {
           ...clearRun(state, "result", null),
           committed: snapshot,
           baseline: state.baseline ?? snapshot,
+          history: committedHistory?.history ?? state.history,
           revision: state.revision + 1,
+          automaticReprocessError: null,
         },
-        effects: [],
+        effects:
+          entry === null || committedHistory === null
+            ? []
+            : [
+                {
+                  type: "commit-automatic-history",
+                  documentId: state.documentId,
+                  entry,
+                  released: committedHistory.released,
+                },
+              ],
       };
     }
     case "COMMIT_REJECTED_STALE": {

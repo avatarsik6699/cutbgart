@@ -7,6 +7,7 @@ import type {
 } from "@/editor/domain";
 
 export type ManualCutoutCommitRequest = {
+  automaticModelMode: DocumentSnapshot["automaticModelMode"];
   documentId: DocumentId;
   draftId: ManualDraftId;
   expectedRevision: Revision;

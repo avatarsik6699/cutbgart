@@ -14,13 +14,20 @@ import {
   processingStatusText,
   type MainPageEditorTypes,
 } from "../main-page";
-import { EditorToolbar, LocalExecutionReadout } from "../editor-tools";
+import {
+  AutomaticModelControl,
+  EditorToolbar,
+  LocalExecutionReadout,
+} from "../editor-tools";
 import type { EditorSessionTypes } from "@/editor/runtime";
 import { Skeleton, Typography } from "@/shared/ui";
 import { m } from "@/paraglide/messages";
 
 import {
+  selectAvailableModelModes,
+  selectCurrentModelMode,
   selectInferencePath,
+  selectProcessingModelMode,
   useEditorSessionSelector,
   useEditorSessionValue,
   useEditorModel,
@@ -102,7 +109,7 @@ function AutomaticProcessingContent(props: {
         phase={props.phase}
       />
       <div className="[grid-area:rail]">
-        <Skeleton className="min-h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border" />
+        <Skeleton className="min-h-stage-lg rounded-lg border border-border" />
       </div>
     </div>
   );
@@ -154,12 +161,25 @@ function ProcessingStatusView(props: {
 
 function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {
   const model = useEditorModel();
+  const availableModes = useEditorSessionValue(selectAvailableModelModes);
+  const currentMode = useEditorSessionValue(selectCurrentModelMode);
   const inferencePath = useEditorSessionValue(selectInferencePath);
+  const processingMode = useEditorSessionValue(selectProcessingModelMode);
   return (
     <EditorToolbar
       onBack={props.busy ? model.cancelProcessing : model.reset}
       StatusSlot={
-        <LocalExecutionReadout busy={props.busy} inferencePath={inferencePath} />
+        props.batchMode || (currentMode === null && processingMode === null) ? (
+          <LocalExecutionReadout busy={props.busy} inferencePath={inferencePath} />
+        ) : (
+          <AutomaticModelControl
+            availableModes={availableModes}
+            busy={props.busy}
+            currentMode={currentMode}
+            inferencePath={inferencePath}
+            processingMode={processingMode}
+          />
+        )
       }
       WorkspaceActionsSlot={
         props.batchMode ? <BatchActionsConnector disabled={props.busy} /> : undefined

@@ -600,16 +600,22 @@ export function decideDocumentCommand(
       };
     }
     case "START_AUTOMATIC_REMOVAL": {
-      if (!("runId" in envelope)) return rejectDecision(state, command.type, "not-ready");
+      if (!("runId" in envelope) || !("operationId" in envelope))
+        return rejectDecision(state, command.type, "not-ready");
       if (state.activeRun !== null || isActiveRunStatus(state.status)) {
         return rejectDecision(state, command.type, "run-active");
       }
+      if (state.activeDraft !== null)
+        return rejectDecision(state, command.type, "draft-active");
       if (
         state.status !== "ready" &&
+        state.status !== "result" &&
         !(state.status === "error" && state.error?.retryable)
       ) {
         return rejectDecision(state, command.type, "not-ready");
       }
+      if (state.committed?.automaticModelMode === command.modelMode)
+        return rejectDecision(state, command.type, "same-model");
       const correlation = {
         documentId: state.documentId,
         runId: envelope.runId,
@@ -623,12 +629,14 @@ export function decideDocumentCommand(
             runId: envelope.runId,
             expectedRevision: state.revision,
             modelMode: command.modelMode,
+            operationId: envelope.operationId,
           },
           pendingCommit: null,
           status: "queued",
           stage: "queued",
           progress: null,
           error: null,
+          automaticReprocessError: null,
         },
         effects: [
           {
@@ -732,6 +740,7 @@ export function decideDocumentCommand(
           pendingBackgroundCommit: null,
           pendingEnhancementCommit: null,
           magicCandidates: [],
+          automaticReprocessError: null,
         },
         effects,
       };

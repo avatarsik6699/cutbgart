@@ -1,4 +1,5 @@
 import type { ArtifactId, ArtifactLeaseOwner, DocumentSnapshot } from "@/editor/domain";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 import type { ArtifactRepository } from "../artifacts";
 import { encodedMediaType, transferableBytes } from "../processing";
@@ -13,6 +14,7 @@ import {
 } from "./snapshot-commit-protocol";
 
 export type SnapshotCommitRequest = SnapshotCommitCorrelation & {
+  automaticModelMode: AutomaticModelMode;
   draftMatte: ArtifactId;
   source: ArtifactId;
   foreground?: ArtifactId | null;
@@ -151,6 +153,7 @@ export class WorkerSnapshotCommitter implements SnapshotCommitter {
           settled = true;
           cleanup();
           resolve({
+            automaticModelMode: request.automaticModelMode,
             matte: request.draftMatte,
             foreground: request.foreground ?? null,
             composite,

@@ -7,6 +7,7 @@ import type {
 } from "@/editor/domain";
 
 export type MagicCutoutCommitInput = {
+  automaticModelMode: DocumentSnapshot["automaticModelMode"];
   documentId: DocumentId;
   draftId: MagicDraftId;
   candidateId: MagicCandidateId;

@@ -239,6 +239,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
           introduced.push(foregroundArtifact);
         const snapshot = await this.#snapshots.commit(
           {
+            automaticModelMode: input.snapshot.automaticModelMode,
             documentId: input.documentId,
             draftId: input.draftId,
             runId: input.runId,

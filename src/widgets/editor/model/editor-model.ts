@@ -17,6 +17,7 @@ export type EditorViewSnapshot = Readonly<{
   batchMode: boolean;
   exportSize: ExportSize;
   qualityMode: AutomaticModelMode | null;
+  restoreModelFocus: boolean;
   restoreFocusTool: "manual" | "magic" | "background" | "enhancements" | null;
 }>;
 
@@ -36,6 +37,7 @@ export class EditorModel {
     batchMode: false,
     exportSize: "original",
     qualityMode: null,
+    restoreModelFocus: false,
     restoreFocusTool: null,
   };
 
@@ -85,6 +87,16 @@ export class EditorModel {
 
   readonly retryProcessing = (): void => {
     if (this.view.qualityMode !== null) this.session.retry(this.view.qualityMode);
+  };
+
+  readonly reprocessCurrentModel = (modelMode: AutomaticModelMode): boolean => {
+    const started = this.session.reprocess(modelMode);
+    if (started) this.updateView({ restoreModelFocus: true });
+    return started;
+  };
+
+  readonly markModelFocusRestored = (): void => {
+    this.updateView({ restoreModelFocus: false });
   };
 
   readonly reset = (): void => {
@@ -192,6 +204,7 @@ export class EditorModel {
       batchMode: false,
       exportSize: "original",
       restoreFocusTool: null,
+      restoreModelFocus: false,
     });
   }
 
@@ -202,7 +215,8 @@ export class EditorModel {
       candidate.batchMode === this.view.batchMode &&
       candidate.exportSize === this.view.exportSize &&
       candidate.qualityMode === this.view.qualityMode &&
-      candidate.restoreFocusTool === this.view.restoreFocusTool
+      candidate.restoreFocusTool === this.view.restoreFocusTool &&
+      candidate.restoreModelFocus === this.view.restoreModelFocus
     )
       return;
     this.view = candidate;

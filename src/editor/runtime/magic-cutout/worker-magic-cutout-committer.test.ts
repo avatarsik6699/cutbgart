@@ -125,6 +125,7 @@ function createHarness() {
     snapshots,
   });
   const input = {
+    automaticModelMode: "isnet-q8",
     documentId,
     draftId,
     candidateId,

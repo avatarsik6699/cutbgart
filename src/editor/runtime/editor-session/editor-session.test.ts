@@ -50,13 +50,16 @@ function pngFile(name = "portrait.png"): File {
 }
 
 function createGatewayHarness() {
-  const terminal = deferred<ProcessingTerminalOutcome>();
+  const terminals = [deferred<ProcessingTerminalOutcome>()];
   const listeners = new Set<(progress: ProcessingProgress) => void>();
-  let request: ProcessingRequest | null = null;
+  const requests: ProcessingRequest[] = [];
   const dispose = vi.fn(() => Promise.resolve());
   const gateway: ProcessingGateway = {
     start(nextRequest) {
-      request = nextRequest;
+      const index = requests.length;
+      const terminal = terminals[index] ?? deferred<ProcessingTerminalOutcome>();
+      terminals[index] = terminal;
+      requests.push(nextRequest);
       const result = terminal.promise.then((outcome) => {
         if (outcome.type === "succeeded") {
           return outcome.snapshot;
@@ -86,8 +89,14 @@ function createGatewayHarness() {
     publish(progress: ProcessingProgress) {
       for (const listener of listeners) listener(progress);
     },
-    request: () => request,
-    terminal,
+    request: () => requests.at(-1) ?? null,
+    requestAt: (index: number) => requests[index] ?? null,
+    terminal: terminals[0]!,
+    terminalAt(index: number) {
+      const terminal = terminals[index] ?? deferred<ProcessingTerminalOutcome>();
+      terminals[index] = terminal;
+      return terminal;
+    },
   };
 }
 
@@ -207,6 +216,7 @@ describe("editor browser session", () => {
       owner,
     );
     const result: DocumentSnapshot = {
+      automaticModelMode: "isnet-q8",
       matte,
       foreground: null,
       composite,
@@ -281,6 +291,87 @@ describe("editor browser session", () => {
       status: "model-loading",
     });
     harness.session.reset();
+    await harness.session.dispose();
+  });
+
+  it("reprocesses only the selected result with an available model and preserves cancel", async () => {
+    const harness = createHarness();
+    await harness.session.importImage(pngFile(), "isnet-q8");
+
+    function completeRun(index: number, mode: DocumentSnapshot["automaticModelMode"]) {
+      const request = harness.gateway.requestAt(index);
+      if (request === null) throw new Error("Processing request is unavailable");
+      const owner = {
+        kind: "run",
+        documentId: request.documentId,
+        runId: request.runId,
+      } as const;
+      const matte = harness.repository.register(
+        new Uint8ClampedArray([255]),
+        {
+          kind: "matte",
+          mediaType: "application/octet-stream",
+          width: 1,
+          height: 1,
+          estimatedBytes: 1,
+        },
+        owner,
+      );
+      const composite = harness.repository.register(
+        new Blob([mode], { type: "image/png" }),
+        {
+          kind: "composite",
+          mediaType: "image/png",
+          width: 1,
+          height: 1,
+          estimatedBytes: mode.length,
+        },
+        owner,
+      );
+      harness.gateway.terminalAt(index).resolve({
+        type: "succeeded",
+        snapshot: {
+          automaticModelMode: mode,
+          matte,
+          foreground: null,
+          composite,
+          background: { type: "transparent" },
+        },
+      });
+    }
+
+    completeRun(0, "isnet-q8");
+    const active = harness.session.getSnapshot();
+    if (active.kind !== "document") throw new Error("Document was not prepared");
+    await vi.waitFor(() => expect(harness.session.currentModelMode()).toBe("isnet-q8"));
+    expect(harness.session.availableModelModes()).toEqual(["isnet-q8", "isnet-fp32"]);
+    expect(harness.session.reprocess("ben2-fp16")).toBe(false);
+    expect(harness.session.reprocess("isnet-fp32")).toBe(true);
+    expect(harness.gateway.requestAt(1)).toMatchObject({
+      documentId: active.actor.getSnapshot().context.document.documentId,
+      source: active.actor.getSnapshot().context.document.source,
+      modelMode: "isnet-fp32",
+    });
+    harness.session.cancel();
+    await vi.waitFor(() =>
+      expect(active.actor.getSnapshot().context.document.status).toBe("result"),
+    );
+    expect(harness.session.currentModelMode()).toBe("isnet-q8");
+    expect(active.actor.getSnapshot().context.document.history.past).toHaveLength(0);
+
+    expect(harness.session.reprocess("isnet-fp32")).toBe(true);
+    completeRun(2, "isnet-fp32");
+    await vi.waitFor(() => expect(harness.session.currentModelMode()).toBe("isnet-fp32"));
+    expect(active.actor.getSnapshot().context.document.history.past).toMatchObject([
+      { kind: "automatic-remove" },
+    ]);
+    harness.session.undoDocument();
+    expect(harness.session.currentModelMode()).toBe("isnet-q8");
+    harness.session.redoDocument();
+    expect(harness.session.currentModelMode()).toBe("isnet-fp32");
+
+    harness.session.reset();
+    harness.repository.assertEmpty();
     await harness.session.dispose();
   });
 
@@ -370,6 +461,7 @@ describe("editor browser session", () => {
     harness.gateway.terminal.resolve({
       type: "succeeded",
       snapshot: {
+        automaticModelMode: "isnet-q8",
         matte,
         foreground: null,
         composite,

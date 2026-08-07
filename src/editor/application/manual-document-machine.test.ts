@@ -57,6 +57,7 @@ describe("manual document actor", () => {
   it("keeps gestures local and applies exactly one atomic committed operation", async () => {
     const before = buildDocumentSnapshot();
     const after: DocumentSnapshot = {
+      automaticModelMode: "isnet-q8",
       matte: createArtifactId("matte-manual"),
       foreground: null,
       composite: createArtifactId("composite-manual"),

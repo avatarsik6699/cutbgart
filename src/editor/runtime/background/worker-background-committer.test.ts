@@ -49,6 +49,7 @@ describe("WorkerBackgroundCommitter", () => {
         expectedRevision: 3,
         draftRevision: 2,
         operation: "background",
+        automaticModelMode: snapshot.automaticModelMode,
         source: createArtifactId("source-1"),
         draftMatte: snapshot.matte,
         foreground: snapshot.foreground,

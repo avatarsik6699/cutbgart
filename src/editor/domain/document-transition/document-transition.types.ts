@@ -18,6 +18,7 @@ export declare namespace DocumentTransitionTypes {
   type CommandEnvelope =
     | {
         command: Extract<DocumentCommand, { type: "START_AUTOMATIC_REMOVAL" }>;
+        operationId: EditOperationId;
         runId: RunId;
       }
     | {
@@ -73,7 +74,11 @@ export declare namespace DocumentTransitionTypes {
   type Effect =
     | (ProcessingRequest & { type: "start-processing" })
     | (RunCorrelation & { type: "cancel-processing" })
-    | (RunCorrelation & { type: "promote-run"; snapshot: DocumentSnapshot })
+    | (RunCorrelation & {
+        type: "promote-run";
+        initial: boolean;
+        snapshot: DocumentSnapshot;
+      })
     | { type: "release-run-if-owned"; documentId: DocumentId; runId: RunId }
     | { type: "release-document"; documentId: DocumentId }
     | { type: "release-manual-draft"; documentId: DocumentId; draftId: ManualDraftId }
@@ -93,6 +98,12 @@ export declare namespace DocumentTransitionTypes {
         documentId: DocumentId;
         draftId: MagicDraftId;
         runId: RunId;
+      }
+    | {
+        type: "commit-automatic-history";
+        documentId: DocumentId;
+        entry: DocumentHistoryTypes.Entry;
+        released: readonly DocumentHistoryTypes.Entry[];
       }
     | {
         type: "commit-manual-history";

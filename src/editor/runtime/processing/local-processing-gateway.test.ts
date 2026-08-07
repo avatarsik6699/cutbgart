@@ -24,6 +24,7 @@ const request: ProcessingRequest = {
   modelMode: "isnet-q8",
 };
 const snapshot: DocumentSnapshot = {
+  automaticModelMode: "isnet-q8",
   matte: createArtifactId("matte-1"),
   foreground: null,
   composite: createArtifactId("composite-1"),

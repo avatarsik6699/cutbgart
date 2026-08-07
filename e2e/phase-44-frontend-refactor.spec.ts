@@ -295,6 +295,109 @@ test("single-image processing keeps progress, comparison, and PNG export intact"
   await expect(workspace).toHaveAttribute("data-active-tool", "enhance");
 });
 
+test("single-image model reprocessing preserves history, failure state, focus, and drafts in both locales", async ({
+  editor,
+  page,
+}) => {
+  const locales = [
+    {
+      path: "/en/",
+      viewport: { width: 1280, height: 900 },
+      upload: "Upload an image",
+      current: /^Current model:/,
+      processing: /^Processing with/,
+      failure:
+        "The selected model could not process this image. Your current result was preserved; choose a model to try again.",
+      ocean: "Ocean",
+      guard: "Finish this edit before switching tools",
+      continueEditing: "Continue editing",
+      discard: "Discard draft",
+      undo: "Undo document change",
+      redo: "Redo document change",
+    },
+    {
+      path: "/",
+      viewport: { width: 390, height: 844 },
+      upload: "Загрузить изображения",
+      current: /^Текущая модель:/,
+      processing: /^Обработка моделью/,
+      failure:
+        "Выбранная модель не смогла обработать изображение. Текущий результат сохранён; выберите модель для повторной попытки.",
+      ocean: "Океан",
+      guard: "Завершите правку перед сменой инструмента",
+      continueEditing: "Продолжить редактирование",
+      discard: "Отбросить черновик",
+      undo: "Отменить изменение документа",
+      redo: "Вернуть изменение документа",
+    },
+  ] as const;
+
+  for (const locale of locales) {
+    await page.setViewportSize(locale.viewport);
+    await page.goto(locale.path);
+    await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+    await page.getByLabel(locale.upload).setInputFiles(phase33ImageCorpus.smoke.path);
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
+
+    const modelControl = page.getByTestId("automatic-model-control").locator("select");
+    await expect(modelControl).toHaveAccessibleName(locale.current);
+    const initialMode = await modelControl.inputValue();
+    const alternateMode = initialMode === "isnet-q8" ? "isnet-fp32" : "isnet-q8";
+
+    await modelControl.selectOption(alternateMode);
+    await expect.poll(editor.scenario.runCount).toBe(2);
+    await expect(modelControl).toHaveAccessibleName(locale.processing);
+    await expect(modelControl).toBeDisabled();
+    expect((await editor.scenario.runModelModes()).at(-1)).toBe(alternateMode);
+    await editor.progress.cancelButton.click();
+    await expect(modelControl).toHaveValue(initialMode);
+    await expect(modelControl).toBeFocused();
+
+    await modelControl.selectOption(alternateMode);
+    await expect.poll(editor.scenario.runCount).toBe(3);
+    await editor.scenario.failRun();
+    await expect(page.getByRole("alert")).toContainText(locale.failure);
+    await expect(modelControl).toHaveValue(initialMode);
+    await expect(modelControl).toBeFocused();
+
+    await modelControl.selectOption(alternateMode);
+    await expect.poll(editor.scenario.runCount).toBe(4);
+    await editor.scenario.completeRun();
+    await expect(modelControl).toHaveValue(alternateMode);
+    await expect(modelControl).toBeFocused();
+    const undo = page.getByRole("button", { name: locale.undo });
+    const redo = page.getByRole("button", { name: locale.redo });
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect(modelControl).toHaveValue(initialMode);
+    await redo.click();
+    await expect(modelControl).toHaveValue(alternateMode);
+
+    await page.locator('[data-tool-id="background"]').click();
+    await page.getByRole("button", { name: locale.ocean, exact: true }).click();
+    await modelControl.selectOption(initialMode);
+    await expect(page.getByRole("heading", { name: locale.guard })).toBeVisible();
+    await expect.poll(editor.scenario.runCount).toBe(4);
+    await page.getByRole("button", { name: locale.continueEditing }).click();
+    await expect(modelControl).toHaveValue(alternateMode);
+    await expect(page.getByTestId("tool-panel-slot")).toBeFocused();
+
+    await modelControl.selectOption(initialMode);
+    await page.getByRole("button", { name: locale.discard }).click();
+    await expect.poll(editor.scenario.runCount).toBe(5);
+    await editor.scenario.completeRun();
+    await expect(modelControl).toHaveValue(initialMode);
+
+    await editor.preview.resetButton.click();
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
+      artifacts: 0,
+      leases: 0,
+      objectUrls: 0,
+    });
+  }
+});
+
 test("committed history, Background preview, and tool viewports stay coherent in both locales", async ({
   editor,
   page,
@@ -624,6 +727,8 @@ test("batch connectors keep admission, selection, and ZIP commands at their cons
   await expect(admissionGroup).toContainText("Add images");
   await expect(batch.locator("article")).toHaveCount(2);
   await expect(batch.getByText("Result ready")).toHaveCount(2);
+  await expect(page.getByTestId("automatic-model-control")).toHaveCount(0);
+  expect(await editor.scenario.runModelModes()).toHaveLength(2);
   await batch
     .locator("article")
     .nth(1)

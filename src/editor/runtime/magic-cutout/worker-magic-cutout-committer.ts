@@ -53,6 +53,7 @@ export class WorkerMagicCutoutCommitter implements MagicCutoutCommitter {
     );
     return this.#snapshots.commit(
       {
+        automaticModelMode: input.automaticModelMode,
         documentId: input.documentId,
         draftId: input.draftId,
         expectedRevision: input.expectedRevision,

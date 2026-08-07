@@ -7,4 +7,5 @@ export { EnhancementsToolPanel } from "./enhancements-tool-panel";
 export type { EnhancementPanelOutcome } from "./enhancements-tool-panel";
 export { createEnhancementOperationRegistry } from "./enhancement-operation-registry";
 export { LocalExecutionReadout } from "./local-execution-readout";
+export { AutomaticModelControl } from "./automatic-model-control";
 export { createEditorToolRegistry } from "./editor-tool-registry";

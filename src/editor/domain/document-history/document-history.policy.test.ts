@@ -16,12 +16,14 @@ function entry(index: number, bytes = 1): DocumentHistoryTypes.Entry {
     operationId: createEditOperationId(`operation-${index}`),
     kind: "manual-cutout",
     before: {
+      automaticModelMode: "isnet-q8",
       matte: createArtifactId(`matte-before-${index}`),
       foreground: null,
       composite: createArtifactId(`composite-before-${index}`),
       background: { type: "transparent" },
     },
     after: {
+      automaticModelMode: "isnet-q8",
       matte: createArtifactId(`matte-after-${index}`),
       foreground: null,
       composite: createArtifactId(`composite-after-${index}`),

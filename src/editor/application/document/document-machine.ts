@@ -16,6 +16,7 @@ import { createProcessingRunActor } from "./processing-run-actor";
 import { ProcessingGatewayError } from "../processing";
 
 type ManualCommitInput = {
+  automaticModelMode: DocumentSnapshot["automaticModelMode"];
   documentId: DocumentState["documentId"];
   draftId: Extract<
     NonNullable<DocumentState["activeDraft"]>,
@@ -30,6 +31,7 @@ type ManualCommitInput = {
 
 type MagicPredictionInput = NonNullable<DocumentState["activeMagicPrediction"]>;
 type MagicCommitInput = {
+  automaticModelMode: DocumentSnapshot["automaticModelMode"];
   documentId: DocumentState["documentId"];
   draftId: NonNullable<DocumentState["pendingMagicCommit"]>["draftId"];
   candidateId: NonNullable<DocumentState["pendingMagicCommit"]>["candidateId"];
@@ -148,7 +150,11 @@ export function createDocumentMachine(dependencies: DocumentMachineTypes.Depende
 
     let envelope;
     if (event.command.type === "START_AUTOMATIC_REMOVAL") {
-      envelope = { command: event.command, runId: dependencies.runIds.next() } as const;
+      envelope = {
+        command: event.command,
+        operationId: dependencies.manualIds.operation(),
+        runId: dependencies.runIds.next(),
+      } as const;
     } else if (event.command.type === "BEGIN_MANUAL_CUTOUT") {
       envelope = {
         command: event.command,
@@ -231,15 +237,33 @@ export function createDocumentMachine(dependencies: DocumentMachineTypes.Depende
 
     if (promotion !== null) {
       const accepted = executeArtifactEffect(dependencies, promotion) === true;
-      enqueue.raise({
-        type: "DOMAIN_EVENT",
-        event: {
-          type: accepted ? "COMMIT_ACCEPTED" : "COMMIT_REJECTED_STALE",
-          documentId: promotion.documentId,
-          runId: promotion.runId,
-          expectedRevision: promotion.expectedRevision,
-        },
-      });
+      if (accepted) {
+        enqueue.raise({
+          type: "DOMAIN_EVENT",
+          event: {
+            type: "COMMIT_ACCEPTED",
+            documentId: promotion.documentId,
+            runId: promotion.runId,
+            expectedRevision: promotion.expectedRevision,
+            estimatedHistoricalBytes:
+              context.document.committed === null
+                ? 0
+                : dependencies.artifacts.estimateHistoricalBytes(
+                    context.document.committed,
+                  ),
+          },
+        });
+      } else {
+        enqueue.raise({
+          type: "DOMAIN_EVENT",
+          event: {
+            type: "COMMIT_REJECTED_STALE",
+            documentId: promotion.documentId,
+            runId: promotion.runId,
+            expectedRevision: promotion.expectedRevision,
+          },
+        });
+      }
     }
 
     if (
@@ -354,6 +378,8 @@ export function createDocumentMachine(dependencies: DocumentMachineTypes.Depende
             const pending = context.document.pendingManualCommit;
             if (pending === null) throw new Error("Manual commit input is unavailable");
             return {
+              automaticModelMode:
+                context.document.committed?.automaticModelMode ?? "isnet-q8",
               documentId: context.document.documentId,
               draftId: pending.draftId,
               expectedRevision: pending.expectedRevision,
@@ -502,6 +528,8 @@ export function createDocumentMachine(dependencies: DocumentMachineTypes.Depende
             const pending = context.document.pendingMagicCommit;
             if (pending === null) throw new Error("Magic commit input is unavailable");
             return {
+              automaticModelMode:
+                context.document.committed?.automaticModelMode ?? "isnet-q8",
               documentId: context.document.documentId,
               draftId: pending.draftId,
               candidateId: pending.candidateId,

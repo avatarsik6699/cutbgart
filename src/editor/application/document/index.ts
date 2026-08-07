@@ -14,6 +14,7 @@ export type {
 } from "./magic-cutout-committer";
 export {
   selectDocumentError,
+  selectHasAutomaticReprocessError,
   selectBackgroundDraft,
   selectDocumentProgress,
   selectDocumentState,

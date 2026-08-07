@@ -38,6 +38,7 @@ export function registerWorkerOutput(
       owner,
     );
     return {
+      automaticModelMode: request.modelMode,
       matte,
       foreground: null,
       composite,

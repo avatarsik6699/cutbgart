@@ -13,6 +13,7 @@ describe("DocumentResultProjection", () => {
     const document = buildDocumentState({
       status: "result",
       committed: {
+        automaticModelMode: "isnet-q8",
         matte: createArtifactId("matte-1"),
         foreground: null,
         composite,
@@ -47,6 +48,7 @@ describe("DocumentResultProjection", () => {
     const document = buildDocumentState({
       status: "result",
       committed: {
+        automaticModelMode: "isnet-q8",
         matte: createArtifactId("matte-1"),
         foreground,
         composite,

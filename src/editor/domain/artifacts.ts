@@ -10,6 +10,7 @@ import type {
 } from "./ids";
 
 import type { BackgroundTypes } from "./background";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 export type ArtifactKind =
   "source" | "matte" | "foreground" | "composite" | "png" | "background-image";
@@ -52,6 +53,7 @@ export type ArtifactRepositoryStats = {
 };
 
 export type DocumentSnapshot = {
+  automaticModelMode: AutomaticModelMode;
   matte: ArtifactId;
   foreground: ArtifactId | null;
   composite: ArtifactId;

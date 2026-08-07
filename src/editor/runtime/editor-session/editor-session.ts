@@ -13,8 +13,11 @@ import {
   type DocumentState,
   type WorkspaceItemId,
 } from "@/editor/domain";
-import type { AutomaticModelMode } from "@/shared/lib";
-import type { BrowserInferencePath } from "@/shared/lib";
+import {
+  PRODUCTION_MODELS,
+  type AutomaticModelMode,
+  type BrowserInferencePath,
+} from "@/shared/lib";
 
 import { BatchExportCoordinator } from "../batch-export";
 import { BatchImportCoordinator, WORKSPACE_ITEM_LIMIT } from "../batch-import";
@@ -44,6 +47,13 @@ type ItemRecord = {
   inferencePath: BrowserInferencePath | null;
 };
 
+const WEBGPU_MODEL_MODES = Object.freeze(PRODUCTION_MODELS.map((model) => model.id));
+const WASM_MODEL_MODES = Object.freeze(
+  PRODUCTION_MODELS.filter((model) =>
+    (model.supportedPaths as readonly BrowserInferencePath[]).includes("wasm"),
+  ).map((model) => model.id),
+);
+
 function documentState(
   documentId: DocumentId,
   imageId: DocumentState["imageId"],
@@ -70,6 +80,7 @@ function documentState(
     stage: null,
     progress: null,
     error: null,
+    automaticReprocessError: null,
   };
 }
 
@@ -268,8 +279,8 @@ export function createEditorSession(
       items: visible.map((item) => {
         const status = itemStatus(item);
         const queuePosition = status === "queued" ? ++queued : null;
-        const documentError =
-          item.runtime?.actor.getSnapshot().context.document.error ?? null;
+        const document = item.runtime?.actor.getSnapshot().context.document;
+        const documentError = document?.error ?? null;
         return {
           itemId: item.itemId,
           documentId: item.documentId,
@@ -278,7 +289,7 @@ export function createEditorSession(
           error: item.error ?? documentError,
           previewUrl: item.runtime?.getSnapshot().previewUrl ?? null,
           queuePosition,
-          qualityMode: item.modelMode,
+          qualityMode: document?.committed?.automaticModelMode ?? item.modelMode,
         };
       }),
       export: batchExport.getSnapshot(),
@@ -446,7 +457,16 @@ export function createEditorSession(
 
   const selected = () => selectedRuntime();
 
+  function availableModelModes(): readonly AutomaticModelMode[] {
+    const item = items.find(
+      (candidate) =>
+        !candidate.removed && candidate.documentId === selected()?.documentId,
+    );
+    return item?.inferencePath === "webgpu" ? WEBGPU_MODEL_MODES : WASM_MODEL_MODES;
+  }
+
   return {
+    availableModelModes,
     applyBackground: () => selected()?.applyBackground(),
     applyEnhancements: () => selected()?.applyEnhancements(),
     applyMagic: () => selected()?.applyMagic(),
@@ -626,6 +646,15 @@ export function createEditorSession(
         requestedMode: item.requestedModelMode,
       };
     },
+    currentModelMode() {
+      const document = selected()?.actor.getSnapshot().context.document;
+      return document?.committed?.automaticModelMode ?? null;
+    },
+    processingModelMode() {
+      return (
+        selected()?.actor.getSnapshot().context.document.activeRun?.modelMode ?? null
+      );
+    },
     singleExportSnapshot: () => singleExport,
     retry(modelMode) {
       const runtime = selected();
@@ -639,6 +668,38 @@ export function createEditorSession(
           modelMode: modelMode ?? "isnet-q8",
         },
       });
+    },
+    reprocess(modelMode) {
+      const runtime = selected();
+      if (runtime === null) return false;
+      const item = items.find(
+        (candidate) => !candidate.removed && candidate.documentId === runtime.documentId,
+      );
+      const document = runtime.actor.getSnapshot().context.document;
+      if (
+        item === undefined ||
+        document.status !== "result" ||
+        document.committed === null ||
+        document.activeDraft !== null ||
+        document.committed.automaticModelMode === modelMode ||
+        !availableModelModes().includes(modelMode)
+      )
+        return false;
+      runtime.actor.send({
+        type: "COMMAND",
+        command: {
+          type: "START_AUTOMATIC_REMOVAL",
+          documentId: runtime.documentId,
+          backend: "local",
+          modelMode,
+        },
+      });
+      const outcome = runtime.actor.getSnapshot().context.lastCommandOutcome;
+      if (outcome?.status !== "accepted") return false;
+      item.requestedModelMode = modelMode;
+      item.modelMode = modelMode;
+      publish();
+      return true;
     },
     async retryItem(itemId) {
       const item = items.find(

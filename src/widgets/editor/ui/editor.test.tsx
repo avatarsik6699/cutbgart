@@ -148,8 +148,8 @@ describe("EditorWorkspace", () => {
       </EditorProvider>,
     );
 
-    expect(renders).toEqual({ exportSize: 1, qualityMode: 1, sessionKind: 1 });
+    expect(renders).toEqual({ exportSize: 1, qualityMode: 2, sessionKind: 1 });
     fireEvent.click(screen.getByRole("button", { name: "choose 1024" }));
-    expect(renders).toEqual({ exportSize: 2, qualityMode: 1, sessionKind: 1 });
+    expect(renders).toEqual({ exportSize: 2, qualityMode: 2, sessionKind: 1 });
   });
 });

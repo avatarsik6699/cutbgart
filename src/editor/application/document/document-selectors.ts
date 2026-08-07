@@ -29,6 +29,12 @@ export function selectDocumentError(snapshot: DocumentSnapshotLike): string | nu
   return snapshot.context.document.error?.message ?? null;
 }
 
+export function selectHasAutomaticReprocessError(
+  snapshot: DocumentSnapshotLike,
+): boolean {
+  return snapshot.context.document.automaticReprocessError !== null;
+}
+
 export function selectLastDocumentCommandOutcome(
   snapshot: DocumentSnapshotLike,
 ): CommandOutcome | null {

@@ -1,4 +1,5 @@
 import { selectDocumentRevision, selectDocumentState } from "@/editor/application";
+import { useRef } from "react";
 import type { DocumentMachineTypes, DocumentSnapshotLike } from "@/editor/application";
 import { m } from "@/paraglide/messages";
 import { Typography } from "@/shared/ui";
@@ -29,11 +30,13 @@ export function ActiveDocument(props: { actor: DocumentMachineTypes.ActorRef }) 
 }
 
 function ActiveDocumentWorkspace() {
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const documentId = useActiveDocumentActorSelector(selectDocumentId);
   const activeTool = useActiveDocumentViewSelector(selectActiveTool);
 
   return (
     <div
+      ref={workspaceRef}
       className="tool-workspace-grid"
       data-testid="editor-tool-workspace"
       data-document-id={documentId}
@@ -42,7 +45,7 @@ function ActiveDocumentWorkspace() {
       <div className="min-w-0 overflow-hidden [grid-area:toolbar]">
         <EditorToolbarConnector />
       </div>
-      <NavigationGuard />
+      <NavigationGuard editingRoot={workspaceRef} />
       <DocumentRevisionStatus />
       <ActiveTool />
       <DocumentError />

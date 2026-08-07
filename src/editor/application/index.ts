@@ -24,6 +24,7 @@ export type {
 } from "./document";
 export {
   selectDocumentError,
+  selectHasAutomaticReprocessError,
   selectBackgroundDraft,
   selectDocumentProgress,
   selectDocumentState,

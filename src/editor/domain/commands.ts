@@ -205,6 +205,7 @@ export type CommandRejectionReason =
   | "document-not-found"
   | "not-ready"
   | "run-active"
+  | "same-model"
   | "no-active-run"
   | "no-result"
   | "stale-revision"

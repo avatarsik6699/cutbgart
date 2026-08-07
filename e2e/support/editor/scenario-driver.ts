@@ -3,7 +3,9 @@ import type { Page } from "@playwright/test";
 import {
   advanceMockEditorStage,
   completeMockEditorRun,
+  failMockEditorRun,
   mockEditorRunCount,
+  mockEditorRunModelModes,
   mockEditorManualCommitCount,
   mockEditorMagicCommitCount,
   mockEditorMagicPredictionCount,
@@ -20,7 +22,9 @@ export function editorScenarioDriver(page: Page) {
     stage: (stage: "model-loading" | "automatic-remove", fraction?: number) =>
       advanceMockEditorStage(page, stage, fraction),
     completeRun: () => completeMockEditorRun(page),
+    failRun: () => failMockEditorRun(page),
     runCount: () => mockEditorRunCount(page),
+    runModelModes: () => mockEditorRunModelModes(page),
     manualCommitCount: () => mockEditorManualCommitCount(page),
     magicCommitCount: () => mockEditorMagicCommitCount(page),
     magicPredictionCount: () => mockEditorMagicPredictionCount(page),

@@ -14,7 +14,8 @@ export declare namespace DocumentHistoryTypes {
 
   type Entry = {
     operationId: EditOperationId;
-    kind: "manual-cutout" | "magic-cutout" | "background" | "enhance";
+    kind:
+      "automatic-remove" | "manual-cutout" | "magic-cutout" | "background" | "enhance";
     before: DocumentSnapshot;
     after: DocumentSnapshot;
     estimatedHistoricalBytes: number;

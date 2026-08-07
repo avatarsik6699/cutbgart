@@ -139,7 +139,7 @@ render isolation.
   so the chosen mode clearly applies to subsequently admitted items without a duplicate heading.
   Review current browser/UI guidance during planning and cover both locales and narrow/desktop
   behavior in Playwright — _Depends on:_ `T10A`
-- [ ] `T12` Replace the single-image `on-device` badge with the existing available local-model
+- [x] `T12` Replace the single-image `on-device` badge with the existing available local-model
   choices, identify the model used for the current automatic result, and allow selecting another
   model to re-run only the current document through the existing processing gateway. Before code,
   document source/baseline, dirty-draft, history, cancellation, failure, and focus semantics and
@@ -543,6 +543,10 @@ waiver.
   denied, and failed reads without relying on the browser-divergent Permissions API. A 10-second
   processing-only timer is the single delayed-explanation threshold and is disposed with that run's
   presentation.
+- T12 stores effective automatic-model provenance on committed snapshots, so later tool commits and
+  Undo/Redo restore pixels and model identity together. Reprocessing keeps the first automatic
+  baseline, reads the immutable source, and uses the existing correlated heavy-job path; batch
+  presentation remains non-interactive and sibling items are unchanged.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

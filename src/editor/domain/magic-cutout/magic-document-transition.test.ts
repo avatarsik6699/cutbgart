@@ -18,6 +18,7 @@ const draftId = createMagicDraftId("magic-draft-1");
 const runId = createRunId("magic-run-1");
 const candidateId = createMagicCandidateId("candidate-1");
 const before = {
+  automaticModelMode: "isnet-q8" as const,
   matte: createArtifactId("matte-before"),
   foreground: null,
   composite: createArtifactId("composite-before"),
@@ -46,6 +47,7 @@ function resultState(): DocumentState {
     stage: null,
     progress: null,
     error: null,
+    automaticReprocessError: null,
   };
 }
 
@@ -152,6 +154,7 @@ describe("Magic document transitions", () => {
       operationId: createEditOperationId("operation-1"),
     }).state;
     const after = {
+      automaticModelMode: "isnet-q8" as const,
       matte: createArtifactId("matte-after"),
       foreground: null,
       composite: createArtifactId("composite-after"),

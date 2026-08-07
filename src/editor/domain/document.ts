@@ -30,9 +30,11 @@ export type ActiveRun = {
   runId: RunId;
   expectedRevision: Revision;
   modelMode: AutomaticModelMode;
+  operationId: EditOperationId;
 };
 
 export type PendingCommit = ActiveRun & {
+  operationId: EditOperationId;
   snapshot: DocumentSnapshot;
 };
 
@@ -113,4 +115,5 @@ export type DocumentState = {
   stage: ProcessingStage | null;
   progress: number | null;
   error: ProcessingError | null;
+  automaticReprocessError: ProcessingError | null;
 };

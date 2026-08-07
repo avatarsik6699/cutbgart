@@ -71,6 +71,7 @@ function createHarness() {
     create: () => worker as unknown as SnapshotCommitWorker,
   });
   const request = {
+    automaticModelMode: "isnet-q8" as const,
     documentId,
     draftId,
     expectedRevision: 1,

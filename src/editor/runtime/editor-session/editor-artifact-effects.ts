@@ -82,12 +82,41 @@ function commitDraftHistory(
     });
 }
 
+function commitAutomaticHistory(
+  repository: ArtifactRepository,
+  effect: Extract<DocumentTransitionTypes.Effect, { type: "commit-automatic-history" }>,
+): void {
+  const historyOwner = {
+    kind: "history",
+    documentId: effect.documentId,
+    operationId: effect.entry.operationId,
+  } as const;
+  for (const id of new Set([
+    ...snapshotIds(effect.entry.before),
+    ...snapshotIds(effect.entry.after),
+  ]))
+    repository.retain(id, historyOwner);
+  const afterIds = new Set(snapshotIds(effect.entry.after));
+  for (const id of snapshotIds(effect.entry.before))
+    if (!afterIds.has(id))
+      repository.release(id, { kind: "document", documentId: effect.documentId });
+  for (const released of effect.released)
+    repository.releaseOwnerIfPresent({
+      kind: "history",
+      documentId: effect.documentId,
+      operationId: released.operationId,
+    });
+}
+
 export function createEditorArtifactEffects(options: {
   download: DownloadAdapter;
   fileName(documentId: DocumentTransitionTypes.Effect["documentId"]): string | null;
   repository: ArtifactRepository;
 }): DocumentMachineTypes.ArtifactEffects {
   return {
+    commitAutomaticHistory(effect) {
+      commitAutomaticHistory(options.repository, effect);
+    },
     estimateHistoricalBytes(snapshot) {
       return snapshotIds(snapshot).reduce(
         (total, id) => total + (options.repository.metadata(id)?.estimatedBytes ?? 0),
@@ -109,7 +138,7 @@ export function createEditorArtifactEffects(options: {
         { kind: "run", documentId: effect.documentId, runId: effect.runId },
         { kind: "document", documentId: effect.documentId },
       );
-      if (promoted) {
+      if (promoted && effect.initial) {
         for (const id of snapshotIds(effect.snapshot)) {
           options.repository.retain(id, {
             kind: "baseline",

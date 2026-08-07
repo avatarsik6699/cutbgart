@@ -13,6 +13,7 @@ export class WorkerBackgroundCommitter implements BackgroundCommitter {
   commit(input: BackgroundCommitInput, signal: AbortSignal): Promise<DocumentSnapshot> {
     return this.#snapshots.commit(
       {
+        automaticModelMode: input.snapshot.automaticModelMode,
         documentId: input.documentId,
         draftId: input.draftId,
         expectedRevision: input.expectedRevision,

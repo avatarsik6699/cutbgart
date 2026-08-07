@@ -1,4 +1,5 @@
 import type { DocumentMachineTypes } from "@/editor/application";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 import type { EditorModel } from "./editor-model";
 
@@ -12,6 +13,7 @@ export type ActiveDocumentViewSnapshot = Readonly<{
     | Readonly<{ type: "tool"; tool: EditorToolId }>
     | Readonly<{ type: "cutout-mode"; mode: CutoutPresentationMode }>
     | Readonly<{ type: "leave" }>
+    | Readonly<{ type: "reprocess"; modelMode: AutomaticModelMode }>
     | null;
 }>;
 
@@ -67,6 +69,15 @@ export class ActiveDocumentModel {
 
   requestLeave(): void {
     this.requestNavigation({ type: "leave" });
+  }
+
+  requestModel(modelMode: AutomaticModelMode): void {
+    if (
+      this.actor.getSnapshot().context.document.committed?.automaticModelMode ===
+      modelMode
+    )
+      return;
+    this.requestNavigation({ type: "reprocess", modelMode });
   }
 
   keepEditing(): void {
@@ -135,6 +146,10 @@ export class ActiveDocumentModel {
     if (navigation.type === "cutout-mode") {
       this.updateView({ activeTool: "cutout", cutoutMode: navigation.mode });
       this.startSelectedTool();
+      return;
+    }
+    if (navigation.type === "reprocess") {
+      this.editor.reprocessCurrentModel(navigation.modelMode);
       return;
     }
     this.editor.leaveDocument();

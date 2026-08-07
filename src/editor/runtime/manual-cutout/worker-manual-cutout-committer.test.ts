@@ -72,6 +72,7 @@ describe("WorkerManualCutoutCommitter", () => {
   it("transfers source/matte through the no-inference protocol and correlates one snapshot", async () => {
     const test = harness();
     const request = {
+      automaticModelMode: "isnet-q8" as const,
       documentId: test.documentId,
       draftId: test.draftId,
       expectedRevision: 3,
@@ -107,6 +108,7 @@ describe("WorkerManualCutoutCommitter", () => {
     const controller = new AbortController();
     const result = test.committer.commit(
       {
+        automaticModelMode: "isnet-q8",
         documentId: test.documentId,
         draftId: test.draftId,
         expectedRevision: 0,

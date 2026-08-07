@@ -6,7 +6,12 @@ import {
   buildProcessingError,
 } from "@/editor/testing";
 
-import { createRunId, decideDocumentCommand, transitionDocument } from "./index";
+import {
+  createEditOperationId,
+  createRunId,
+  decideDocumentCommand,
+  transitionDocument,
+} from "./index";
 
 function seededSequence(seed: number) {
   let value = seed >>> 0;
@@ -24,6 +29,7 @@ describe("document transition invariants", () => {
     for (let iteration = 0; iteration < 120; iteration += 1) {
       const initial = buildDocumentState();
       const runId = createRunId(`run-${String(iteration)}`);
+      const operationId = createEditOperationId(`operation-${String(iteration)}`);
       const started = decideDocumentCommand(initial, {
         command: {
           type: "START_AUTOMATIC_REMOVAL",
@@ -32,12 +38,14 @@ describe("document transition invariants", () => {
           modelMode: "isnet-q8",
         },
         runId,
+        operationId,
       });
       expect(started.outcome.status).toBe("accepted");
       expect(started.state.activeRun).toEqual({
         runId,
         expectedRevision: 0,
         modelMode: "isnet-q8",
+        operationId,
       });
 
       const branch = random() % 3;
@@ -76,6 +84,7 @@ describe("document transition invariants", () => {
         });
         const committed = transitionDocument(succeeded.state, {
           type: "COMMIT_ACCEPTED",
+          estimatedHistoricalBytes: 0,
           documentId: initial.documentId,
           runId,
           expectedRevision: 0,

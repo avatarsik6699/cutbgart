@@ -26,6 +26,7 @@ export async function installMockEditorWorker(
       };
       type TestWindow = Window & {
         __completeEditorRun?: () => void;
+        __failEditorRun?: () => void;
         __advanceEditorRunStage?: (
           stage: "model-loading" | "automatic-remove",
           fraction: number,
@@ -147,6 +148,11 @@ export async function installMockEditorWorker(
               const activeWorker = [...workers].find((worker) => worker.active !== null);
               if (activeWorker === undefined) throw new Error("No active editor run");
               activeWorker.complete();
+            };
+            testWindow.__failEditorRun = () => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor run");
+              activeWorker.fail();
             };
             testWindow.__advanceEditorRunStage = (stage, fraction) => {
               const activeWorker = [...workers].find((worker) => worker.active !== null);
@@ -323,6 +329,23 @@ export async function installMockEditorWorker(
           }, "image/png");
         }
 
+        fail(): void {
+          const command = this.active;
+          if (command === null) throw new Error("No active editor run");
+          this.active = null;
+          this.emit({
+            protocol: 1,
+            type: "FAILED",
+            correlation: command.correlation,
+            error: {
+              code: "processing-failed",
+              message: "Mock automatic processing failure",
+              retryable: true,
+            },
+            timings: [],
+          });
+        }
+
         png(): Uint8Array {
           return Uint8Array.from([
             137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
@@ -396,6 +419,20 @@ export async function mockEditorRunCount(page: Page): Promise<number> {
   return page.evaluate(
     () => (window as Window & { __v2RunCount?: number }).__v2RunCount ?? 0,
   );
+}
+
+export async function mockEditorRunModelModes(page: Page): Promise<readonly string[]> {
+  return page.evaluate(
+    () => (window as Window & { __v2RunModelModes?: string[] }).__v2RunModelModes ?? [],
+  );
+}
+
+export async function failMockEditorRun(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const fail = (window as Window & { __failEditorRun?: () => void }).__failEditorRun;
+    if (fail === undefined) throw new Error("No active mock editor run");
+    fail();
+  });
 }
 
 export async function mockEditorManualCommitCount(page: Page): Promise<number> {
@@ -479,11 +516,13 @@ export async function resetMockEditorWorker(page: Page): Promise<void> {
     .evaluate(() => {
       const testWindow = window as Window & {
         __completeEditorRun?: () => void;
+        __failEditorRun?: () => void;
         __advanceEditorRunStage?: (
           stage: "model-loading" | "automatic-remove",
           fraction: number,
         ) => void;
         __v2RunCount?: number;
+        __v2RunModelModes?: string[];
         __v2ManualCommitCount?: number;
         __v2MagicCommitCount?: number;
         __v2MagicPredictionCount?: number;
@@ -495,8 +534,10 @@ export async function resetMockEditorWorker(page: Page): Promise<void> {
         __v2EnhancementOutcome?: "changed" | "unchanged" | "failed";
       };
       delete testWindow.__completeEditorRun;
+      delete testWindow.__failEditorRun;
       delete testWindow.__advanceEditorRunStage;
       delete testWindow.__v2RunCount;
+      delete testWindow.__v2RunModelModes;
       delete testWindow.__v2ManualCommitCount;
       delete testWindow.__v2MagicCommitCount;
       delete testWindow.__v2MagicPredictionCount;

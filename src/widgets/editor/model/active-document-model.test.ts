@@ -135,4 +135,68 @@ describe("ActiveDocumentModel", () => {
     expect(actor.getSnapshot().context.document.activeDraft).toBeNull();
     actor.stop();
   });
+
+  it("routes model reprocessing through the existing dirty-draft guard", () => {
+    const actor = resultActor();
+    const reprocessCurrentModel = vi.fn(() => true);
+    const session = {
+      beginMagic: vi.fn(() => {
+        actor.send({
+          type: "COMMAND",
+          command: {
+            type: "BEGIN_MAGIC_CUTOUT",
+            documentId: actor.getSnapshot().context.document.documentId,
+            expectedRevision: actor.getSnapshot().context.document.revision,
+          },
+        });
+      }),
+      cancelMagic: vi.fn(() => {
+        const draft = actor.getSnapshot().context.document.activeDraft;
+        if (draft?.kind !== "magic-cutout") return;
+        actor.send({
+          type: "COMMAND",
+          command: {
+            type: "CANCEL_MAGIC_CUTOUT",
+            documentId: draft.documentId,
+            draftId: draft.draftId,
+          },
+        });
+      }),
+    };
+    const editor = {
+      session,
+      leaveDocument: vi.fn(),
+      reprocessCurrentModel,
+    } as unknown as EditorModel;
+    const model = new ActiveDocumentModel(editor, actor);
+    model.ensureSelectedToolOpen();
+    const draft = actor.getSnapshot().context.document.activeDraft;
+    if (draft?.kind !== "magic-cutout") throw new Error("Magic draft was not opened");
+    actor.send({
+      type: "COMMAND",
+      command: {
+        type: "MAGIC_DRAFT_CHANGED",
+        documentId: draft.documentId,
+        draftId: draft.draftId,
+        expectedRevision: draft.baselineRevision,
+        draftRevision: 1,
+        dirty: true,
+      },
+    });
+
+    model.requestModel("isnet-fp32");
+    expect(model.viewStore.getSnapshot().pendingNavigation).toEqual({
+      type: "reprocess",
+      modelMode: "isnet-fp32",
+    });
+    expect(reprocessCurrentModel).not.toHaveBeenCalled();
+
+    model.keepEditing();
+    expect(model.viewStore.getSnapshot().pendingNavigation).toBeNull();
+    model.requestModel("isnet-fp32");
+    model.discardAndContinue();
+    expect(session.cancelMagic).toHaveBeenCalledOnce();
+    expect(reprocessCurrentModel).toHaveBeenCalledWith("isnet-fp32");
+    actor.stop();
+  });
 });

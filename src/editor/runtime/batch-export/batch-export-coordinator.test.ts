@@ -42,6 +42,7 @@ describe("BatchExportCoordinator", () => {
         owner,
       );
       const snapshot: DocumentSnapshot = {
+        automaticModelMode: "isnet-q8",
         matte,
         foreground: null,
         composite,
@@ -120,6 +121,7 @@ describe("BatchExportCoordinator", () => {
         {
           documentId,
           snapshot: {
+            automaticModelMode: "isnet-q8",
             matte,
             foreground: null,
             composite,

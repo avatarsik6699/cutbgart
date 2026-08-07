@@ -32,6 +32,7 @@ import {
 const documentId = createDocumentId("document-1");
 const source = createArtifactId("source-1");
 const resultSnapshot: DocumentSnapshot = {
+  automaticModelMode: "isnet-q8",
   matte: createArtifactId("matte-1"),
   foreground: null,
   composite: createArtifactId("composite-1"),
@@ -178,6 +179,7 @@ function createDocumentState(status: DocumentState["status"]): DocumentState {
     history: { past: [], future: [], retainedHistoricalBytes: 0 },
     status,
     stage: null,
+    automaticReprocessError: null,
     progress: null,
     error: null,
   };

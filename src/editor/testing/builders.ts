@@ -15,6 +15,7 @@ export function buildDocumentSnapshot(
   overrides: Partial<DocumentSnapshot> = {},
 ): DocumentSnapshot {
   return {
+    automaticModelMode: "isnet-q8",
     matte: createArtifactId("matte-1"),
     foreground: null,
     composite: createArtifactId("composite-1"),
@@ -47,6 +48,7 @@ export function buildDocumentState(
     stage: null,
     progress: null,
     error: null,
+    automaticReprocessError: null,
     ...overrides,
   };
 }

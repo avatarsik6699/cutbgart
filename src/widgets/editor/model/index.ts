@@ -29,6 +29,9 @@ export {
   selectActivePreviewUrl,
   selectActiveResultUrl,
   selectActiveWidth,
+  selectAvailableModelModes,
+  selectCurrentModelMode,
   selectInferencePath,
+  selectProcessingModelMode,
   selectSingleExportSnapshot,
 } from "./editor-session-selectors";

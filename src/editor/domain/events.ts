@@ -42,7 +42,7 @@ export type ProcessingLifecycleEvent =
   | ProcessingTerminalEvent;
 
 export type CommitEvent =
-  | (RunCorrelation & { type: "COMMIT_ACCEPTED" })
+  | (RunCorrelation & { type: "COMMIT_ACCEPTED"; estimatedHistoricalBytes: number })
   | (RunCorrelation & { type: "COMMIT_REJECTED_STALE" });
 
 export type ExportEvent =

@@ -6,6 +6,7 @@ import {
   createDocumentId,
   createEditOperationId,
   createManualDraftId,
+  createRunId,
   commitDocumentHistory,
   type DocumentHistoryTypes,
   type DocumentSnapshot,
@@ -54,6 +55,7 @@ describe("editor artifact effects", () => {
     const documentOwner = { kind: "document", documentId } as const;
     const draftOwner = { kind: "manual-draft", documentId, draftId } as const;
     const registerSnapshot = (owner: typeof documentOwner | typeof draftOwner) => ({
+      automaticModelMode: "isnet-q8" as const,
       matte: repository.register(
         new Uint8ClampedArray([255]),
         {
@@ -123,6 +125,84 @@ describe("editor artifact effects", () => {
     repository.assertEmpty();
   });
 
+  it("promotes reprocessing into history without creating another baseline lease", () => {
+    let next = 0;
+    const repository = new ArtifactRepository({
+      idSource: { next: () => createArtifactId(`reprocess-${++next}`) },
+      memoryBudgetBytes: 1024,
+    });
+    const documentId = createDocumentId("document-reprocess");
+    const runId = createRunId("run-reprocess");
+    const documentOwner = { kind: "document", documentId } as const;
+    const runOwner = { kind: "run", documentId, runId } as const;
+    const registerSnapshot = (
+      owner: typeof documentOwner | typeof runOwner,
+      mode: DocumentSnapshot["automaticModelMode"],
+    ): DocumentSnapshot => ({
+      automaticModelMode: mode,
+      matte: repository.register(
+        new Uint8ClampedArray([255]),
+        {
+          kind: "matte",
+          mediaType: "application/octet-stream",
+          width: 1,
+          height: 1,
+          estimatedBytes: 1,
+        },
+        owner,
+      ),
+      foreground: null,
+      composite: repository.register(
+        new Blob([mode], { type: "image/png" }),
+        {
+          kind: "composite",
+          mediaType: "image/png",
+          width: 1,
+          height: 1,
+          estimatedBytes: mode.length,
+        },
+        owner,
+      ),
+      background: { type: "transparent" },
+    });
+    const before = registerSnapshot(documentOwner, "isnet-q8");
+    for (const id of [before.matte, before.composite])
+      repository.retain(id, { kind: "baseline", documentId });
+    const after = registerSnapshot(runOwner, "isnet-fp32");
+    const effects = createEditorArtifactEffects({
+      download: { start: vi.fn() },
+      fileName: () => "portrait.png",
+      repository,
+    });
+    expect(
+      effects.promoteRun({
+        type: "promote-run",
+        documentId,
+        runId,
+        expectedRevision: 1,
+        initial: false,
+        snapshot: after,
+      }),
+    ).toBe(true);
+    const operationId = createEditOperationId("automatic-operation-1");
+    effects.commitAutomaticHistory?.({
+      type: "commit-automatic-history",
+      documentId,
+      entry: {
+        operationId,
+        kind: "automatic-remove",
+        before,
+        after,
+        estimatedHistoricalBytes: 4,
+      },
+      released: [],
+    });
+    expect(repository.stats()).toMatchObject({ artifacts: 4, leases: 8 });
+    repository.releaseOwnerIfPresent({ kind: "history", documentId, operationId });
+    effects.releaseDocument({ type: "release-document", documentId });
+    repository.assertEmpty();
+  });
+
   it("retains an artifact-backed committed background across history movement", () => {
     let next = 0;
     const repository = new ArtifactRepository({
@@ -180,12 +260,14 @@ describe("editor artifact effects", () => {
       draftOwner,
     );
     const before = {
+      automaticModelMode: "isnet-q8" as const,
       matte,
       foreground: null,
       composite: beforeComposite,
       background: { type: "transparent" } as const,
     };
     const after = {
+      automaticModelMode: "isnet-q8" as const,
       matte,
       foreground: null,
       composite: afterComposite,
@@ -249,6 +331,7 @@ describe("editor artifact effects", () => {
       documentOwner,
     );
     let current: DocumentSnapshot = {
+      automaticModelMode: "isnet-q8",
       matte,
       foreground: null,
       composite: repository.register(
@@ -296,6 +379,7 @@ describe("editor artifact effects", () => {
           } as const)
         : ({ type: "color", value: "#112233" } as const);
       const after: DocumentSnapshot = {
+        automaticModelMode: "isnet-q8",
         matte,
         foreground: null,
         composite: repository.register(

@@ -62,6 +62,7 @@ function harness() {
     documentOwner,
   );
   const snapshot = {
+    automaticModelMode: "isnet-q8" as const,
     matte,
     foreground: null,
     composite,
@@ -117,6 +118,7 @@ describe("EnhancementCommitService", () => {
         owner,
       );
       return Promise.resolve({
+        automaticModelMode: request.automaticModelMode,
         matte: request.draftMatte,
         foreground: request.foreground ?? null,
         composite,
