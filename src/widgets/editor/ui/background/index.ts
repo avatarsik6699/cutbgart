@@ -1,2 +1,1 @@
-export { BackgroundWorkspace } from "./background-workspace";
-export type { BackgroundInteraction } from "./background-workspace";
+export { BackgroundConnector } from "./background-connector";

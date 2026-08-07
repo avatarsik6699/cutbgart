@@ -2,14 +2,14 @@ import { Paintbrush, WandSparkles } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 
-import type { CutoutPresentationMode } from "./editor-tool-workspace-contract";
+import type { CutoutPresentationMode } from "../../model";
 
-type Props = Readonly<{
-  mode: CutoutPresentationMode;
-  onModeChange(mode: CutoutPresentationMode): void;
-}>;
-
-export function CutoutModeTabs(props: Props) {
+export function CutoutModeTabs(
+  props: Readonly<{
+    mode: CutoutPresentationMode;
+    onModeChange(mode: CutoutPresentationMode): void;
+  }>,
+) {
   return (
     <div
       className="grid grid-cols-2 rounded-xl bg-muted/60 p-1"

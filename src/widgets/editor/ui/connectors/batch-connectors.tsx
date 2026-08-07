@@ -34,8 +34,17 @@ const selectWorkspace = (
 const selectAdmissionError = (snapshot: EditorViewSnapshot) =>
   snapshot.batchAdmissionError;
 const selectQualityMode = (snapshot: EditorViewSnapshot) => snapshot.qualityMode;
+const selectItemCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
+  snapshot.items.length;
+const selectCompletedCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) => {
+  let count = 0;
+  for (const item of snapshot.items) if (item.status === "result") count += 1;
+  return count;
+};
+const selectExporting = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
+  snapshot.export.status === "preparing";
 
-function useBatchProjection(): MainPageEditorTypes.BatchProjection {
+function useBatchRailProjection(): MainPageEditorTypes.BatchProjection {
   const workspace = useEditorWorkspaceSelector(selectWorkspace);
   const admissionError = useEditorViewSelector(selectAdmissionError);
 
@@ -67,7 +76,7 @@ function useBatchProjection(): MainPageEditorTypes.BatchProjection {
 
 export function BatchRailConnector() {
   const model = useEditorModel();
-  const batch = useBatchProjection();
+  const batch = useBatchRailProjection();
 
   return (
     <MainPageBatchRail
@@ -80,16 +89,16 @@ export function BatchRailConnector() {
   );
 }
 
-type ActionsProps = Readonly<{ disabled: boolean }>;
-
-export function BatchActionsConnector(props: ActionsProps) {
+export function BatchActionsConnector(props: Readonly<{ disabled: boolean }>) {
   const model = useEditorModel();
-  const batch = useBatchProjection();
   const qualityMode = useEditorViewSelector(selectQualityMode);
+  const itemCount = useEditorWorkspaceSelector(selectItemCount);
+  const completedCount = useEditorWorkspaceSelector(selectCompletedCount);
+  const exporting = useEditorWorkspaceSelector(selectExporting);
 
   return (
     <MainPageBatchActions
-      batch={batch}
+      actions={{ atCapacity: itemCount >= 20, completedCount, exporting }}
       disabled={props.disabled}
       onAddFiles={(files) => void model.admitFiles(files)}
       onCancelDownloadAll={model.cancelDownloadAll}

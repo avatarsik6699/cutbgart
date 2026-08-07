@@ -4,7 +4,7 @@ import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import { m } from "@/paraglide/messages";
 import { cn } from "@/shared/lib/utils";
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui";
-import type { EditorToolId } from "./editor-tool-workspace-contract";
+import type { EditorToolId } from "../../model";
 import type { EditorToolDefinition } from "./editor-tool-registry";
 
 export interface EditorToolbarProps {

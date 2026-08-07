@@ -37,4 +37,10 @@ export declare namespace MainPageEditorTypes {
     }>;
     export: EditorSessionTypes.BatchExportSnapshot;
   }>;
+
+  type BatchActionsProjection = Readonly<{
+    atCapacity: boolean;
+    completedCount: number;
+    exporting: boolean;
+  }>;
 }

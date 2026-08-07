@@ -144,6 +144,18 @@ test("single-image processing keeps progress, comparison, and PNG export intact"
 
   const download = await editor.exportPng.download();
   expect(download.suggestedFilename()).toBe("cutbg-result.png");
+
+  const workspace = page.getByTestId("editor-tool-workspace");
+  await expect(workspace).toHaveAttribute("data-active-tool", "cutout");
+  await page.locator('[data-tool-id="background"]').click();
+  await expect(workspace).toHaveAttribute("data-active-tool", "background");
+  await page.getByLabel("Choose background colour").fill("#224466");
+  await page.locator('[data-tool-id="enhance"]').click();
+  await expect(
+    page.getByRole("heading", { name: "Finish this edit before switching tools" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Discard draft" }).click();
+  await expect(workspace).toHaveAttribute("data-active-tool", "enhance");
 });
 
 test("batch connectors keep admission, selection, and ZIP commands at their consumers", async ({

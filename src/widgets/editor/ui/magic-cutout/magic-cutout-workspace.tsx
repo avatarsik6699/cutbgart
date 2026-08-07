@@ -3,37 +3,21 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { Button, EditorStage, Image, Typography } from "@/shared/ui";
+import { EditorStage, Image } from "@/shared/ui";
 import type { MagicCutoutTypes } from "@/editor/domain";
 import type { MagicRuntimeProgress } from "@/editor/runtime";
-import {
-  CanvasViewControls,
-  ToolPanelSlot,
-  type CanvasInteractionMode,
-} from "../editor-tools";
+import { CanvasViewControls, type CanvasInteractionMode } from "../editor-tools";
 import {
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CutoutStagePanController,
   cutoutStageContentStyle,
   isEditableCanvasShortcutTarget,
 } from "../cutout-stage";
-import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
-
-type Props = {
-  draft: MagicCutoutTypes.Draft;
-  height: number;
-  runtimeProgress: MagicRuntimeProgress | null;
-  interaction: MagicCutoutInteraction;
-  currentUrl: string;
-  width: number;
-  onCutoutModeChange?(mode: "magic" | "manual"): void;
-};
+import { MagicCutoutPanel } from "./magic-cutout-panel";
 
 export type MagicCutoutInteraction = Readonly<{
   apply(): void;
@@ -66,23 +50,44 @@ export type MagicCutoutInteraction = Readonly<{
   writeViewState(state: Readonly<{ mode: MagicCutoutTypes.Mode; radius: number }>): void;
 }>;
 
-function statusLabel(
-  draft: MagicCutoutTypes.Draft,
-  runtimeProgress: MagicRuntimeProgress | null,
-): string {
-  if (runtimeProgress?.stage === "magic-queued") return m.editorMagicQueued();
-  if (runtimeProgress?.stage === "magic-model-loading")
-    return m.editorMagicModelLoading();
-  if (runtimeProgress?.stage === "magic-encode") return m.editorMagicEncoding();
-  if (runtimeProgress?.stage === "magic-predict") return m.editorMagicPredicting();
-  if (draft.status === "encoding") return m.editorMagicEncoding();
-  if (draft.status === "predicting") return m.editorMagicPredicting();
-  if (draft.status === "preview") return m.editorMagicPreviewReady();
-  if (draft.status === "error") return m.editorMagicError();
-  return draft.dirty ? m.editorMagicDirty() : m.editorMagicReady();
+type DisplayStroke = ReturnType<MagicCutoutInteraction["displayStrokes"]>[number];
+
+function paintStroke(
+  context: CanvasRenderingContext2D,
+  stroke: DisplayStroke,
+  scaleX: number,
+  scaleY: number,
+): void {
+  const first = stroke.points[0];
+  if (first === undefined) return;
+  context.beginPath();
+  context.moveTo(first.x * scaleX, first.y * scaleY);
+  for (let index = 1; index < stroke.points.length; index += 1) {
+    const point = stroke.points[index];
+    if (point !== undefined) context.lineTo(point.x * scaleX, point.y * scaleY);
+  }
+  context.strokeStyle = stroke.mode === "keep" ? "#22c55e" : "#ef4444";
+  context.globalAlpha = 0.78;
+  context.lineWidth = stroke.radius * 2 * scaleX;
+  context.stroke();
+  if (stroke.points.length !== 1) return;
+  context.beginPath();
+  context.arc(first.x * scaleX, first.y * scaleY, stroke.radius * scaleX, 0, Math.PI * 2);
+  context.fillStyle = context.strokeStyle;
+  context.fill();
 }
 
-export function MagicCutoutWorkspace(props: Props) {
+export function MagicCutoutWorkspace(
+  props: Readonly<{
+    draft: MagicCutoutTypes.Draft;
+    height: number;
+    runtimeProgress: MagicRuntimeProgress | null;
+    interaction: MagicCutoutInteraction;
+    currentUrl: string;
+    width: number;
+    onCutoutModeChange?(mode: "magic" | "manual"): void;
+  }>,
+) {
   const initialView = props.interaction.readViewState();
   const [mode, setMode] = useState<MagicCutoutTypes.Mode>(initialView.mode);
   const radiusRef = useRef(initialView.radius);
@@ -93,11 +98,6 @@ export function MagicCutoutWorkspace(props: Props) {
   const [panController] = useState(() => new CutoutStagePanController(1));
   const spacePanningRef = useRef(false);
   const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const discardDialogRef = useRef<HTMLDivElement>(null);
-  const continueButtonRef = useRef<HTMLButtonElement>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  const previousConfirmDiscardRef = useRef(false);
 
   function changeMode(nextMode: MagicCutoutTypes.Mode): void {
     setMode(nextMode);
@@ -180,30 +180,8 @@ export function MagicCutoutWorkspace(props: Props) {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.lineCap = "round";
     context.lineJoin = "round";
-    for (const stroke of props.interaction.displayStrokes()) {
-      const first = stroke.points[0];
-      if (first === undefined) continue;
-      context.beginPath();
-      context.moveTo(first.x * scaleX, first.y * scaleY);
-      for (const point of stroke.points.slice(1))
-        context.lineTo(point.x * scaleX, point.y * scaleY);
-      context.strokeStyle = stroke.mode === "keep" ? "#22c55e" : "#ef4444";
-      context.globalAlpha = 0.78;
-      context.lineWidth = stroke.radius * 2 * scaleX;
-      context.stroke();
-      if (stroke.points.length === 1) {
-        context.beginPath();
-        context.arc(
-          first.x * scaleX,
-          first.y * scaleY,
-          stroke.radius * scaleX,
-          0,
-          Math.PI * 2,
-        );
-        context.fillStyle = context.strokeStyle;
-        context.fill();
-      }
-    }
+    for (const stroke of props.interaction.displayStrokes())
+      paintStroke(context, stroke, scaleX, scaleY);
     context.globalAlpha = 1;
   }
 
@@ -280,15 +258,6 @@ export function MagicCutoutWorkspace(props: Props) {
       };
     },
     [panController],
-  );
-
-  useEffect(
-    function routeDiscardDialogFocusFx() {
-      if (confirmDiscard) continueButtonRef.current?.focus();
-      else if (previousConfirmDiscardRef.current) cancelButtonRef.current?.focus();
-      previousConfirmDiscardRef.current = confirmDiscard;
-    },
-    [confirmDiscard],
   );
 
   useEffect(
@@ -379,32 +348,9 @@ export function MagicCutoutWorkspace(props: Props) {
     scheduleStrokePaint();
   }
 
-  const busy = props.draft.status === "encoding" || props.draft.status === "predicting";
   let canvasCursorClassName = "cursor-none";
   if (interactionMode === "hand" || spacePanning)
     canvasCursorClassName = panning ? "cursor-grabbing" : "cursor-grab";
-
-  function discardDialogKeyDownFx(event: ReactKeyboardEvent<HTMLDivElement>): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setConfirmDiscard(false);
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = discardDialogRef.current?.querySelectorAll<HTMLButtonElement>(
-      "button:not([disabled])",
-    );
-    const first = focusable?.[0];
-    const last = focusable?.[(focusable.length ?? 0) - 1];
-    if (first === undefined || last === undefined) return;
-    if (event.shiftKey && event.target === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && event.target === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
 
   return (
     <>
@@ -486,126 +432,16 @@ export function MagicCutoutWorkspace(props: Props) {
           </div>
         </EditorStage>
       </div>
-      <div className="[grid-area:rail]">
-        <ToolPanelSlot toolId="cutout" label={m.editorMagicTitle()} autoFocus>
-          <section className="flex h-full min-h-0 flex-col gap-5">
-            <CutoutModeTabs
-              mode="magic"
-              onModeChange={(mode) => props.onCutoutModeChange?.(mode)}
-            />
-            <div
-              className="grid grid-cols-2 gap-2"
-              role="toolbar"
-              aria-label={m.editorMagicMode()}
-            >
-              <Button
-                variant={mode === "keep" ? "default" : "outline"}
-                className={`h-20 flex-col gap-1.5 ${
-                  mode === "keep"
-                    ? "bg-emerald-700 text-white hover:bg-emerald-800"
-                    : "border-emerald-700 text-emerald-800 dark:text-emerald-300"
-                }`}
-                onClick={() => changeMode("keep")}
-              >
-                <CirclePlus className="size-6" aria-hidden="true" />
-                {m.guidedBrushKeep()}
-              </Button>
-              <Button
-                variant={mode === "remove" ? "default" : "outline"}
-                className={`h-20 flex-col gap-1.5 ${
-                  mode === "remove"
-                    ? "bg-rose-700 text-white hover:bg-rose-800"
-                    : "border-rose-700 text-rose-800 dark:text-rose-300"
-                }`}
-                onClick={() => changeMode("remove")}
-              >
-                <CircleMinus className="size-6" aria-hidden="true" />
-                {m.guidedBrushRemove()}
-              </Button>
-            </div>
-
-            <Typography variant="caption" as="p" className="sr-only" aria-live="polite">
-              {statusLabel(props.draft, props.runtimeProgress)}
-            </Typography>
-
-            <label className="grid max-w-md gap-2 text-sm font-medium">
-              <span>{m.brushSize()}</span>
-              <input
-                type="range"
-                min="2"
-                max="80"
-                defaultValue={initialView.radius}
-                onChange={(event) => changeRadius(Number(event.currentTarget.value))}
-              />
-            </label>
-
-            <div className="mt-auto flex flex-col gap-2 pt-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  className="w-full"
-                  onClick={() => props.interaction.apply()}
-                  disabled={!props.draft.dirty || busy}
-                >
-                  {busy ? m.editorMagicWorking() : m.cutoutApply()}
-                </Button>
-                <Button
-                  ref={cancelButtonRef}
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    if (props.draft.dirty) setConfirmDiscard(true);
-                    else props.interaction.cancel();
-                  }}
-                >
-                  {m.cancel()}
-                </Button>
-              </div>
-            </div>
-            {confirmDiscard ? (
-              <div
-                ref={discardDialogRef}
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="magic-discard-title"
-                aria-describedby="magic-discard-body"
-                className="border-destructive/40 bg-destructive/5 rounded-lg border p-4"
-                onKeyDown={discardDialogKeyDownFx}
-              >
-                <Typography id="magic-discard-title" variant="heading-3" as="h3">
-                  {m.editorDraftGuardTitle()}
-                </Typography>
-                <Typography
-                  id="magic-discard-body"
-                  variant="body-small"
-                  as="p"
-                  className="mt-2"
-                >
-                  {m.editorDraftGuardBody()}
-                </Typography>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    ref={continueButtonRef}
-                    variant="outline"
-                    onClick={() => setConfirmDiscard(false)}
-                  >
-                    {m.editorDraftContinue()}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    style={{
-                      backgroundColor: "var(--destructive)",
-                      color: "var(--destructive-foreground)",
-                    }}
-                    onClick={() => props.interaction.cancel()}
-                  >
-                    {m.editorDraftDiscard()}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </ToolPanelSlot>
-      </div>
+      <MagicCutoutPanel
+        draft={props.draft}
+        initialRadius={initialView.radius}
+        interaction={props.interaction}
+        mode={mode}
+        onCutoutModeChange={props.onCutoutModeChange}
+        onModeChange={changeMode}
+        onRadiusChange={changeRadius}
+        runtimeProgress={props.runtimeProgress}
+      />
     </>
   );
 }

@@ -3,7 +3,7 @@ import { ImageIcon, Scissors, Sparkles } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 
-import type { EditorToolId } from "./editor-tool-workspace-contract";
+import type { EditorToolId } from "../../model";
 
 export interface EditorToolIconProps {
   className?: string;

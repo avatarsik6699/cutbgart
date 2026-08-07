@@ -5,13 +5,6 @@
   "health": {
     "thresholdOverrides": [
       {
-        "files": ["src/widgets/editor/ui/active-document.tsx"],
-        "maxCyclomatic": 31,
-        "maxCognitive": 35,
-        "maxCrap": 198,
-        "reason": "Accepted Phase-42 controller-neutral composition relocated unchanged into the editor owner during Phase 43.",
-      },
-      {
         "files": ["src/widgets/editor/ui/editor-tools/enhancements-tool-panel.tsx"],
         "maxCyclomatic": 26,
         "maxCognitive": 27,
@@ -26,6 +19,16 @@
         "files": ["src/widgets/editor/ui/editor-tools/canvas-view-controls.tsx"],
         "maxCrap": 32,
         "reason": "Accepted Phase-42 presentation relocation is recorded without treating the file move as newly introduced complexity.",
+      },
+      {
+        "files": ["src/widgets/editor/ui/manual-cutout/manual-cutout-canvas.tsx"],
+        "maxCognitive": 21,
+        "reason": "The focused Manual canvas owner intentionally keeps pointer capture, imperative brush preview, pan/zoom, and matching cleanup together; workflow and panel rendering live elsewhere.",
+      },
+      {
+        "files": ["src/widgets/editor/ui/magic-cutout/magic-cutout-workspace.tsx"],
+        "maxCognitive": 25,
+        "reason": "The focused Magic canvas owner intentionally keeps requestAnimationFrame painting, pointer capture, pan/zoom, and matching cleanup together; workflow, commands, and panel rendering live elsewhere.",
       },
     ],
   },

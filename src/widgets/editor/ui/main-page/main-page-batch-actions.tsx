@@ -3,13 +3,12 @@ import { ChooseFilesButton } from "@/features/upload-image";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
 import { memo } from "react";
-import { batchMainPageProjectionEqual } from "./main-page-editor.utils";
 
 import type { MainPageEditorTypes } from "./main-page-editor.types";
 import type { AutomaticModelMode } from "@/shared/lib";
 
 type Props = {
-  batch: MainPageEditorTypes.BatchProjection;
+  actions: MainPageEditorTypes.BatchActionsProjection;
   disabled: boolean;
   onAddFiles: (files: readonly File[]) => void;
   onCancelDownloadAll: () => void;
@@ -19,7 +18,6 @@ type Props = {
 };
 
 function MainPageBatchActionsView(props: Props) {
-  const exporting = props.batch.export.status === "preparing";
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label={m.batchActionsAria()}>
       <QualityModePopover
@@ -29,9 +27,7 @@ function MainPageBatchActionsView(props: Props) {
       />
       <ChooseFilesButton
         className="h-8 w-auto px-3 py-0 sm:flex"
-        disabled={
-          props.disabled || props.batch.capacity.current >= props.batch.capacity.limit
-        }
+        disabled={props.disabled || props.actions.atCapacity}
         label={m.addImages()}
         multiple
         onFiles={props.onAddFiles}
@@ -40,10 +36,12 @@ function MainPageBatchActionsView(props: Props) {
         type="button"
         size="sm"
         variant="outline"
-        disabled={props.batch.counts.completed === 0 && !exporting}
-        onClick={exporting ? props.onCancelDownloadAll : props.onDownloadAll}
+        disabled={props.actions.completedCount === 0 && !props.actions.exporting}
+        onClick={
+          props.actions.exporting ? props.onCancelDownloadAll : props.onDownloadAll
+        }
       >
-        {exporting ? m.cancel() : m.downloadAllZip()}
+        {props.actions.exporting ? m.cancel() : m.downloadAllZip()}
       </Button>
     </div>
   );
@@ -58,5 +56,7 @@ export const MainPageBatchActions = memo(
     previous.onCancelDownloadAll === next.onCancelDownloadAll &&
     previous.onChooseQualityMode === next.onChooseQualityMode &&
     previous.onDownloadAll === next.onDownloadAll &&
-    batchMainPageProjectionEqual(previous.batch, next.batch),
+    previous.actions.atCapacity === next.actions.atCapacity &&
+    previous.actions.completedCount === next.actions.completedCount &&
+    previous.actions.exporting === next.actions.exporting,
 );

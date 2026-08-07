@@ -94,7 +94,7 @@ render isolation.
   cache/report/protocol identifiers, and traceability evidence with v2 naming. Preserve every
   owner, selector identity, worker URL,
   user-visible behavior, and public route — _Depends on:_ `T5`
-- [ ] `T6` Decompose batch, active-document, toolbar, Manual/Magic Cutout, Background, Enhancements,
+- [x] `T6` Decompose batch, active-document, toolbar, Manual/Magic Cutout, Background, Enhancements,
   history, canvas, and navigation-guard presentation into explicit render owners. Keep high-frequency
   pointer/canvas/view state imperative or tool-local, and preserve the accepted v2 controllers,
   artifact/resource lifecycle, per-document isolation, and one workflow source of truth —
@@ -429,6 +429,13 @@ waiver.
   classifies the repository-wide moves as introductions; the phase-end T1 audit remains responsible
   for the final baseline-aware quality decision.
 - T5A was manually accepted by the architect before the T6 checkpoint began.
+- T6 keeps durable workflow and resource ownership in `EditorSession`/document actors while a
+  stable `ActiveDocumentModel` owns only UI selection, cutout mode, and pending navigation. Leaf
+  connectors subscribe at their consumers; the broad workspace projection/intent relay was
+  removed. Manual and Magic retain their related pointer, RAF, pan/zoom, canvas resource, and
+  cleanup paths in focused canvas owners rather than splitting one imperative lifecycle across
+  components.
+- T6 was manually accepted by the architect before the T7 audit began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 
