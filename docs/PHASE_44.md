@@ -447,7 +447,8 @@ waiver.
   models retain UI-only commands/preferences, and leaf React selectors pass the focused render
   regressions. No remaining measured render defect justifies a MobX or other state-manager spike,
   mirrored workflow state, or another runtime dependency.
-- T8 was manually accepted by the architect before final T1 verification began.
+- T8 was manually accepted by the architect. Final T1 verification has not begun and remains
+  deferred while the architect prepares additional requirements to scope as T9.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 
