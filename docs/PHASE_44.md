@@ -29,8 +29,9 @@ the visual and interaction reference.
 
 ## Checkpoint Workflow
 
-The stable execution order is `T2 → T3 → T4 → T5 → T6 → T7 → T8 → T1`. IDs are deliberately not
-renumbered: `T1` is the final end-state verification requested by the architect.
+The stable execution order is `T2 → T3 → T4 → T5 → T5A → T6 → T7 → T8 → T1`. IDs are deliberately
+not renumbered: `T1` is the final end-state verification requested by the architect, while `T5A`
+records the post-cutover structural convergence added during T5 acceptance.
 
 For each implementation checkpoint:
 
@@ -85,12 +86,20 @@ render isolation.
   narrow stable selectors/props while preserving current session commands, cancellation,
   correlation, committed-result, and export behavior. Apply the prospective decomposition contract
   above to every touched capability — _Depends on:_ `T4`
+- [x] `T5A` Remove migration-era structure and naming from the active implementation. Move the
+  framework-independent core to `src/editor/{domain,application,runtime,testing}`, merge React
+  presentation and the stable model/composition root under `src/widgets/editor`, rename active
+  `public-editor`, `editor-v2`, E2E-support, profiling, configuration, and architecture-document
+  paths to permanent semantic names, and leave only compatibility redirect URLs, versioned
+  cache/report/protocol identifiers, and traceability evidence with v2 naming. Preserve every
+  owner, selector identity, worker URL,
+  user-visible behavior, and public route — _Depends on:_ `T5`
 - [ ] `T6` Decompose batch, active-document, toolbar, Manual/Magic Cutout, Background, Enhancements,
   history, canvas, and navigation-guard presentation into explicit render owners. Keep high-frequency
   pointer/canvas/view state imperative or tool-local, and preserve the accepted v2 controllers,
   artifact/resource lifecycle, per-document isolation, and one workflow source of truth —
   apply the prospective decomposition contract above to every touched capability — _Depends on:_
-  `T5`
+  `T5A`
 - [ ] `T7` Audit the decomposed surface for remaining broad subscriptions, unstable projections,
   callback/slot fan-out, and unrelated subtree invalidation. Move XState/external-store selectors
   to leaf connectors, stabilize identities, and add `memo`/`useMemo`/`useCallback` only across
@@ -107,7 +116,7 @@ render isolation.
   build/container/release checks, and architect acceptance so the phase is ready for the separate
   `/phase-gate 44` workflow. Pre-refactor render counters and Chrome traces are intentionally not
   required; do not claim a numeric before/after improvement — _Depends on:_ `T2`, `T3`, `T4`, `T5`,
-  `T6`, `T7`, `T8`
+  `T5A`, `T6`, `T7`, `T8`
 
 ---
 
@@ -123,21 +132,21 @@ docs/SPEC.md
 docs/STATE.md
 docs/README.md
 docs/PHASE_44.md
-docs/ARCHITECTURE_V2.md
+docs/ARCHITECTURE.md
 docs/audits/
 docs/archive/
 messages/
 public/sw.js
-scripts/profiling/v2/verify-phase-*-reports.ts
+scripts/profiling/editor/verify-phase-*-reports.ts
 scripts/service-worker-cache.test.ts
 src/shared/lib/brush-geometry.ts
 src/routes/
 src/pages/
-src/widgets/public-editor/
+src/widgets/editor/
 src/widgets/site-footer/
 src/widgets/site-header/
 src/widgets/site-shell/
-src/v2/presentation/
+src/editor/
 src/shared/lib/
 src/shared/ui/
 src/features/upload-image/
@@ -146,7 +155,7 @@ src/features/download-result/
 src/features/model-storage/
 e2e/phase-44-frontend-refactor.spec.ts
 e2e/support/
-scripts/profiling/v2/
+scripts/profiling/editor/
 package.json
 pnpm-lock.yaml
 ~~~
@@ -198,9 +207,9 @@ None.
 
 ### Checkpoint verification
 
-Each T2–T8 plan must name exact focused checks before editing. Prefer file-scoped Vitest and the
+Each T2–T8 plan, including T5A, must name exact focused checks before editing. Prefer file-scoped Vitest and the
 single affected Phase-44 Playwright journey; run typecheck or lint when the changed boundary needs
-them. For v2/public-editor architecture files, run Fallow guard on the changed paths. Full-project,
+them. For editor core/widget architecture files, run Fallow guard on the changed paths. Full-project,
 real-model, container, security, release, and Chrome evidence is deferred to T1 unless needed to
 diagnose a newly observed checkpoint failure.
 
@@ -292,7 +301,7 @@ waiver.
   `presentation/shared` tests into `presentation/shared/tests`; make this the hard prospective
   frontend convention for later Phase-44 work.
 - [x] Group the T3 diagnostics capability under a semantic
-  `src/v2/presentation/shared/diagnostics` public module and decompose its UI into one meaningful
+  `src/widgets/editor/ui/shared/diagnostics` public module and decompose its UI into one meaningful
   component per file.
 - [x] Replace the class-based diagnostics lazy-load error boundary with an explicit function-based
   dynamic-import loader that preserves closed-by-default loading, contained error feedback, and
@@ -304,8 +313,8 @@ waiver.
   UI date construction in diagnostics and site footer, audit remaining `new Date` uses by
   ownership, and document that presentation code must not call native date APIs directly.
 - [x] Move the v2-owned `Image` and `Typography` primitives, tests, and public exports from
-  `src/v2/shared/ui` into semantic capability modules under repository-wide `src/shared/ui`, update
-  every consumer and architecture boundary, and remove the now-redundant `src/v2/shared` tree.
+  `src/editor/shared/ui` into semantic capability modules under repository-wide `src/shared/ui`, update
+  every consumer and architecture boundary, and remove the now-redundant `src/editor/shared` tree.
 - [x] Replace raw text elements in T3-touched static-page and site-chrome components
   with the shared `Typography` primitive while preserving semantic heading levels, accepted visual
   classes, accessibility, and localized content.
@@ -385,7 +394,7 @@ waiver.
   remain forbidden.
 - T4 consumer tracing removed the unreachable legacy `features/upload-image` preparation worker,
   hook, validator, and prepared-result UI. Active public input now emits raw `File` values through
-  `FileAdmission`; the cancellable `runtime-browser/editor-session/image-import-preparation.ts`
+  `FileAdmission`; the cancellable `src/editor/runtime/editor-session/image-import-preparation.ts`
   boundary remains the sole validation, resizing, and preparation owner.
 - T4 review uses React 19.2 `useEffectEvent` for the paste listener instead of a repository-owned
   `useLatest` ref relay: the listener remains registered while the Effect Event observes the latest
@@ -410,6 +419,16 @@ waiver.
   analysis, the full Vitest suite, and all three Phase-44 Chromium journeys. The repository-wide
   Fallow audit still reports accumulated Phase-44 findings outside this correction and remains a
   T1 end-state obligation; no finding on the corrected paths gates this checkpoint.
+- T5 was manually accepted by the architect and committed as `ffee773` together with its dependent
+  T4 state, because the isolated staged T4 snapshot referenced files that T5 deliberately removed.
+- T5A is a structural convergence only: the editor core now lives under `src/editor`, React
+  composition under `src/widgets/editor`, and E2E/profiling helpers under semantic `editor` paths.
+  Redirect-only `/editor-v2` routes, externally versioned cache/report/protocol identifiers, and
+  audit traceability keep their historical/version meaning. Fallow reports no boundary,
+  unresolved-import, or circular-dependency defects, but its new-only comparison against `main`
+  classifies the repository-wide moves as introductions; the phase-end T1 audit remains responsible
+  for the final baseline-aware quality decision.
+- T5A was manually accepted by the architect before the T6 checkpoint began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

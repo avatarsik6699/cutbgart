@@ -39,7 +39,7 @@ automated checks are green.
 
 - XState application actors are the only source of truth for durable editor workflow: document
   status, progress, errors, drafts, committed history, workspace membership, and selection.
-- `runtime-browser` and `EditorSession` own browser resources and integrations: blobs, pixels,
+- `src/editor/runtime` and `EditorSession` own browser resources and integrations: blobs, pixels,
   canvases, object URLs, workers, transferable buffers, cancellation, correlation, and cleanup.
 - A presentation/view model may own UI-only state and semantic commands. It must not copy actor
   workflow state or browser resources into another store.
@@ -153,9 +153,9 @@ The project keeps useful FSD vocabulary and dependency direction, not FSD ceremo
 - Cross-slice imports remain forbidden between `entities` and between `features`.
 - Direct same-layer composition is allowed between `widgets` and between `pages` when it removes
   adapter props, portals, context bridges, or artificial relocation.
-- `src/v2/{domain,application,runtime-browser,presentation,testing}` remains role-oriented.
+- `src/editor/{domain,application,runtime,testing}` remains role-oriented.
   Domain/application do not import React, UI, browser globals, workers, or providers; runtime owns
-  browser adapters; presentation binds owners to React.
+  browser adapters; `src/widgets/editor` binds those owners to React.
 - Cross-slice consumers use a slice's intentional public API. Capability-internal imports are
   relative and may address their real file directly.
 

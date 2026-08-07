@@ -1,7 +1,7 @@
 # TECHNICAL SPECIFICATION: BG Remove App
 
 > Active product and system contract. Read this document, [`STATE.md`](./STATE.md),
-> [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md), and the active phase before implementation.
+> [`ARCHITECTURE.md`](./ARCHITECTURE.md), and the active phase before implementation.
 > The complete pre-compaction v1.27 specification is preserved at
 > [`archive/contracts/SPEC_V1_27_FULL.md`](./archive/contracts/SPEC_V1_27_FULL.md).
 > Run `/spec-sync` whenever this file changes.
@@ -11,7 +11,7 @@
 | Field | Value |
 |-------|-------|
 | Version | `v1.44` |
-| Date | `2026-08-05` |
+| Date | `2026-08-07` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
 | Internal project | `bg_remove_app` / BG Remove App |
@@ -23,7 +23,7 @@
 ## 1. Product contract
 
 BG Remove App removes image backgrounds and supports finishing/export workflows. The deployed
-editor is an anonymous browser-local product implemented solely by the accepted v2 domain,
+editor is an anonymous browser-local product implemented solely by the accepted editor domain,
 application, browser-runtime, and presentation architecture.
 
 Three invariants govern every decision:
@@ -36,7 +36,7 @@ Three invariants govern every decision:
 3. **Responsiveness, indexability, and accessibility are functionality.** A visually correct result
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
-The accepted v2 implementation now covers the complete browser-local workflow: automatic removal,
+The accepted editor implementation now covers the complete browser-local workflow: automatic removal,
 bounded committed history, Manual and Magic Cutout, Background, fine-detail/colour-halo
 Enhancements, multi-document orchestration, preview/export, deterministic ZIP export, and safe
 cancel/retry/reset. Phases 39–42 reconnected that architecture to the established v1 presentation
@@ -67,7 +67,7 @@ in Git and archived evidence.
 
 ### 2.2 Implemented v2 foundation through Phase 37
 
-Phases 33–37 built an isolated implementation under `src/v2/` and a separate noindex route. It
+Phases 33–37 built an isolated implementation under `src/editor/` and a separate noindex route. It
 includes:
 
 - framework-free IDs, snapshots, commands, events, invariants, and processing ports;
@@ -510,10 +510,11 @@ protocols, artifact ownership, privacy, models, and exports while rebuilding the
 composition from existing components with smaller ownership boundaries.
 
 Its stable checkpoint order is `T2` cleanup, `T3` shell/composition, `T4` upload/mode selection,
-`T5` single-image processing/result/export, `T6` active document and editor tools, `T7` narrow
-subscriptions and selective memoization, `T8` state-manager decision, then `T1` final evidence and
-gate. `/impl-assist 44 <ID>` targets one checkpoint and must stop after focused verification; the
-architect manually accepts it before a checkpoint commit and before the next task starts.
+`T5` single-image processing/result/export, `T5A` permanent editor structure, `T6` active document
+and editor tools, `T7` narrow subscriptions and selective memoization, `T8` state-manager decision,
+then `T1` final evidence and gate. `/impl-assist 44 <ID>` targets one checkpoint and must stop after
+focused verification; the architect manually accepts it before a checkpoint commit and before the
+next task starts.
 
 The phase covers:
 
@@ -521,6 +522,12 @@ The phase covers:
   adapters whose retained consumers and operational references have been traced first; Git tag
   `v0.43.0` remains the recoverable source snapshot, so obsolete production code is deleted rather
   than moved under a compilable `src/archive` tree;
+- after the accepted v2 cutover, remove migration-era names from the active architecture: keep the
+  framework-independent editor core under `src/editor/{domain,application,runtime,testing}`, merge
+  React presentation and the sole composition root under `src/widgets/editor`, and rename active
+  E2E/profiling/configuration paths accordingly. Historical redirect URLs, versioned cache/report/
+  protocol identifiers, and traceability evidence retain their original names because changing
+  them would break compatibility or falsify history;
 - decompose the page shell and route-neutral public composition, then upload/mode selection,
   single-image processing/result/export, batch, active-document, and editor-tool surfaces into
   focused connectors and controller-neutral views with explicit render owners;
@@ -529,7 +536,7 @@ The phase covers:
   stabilize callbacks or derived objects only where they cross a meaningful memoization boundary;
 - provide the public editor through one stable session/view-model context whose value never contains
   current snapshots or projections. The view model may own UI-only preferences and semantic
-  commands, but must not mirror XState workflow state or runtime-browser resources;
+  commands, but must not mirror XState workflow state or `src/editor/runtime` resources;
 - forbid model/session/snapshot and catch-all intent relays through intermediate presentation
   components. A direct connector-to-view boundary may use narrow semantic data and callbacks;
 - require every wrapper, component, service, barrel, and public export to own state/lifecycle,
@@ -567,7 +574,7 @@ templates, text, shadows, perspective—is a separate track after the focused wo
 
 ## 3. Domain model and invariants
 
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) is the detailed architecture decision. The normative
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) is the detailed architecture decision. The normative
 v2 vocabulary is:
 
 ```ts
@@ -894,17 +901,17 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 
 ### 5.2 Frontend boundaries
 
-The sole public editor implementation is organized under:
+The sole editor implementation is organized under:
 
 ```text
-src/v2/
+src/editor/
   domain/             pure types, transitions, invariants
   application/        actors, commands, ports, use cases
-  runtime-browser/    artifacts, workers, local processing adapters
-  presentation/       route composition, selectors, UI adapters
-  shared/ui/          v2 reusable presentation primitives
-  shared/lib/         consumed cross-cutting wrappers only
+  runtime/            artifacts, workers, local processing adapters
   testing/            fakes, fixtures, model-based helpers
+src/widgets/editor/
+  model/              stable session/view-model binding
+  ui/                 connectors and controller-neutral React presentation
 ```
 
 All frontend work follows [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md). In particular:
@@ -1009,7 +1016,7 @@ Current environment contract:
 | `PORT`, `NODE_ENV` | Standard server runtime configuration |
 
 Phases 33–37 add no environment variable. Future backend technology is deliberately undecided; current
-candidates and decision criteria are recorded in `ARCHITECTURE_V2.md`, not an implementation mandate.
+candidates and decision criteria are recorded in `ARCHITECTURE.md`, not an implementation mandate.
 
 ## 7. Non-functional acceptance
 

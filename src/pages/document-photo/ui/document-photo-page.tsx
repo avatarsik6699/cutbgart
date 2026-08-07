@@ -1,12 +1,12 @@
 import { m } from "@/paraglide/messages";
 import { ScenarioPageLayout } from "@/shared/ui";
-import { PublicEditorWorkspace } from "@/widgets/public-editor";
+import { EditorWorkspace } from "@/widgets/editor";
 import { SiteShell } from "@/widgets/site-shell";
 
 /**
  * `/udalit-fon-s-foto-na-dokumenty` (ru) / `/en/remove-background-from-id-photo`
  * (en) — ID/document photo scenario. The surrounding content stays
- * locale-driven while the editor uses the sole public v2 composition.
+ * locale-driven while the editor uses the sole public editor composition.
  */
 export function DocumentPhotoPage() {
   return (
@@ -26,7 +26,7 @@ export function DocumentPhotoPage() {
         title={m.documentPhotoTitle()}
         trust={m.trustBadge()}
       >
-        <PublicEditorWorkspace />
+        <EditorWorkspace />
       </ScenarioPageLayout>
     </SiteShell>
   );

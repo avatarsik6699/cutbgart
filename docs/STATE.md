@@ -29,12 +29,12 @@
 | 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
 | 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
-| 44 | 🔄 in-progress | `v0.44.0`; T5 ownership rework complete, awaiting architect acceptance | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
+| 44 | 🔄 in-progress | `v0.44.0`; T5A accepted, T6 next | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
 
 **Latest closed phase:** `43`
 
-**Implementation in progress:** Phase 44 checkpoint `T5` has been reworked under the architect-
-approved frontend ownership/render contract and awaits checkpoint acceptance before T6.
+**Implementation in progress:** Phase 44 checkpoint `T5A` is architect-accepted. The permanent
+editor paths are established and `T6` is the next implementation checkpoint.
 
 **Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), executed through targeted
 `/impl-assist 44 <ID>` checkpoints. Production deployment remains a separate authorized-operator
@@ -42,10 +42,10 @@ workflow.
 
 ## Current contract
 
-This section describes the accepted contract through Phase 43. The v2 runtime is the sole public
+This section describes the accepted contract through Phase 43. The editor runtime is the sole public
 editor and includes automatic removal, Manual Cutout, guided Magic Cutout, Background,
 Enhancements, document history, and a batch/multi-document workspace. The superseded legacy
-workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and the archived
+workflow is deleted. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and the archived
 [`PHASE_43.md`](./archive/phases/PHASE_43.md).
 
 ### Runtime status
@@ -87,7 +87,7 @@ workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and the ar
   readiness evidence without a waived gate, bind every public/scenario editor route to v2, remove
   the legacy workflow by proven reachability, and rehearse rollback to the previous immutable
   release before deployment.
-- Phase 43 completed that unconditional cutover. `src/widgets/public-editor` owns the sole
+- Phase 43 completed that unconditional cutover. `src/widgets/editor` owns the sole
   route-neutral composition; roots and eight scenario routes use it, former v2 routes redirect by
   locale, and the legacy development harness and workflow graph are removed.
 - The Phase-43 report concludes `ready` with zero blocker, missing evidence, serious accessibility
@@ -99,7 +99,7 @@ workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and the ar
   dependencies and entity/feature slice isolation while allowing direct same-layer widget/page
   composition. Product behavior, routes, domain/runtime ownership, privacy, models, exports, and
   deployment remain unchanged.
-- The Phase-44 frontend contract uses a stable public-editor session/view-model boundary, leaf
+- The Phase-44 frontend contract uses a stable editor session/view-model boundary, leaf
   XState/external-store selectors, controller-neutral views, semantic commands, and abstraction
   justification. FSD remains a layer/import vocabulary rather than a folder or wrapper mandate;
   no additional workflow store is authorized.
@@ -255,11 +255,12 @@ There is no image-processing API.
 Phases 33–39 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
-### Current Editor v2 contract
+### Current editor contract
 
-The implemented v2 editor is public and local-processing-only:
+The implemented editor is public and local-processing-only:
 
-- `src/v2/{domain,application,runtime-browser,presentation,shared/ui,shared/lib,testing}`;
+- `src/editor/{domain,application,runtime,testing}` plus React composition in
+  `src/widgets/editor/{model,ui}`;
 - one workspace actor over ordered membership/selection and one document actor/runtime per image;
 - IDs/revisions in domain state, binary values in `ArtifactRepository`;
 - `{ documentId, runId, expectedRevision }` correlation and explicit terminal outcomes;
@@ -401,7 +402,7 @@ separately gated work.
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
 | Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
-| Phase 44 | In progress; T2–T4 accepted, T5 ownership rework is complete and awaits architect acceptance before T6 |
+| Phase 44 | In progress; T2–T5A accepted, T6 is next |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log

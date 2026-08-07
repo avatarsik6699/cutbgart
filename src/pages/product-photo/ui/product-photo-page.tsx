@@ -1,12 +1,12 @@
 import { m } from "@/paraglide/messages";
 import { ScenarioPageLayout } from "@/shared/ui";
-import { PublicEditorWorkspace } from "@/widgets/public-editor";
+import { EditorWorkspace } from "@/widgets/editor";
 import { SiteShell } from "@/widgets/site-shell";
 
 /**
  * `/udalit-fon-s-foto-tovara` (ru) / `/en/remove-background-from-product-photo`
  * (en) — product/marketplace listing photo scenario. The surrounding content
- * stays locale-driven while the editor uses the sole public v2 composition.
+ * stays locale-driven while the editor uses the sole public editor composition.
  */
 export function ProductPhotoPage() {
   return (
@@ -26,7 +26,7 @@ export function ProductPhotoPage() {
         title={m.productPhotoTitle()}
         trust={m.trustBadge()}
       >
-        <PublicEditorWorkspace />
+        <EditorWorkspace />
       </ScenarioPageLayout>
     </SiteShell>
   );

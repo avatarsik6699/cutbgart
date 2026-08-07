@@ -80,7 +80,7 @@ export default tseslint.config(
       "src/shared/ui/media/**/*.{ts,tsx}",
       "src/shared/ui/site/site-link-anchor.tsx",
       "src/shared/ui/typography/**/*.{ts,tsx}",
-      "src/v2/presentation/shared/diagnostics/components/diagnostics-trigger-button.tsx",
+      "src/widgets/editor/ui/diagnostics/components/diagnostics-trigger-button.tsx",
     ],
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],

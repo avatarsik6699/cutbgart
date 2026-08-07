@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { exportComponent } from "./support/v2/export";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
-import { previewComponent } from "./support/v2/preview";
-import { uploadComponent } from "./support/v2/upload";
+import { exportComponent } from "./support/editor/export";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
+import { previewComponent } from "./support/editor/preview";
+import { uploadComponent } from "./support/editor/upload";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });

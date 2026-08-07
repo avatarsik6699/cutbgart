@@ -8,7 +8,7 @@ describe("Typography", () => {
   it("maps visual variants to deliberate semantic defaults", () => {
     render(
       <>
-        <Typography variant="display">Editor v2</Typography>
+        <Typography variant="display">Editor</Typography>
         <Typography variant="heading-2">Result</Typography>
         <Typography variant="page-title">About</Typography>
         <Typography variant="section-title">How it works</Typography>
@@ -19,7 +19,7 @@ describe("Typography", () => {
       </>,
     );
 
-    expect(screen.getByRole("heading", { level: 1, name: "Editor v2" })).not.toBeNull();
+    expect(screen.getByRole("heading", { level: 1, name: "Editor" })).not.toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: "Result" })).not.toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "About" })).not.toBeNull();
     expect(

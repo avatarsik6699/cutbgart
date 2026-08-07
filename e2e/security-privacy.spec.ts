@@ -1,13 +1,13 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 const privateName = "private-source-name.jpg";
 
 test.describe.configure({ retries: 0 });
 
-test.describe("public v2 security and privacy", () => {
+test.describe("public editor security and privacy", () => {
   test("serves the measured browser security-header policy", async ({ page }) => {
     const response = await page.goto("/en/");
     expect(response).not.toBeNull();
@@ -27,7 +27,7 @@ test.describe("public v2 security and privacy", () => {
   });
 
   test("analytics and PNG/ZIP exports never contain source metadata or pixels", async ({
-    editorV2,
+    editor,
     page,
   }) => {
     const analyticsBodies: string[] = [];
@@ -55,10 +55,10 @@ test.describe("public v2 security and privacy", () => {
       mimeType: "image/jpeg",
       buffer: sample,
     });
-    await expect.poll(editorV2.scenario.runCount).toBe(1);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
 
-    const singleDownload = await editorV2.exportPng.download();
+    const singleDownload = await editor.exportPng.download();
     const singlePath = await singleDownload.path();
     if (singlePath === null) throw new Error("Single PNG download path unavailable");
     const singleBytes = await readFile(singlePath);
@@ -72,15 +72,15 @@ test.describe("public v2 security and privacy", () => {
     expect(analyticsPayload).not.toContain(sample.subarray(0, 16).toString("base64"));
     expect(analyticsPayload).not.toMatch(/sha256|exif|mask|pixel/i);
 
-    await editorV2.preview.resetButton.click();
+    await editor.preview.resetButton.click();
     await page.getByLabel("Upload an image").setInputFiles([
       { name: privateName, mimeType: "image/jpeg", buffer: sample },
       { name: "second-private.jpg", mimeType: "image/jpeg", buffer: sample },
     ]);
-    await expect.poll(editorV2.scenario.runCount).toBe(2);
-    await editorV2.scenario.completeRun();
-    await expect.poll(editorV2.scenario.runCount).toBe(3);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(2);
+    await editor.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(3);
+    await editor.scenario.completeRun();
     const pending = page.waitForEvent("download");
     await page.getByRole("button", { name: /Download all/ }).click();
     const zipPath = await (await pending).path();
@@ -93,7 +93,7 @@ test.describe("public v2 security and privacy", () => {
   });
 
   test("clearing downloaded models preserves active editor work", async ({
-    editorV2,
+    editor,
     page,
   }) => {
     await page.goto("/en/");
@@ -106,9 +106,9 @@ test.describe("public v2 security and privacy", () => {
       })
       .toBe(true);
     await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-    await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-    await expect.poll(editorV2.scenario.runCount).toBe(1);
-    await editorV2.scenario.completeRun();
+    await editor.upload.choose(phase33ImageCorpus.smoke.path);
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
     await page.evaluate(async () => {
       const cache = await caches.open("bg-remove-model-cache-v2-v0.22.0");
       await cache.put(
@@ -130,11 +130,11 @@ test.describe("public v2 security and privacy", () => {
     await expect(clearModels).toBeEnabled();
     await clearModels.click();
     await expect(page.getByText(/active editor work was kept/i)).toBeVisible();
-    await expect(editorV2.exportPng.button).toBeEnabled();
+    await expect(editor.exportPng.button).toBeEnabled();
   });
 
   test("rejects malformed and unsupported images before inference", async ({
-    editorV2,
+    editor,
     page,
   }) => {
     await page.goto("/en/");
@@ -146,7 +146,7 @@ test.describe("public v2 security and privacy", () => {
       buffer: Buffer.from("not an image"),
     });
     await expect(page.getByRole("alert")).toContainText(/not supported|format/i);
-    expect(await editorV2.scenario.runCount()).toBe(0);
+    expect(await editor.scenario.runCount()).toBe(0);
     await page.getByRole("button", { name: /try again/i }).click();
     await upload.setInputFiles({
       name: "malformed.jpg",
@@ -154,6 +154,6 @@ test.describe("public v2 security and privacy", () => {
       buffer: Buffer.from("not a jpeg"),
     });
     await expect(page.getByRole("alert")).toContainText(/could not be read/i);
-    expect(await editorV2.scenario.runCount()).toBe(0);
+    expect(await editor.scenario.runCount()).toBe(0);
   });
 });

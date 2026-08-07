@@ -7,11 +7,7 @@ interface ProgressBarProps {
   label?: string;
 }
 
-function ProgressBar({
-  value,
-  className,
-  label = m.editorV2Progress(),
-}: ProgressBarProps) {
+function ProgressBar({ value, className, label = m.editorProgress() }: ProgressBarProps) {
   const rounded = Math.round(value);
   return (
     <div

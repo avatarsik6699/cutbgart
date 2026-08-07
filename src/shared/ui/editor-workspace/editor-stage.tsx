@@ -14,7 +14,7 @@ export type EditorStageFullscreenControls = Readonly<{
   toggleFullscreen: () => void;
 }>;
 
-/** Stable visual footprint shared by legacy and v2 main-page presentation. */
+/** Stable visual footprint for the main editor presentation. */
 export function EditorStage(props: EditorStageProps) {
   const stageDomId = useId();
   const [nativeFullscreen, setNativeFullscreen] = useState(false);

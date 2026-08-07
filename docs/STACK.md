@@ -26,10 +26,10 @@
 
 ---
 
-## Editor v2 foundation stack
+## Editor foundation stack
 
 Phase 33 implemented and gated the first isolated vertical slice governed by
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md). The table above remains the deployed public-product
+[`ARCHITECTURE.md`](./ARCHITECTURE.md). The table above remains the deployed public-product
 stack while the noindex v2 route grows through later accepted slices.
 
 | Area | Direction | Phase-33 boundary |
@@ -187,7 +187,7 @@ Windows through `\\wsl.localhost\<distribution>\...` or copy the exact fixture i
 directory and record its hash. Do not pass `/home/...` paths to a Windows browser MCP.
 
 - Build Web Apps supplies current React performance-review and browser-debugging workflows; repo
-  SDD, `ARCHITECTURE_V2.md`, and `FRONTEND_CONVENTIONS.md` remain authoritative.
+  SDD, `ARCHITECTURE.md`, and `FRONTEND_CONVENTIONS.md` remain authoritative.
 - Chrome DevTools MCP owns runtime traces, long-task/main-thread attribution, network evidence, and
   heap diagnostics. It must use the same native-Windows boundary as Playwright MCP. Keep the
   isolated profile and privacy flags; Playwright remains the behavioral E2E owner.

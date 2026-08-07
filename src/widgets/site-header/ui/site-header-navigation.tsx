@@ -1,7 +1,7 @@
 import { ModelStorageTrigger } from "@/features/model-storage";
 import { m } from "@/paraglide/messages";
 import { FeedbackLink, SiteLink } from "@/shared/ui";
-import { DiagnosticsSheet } from "@/v2/presentation/shared";
+import { DiagnosticsSheet } from "@/widgets/editor";
 
 import { LanguageSwitcher } from "./language-switcher";
 

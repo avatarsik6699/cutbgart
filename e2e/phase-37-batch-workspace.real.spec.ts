@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -45,7 +45,7 @@ test("three real documents share one FIFO model runtime and cached selection", a
       phase33ImageCorpus.smoke.path,
       phase33ImageCorpus.smoke.path,
     ]);
-  const strip = page.getByTestId("v2-workspace-strip");
+  const strip = page.getByTestId("batch-filmstrip");
   await expect(strip.locator("li")).toHaveCount(3);
   await expect(strip.getByText("Result ready")).toHaveCount(3, {
     timeout: 18 * 60_000,

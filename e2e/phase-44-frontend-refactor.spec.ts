@@ -1,5 +1,5 @@
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 
@@ -116,38 +116,38 @@ test("public and localized scenario routes share the shell without losing the ed
 });
 
 test("single-image processing keeps progress, comparison, and PNG export intact", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en");
   await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
   await page.getByLabel("Upload an image").setInputFiles(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
 
-  await editorV2.scenario.stage("model-loading", 0.4);
+  await editor.scenario.stage("model-loading", 0.4);
   await expect(page.getByTestId("tool-workspace")).toHaveAttribute(
     "data-main-page-phase",
     "loading-model",
   );
-  await expect(editorV2.progress.currentStage).toContainText("40");
+  await expect(editor.progress.currentStage).toContainText("40");
 
-  await editorV2.scenario.stage("automatic-remove", 0.5);
+  await editor.scenario.stage("automatic-remove", 0.5);
   await expect(page.getByTestId("tool-workspace")).toHaveAttribute(
     "data-main-page-phase",
     "processing",
   );
-  await editorV2.scenario.completeRun();
+  await editor.scenario.completeRun();
   await expect(page.getByRole("slider")).toBeVisible();
 
   await page.getByRole("button", { name: "Output options" }).click();
   await expect(page.getByRole("menuitemradio", { name: "Original" })).toBeChecked();
 
-  const download = await editorV2.exportPng.download();
+  const download = await editor.exportPng.download();
   expect(download.suggestedFilename()).toBe("cutbg-result.png");
 });
 
 test("batch connectors keep admission, selection, and ZIP commands at their consumers", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en");
@@ -156,10 +156,10 @@ test("batch connectors keep admission, selection, and ZIP commands at their cons
     .getByLabel("Upload an image")
     .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
 
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
-  await expect.poll(editorV2.scenario.runCount).toBe(2);
-  await editorV2.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(2);
+  await editor.scenario.completeRun();
 
   const batch = page.getByTestId("batch-overview");
   await expect(batch.locator("article")).toHaveCount(2);

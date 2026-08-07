@@ -1,18 +1,18 @@
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 test("Magic Apply predicts the best candidate and creates exactly one document edit", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
   await expect(page.getByRole("tab", { name: "Magic" })).toBeVisible();
   const canvas = page.getByLabel("Paint Keep and Remove guidance on the image");
@@ -33,9 +33,9 @@ test("Magic Apply predicts the best candidate and creates exactly one document e
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(page.getByText("Document revision 2")).toBeVisible();
   await expect.poll(() => currentImage.getAttribute("src")).not.toBe(baselineResultUrl);
-  await expect.poll(editorV2.scenario.magicCommitCount).toBe(1);
-  await expect.poll(editorV2.scenario.magicPredictionCount).toBe(1);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.magicCommitCount).toBe(1);
+  await expect.poll(editor.scenario.magicPredictionCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
 
   const documentUndo = page.getByRole("button", { name: "Undo document change" });
   const documentRedo = page.getByRole("button", { name: "Redo document change" });
@@ -44,12 +44,12 @@ test("Magic Apply predicts the best candidate and creates exactly one document e
   await expect(documentRedo).toBeEnabled();
   await page.keyboard.press("Control+y");
   await expect(documentUndo).toBeEnabled();
-  expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
+  expect((await editor.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",
   );
 
-  await editorV2.preview.resetButton.click();
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await editor.preview.resetButton.click();
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
@@ -57,14 +57,14 @@ test("Magic Apply predicts the best candidate and creates exactly one document e
 });
 
 test("Magic keeps a non-square image fully fitted and supports Space panning", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.representative.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.representative.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
   const canvas = page.getByLabel("Paint Keep and Remove guidance on the image");
   const viewport = page.getByTestId("cutout-stage-viewport");
@@ -123,8 +123,8 @@ test("Magic keeps a non-square image fully fitted and supports Space panning", a
   expect(Math.abs(brushCursorBox.width - brushCursorBox.height)).toBeLessThanOrEqual(1);
   await expect(brushCursor).toHaveCSS("border-top-style", "solid");
 
-  await editorV2.preview.resetButton.click();
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await editor.preview.resetButton.click();
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
@@ -132,14 +132,14 @@ test("Magic keeps a non-square image fully fitted and supports Space panning", a
 });
 
 test("dirty Magic Cancel asks before discarding and Russian controls are localized", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
   await expect(page.getByRole("tab", { name: "Магия" })).toBeVisible();
   await page
     .getByLabel("Нарисуйте подсказки «Сохранить» и «Удалить» на изображении")
@@ -151,5 +151,5 @@ test("dirty Magic Cancel asks before discarding and Russian controls are localiz
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
   await page.getByRole("button", { name: "Отбросить черновик" }).click();
   await expect(page.getByRole("tab", { name: "Магия" })).toBeVisible();
-  await expect.poll(editorV2.scenario.magicPredictionCount).toBe(0);
+  await expect.poll(editor.scenario.magicPredictionCount).toBe(0);
 });

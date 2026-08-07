@@ -9,7 +9,7 @@ it as supporting or historical material—not as an implementation contract.
 |----------|---------|
 | [`SPEC.md`](./SPEC.md) | Compact approved product/system intent and phased roadmap |
 | [`STATE.md`](./STATE.md) | Compact current runtime contract, phase status, blockers, and current decisions |
-| [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) | Target v2 domain, layers, runtime, stack, and migration |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Current editor domain, layers, runtime, and presentation architecture |
 | [`PHASE_44.md`](./PHASE_44.md) | Active checkpoint-driven frontend decomposition and render-ownership contract |
 | [`STACK.md`](./STACK.md) | Current/planned technologies, commands, gates, deployment |
 | [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md) | Hard React/TypeScript/frontend requirements |
@@ -22,7 +22,8 @@ it as supporting or historical material—not as an implementation contract.
 ## Current phase boundary
 
 Phase 44 is the only active implementation scope. It refactors the accepted Phase-43 public
-frontend through architect-approved checkpoints in order `T2` through `T8`, followed by final
+frontend through architect-approved checkpoints in order `T2` through `T5`, `T5A`, then `T6`
+through `T8`, followed by final
 evidence and gate task `T1`. Production deployment remains a separate post-merge operator action.
 
 ## Archive

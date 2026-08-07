@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });

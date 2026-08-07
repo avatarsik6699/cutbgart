@@ -17,13 +17,13 @@ Recoverable source baseline: immutable tag `v0.43.0` at `2b2c46c`
 | File | Evidence and disposition |
 |------|--------------------------|
 | `src/shared/lib/brush-geometry.ts` | No import, re-export, test, build, or tool consumer; its sole export had zero Fallow references. |
-| `src/v2/presentation/background/background-preview.tsx` | No importer or re-export; the accepted background presentation is owned by the active tool workspace. |
-| `src/widgets/public-editor/ui/editor-v2-document-panel.tsx` | No production importer or barrel export; superseded by active-document/main-page/tool-workspace composition. |
-| `src/widgets/public-editor/ui/editor-v2-status-rail.tsx` | Imported only by the dead document panel, so it became unreachable with that panel. |
-| `src/widgets/public-editor/ui/editor-v2-document-panel.test.tsx` | Tested only the removed dead panel and had no independent contract owner. |
-| `src/features/upload-image/{model,worker}` and legacy prepared-upload UI | T4 traced every symbol to the feature barrel and its self-tests only. The public v2 editor admits raw `File` values through `FileAdmission`; `runtime-browser/editor-session/image-import-preparation.ts` is the sole active validation, resize, cancellation, and preparation owner. The duplicate legacy worker/hook/validation path and its tests were removed together. |
+| `src/widgets/editor/ui/background/background-preview.tsx` | No importer or re-export; the accepted background presentation is owned by the active tool workspace. |
+| `src/widgets/public-editor/ui/editor-v2-document-panel.tsx` (pre-T5A path) | No production importer or barrel export; superseded by active-document/main-page/tool-workspace composition. |
+| `src/widgets/public-editor/ui/editor-v2-status-rail.tsx` (pre-T5A path) | Imported only by the dead document panel, so it became unreachable with that panel. |
+| `src/widgets/public-editor/ui/editor-v2-document-panel.test.tsx` (pre-T5A path) | Tested only the removed dead panel and had no independent contract owner. |
+| `src/features/upload-image/{model,worker}` and legacy prepared-upload UI | T4 traced every symbol to the feature barrel and its self-tests only. The editor admits raw `File` values through `FileAdmission`; the then-current `src/v2/runtime-browser/editor-session/image-import-preparation.ts` path is retained here as traceability evidence. The duplicate legacy worker/hook/validation path and its tests were removed together. |
 
-The matching stale rows were removed from `docs/ARCHITECTURE_V2.md`. No runtime API, actor,
+The matching stale rows were removed from `docs/ARCHITECTURE.md`. No runtime API, actor,
 artifact ownership, route, browser-resource lifetime, or user-facing behavior changed.
 
 ## Retained after consumer trace
@@ -33,9 +33,9 @@ artifact ownership, route, browser-resource lifetime, or user-facing behavior ch
 | `public/sw.js` | Registered dynamically by `src/app/service-worker-registration.tsx`; model-cache and degraded/security E2E flows depend on it. |
 | `scripts/release/smoke.mjs` | Copied into both production and release-test images and invoked by deploy/common release scripts. |
 | `scripts/operations/*.mjs` | Invoked by operations tests, runbooks, `STACK.md`, and reliability procedures. |
-| `scripts/profiling/v2/run-phase-*.mjs` and verifiers | Explicit `package.json` entry points; archived JSON bundles remain their reproducible verification inputs. |
+| `scripts/profiling/editor/run-phase-*.mjs` and verifiers | Explicit `package.json` entry points; archived JSON bundles remain their reproducible verification inputs. |
 | `e2e/phase-33-*` through `e2e/phase-43-*` | Still reachable through package scripts and the accepted deterministic/real-model regression suites. |
-| `src/v2/testing/**` | Test/runtime harness entry points can be invisible to a production-only graph; imports from Vitest, E2E support, and profiling remain valid consumers. |
+| `src/editor/testing/**` | Test/runtime harness entry points can be invisible to a production-only graph; imports from Vitest, E2E support, and profiling remain valid consumers. |
 | Remaining Fallow unused-file/export/type findings | Advisory backlog only; no deletion without an exact production/test/internal-tool/build/operations trace. |
 
 ## Archived documentation
