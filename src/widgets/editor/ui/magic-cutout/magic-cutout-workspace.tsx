@@ -12,6 +12,7 @@ import type { MagicCutoutTypes } from "@/editor/domain";
 import type { MagicRuntimeProgress } from "@/editor/runtime";
 import { CanvasViewControls, type CanvasInteractionMode } from "../editor-tools";
 import {
+  CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CutoutStagePanController,
   cutoutStageContentStyle,
@@ -261,25 +262,15 @@ export function MagicCutoutWorkspace(
   );
 
   useEffect(
-    function guardDirtyMagicDraftFx() {
+    function guardDirtyMagicDraftUnloadFx() {
       function beforeUnloadFx(event: BeforeUnloadEvent): void {
         if (!props.draft.dirty) return;
         event.preventDefault();
         event.returnValue = "";
       }
-      function keyDownFx(event: KeyboardEvent): void {
-        if (!(event.ctrlKey || event.metaKey)) return;
-        const key = event.key.toLowerCase();
-        if (key !== "z" && key !== "y") return;
-        event.preventDefault();
-        if (key === "y" || event.shiftKey) props.interaction.redo();
-        else props.interaction.undo();
-      }
       globalThis.addEventListener("beforeunload", beforeUnloadFx);
-      globalThis.addEventListener("keydown", keyDownFx);
       return function removeMagicDraftGuardsFx() {
         globalThis.removeEventListener("beforeunload", beforeUnloadFx);
-        globalThis.removeEventListener("keydown", keyDownFx);
       };
     },
     [props.draft.dirty, props.interaction],
@@ -389,8 +380,9 @@ export function MagicCutoutWorkspace(
           >
             <div
               ref={connectContent}
-              className="relative shrink-0"
+              className={CUTOUT_STAGE_CONTENT_CLASS_NAME}
               data-testid="cutout-stage-content"
+              data-tool-image-viewport="true"
               style={cutoutStageContentStyle(props.width, props.height)}
             >
               <Image

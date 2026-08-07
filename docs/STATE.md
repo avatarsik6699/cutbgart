@@ -29,12 +29,13 @@
 | 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
 | 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
-| 44 | 🔄 in-progress | `v0.44.0`; T8 accepted, awaiting T9 scope | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
+| 44 | 🔄 in-progress | `v0.44.0`; T8 accepted, T9 formalized next | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and bounded correctness/UX closure |
 
 **Latest closed phase:** `43`
 
-**Implementation in progress:** Phase 44 checkpoints through `T8` are architect-accepted. `T1` has
-not begun; the architect will provide additional requirements to formalize as `T9` first.
+**Implementation in progress:** Phase 44 checkpoints through `T8` are architect-accepted. SPEC
+v1.45 groups the architect's reported work into `T9 → T10 → T10A → T11 → T12 → T13`; `T1` has not
+begun and remains the final verification task.
 
 **Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), executed through targeted
 `/impl-assist 44 <ID>` checkpoints. Production deployment remains a separate authorized-operator
@@ -103,6 +104,11 @@ workflow is deleted. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and the archived
   XState/external-store selectors, controller-neutral views, semantic commands, and abstraction
   justification. FSD remains a layer/import vocabulary rather than a folder or wrapper mandate;
   no additional workflow store is authorized.
+- SPEC v1.45 extends Phase 44 after accepted T8 with six grouped checkpoints: restore authoritative
+  document/history/background/viewport behavior; diagnose then recover Magic quality/performance;
+  improve admission, mode, delayed-status, and batch UX; add current-document selection among
+  existing local models; and add non-persisted theme, scrollbar, and navigation-progress polish.
+  Routes, privacy, backend scope, model families/assets, export formats, and deployment stay fixed.
 
 ### Core models
 
@@ -402,13 +408,40 @@ separately gated work.
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
 | Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
-| Phase 44 | In progress; T2–T8 accepted, awaiting architect-defined T9 scope before T1 |
+| Phase 44 | In progress; T2–T8 accepted, T9–T13 formalized and awaiting sequential implementation before T1 |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-07 — Phase 44 correctness and UX closure approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect supplied thirteen post-T8 product findings and requested prioritized,
+dependency-aware grouping inside the current phase
+
+#### Changes / Decision
+
+- SPEC v1.45 expands Phase 44 after accepted T8 with six grouped checkpoints in order
+  `T9 → T10 → T10A → T11 → T12 → T13`, followed by the existing final `T1`.
+- Correctness and shared document truth come first. Magic diagnosis is a mandatory no-algorithm-
+  change gate before recovery implementation. Processing/admission UX and model reprocessing follow;
+  theme, scrollbars, and navigation progress remain last so they do not mask workflow defects.
+- The extension adds no route, persistence, backend, remote processing, model family/asset, export
+  format, environment key, or deployment work. Every changed user-facing flow requires bilingual
+  Playwright coverage.
+
+#### Affected Phases / Consequences
+
+- Phase 44 — scope and contracts reviewed and synchronized; status remains in progress, with T9 as
+  the next authorized checkpoint.
+- Phases 01–43 remain complete and unchanged; their privacy, ownership, and accepted editor
+  invariants remain regression requirements.
 
 ### 2026-08-05 — Checkpoint-driven frontend decomposition approved
 

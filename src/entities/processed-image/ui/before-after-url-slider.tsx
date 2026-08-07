@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { m } from "@/paraglide/messages";
+import { EDITOR_IMAGE_VIEWPORT_CLASS_NAME, editorImageViewportStyle } from "@/shared/ui";
 
 export type BeforeAfterUrlSliderProps = Readonly<{
   afterUrl: string | null;
@@ -96,13 +97,10 @@ export function BeforeAfterUrlSlider(props: BeforeAfterUrlSliderProps) {
     <div
       ref={containerRef}
       data-testid="before-after-frame"
+      data-tool-image-viewport="true"
       data-fit="contain"
-      className="editor-image-frame relative touch-none overflow-hidden rounded-xl bg-muted select-none"
-      style={{
-        aspectRatio: `${String(props.width)} / ${String(props.height)}`,
-        width: `min(100cqw, calc(100cqh * ${String(props.width / props.height)}))`,
-        height: `min(100cqh, calc(100cqw / ${String(props.width / props.height)}))`,
-      }}
+      className={`${EDITOR_IMAGE_VIEWPORT_CLASS_NAME} touch-none overflow-hidden rounded-xl bg-muted select-none`}
+      style={editorImageViewportStyle(props.width, props.height)}
       onPointerDown={(event) => {
         draggingRef.current = true;
         updatePositionFromClientX(event.clientX);

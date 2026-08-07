@@ -36,7 +36,7 @@ function interactionHarness() {
 describe("ManualCutoutWorkspace", () => {
   afterEach(cleanup);
 
-  it("uses only semantic interaction commands for canvas setup, history, and completion", () => {
+  it("uses semantic commands and leaves global history routing to the document owner", () => {
     const harness = interactionHarness();
     render(
       <ManualCutoutWorkspace
@@ -66,8 +66,8 @@ describe("ManualCutoutWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Apply$|^Применить$/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
 
-    expect(harness.calls.undo).toHaveBeenCalledOnce();
-    expect(harness.calls.redo).toHaveBeenCalledOnce();
+    expect(harness.calls.undo).not.toHaveBeenCalled();
+    expect(harness.calls.redo).not.toHaveBeenCalled();
     expect(harness.calls.apply).toHaveBeenCalledOnce();
     expect(harness.calls.cancel).toHaveBeenCalledOnce();
   });
@@ -116,8 +116,11 @@ describe("ManualCutoutWorkspace", () => {
       />,
     );
     const viewport = screen.getByTestId("cutout-stage-viewport");
+    const content = screen.getByTestId("cutout-stage-content");
     const canvas = screen.getByRole("img", { name: /Manual cutout|Ручн/ });
     expect(viewport.className).toContain("overflow-hidden");
+    expect(content.getAttribute("data-tool-image-viewport")).toBe("true");
+    expect(content.className).toContain("editor-image-frame");
     expect(cutoutStageContentStyle(4000, 2000)).toMatchObject({
       width: "min(100cqw, 200cqh)",
       height: "min(100cqh, 50cqw)",

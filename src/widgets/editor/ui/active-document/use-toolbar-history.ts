@@ -1,6 +1,9 @@
 import { useCallback } from "react";
 
-import { selectCanRedoDocument, selectCanUndoDocument } from "@/editor/application";
+import {
+  selectHasFutureDocumentHistory,
+  selectHasPastDocumentHistory,
+} from "@/editor/application";
 import { m } from "@/paraglide/messages";
 
 import {
@@ -22,8 +25,12 @@ function selectDraftHistoryFlags(
 
 export function useToolbarHistory() {
   const document = useActiveDocumentModel();
-  const canUndoDocument = useActiveDocumentActorSelector(selectCanUndoDocument);
-  const canRedoDocument = useActiveDocumentActorSelector(selectCanRedoDocument);
+  const hasPastDocumentHistory = useActiveDocumentActorSelector(
+    selectHasPastDocumentHistory,
+  );
+  const hasFutureDocumentHistory = useActiveDocumentActorSelector(
+    selectHasFutureDocumentHistory,
+  );
   const dirtyDraft = useActiveDocumentActorSelector(
     (snapshot) => snapshot.context.document.activeDraft?.dirty === true,
   );
@@ -40,8 +47,8 @@ export function useToolbarHistory() {
   );
 
   return {
-    canRedo: canRedoDraft || (!dirtyDraft && canRedoDocument),
-    canUndo: canUndoDraft || (!dirtyDraft && canUndoDocument),
+    canRedo: canRedoDraft || (!dirtyDraft && hasFutureDocumentHistory),
+    canUndo: canUndoDraft || (!dirtyDraft && hasPastDocumentHistory),
     redo,
     redoLabel: canRedoDraft ? m.editorDraftRedo() : null,
     undo,

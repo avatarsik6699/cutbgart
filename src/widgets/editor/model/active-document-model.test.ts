@@ -2,7 +2,12 @@ import { createActor } from "xstate";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDocumentMachine } from "@/editor/application";
-import { createEditOperationId, createManualDraftId, createRunId } from "@/editor/domain";
+import {
+  createEditOperationId,
+  createMagicDraftId,
+  createManualDraftId,
+  createRunId,
+} from "@/editor/domain";
 import { buildDocumentSnapshot, buildDocumentState } from "@/editor/testing";
 
 import { ActiveDocumentModel } from "./active-document-model";
@@ -34,6 +39,7 @@ function resultActor() {
         draft: () => createManualDraftId("manual-draft-1"),
         operation: () => createEditOperationId("operation-1"),
       },
+      magicIds: { draft: () => createMagicDraftId("magic-draft-1") },
       manualCommitter: { commit: () => Promise.reject(new Error("unexpected")) },
     }),
     {
@@ -89,6 +95,44 @@ describe("ActiveDocumentModel", () => {
     unregister();
     model.undoDraft();
     expect(undo).toHaveBeenCalledOnce();
+    actor.stop();
+  });
+
+  it("closes a clean auto-opened draft before moving committed history", () => {
+    const actor = resultActor();
+    const order: string[] = [];
+    const session = {
+      cancelMagic: vi.fn(() => {
+        order.push("cancel-draft");
+        const draft = actor.getSnapshot().context.document.activeDraft;
+        if (draft?.kind === "magic-cutout") {
+          actor.send({
+            type: "COMMAND",
+            command: {
+              type: "CANCEL_MAGIC_CUTOUT",
+              documentId: draft.documentId,
+              draftId: draft.draftId,
+            },
+          });
+        }
+      }),
+      undoDocument: vi.fn(() => order.push("undo-document")),
+    };
+    const editor = { session, leaveDocument: vi.fn() } as unknown as EditorModel;
+    const model = new ActiveDocumentModel(editor, actor);
+    actor.send({
+      type: "COMMAND",
+      command: {
+        type: "BEGIN_MAGIC_CUTOUT",
+        documentId: actor.getSnapshot().context.document.documentId,
+        expectedRevision: actor.getSnapshot().context.document.revision,
+      },
+    });
+
+    model.undoDocument();
+
+    expect(order).toEqual(["cancel-draft", "undo-document"]);
+    expect(actor.getSnapshot().context.document.activeDraft).toBeNull();
     actor.stop();
   });
 });

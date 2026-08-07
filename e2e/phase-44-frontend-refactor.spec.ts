@@ -158,6 +158,152 @@ test("single-image processing keeps progress, comparison, and PNG export intact"
   await expect(workspace).toHaveAttribute("data-active-tool", "enhance");
 });
 
+test("committed history, Background preview, and tool viewports stay coherent in both locales", async ({
+  editor,
+  page,
+}) => {
+  const locales = [
+    {
+      path: "/en/",
+      upload: "Upload an image",
+      cutout: "Cutout",
+      background: "Background",
+      enhancements: "Enhancements",
+      ocean: "Ocean",
+      apply: "Apply",
+      cancel: "Cancel",
+      chooseBackground: "Choose background image",
+      resultAlt: "Image with background removed",
+      comparisonAlt: "Image before and after background removal",
+      undo: "Undo document change",
+      redo: "Redo document change",
+    },
+    {
+      path: "/",
+      upload: "Загрузить изображения",
+      cutout: "Вырезание",
+      background: "Фон",
+      enhancements: "Улучшения",
+      ocean: "Океан",
+      apply: "Применить",
+      cancel: "Отмена",
+      chooseBackground: "Выбрать изображение для фона",
+      resultAlt: "Изображение с удалённым фоном",
+      comparisonAlt: "Изображение до и после удаления фона",
+      undo: "Отменить изменение документа",
+      redo: "Вернуть изменение документа",
+    },
+  ] as const;
+
+  for (const locale of locales) {
+    await page.goto(locale.path);
+    await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+    await page.getByLabel(locale.upload).setInputFiles(phase33ImageCorpus.smoke.path);
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
+
+    const undo = page.getByRole("button", { name: locale.undo });
+    const redo = page.getByRole("button", { name: locale.redo });
+    await expect(undo).toBeDisabled();
+    await expect(redo).toBeDisabled();
+    const initialUrl = await page
+      .getByRole("img", { name: locale.resultAlt })
+      .getAttribute("src");
+    expect(initialUrl).toMatch(/^blob:/);
+    const cutoutViewport = await page
+      .locator('[data-tool-image-viewport="true"]')
+      .boundingBox();
+
+    await page.getByRole("button", { name: locale.background, exact: true }).click();
+    const backgroundViewport = page.locator('[data-tool-image-viewport="true"]');
+    await expect(backgroundViewport).toBeVisible();
+    await page.getByRole("button", { name: locale.ocean, exact: true }).click();
+    await expect(page.getByTestId("after-preview-background")).toHaveCSS(
+      "background-image",
+      /gradient/,
+    );
+    await page
+      .getByLabel(locale.chooseBackground)
+      .setInputFiles(phase33ImageCorpus.smoke.path);
+    await expect.poll(editor.scenario.backgroundPreparationCount).toBe(1);
+    await expect(page.getByTestId("after-preview-background")).toHaveCSS(
+      "background-image",
+      /blob:/,
+    );
+    await page.getByRole("button", { name: locale.cancel, exact: true }).click();
+    await expect.poll(editor.scenario.backgroundCommitCount).toBe(0);
+    await expect(undo).toBeDisabled();
+    await expect(page.getByRole("img", { name: locale.comparisonAlt })).toHaveAttribute(
+      "src",
+      initialUrl!,
+    );
+
+    await page.getByRole("button", { name: locale.ocean, exact: true }).click();
+    await page.getByRole("button", { name: locale.apply, exact: true }).click();
+    await expect.poll(editor.scenario.backgroundCommitCount).toBe(1);
+    await expect(undo).toBeEnabled();
+    const committedUrl = await page
+      .getByRole("img", { name: locale.comparisonAlt })
+      .getAttribute("src");
+    expect(committedUrl).toMatch(/^blob:/);
+    expect(committedUrl).not.toBe(initialUrl);
+
+    await undo.click();
+    await expect(redo).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.getByRole("img", { name: locale.comparisonAlt }).getAttribute("src"),
+      )
+      .not.toBe(committedUrl);
+    const undoneUrl = await page
+      .getByRole("img", { name: locale.comparisonAlt })
+      .getAttribute("src");
+    expect(undoneUrl).toMatch(/^blob:/);
+    expect(undoneUrl).not.toBe(committedUrl);
+    await redo.click();
+    await expect(undo).toBeEnabled();
+    await expect
+      .poll(() =>
+        page.getByRole("img", { name: locale.comparisonAlt }).getAttribute("src"),
+      )
+      .not.toBe(undoneUrl);
+    const redoneUrl = await page
+      .getByRole("img", { name: locale.comparisonAlt })
+      .getAttribute("src");
+    expect(redoneUrl).toMatch(/^blob:/);
+    expect(redoneUrl).not.toBe(undoneUrl);
+
+    const backgroundBox = await backgroundViewport.boundingBox();
+    await page.getByRole("button", { name: locale.enhancements, exact: true }).click();
+    const enhancementViewport = page.locator('[data-tool-image-viewport="true"]');
+    const enhancementBox = await enhancementViewport.boundingBox();
+    const enhancementSources = await enhancementViewport
+      .locator("img")
+      .evaluateAll((images) => [
+        ...new Set(images.map((image) => image.getAttribute("src"))),
+      ]);
+    expect(enhancementSources).toEqual([redoneUrl]);
+    await page.getByRole("button", { name: locale.cutout, exact: true }).click();
+    const reopenedCutoutBox = await page
+      .locator('[data-tool-image-viewport="true"]')
+      .boundingBox();
+
+    for (const box of [backgroundBox, enhancementBox, reopenedCutoutBox]) {
+      expect(box).not.toBeNull();
+      expect(cutoutViewport).not.toBeNull();
+      expect(Math.abs(box!.width - cutoutViewport!.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box!.height - cutoutViewport!.height)).toBeLessThanOrEqual(1);
+    }
+
+    await editor.preview.resetButton.click();
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
+      artifacts: 0,
+      leases: 0,
+      objectUrls: 0,
+    });
+  }
+});
+
 test("batch connectors keep admission, selection, and ZIP commands at their consumers", async ({
   editor,
   page,

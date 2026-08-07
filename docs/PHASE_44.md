@@ -1,4 +1,4 @@
-# PHASE 44 — Frontend Decomposition and Render Ownership
+# PHASE 44 — Frontend Decomposition, Correctness, and UX Closure
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | Phase | `44` |
-| Title | Frontend Decomposition and Render Ownership |
+| Title | Frontend Decomposition, Correctness, and UX Closure |
 | Status | `🔄 in-progress` |
 | Tag | `v0.44.0` |
 | Depends on | PHASE_43 complete and tagged `v0.43.0` |
@@ -16,28 +16,30 @@
 
 ## Phase Goal
 
-Refactor the accepted Phase-43 public frontend in one checkpoint-driven phase. Reuse the existing
-components and v2 core while decomposing large compositions, moving subscriptions toward leaf
-consumers, stabilizing meaningful component boundaries, and deleting only reachability-proven
-obsolete surfaces. Preserve product behavior, visual presentation, accessibility, privacy,
-domain/runtime ownership, models, exports, routes, and operations.
+Refactor the accepted Phase-43 public frontend and close the architect-reported correctness and UX
+gaps in one checkpoint-driven phase. The accepted T2–T8 decomposition remains fixed; T9–T13 restore
+coherent document/tool behavior, recover Magic Cutout, improve local processing controls and
+feedback, and add bounded global UI polish before final verification. Preserve privacy, local-only
+processing, routes, model families/assets, exports, backend boundaries, and operations.
 
 No new design assets are required. The accepted Phase-43 bilingual desktop/narrow presentation is
-the visual and interaction reference.
+the reference outside the explicit T9–T13 changes in [`SPEC.md`](./SPEC.md) §2.13.
 
 ---
 
 ## Checkpoint Workflow
 
-The stable execution order is `T2 → T3 → T4 → T5 → T5A → T6 → T7 → T8 → T1`. IDs are deliberately
-not renumbered: `T1` is the final end-state verification requested by the architect, while `T5A`
-records the post-cutover structural convergence added during T5 acceptance.
+The stable execution order is
+`T2 → T3 → T4 → T5 → T5A → T6 → T7 → T8 → T9 → T10 → T10A → T11 → T12 → T13 → T1`.
+IDs are deliberately not renumbered: `T1` remains final end-state verification, `T5A` records the
+post-cutover structural convergence, and `T10A` separates Magic implementation from its mandatory
+diagnosis/plan gate.
 
 For each implementation checkpoint:
 
 1. Run `/impl-assist 44 <ID>` for one task only.
-2. Apply `frontend-implementation`, Fallow guard/trace where relevant, and only task-specific
-   unit/component/render/Playwright/type/lint checks. A frontend checkpoint requires
+2. Apply `frontend-implementation` to frontend code, Fallow guard/trace where relevant, and only
+   task-specific unit/component/render/Playwright/type/lint checks. A frontend checkpoint requires
    `Frontend contract: PASS` before completion.
 3. Stop for architect manual behavior and code review. Record actionable findings under Architect
    Review Notes and resolve them with `/impl-assist 44 R[N]`.
@@ -52,7 +54,7 @@ mandatory for closure.
 
 ### Prospective frontend contract
 
-T4–T7 apply `FRONTEND_CONVENTIONS.md` to every capability deliberately touched. Keep stable
+T4–T7 and T9–T13 apply `FRONTEND_CONVENTIONS.md` to every capability deliberately touched. Keep stable
 session/view-model references above leaf connectors; do not pass session objects, actor snapshots,
 broad projections, catch-all intents, or JSX slots through intermediate presentation components.
 Every extraction must own state/lifecycle, policy, accessibility/error behavior, a meaningful
@@ -110,13 +112,53 @@ render isolation.
   dependency, isolate the spike, consult current primary docs, prove one-way UI/view-model
   ownership and measurable benefit, and obtain explicit architect approval before retaining it.
   Record a no-add decision when the existing mechanisms meet the contract — _Depends on:_ `T7`
+- [x] `T9` Restore one authoritative current document across Cutout, Enhancements, and Background.
+  Make each successful changed Apply exactly one committed history operation; make initial,
+  draft-active, Undo, and Redo availability truthful; make every Undo/Redo click visibly move one
+  committed step; restore immediate Background preset/custom-image preview plus atomic Apply/Cancel;
+  and standardize all three tool viewports to the accepted Enhancements size, spacing, scroll, zoom,
+  and control behavior. Preserve tool-local drafts until Apply/Cancel and add focused contract,
+  render, resource, and bilingual Playwright coverage — _Depends on:_ `T8`
+- [ ] `T10` Diagnose the Magic Cutout quality and Apply-latency regression without changing the
+  algorithm. Trace the responsible path against retained Git/evidence, record representative
+  subject-edge and foreground/background fixtures, define objective Remove/Keep quality criteria,
+  establish a reproducible accepted Apply-performance target from evidence, and write an
+  architect-reviewed recovery plan under `docs/audits/`. Do not begin `T10A` until the architect
+  accepts the diagnosis, target, and plan — _Depends on:_ `T9`
+- [ ] `T10A` Implement only the accepted T10 Magic recovery plan. Remove strokes must remove
+  background while preserving crossed subject edges; Keep strokes must restore subject pixels
+  without restoring crossed background; Apply must meet the evidenced target without weakening
+  run/revision correlation, bounded work, cancellation, interaction responsiveness, or artifact
+  cleanup. Add deterministic algorithm/contract fixtures, browser interaction coverage, real-model
+  evidence where the plan requires it, and regression timing evidence — _Depends on:_ `T10`
+- [ ] `T11` Make admission and processing feedback predictable: keep keyboard paste independent of
+  hover and make the visible clipboard affordance invoke the same admission path with truthful
+  permission/error feedback; render no processing mode selected during initialization and select
+  Maximum once client initialization completes; show a localized delayed-processing explanation
+  only after one documented deterministic threshold; and group batch mode selection with Add Image
+  so the chosen mode clearly applies to subsequently admitted items without a duplicate heading.
+  Review current browser/UI guidance during planning and cover both locales and narrow/desktop
+  behavior in Playwright — _Depends on:_ `T10A`
+- [ ] `T12` Replace the single-image `on-device` badge with the existing available local-model
+  choices, identify the model used for the current automatic result, and allow selecting another
+  model to re-run only the current document through the existing processing gateway. Before code,
+  document source/baseline, dirty-draft, history, cancellation, failure, and focus semantics and
+  obtain architect approval; never add a model asset/family, mutate a sibling, bypass the heavy-job
+  coordinator, or publish stale work. Cover model identity, successful reprocessing, cancel/failure,
+  history, and document isolation — _Depends on:_ `T11`
+- [ ] `T13` Add a localized keyboard-accessible light/dark theme control, make all editor/site
+  surfaces and custom scrollbars coherent in both themes, and add an accessible reduced-motion-
+  aware top NavigationProgress driven by real TanStack Router/content navigation rather than editor
+  inference. Do not add persisted user data or a runtime dependency without an explicit phase
+  amendment; consult current primary TanStack Router and browser guidance before implementation and
+  add bilingual responsive Playwright coverage — _Depends on:_ `T12`
 - [ ] `T1` Perform final end-state render/subscription review, focused React render/commit evidence,
   managed-Windows Chrome performance/resource verification, repeated upload/reset/batch/tool churn,
   complete bilingual deterministic and real-model journeys, full architecture/Fallow/security/
   build/container/release checks, and architect acceptance so the phase is ready for the separate
   `/phase-gate 44` workflow. Pre-refactor render counters and Chrome traces are intentionally not
   required; do not claim a numeric before/after improvement — _Depends on:_ `T2`, `T3`, `T4`, `T5`,
-  `T5A`, `T6`, `T7`, `T8`
+  `T5A`, `T6`, `T7`, `T8`, `T9`, `T10`, `T10A`, `T11`, `T12`, `T13`
 
 ---
 
@@ -160,18 +202,18 @@ package.json
 pnpm-lock.yaml
 ~~~
 
-`package.json` and `pnpm-lock.yaml` may change only if T8 receives explicit architect approval for
-a retained dependency, T2 removes a traced unused dependency, or the architect-approved T3 review
-adds the narrowly scoped `react-error-boundary` dependency. Runtime/application selector APIs may
-be touched narrowly when a leaf connector needs an existing value; expand this list in the phase
-before broader runtime changes.
+`package.json` and `pnpm-lock.yaml` may change only for the already accepted T2/T3/T8 cases. T9–T13
+must use the retained stack unless the architect first approves a phase amendment. Runtime,
+application, and domain APIs may change only as narrowly required for the approved T9, T10A, or T12
+behavior; worker-protocol or broader ownership changes require an explicit phase amendment first.
 
 ### Do NOT touch
 
 - Production deployment state, VPS, DNS, Cloudflare, live caches, analytics data, or secrets
-- Product routes, localized copy, SEO/structured-data outcomes, visual design, or user capabilities
-- Domain command/event semantics, document/history invariants, worker protocols, processing models,
-  model assets/revisions, artifact formats, export formats, privacy policy, or remote/backend scope
+- Product route set, SEO/structured-data outcomes, or visual/user behavior outside the explicit
+  T9–T13 changes
+- Model families/assets/revisions, artifact/export formats, privacy policy, persisted user data, or
+  remote/backend scope; domain/history semantics may change only where T9/T12 explicitly require it
 - Browser resource ownership merely to reduce React renders; binary/runtime values stay outside
   React and XState
 
@@ -183,19 +225,22 @@ before broader runtime changes.
 
 ### New persistent data (tables / collections / files)
 
-Phase-44 inventory and final evidence files only. No user data, database, IndexedDB, cache, or new
-`localStorage` key.
+Phase-44 inventory, T10 diagnosis/recovery evidence, and final evidence files only. No user data,
+database, IndexedDB, cache, or new `localStorage` key; theme selection is not persisted.
 
 ### New API endpoints / RPC methods / events
 
-None. Existing routes, domain commands/events, worker protocols, and export contracts remain
-unchanged.
+No endpoint, route, or RPC change. Reuse existing document/tool/history and processing commands
+where possible; any narrow command/event adjustment required by T9 or T12 must retain typed
+correlation and be recorded in the checkpoint plan. Worker-protocol changes are not authorized
+without an explicit phase amendment.
 
 ### New types / models / shared interfaces
 
-No new product/domain model. Small presentation props, selector return types, and component-local
-view contracts may be introduced only for concrete decomposed consumers. They must not mirror the
-document/workspace actor model or carry browser resources.
+No new persisted or backend model. Small theme/navigation/model-choice presentation values,
+selector return types, and component-local view contracts may be introduced for T9–T13. They must
+not mirror the document/workspace actor model or carry browser resources; T12 uses only existing
+local model identities.
 
 ### New env vars
 
@@ -207,11 +252,13 @@ None.
 
 ### Checkpoint verification
 
-Each T2–T8 plan, including T5A, must name exact focused checks before editing. Prefer file-scoped Vitest and the
-single affected Phase-44 Playwright journey; run typecheck or lint when the changed boundary needs
-them. For editor core/widget architecture files, run Fallow guard on the changed paths. Full-project,
-real-model, container, security, release, and Chrome evidence is deferred to T1 unless needed to
-diagnose a newly observed checkpoint failure.
+Each T2–T13 plan, including T5A and T10A, must name exact focused checks before editing. T10 is a
+diagnosis/plan checkpoint and must not edit the algorithm. Prefer file-scoped Vitest and the single
+affected Phase-44 Playwright journey; every changed user-facing flow requires bilingual browser
+coverage. Run typecheck or lint when the changed boundary needs them and Fallow guard on changed
+editor core/widget paths. Full-project, container, security, release, and Chrome evidence is
+deferred to T1; T10/T10A may require focused real-model/performance evidence to establish and prove
+their accepted recovery target.
 
 ### Final verification
 
@@ -447,8 +494,11 @@ waiver.
   models retain UI-only commands/preferences, and leaf React selectors pass the focused render
   regressions. No remaining measured render defect justifies a MobX or other state-manager spike,
   mirrored workflow state, or another runtime dependency.
-- T8 was manually accepted by the architect. Final T1 verification has not begun and remains
-  deferred while the architect prepares additional requirements to scope as T9.
+- T8 was manually accepted by the architect. SPEC v1.45 groups the architect's thirteen reported
+  issues into six dependency-ordered checkpoints T9–T13; final T1 verification remains deferred
+  until they are accepted.
+- T9 was manually accepted by the architect before the T10 diagnosis and recovery-plan checkpoint
+  began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

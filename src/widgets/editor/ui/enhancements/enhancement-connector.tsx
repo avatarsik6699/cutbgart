@@ -5,7 +5,6 @@ import { selectEnhancementDraft } from "@/editor/application";
 import {
   selectActiveEnhancementRuntime,
   selectActiveHeight,
-  selectActivePreviewUrl,
   selectActiveResultUrl,
   selectActiveWidth,
   useActiveDocumentActorSelector,
@@ -21,7 +20,6 @@ export function EnhancementConnector() {
   const model = useActiveDocumentModel();
   const draft = useActiveDocumentActorSelector(selectEnhancementDraft);
   const height = useEditorSessionValue(selectActiveHeight);
-  const previewUrl = useEditorSessionValue(selectActivePreviewUrl);
   const resultUrl = useEditorSessionValue(selectActiveResultUrl);
   const runtime = useEditorSessionValue(selectActiveEnhancementRuntime);
   const width = useEditorSessionValue(selectActiveWidth);
@@ -35,15 +33,14 @@ export function EnhancementConnector() {
     };
   }, [model]);
 
-  if (draft === null || previewUrl === null || resultUrl === null || runtime === null)
-    return null;
+  if (draft === null || resultUrl === null || runtime === null) return null;
   return (
     <EnhancementWorkspace
       draft={draft}
       height={height}
       previewUrl={resultUrl}
       runtime={runtime}
-      sourceUrl={previewUrl}
+      sourceUrl={resultUrl}
       interaction={interaction}
       width={width}
     />

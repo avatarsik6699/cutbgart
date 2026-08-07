@@ -71,6 +71,9 @@ describe("EnhancementWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
     expect(harness.calls.apply).toHaveBeenCalledOnce();
     expect(harness.calls.cancel).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("before-after-frame").dataset.toolImageViewport).toBe(
+      "true",
+    );
   });
 
   it("reports a no-op without implying a commit and offers retry", () => {

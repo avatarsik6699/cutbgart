@@ -105,7 +105,7 @@ describe("MagicCutoutWorkspace", () => {
     expect(harness.calls.cancel).toHaveBeenCalledOnce();
   });
 
-  it("routes Magic-local keyboard undo and redo", () => {
+  it("leaves global keyboard history routing to the document owner", () => {
     const harness = sessionHarness();
     render(
       <MagicCutoutWorkspace
@@ -120,8 +120,8 @@ describe("MagicCutoutWorkspace", () => {
 
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
     fireEvent.keyDown(window, { key: "z", ctrlKey: true, shiftKey: true });
-    expect(harness.calls.undo).toHaveBeenCalledOnce();
-    expect(harness.calls.redo).toHaveBeenCalledOnce();
+    expect(harness.calls.undo).not.toHaveBeenCalled();
+    expect(harness.calls.redo).not.toHaveBeenCalled();
   });
 
   it("keeps a circular cursor and caps the display-only stroke buffer", () => {

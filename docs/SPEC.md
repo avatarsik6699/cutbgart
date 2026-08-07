@@ -10,7 +10,7 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.44` |
+| Version | `v1.45` |
 | Date | `2026-08-07` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
@@ -42,9 +42,11 @@ Enhancements, multi-document orchestration, preview/export, deterministic ZIP ex
 cancel/retry/reset. Phases 39–42 reconnected that architecture to the established v1 presentation
 and completed the isolated-route migration evidence. Phase 43 switched every public and scenario
 editor route to v2, removed the superseded legacy workflow, and proved release/rollback readiness.
-Phase 44 now refactors the retained public frontend in one architect-reviewed phase: it decomposes
-large compositions, narrows subscriptions and render ownership, removes confirmed obsolete
-surfaces, and verifies the completed application without changing product capability or ownership.
+Phase 44 refactors the retained public frontend in one architect-reviewed phase and then closes a
+bounded set of architect-reported editor correctness and UX gaps before final verification. It
+decomposes large compositions, narrows subscriptions and render ownership, removes confirmed
+obsolete surfaces, restores coherent history/tool behavior, and adds only the explicitly scoped
+local UI improvements in §2.13 without changing privacy or backend ownership.
 
 ## 2. Scope and boundaries
 
@@ -504,17 +506,20 @@ but does not deploy it to production; deployment remains an explicit post-merge 
 
 ### 2.13 Frontend decomposition and render ownership — Phase 44
 
-Phase 44 is one refactoring phase with architect checkpoints after each dependency-complete task.
-It preserves the accepted UI, behavior, routes, product capabilities, domain commands, worker
-protocols, artifact ownership, privacy, models, and exports while rebuilding the public frontend
-composition from existing components with smaller ownership boundaries.
+Phase 44 is one checkpoint-driven frontend phase. Its accepted T2–T8 checkpoints preserve the
+Phase-43 UI and behavior while rebuilding the public frontend composition with smaller ownership
+boundaries. The architect-approved T9–T13 extension then repairs observed behavior and adds the
+bounded UI capabilities below while preserving routes, local-only processing, artifact ownership,
+model families, export formats, and backend boundaries.
 
 Its stable checkpoint order is `T2` cleanup, `T3` shell/composition, `T4` upload/mode selection,
 `T5` single-image processing/result/export, `T5A` permanent editor structure, `T6` active document
 and editor tools, `T7` narrow subscriptions and selective memoization, `T8` state-manager decision,
-then `T1` final evidence and gate. `/impl-assist 44 <ID>` targets one checkpoint and must stop after
-focused verification; the architect manually accepts it before a checkpoint commit and before the
-next task starts.
+`T9` editor truth/history/viewport, `T10` Magic diagnosis, `T10A` Magic recovery, `T11` admission and
+processing UX, `T12` single-image model selection/reprocessing, `T13` global UI polish, then `T1`
+final evidence and gate. `/impl-assist 44 <ID>` targets one checkpoint and must stop after focused
+verification; the architect manually accepts it before a checkpoint commit and before the next
+task starts.
 
 The phase covers:
 
@@ -557,9 +562,46 @@ The phase covers:
   has no mandatory pre-refactor render-counter or trace baseline; it proves the final acceptance
   state rather than claiming a numeric before/after improvement.
 
-Phase 44 introduces no new route, user-visible capability, model family, server endpoint, persisted
-state, environment variable, payment/backend behavior, or production deployment. Refactoring must
-not trade correctness, accessibility, or lifecycle ownership for fewer React renders.
+The post-T8 extension covers exactly these six checkpoint groups:
+
+- restore one authoritative committed image across Cutout, Enhancements, and Background; make each
+  successful changed Apply one bounded document-history operation; make initial and draft-active
+  Undo/Redo availability truthful; make Background preset/custom-image preview, Apply, and Cancel
+  deterministic; and standardize every tool viewport to the accepted Enhancements geometry,
+  scrolling, zoom, spacing, and control behavior;
+- diagnose Magic Cutout quality and Apply-latency regressions before editing the algorithm. Record
+  the responsible path, representative edge/foreground/background fixtures, objective comparison
+  criteria, a reproducible accepted performance target, and an architect-approved recovery plan;
+- implement only that accepted Magic recovery plan. Remove strokes must preserve subject edges they
+  merely cross, Keep strokes must not restore background they merely cross, and Apply must recover
+  the evidenced pre-regression responsiveness without weakening correlation or resource ownership;
+- keep keyboard paste available without hover dependence and make the visible clipboard affordance
+  invoke the same admission path with truthful permission/error feedback; render no processing mode
+  as selected during initialization, then select Maximum when the client is ready; show a localized
+  delayed-processing explanation only after a reviewed deterministic threshold; and group the batch
+  processing-mode choice with Add Image so the selected mode clearly applies to subsequently
+  admitted items without a duplicate heading;
+- replace the single-image `on-device` badge with the existing available local model choices,
+  identify the model that produced the current automatic result, and allow a different choice to
+  re-run the current document through the accepted processing gateway. Before implementation, the
+  checkpoint must document and receive architect approval for source/baseline, dirty-draft,
+  history, cancellation, and failure semantics; it must never mutate a sibling document or publish
+  stale work;
+- add a localized keyboard-accessible light/dark theme control, theme-correct editor/site styling,
+  and one coherent custom-scrollbar treatment, without adding persisted user data; and add an
+  accessible reduced-motion-aware top navigation progress indicator driven by real router/content
+  navigation rather than editor inference. Current primary TanStack Router and browser guidance
+  must be reviewed before choosing its lifecycle.
+
+Update deterministic bilingual Playwright coverage for every changed user flow and retain focused
+unit/contract/render/resource tests. Final real-model, managed-Windows, full-gate, security, build,
+container, and release evidence remains owned by T1.
+
+Phase 44 introduces no new route, model family or asset, server endpoint, persisted user state,
+environment variable, payment/backend behavior, or production deployment. Its only new visible
+capabilities are the existing-model reprocessing control, theme control, truthful delayed status,
+and navigation progress described above. It must not trade correctness, accessibility, privacy,
+correlation, resource lifecycle, or render ownership for visual convenience.
 
 ### 2.14 Future paid direction
 
@@ -939,13 +981,12 @@ Public pages remain fully localized in Russian and English, keyboard operable, s
 meaningful, responsive, and SSR-safe. No essential action may depend only on hover, color, pointer
 precision, or an unannounced status change.
 
-The accepted Phase-43 public editor is the normative visual and interaction reference for Phase 44.
-Unless a later architect-approved spec change says otherwise, Phase 44 must preserve component placement,
-visual hierarchy, labels, responsive behavior, controls, and reachable states. Internal actors,
-commands, projections, processing, and resource ownership may change; visible product behavior may
-not silently change with them. Capture reference screenshots before each UI slice, compare both
-locales at approved desktop and narrow viewports, and treat unexplained visual drift as a failing
-contract rather than a redesign opportunity.
+The accepted Phase-43 public editor remains the normative visual and interaction reference for
+Phase-44 surfaces outside the explicit T9–T13 changes in §2.13. Internal actors, commands,
+projections, processing, and resource ownership may change only as required by those checkpoints;
+visible product behavior may not silently change with them. Capture reference screenshots before
+each UI slice, compare both locales at approved desktop and narrow viewports, and treat unexplained
+visual drift as a failing contract rather than a redesign opportunity.
 
 An incremental slice is compared only across presentation it owns. Truthful copy required by that
 slice and UI owned by an explicitly deferred slice may differ only when its active phase contract
@@ -1172,7 +1213,12 @@ out continue to invalidate unrelated subtrees without explicit justification; a 
 can publish; changed resource owners leak; confirmed obsolete code is removed without reachability
 evidence; any checkpoint lacks its focused checks or architect approval; or final render,
 performance, resource, full-gate, and architect evidence is incomplete. Pre-refactor Chrome traces
-and render counters are not required by this phase.
+and render counters are not required by this phase. The T9–T13 extension also fails if tools display
+different committed baselines, history availability lies, Background preview/Apply/Cancel is not
+atomic, Magic recovery lacks approved diagnosis/evidence, model reprocessing loses or crosses
+document ownership without an approved policy, paste depends on hover, initialization visibly
+selects an intermediate mode, delayed feedback is immediate or nondeterministic, theme/navigation
+controls are inaccessible, or any changed user-facing flow lacks bilingual Playwright coverage.
 
 ## 8. Delivery state and roadmap
 
@@ -1191,11 +1237,12 @@ and render counters are not required by this phase.
 | 41 | Complete | V1-faithful editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes; gate and architect acceptance passed |
 | 42 | Complete / blocked result | Regression closure and complete-product evidence finished; one gate timing failure was explicitly waived, unsupported duration signals remain, and no public cutover is authorized |
 | 43 | Complete / gate passed | Final pre-production phase: public/scenario routes use v2, legacy is removed, and release/rollback readiness is proven; no production deploy |
-| 44 | Planned | One checkpoint-driven frontend decomposition and render-ownership phase; full evidence and gate run only after all refactoring tasks are architect-accepted |
+| 44 | In progress | T2–T8 accepted; six grouped T9–T13 correctness/UX checkpoints precede final T1 evidence and gate |
 | Later | Unscheduled | Production deployment is an explicit operator action after Phase 44 acceptance; post-deploy observation and paid backend work remain separately scoped |
 
-Phase 44 changes implementation structure, not product scope. Paid work and production deployment
-remain outside this track.
+Phase 44 changes implementation structure and the bounded local UI behavior named in §2.13. Paid
+work, remote processing, new model assets, persistence, and production deployment remain outside
+this track.
 
 ## 9. Deferred decisions
 

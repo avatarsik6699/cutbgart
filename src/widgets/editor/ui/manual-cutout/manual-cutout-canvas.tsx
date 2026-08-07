@@ -10,6 +10,7 @@ import { m } from "@/paraglide/messages";
 import { EditorStage } from "@/shared/ui";
 
 import {
+  CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CutoutStagePanController,
   cutoutStageContentStyle,
@@ -161,25 +162,15 @@ export function ManualCutoutCanvas({
   );
 
   useEffect(
-    function guardDirtyDraftNavigationFx() {
+    function guardDirtyDraftUnloadFx() {
       function beforeUnloadFx(event: BeforeUnloadEvent): void {
         if (interaction.snapshot()?.dirty !== true) return;
         event.preventDefault();
         event.returnValue = "";
       }
-      function keyDownFx(event: KeyboardEvent): void {
-        if (!(event.ctrlKey || event.metaKey)) return;
-        const key = event.key.toLowerCase();
-        if (key !== "z" && key !== "y") return;
-        event.preventDefault();
-        if (key === "y" || event.shiftKey) interaction.redo();
-        else interaction.undo();
-      }
       globalThis.addEventListener("beforeunload", beforeUnloadFx);
-      globalThis.addEventListener("keydown", keyDownFx);
       return function removeManualDraftGuardsFx() {
         globalThis.removeEventListener("beforeunload", beforeUnloadFx);
-        globalThis.removeEventListener("keydown", keyDownFx);
       };
     },
     [interaction],
@@ -261,8 +252,9 @@ export function ManualCutoutCanvas({
         >
           <div
             ref={connectContent}
-            className="relative shrink-0"
+            className={CUTOUT_STAGE_CONTENT_CLASS_NAME}
             data-testid="cutout-stage-content"
+            data-tool-image-viewport="true"
             style={cutoutStageContentStyle(width, height)}
           >
             <canvas

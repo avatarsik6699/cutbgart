@@ -6,7 +6,6 @@ import {
   selectActiveBackgroundRuntime,
   selectActiveForegroundUrl,
   selectActiveHeight,
-  selectActivePreviewUrl,
   selectActiveResultUrl,
   selectActiveWidth,
   useActiveDocumentActorSelector,
@@ -20,7 +19,6 @@ export function BackgroundConnector() {
   const draft = useActiveDocumentActorSelector(selectBackgroundDraft);
   const foregroundUrl = useEditorSessionValue(selectActiveForegroundUrl);
   const height = useEditorSessionValue(selectActiveHeight);
-  const previewUrl = useEditorSessionValue(selectActivePreviewUrl);
   const resultUrl = useEditorSessionValue(selectActiveResultUrl);
   const runtime = useEditorSessionValue(selectActiveBackgroundRuntime);
   const width = useEditorSessionValue(selectActiveWidth);
@@ -34,14 +32,15 @@ export function BackgroundConnector() {
     };
   }, [model]);
 
-  if (draft === null || foregroundUrl === null || runtime === null) return null;
+  if (draft === null || foregroundUrl === null || resultUrl === null || runtime === null)
+    return null;
   return (
     <BackgroundWorkspace
       draft={draft}
       foregroundUrl={foregroundUrl}
       height={height}
       runtime={runtime}
-      sourceUrl={previewUrl ?? resultUrl ?? ""}
+      sourceUrl={resultUrl}
       interaction={interaction}
       width={width}
     />
