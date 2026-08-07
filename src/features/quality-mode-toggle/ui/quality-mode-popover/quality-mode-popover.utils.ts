@@ -7,5 +7,6 @@ export function selectedModeLabel(
 ): string {
   if (mode === "ben2-fp16") return m.processingModeBen2();
   if (mode === "isnet-fp32") return m.processingModePrecise();
-  return m.processingModeFast();
+  if (mode === "isnet-q8") return m.processingModeFast();
+  return m.processingModeLabel();
 }

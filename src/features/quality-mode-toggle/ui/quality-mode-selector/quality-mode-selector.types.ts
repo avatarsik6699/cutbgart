@@ -6,7 +6,7 @@ export declare namespace QualityModeSelectorTypes {
   type Props = Readonly<{
     disabled?: boolean;
     onQualityModeChange: (mode: AutomaticModelMode) => void;
-    qualityMode: AutomaticModelMode;
+    qualityMode: AutomaticModelMode | null;
   }>;
 
   type Option = Readonly<{

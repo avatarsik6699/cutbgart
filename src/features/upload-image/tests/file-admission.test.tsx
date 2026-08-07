@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FileAdmission } from "../ui/file-admission";
@@ -6,12 +6,13 @@ import { FileAdmission } from "../ui/file-admission";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("FileAdmission", () => {
   it("routes input, drop, and paste through one file boundary", () => {
     const onFiles = vi.fn();
-    render(<FileAdmission onFiles={onFiles} />);
+    const view = render(<FileAdmission onFiles={onFiles} />);
     const file = new File([new Uint8Array([1])], "photo.png", {
       type: "image/png",
     });
@@ -21,6 +22,15 @@ describe("FileAdmission", () => {
       screen.getByText(/Paste from clipboard|Вставить из буфера обмена/),
     ).toBeTruthy();
     expect(screen.getByText("Ctrl/⌘ + V")).toBeTruthy();
+    const admissionSurface = view.container.querySelector(
+      '[data-file-admission-surface="true"]',
+    );
+    expect(admissionSurface).not.toBeNull();
+    expect(
+      admissionSurface?.contains(
+        screen.getByRole("button", { name: /paste from clipboard/i }),
+      ),
+    ).toBe(true);
 
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.drop(input.parentElement!, { dataTransfer: { files: [file] } });
@@ -98,6 +108,84 @@ describe("FileAdmission", () => {
     expect(
       removeEventListener.mock.calls.filter(([eventName]) => eventName === "paste"),
     ).toHaveLength(1);
+  });
+
+  it("reads the visible clipboard control through the same file callback", async () => {
+    const onFiles = vi.fn<(files: readonly File[]) => void>();
+    const read = vi.fn().mockResolvedValue([
+      {
+        types: ["image/png"],
+        getType: vi.fn().mockResolvedValue(
+          new Blob([new Uint8Array([1])], {
+            type: "image/png",
+          }),
+        ),
+      },
+    ]);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { read } });
+    render(<FileAdmission onFiles={onFiles} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /paste from clipboard/i }));
+
+    await waitFor(() => expect(onFiles).toHaveBeenCalledOnce());
+    expect(read).toHaveBeenCalledOnce();
+    expect(onFiles.mock.calls[0]?.[0][0]).toMatchObject({
+      name: "clipboard-1.png",
+      type: "image/png",
+    });
+  });
+
+  it("reports a denied clipboard read without pretending admission succeeded", async () => {
+    const onFiles = vi.fn();
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: {
+        read: vi
+          .fn()
+          .mockRejectedValue(new DOMException("Permission denied", "NotAllowedError")),
+      },
+    });
+    const view = render(<FileAdmission onFiles={onFiles} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /paste from clipboard/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/not granted/i),
+    );
+    expect(
+      view.container
+        .querySelector('[data-file-admission-surface="true"]')
+        ?.contains(screen.getByRole("alert")),
+    ).toBe(true);
+    expect(onFiles).not.toHaveBeenCalled();
+  });
+
+  it("rejects a late clipboard result after admission becomes disabled", async () => {
+    let resolveRead: ((items: readonly ClipboardItem[]) => void) | undefined;
+    const read = vi.fn(
+      () =>
+        new Promise<readonly ClipboardItem[]>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const onFiles = vi.fn();
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { read } });
+    const view = render(<FileAdmission onFiles={onFiles} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /paste from clipboard/i }));
+    view.rerender(<FileAdmission disabled onFiles={onFiles} />);
+    await act(async () => {
+      resolveRead?.([
+        {
+          types: ["image/png"],
+          getType: () => Promise.resolve(new Blob([], { type: "image/png" })),
+          presentationStyle: "unspecified",
+        },
+      ]);
+      await Promise.resolve();
+    });
+
+    expect(onFiles).not.toHaveBeenCalled();
   });
 
   it("renders preparation and error feedback inside the admission surface", () => {

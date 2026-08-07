@@ -143,7 +143,13 @@ function ProcessingStatusView(props: {
 }) {
   const fallbackUsed = useEditorSessionValue(selectFallbackUsed);
   const statusText = useProcessingStatusText(props.phase, props.progress);
-  return <ProcessingStatus fallbackUsed={fallbackUsed} statusText={statusText} />;
+  return (
+    <ProcessingStatus
+      fallbackUsed={fallbackUsed}
+      processing={isAutomaticProcessingPhase(props.phase)}
+      statusText={statusText}
+    />
+  );
 }
 
 function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {

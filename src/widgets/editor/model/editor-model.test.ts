@@ -20,7 +20,7 @@ describe("EditorModel", () => {
     expect(changed).toMatchObject({
       batchMode: false,
       exportSize: 1024,
-      qualityMode: "isnet-q8",
+      qualityMode: null,
       restoreFocusTool: null,
     });
     expect(model.getViewSnapshot()).toBe(changed);
@@ -36,9 +36,18 @@ describe("EditorModel", () => {
     globalThis.localStorage.setItem("qualityMode", "max");
     const model = new EditorModel();
 
-    expect(model.getViewSnapshot().qualityMode).toBe("isnet-q8");
+    expect(model.getViewSnapshot().qualityMode).toBeNull();
     model.hydrate();
     expect(model.getViewSnapshot().qualityMode).toBe("isnet-fp32");
+    await model.dispose();
+  });
+
+  it("selects Maximum after client initialization when no legacy preference exists", async () => {
+    const model = new EditorModel();
+
+    expect(model.getViewSnapshot().qualityMode).toBeNull();
+    model.hydrate();
+    expect(model.getViewSnapshot().qualityMode).toBe("ben2-fp16");
     await model.dispose();
   });
 });

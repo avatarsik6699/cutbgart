@@ -6,6 +6,14 @@ import { QualityModeToggle } from "../ui/quality-mode-selector";
 afterEach(cleanup);
 
 describe("processing mode selector", () => {
+  it("renders no selected mode before client initialization", () => {
+    render(<QualityModeToggle qualityMode={null} onQualityModeChange={vi.fn()} />);
+
+    expect(
+      screen.getAllByRole("radio").every((radio) => !radio.hasAttribute("checked")),
+    ).toBe(true);
+  });
+
   it("shows three public modes without primary implementation details", () => {
     render(<QualityModeToggle qualityMode="isnet-q8" onQualityModeChange={vi.fn()} />);
 

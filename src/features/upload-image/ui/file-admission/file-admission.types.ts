@@ -14,6 +14,11 @@ export declare namespace FileAdmissionTypes {
     state?: State;
   }>;
 
+  type ClipboardFeedback =
+    | Readonly<{ kind: "idle" }>
+    | Readonly<{ kind: "reading"; message: string }>
+    | Readonly<{ kind: "error"; message: string }>;
+
   type ControlProps = Readonly<{
     className?: string;
     disabled?: boolean;
@@ -29,9 +34,14 @@ export declare namespace FileAdmissionTypes {
     onFiles: (files: readonly File[]) => void;
   }>;
 
-  type PasteParams = Readonly<{
+  type ClipboardParams = Readonly<{
     disabled?: boolean;
     multiple?: boolean;
     onFiles: (files: readonly File[]) => void;
+  }>;
+
+  type ClipboardResult = Readonly<{
+    feedback: ClipboardFeedback;
+    readClipboard: () => Promise<void>;
   }>;
 }

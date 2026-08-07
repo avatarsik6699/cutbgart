@@ -7,20 +7,22 @@ export function isAutomaticProcessingPhase(phase: SingleImageTypes.Phase): boole
   return phase === "preparing" || phase === "loading-model" || phase === "processing";
 }
 
-function modeLabel(mode: AutomaticModelMode): string {
+function modeLabel(mode: AutomaticModelMode | null): string {
   switch (mode) {
     case "isnet-fp32":
       return m.processingModePrecise();
     case "ben2-fp16":
       return m.processingModeBen2();
-    default:
+    case "isnet-q8":
       return m.processingModeFast();
+    default:
+      return m.processingModeLabel();
   }
 }
 
 export function processingStatusText(
   phase: SingleImageTypes.Phase,
-  qualityMode: AutomaticModelMode,
+  qualityMode: AutomaticModelMode | null,
   progressPercent: number | null,
 ): string {
   switch (phase) {

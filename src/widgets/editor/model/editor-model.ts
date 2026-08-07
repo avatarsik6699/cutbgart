@@ -16,7 +16,7 @@ export type EditorViewSnapshot = Readonly<{
   }> | null;
   batchMode: boolean;
   exportSize: ExportSize;
-  qualityMode: AutomaticModelMode;
+  qualityMode: AutomaticModelMode | null;
   restoreFocusTool: "manual" | "magic" | "background" | "enhancements" | null;
 }>;
 
@@ -35,7 +35,7 @@ export class EditorModel {
     batchAdmissionError: null,
     batchMode: false,
     exportSize: "original",
-    qualityMode: "isnet-q8",
+    qualityMode: null,
     restoreFocusTool: null,
   };
 
@@ -51,8 +51,7 @@ export class EditorModel {
   readonly getViewSnapshot = (): EditorViewSnapshot => this.view;
 
   readonly hydrate = (): void => {
-    const qualityMode = storedQualityMode();
-    if (qualityMode !== null) this.updateView({ qualityMode });
+    this.updateView({ qualityMode: storedQualityMode() ?? "ben2-fp16" });
   };
 
   readonly dispose = (): Promise<void> => this.session.dispose();
@@ -69,7 +68,7 @@ export class EditorModel {
   };
 
   readonly admitFiles = async (files: readonly File[]): Promise<void> => {
-    if (files.length === 0) return;
+    if (files.length === 0 || this.view.qualityMode === null) return;
     const workspace = this.session.workspaceSnapshot();
     const plan = planImageAdmission(workspace.items.length, files.length);
     this.updateView({
@@ -84,7 +83,9 @@ export class EditorModel {
 
   readonly cancelProcessing = (): void => this.session.cancel();
 
-  readonly retryProcessing = (): void => this.session.retry(this.view.qualityMode);
+  readonly retryProcessing = (): void => {
+    if (this.view.qualityMode !== null) this.session.retry(this.view.qualityMode);
+  };
 
   readonly reset = (): void => {
     this.resetView();

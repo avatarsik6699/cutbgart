@@ -13,7 +13,7 @@ type Props = Readonly<{
   onChooseQualityMode: (mode: AutomaticModelMode) => void;
   onRetry: () => void;
   phase: MainPageEditorTypes.Phase;
-  qualityMode: AutomaticModelMode;
+  qualityMode: AutomaticModelMode | null;
 }>;
 
 export function MainPageImageAdmission(props: Props) {

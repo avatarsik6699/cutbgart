@@ -1,8 +1,11 @@
 import { m } from "@/paraglide/messages";
 import { Typography } from "@/shared/ui";
 
+import { DelayedProcessingExplanation } from "./delayed-processing-explanation";
+
 type Props = Readonly<{
   fallbackUsed: boolean;
+  processing: boolean;
   statusText: string;
 }>;
 
@@ -12,6 +15,7 @@ export function ProcessingStatus(props: Props) {
       <div aria-live="polite" role="status" className="sr-only">
         {props.statusText}
       </div>
+      {props.processing ? <DelayedProcessingExplanation /> : null}
       {props.fallbackUsed ? (
         <Typography
           variant="body-small"

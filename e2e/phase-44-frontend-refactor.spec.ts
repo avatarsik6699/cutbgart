@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "./support/editor/fixtures";
 import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
@@ -66,7 +68,9 @@ test("public and localized scenario routes share the shell without losing the ed
     );
     await expect(page.locator('[data-slot="site-footer"]')).toBeVisible();
     await expect(page.getByLabel(route.uploadLabel)).toBeEnabled();
-    await expect(page.getByText(route.pasteHint, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`^${route.pasteHint}`) }),
+    ).toBeVisible();
     await expect(page.getByText("Ctrl/⌘ + V")).toBeVisible();
     await page.getByRole("button", { name: route.helpLabel }).click();
     await expect(page.getByText(new RegExp(route.helpBody))).toBeVisible();
@@ -113,6 +117,139 @@ test("public and localized scenario routes share the shell without losing the ed
   await expect(admissionError).toContainText("не поддерживается");
   await admissionError.getByRole("button", { name: "Повторить" }).click();
   await expect(page.getByLabel("Загрузить изображения")).toBeEnabled();
+});
+
+test("T11 admission, client mode, and delayed feedback stay truthful across responsive locales", async ({
+  editor,
+  page,
+  request,
+}) => {
+  const serverMarkup = await (await request.get("/en")).text();
+  const selectorMarkup = serverMarkup
+    .split('data-testid="processing-mode-selector"')[1]
+    ?.split("</fieldset>")[0];
+  expect(selectorMarkup).toBeDefined();
+  expect(selectorMarkup).not.toContain("checked");
+
+  const clipboardBytes = [...(await readFile(phase33ImageCorpus.smoke.path))];
+  await page.clock.install();
+  await page.addInitScript(
+    ({ bytes }) => {
+      const testWindow = window as Window & {
+        __clipboardReadOutcome?: "denied" | "image";
+      };
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: () => {
+            if (testWindow.__clipboardReadOutcome === "denied")
+              return Promise.reject(
+                new DOMException("Permission denied", "NotAllowedError"),
+              );
+            return Promise.resolve([
+              {
+                types: ["image/jpeg"],
+                getType: () =>
+                  Promise.resolve(
+                    new Blob([Uint8Array.from(bytes)], { type: "image/jpeg" }),
+                  ),
+              },
+            ]);
+          },
+        },
+      });
+    },
+    { bytes: clipboardBytes },
+  );
+
+  const locales = [
+    {
+      delayed:
+        "This is taking longer than usual. Keep this tab open; the image is still being processed locally on your device.",
+      denied: "Clipboard permission was not granted. Use Ctrl/⌘ + V or choose a file.",
+      maximum: "Maximum",
+      paste: "Paste from clipboard",
+      path: "/en",
+      viewport: { width: 1280, height: 900 },
+    },
+    {
+      delayed:
+        "Обработка занимает больше времени, чем обычно. Не закрывайте вкладку: изображение всё ещё обрабатывается локально на вашем устройстве.",
+      denied: "Доступ к буферу обмена не разрешён. Нажмите Ctrl/⌘ + V или выберите файл.",
+      maximum: "Максимум",
+      paste: "Вставить из буфера обмена",
+      path: "/",
+      viewport: { width: 390, height: 844 },
+    },
+  ] as const;
+
+  for (const [localeIndex, locale] of locales.entries()) {
+    await page.setViewportSize(locale.viewport);
+    await page.goto(locale.path);
+    await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+    await expect(
+      page.getByRole("radio", { name: new RegExp(`^${locale.maximum}`) }),
+    ).toBeChecked();
+    const pasteButton = page.getByRole("button", {
+      name: new RegExp(`^${locale.paste}`),
+    });
+    await expect(pasteButton).toBeVisible();
+    const admissionSurface = page.locator('[data-file-admission-surface="true"]');
+    await expect(admissionSurface).toBeVisible();
+    await expect(
+      admissionSurface.getByRole("button", {
+        name: new RegExp(`^${locale.paste}`),
+      }),
+    ).toBeVisible();
+
+    await page.evaluate(() => {
+      (window as Window & { __clipboardReadOutcome?: string }).__clipboardReadOutcome =
+        "denied";
+    });
+    await pasteButton.click();
+    await expect(admissionSurface.getByRole("alert")).toContainText(locale.denied);
+
+    await page.evaluate(() => {
+      (window as Window & { __clipboardReadOutcome?: string }).__clipboardReadOutcome =
+        "image";
+    });
+    if (localeIndex === 0) {
+      const browserNow = await page.evaluate(() => Date.now());
+      await page.clock.pauseAt(new Date(browserNow));
+    }
+    await pasteButton.click();
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await expect(page.getByTestId("delayed-processing-explanation")).toHaveCount(0);
+    await page.clock.runFor(9_999);
+    await expect(page.getByTestId("delayed-processing-explanation")).toHaveCount(0);
+    await page.clock.runFor(1);
+    await expect(page.getByTestId("delayed-processing-explanation")).toHaveText(
+      locale.delayed,
+    );
+    await editor.scenario.completeRun();
+    await expect(page.getByTestId("delayed-processing-explanation")).toHaveCount(0);
+    await editor.preview.resetButton.click();
+
+    await page.evaluate(
+      ({ bytes }) => {
+        const file = new File([Uint8Array.from(bytes)], "keyboard-paste.jpg", {
+          type: "image/jpeg",
+        });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        window.dispatchEvent(
+          new ClipboardEvent("paste", {
+            bubbles: true,
+            clipboardData: transfer,
+          }),
+        );
+      },
+      { bytes: clipboardBytes },
+    );
+    await expect.poll(editor.scenario.runCount).toBe(2);
+    await editor.scenario.completeRun();
+    await editor.preview.resetButton.click();
+  }
 });
 
 test("single-image processing keeps progress, comparison, and PNG export intact", async ({
@@ -478,6 +615,13 @@ test("batch connectors keep admission, selection, and ZIP commands at their cons
   await editor.scenario.completeRun();
 
   const batch = page.getByTestId("batch-overview");
+  const admissionGroup = page.getByRole("group", {
+    name: "Processing mode and admission for new images",
+  });
+  await expect(admissionGroup).toBeVisible();
+  await expect(admissionGroup).toContainText("Mode for new images");
+  await expect(admissionGroup).toContainText("Maximum");
+  await expect(admissionGroup).toContainText("Add images");
   await expect(batch.locator("article")).toHaveCount(2);
   await expect(batch.getByText("Result ready")).toHaveCount(2);
   await batch

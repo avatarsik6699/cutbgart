@@ -131,7 +131,7 @@ render isolation.
   run/revision correlation, bounded work, cancellation, interaction responsiveness, or artifact
   cleanup. Add deterministic algorithm/contract fixtures, browser interaction coverage, real-model
   evidence where the plan requires it, and regression timing evidence — _Depends on:_ `T10`
-- [ ] `T11` Make admission and processing feedback predictable: keep keyboard paste independent of
+- [x] `T11` Make admission and processing feedback predictable: keep keyboard paste independent of
   hover and make the visible clipboard affordance invoke the same admission path with truthful
   permission/error feedback; render no processing mode selected during initialization and select
   Maximum once client initialization completes; show a localized delayed-processing explanation
@@ -336,6 +336,9 @@ waiver.
 - [x] Make clipboard image admission discoverable inside the drop-zone presentation with a
   design-system-aligned localized affordance and browser coverage, while preserving desktop/mobile,
   keyboard, focus, MIME, multiple-file, and disabled behavior.
+- [x] Keep the visible clipboard action and its truthful feedback inside the same bordered file
+  admission surface as drag/drop and file selection on desktop and narrow layouts, so admission
+  reads as one cohesive widget rather than detached sibling controls.
 - [x] Make file admission a cohesive state owner: render validation, preparation/progress,
   cancellation, and failure feedback inside the drop-zone/choose-file surface rather than as
   detached sibling blocks, without moving runtime validation or processing truth into presentation.
@@ -535,6 +538,11 @@ waiver.
 - T10A and its processing-overlay, viewport-input, and Manual brush review fixes were manually
   accepted before the architect requested the opt-in render-diagnostics amendment for the final T1
   audit.
+- T11 keeps the window paste event as the permission-free keyboard path and invokes asynchronous
+  Clipboard API reads only from the visible user-activated control; it reports unsupported, empty,
+  denied, and failed reads without relying on the browser-divergent Permissions API. A 10-second
+  processing-only timer is the single delayed-explanation threshold and is disposed with that run's
+  presentation.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

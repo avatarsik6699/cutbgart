@@ -1,7 +1,7 @@
 import { QualityModePopover } from "@/features/quality-mode-toggle";
 import { ChooseFilesButton } from "@/features/upload-image";
 import { m } from "@/paraglide/messages";
-import { Button } from "@/shared/ui";
+import { Button, Typography } from "@/shared/ui";
 import { memo } from "react";
 
 import type { MainPageEditorTypes } from "./main-page-editor.types";
@@ -14,24 +14,39 @@ type Props = {
   onCancelDownloadAll: () => void;
   onChooseQualityMode: (mode: AutomaticModelMode) => void;
   onDownloadAll: () => void;
-  qualityMode: AutomaticModelMode;
+  qualityMode: AutomaticModelMode | null;
 };
 
 function MainPageBatchActionsView(props: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label={m.batchActionsAria()}>
-      <QualityModePopover
-        qualityMode={props.qualityMode}
-        onQualityModeChange={props.onChooseQualityMode}
-        disabled={props.disabled}
-      />
-      <ChooseFilesButton
-        className="h-8 w-auto px-3 py-0 sm:flex"
-        disabled={props.disabled || props.actions.atCapacity}
-        label={m.addImages()}
-        multiple
-        onFiles={props.onAddFiles}
-      />
+      <div
+        role="group"
+        aria-label={m.batchAdmissionControlsLabel()}
+        className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/35 p-1 pl-2"
+      >
+        <Typography
+          variant="caption"
+          as="span"
+          className="hidden max-w-28 text-muted-foreground sm:inline"
+        >
+          {m.batchAdmissionModeLabel()}
+        </Typography>
+        <QualityModePopover
+          qualityMode={props.qualityMode}
+          onQualityModeChange={props.onChooseQualityMode}
+          disabled={props.disabled || props.qualityMode === null}
+        />
+        <ChooseFilesButton
+          className="h-8 w-auto px-3 py-0 sm:flex"
+          disabled={
+            props.disabled || props.actions.atCapacity || props.qualityMode === null
+          }
+          label={m.addImages()}
+          multiple
+          onFiles={props.onAddFiles}
+        />
+      </div>
       <Button
         type="button"
         size="sm"
