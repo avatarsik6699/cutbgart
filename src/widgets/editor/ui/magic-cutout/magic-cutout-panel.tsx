@@ -61,6 +61,7 @@ function trapDialogTab(
 
 export function MagicCutoutPanel(
   props: Readonly<{
+    busy: boolean;
     draft: MagicCutoutTypes.Draft;
     initialRadius: number;
     interaction: MagicCutoutInteraction;
@@ -76,7 +77,6 @@ export function MagicCutoutPanel(
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const previousConfirmDiscardRef = useRef(false);
-  const busy = props.draft.status === "encoding" || props.draft.status === "predicting";
 
   useEffect(
     function routeDiscardDialogFocusFx() {
@@ -114,6 +114,7 @@ export function MagicCutoutPanel(
               variant={props.mode === "keep" ? "default" : "outline"}
               className={`h-20 flex-col gap-1.5 ${props.mode === "keep" ? "bg-emerald-700 text-white hover:bg-emerald-800" : "border-emerald-700 text-emerald-800 dark:text-emerald-300"}`}
               onClick={() => props.onModeChange("keep")}
+              disabled={props.busy}
             >
               <CirclePlus className="size-6" aria-hidden="true" />
               {m.guidedBrushKeep()}
@@ -122,6 +123,7 @@ export function MagicCutoutPanel(
               variant={props.mode === "remove" ? "default" : "outline"}
               className={`h-20 flex-col gap-1.5 ${props.mode === "remove" ? "bg-rose-700 text-white hover:bg-rose-800" : "border-rose-700 text-rose-800 dark:text-rose-300"}`}
               onClick={() => props.onModeChange("remove")}
+              disabled={props.busy}
             >
               <CircleMinus className="size-6" aria-hidden="true" />
               {m.guidedBrushRemove()}
@@ -137,6 +139,7 @@ export function MagicCutoutPanel(
               min="2"
               max="80"
               defaultValue={props.initialRadius}
+              disabled={props.busy}
               onChange={(event) =>
                 props.onRadiusChange(Number(event.currentTarget.value))
               }
@@ -146,9 +149,9 @@ export function MagicCutoutPanel(
             <Button
               className="w-full"
               onClick={props.interaction.apply}
-              disabled={!props.draft.dirty || busy}
+              disabled={!props.draft.dirty || props.busy}
             >
-              {busy ? m.editorMagicWorking() : m.cutoutApply()}
+              {props.busy ? m.editorMagicWorking() : m.cutoutApply()}
             </Button>
             <Button
               ref={cancelButtonRef}
@@ -158,10 +161,18 @@ export function MagicCutoutPanel(
                 if (props.draft.dirty) setConfirmDiscard(true);
                 else props.interaction.cancel();
               }}
+              disabled={props.busy}
             >
               {m.cancel()}
             </Button>
           </div>
+          <Typography
+            variant="caption"
+            as="p"
+            className="text-pretty text-muted-foreground"
+          >
+            {m.editorMagicFirstRunHint()}
+          </Typography>
           {confirmDiscard ? (
             <div
               ref={dialogRef}

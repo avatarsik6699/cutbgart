@@ -3,7 +3,9 @@ import type { TransferableMagicCandidate } from "./magic-worker-protocol";
 
 export type MagicConstraintMaps = Readonly<{
   hard: Int8Array;
+  hardIndices: readonly number[];
   influence: Int8Array;
+  influenceIndices: readonly number[];
   width: number;
   height: number;
 }>;
@@ -82,35 +84,83 @@ export function createMagicConstraints(
       Math.max(1, Math.round(radius * HARD_CORE_RATIO)),
     );
   }
-  return { hard, influence, width, height };
+  const hardIndices: number[] = [];
+  const influenceIndices: number[] = [];
+  for (let index = 0; index < hard.length; index += 1) {
+    if ((hard[index] ?? -1) >= 0) hardIndices.push(index);
+    if ((influence[index] ?? -1) >= 0) influenceIndices.push(index);
+  }
+  return { hard, hardIndices, influence, influenceIndices, width, height };
 }
 
-function agreement(data: Uint8ClampedArray, constraints: Int8Array): number {
-  let marked = 0;
+function agreement(
+  data: Uint8ClampedArray,
+  constraints: Int8Array,
+  indices: readonly number[],
+): number {
   let agreed = 0;
-  constraints.forEach((intent, index) => {
-    if (intent < 0) return;
-    marked += 1;
+  for (const index of indices) {
+    const intent = constraints[index] ?? -1;
     const included = (data[index] ?? 0) >= 128;
     if ((intent === 1 && included) || (intent === 0 && !included)) agreed += 1;
-  });
-  return marked === 0 ? 0 : agreed / marked;
+  }
+  return indices.length === 0 ? 0 : agreed / indices.length;
 }
 
 function continuity(
-  data: Uint8ClampedArray,
+  candidate: Uint8ClampedArray,
   base: Uint8ClampedArray | null,
-  influence: Int8Array,
+  constraints: MagicConstraintMaps,
 ): number {
   if (base === null) return 0;
-  let compared = 0;
   let delta = 0;
-  influence.forEach((intent, index) => {
-    if (intent < 0) return;
-    compared += 1;
-    delta += Math.abs((data[index] ?? 0) - (base[index] ?? 0));
-  });
-  return compared === 0 ? 0 : 1 - delta / (compared * 255);
+  for (const index of constraints.influenceIndices) {
+    const intent = constraints.influence[index] ?? -1;
+    const baseAlpha = base[index] ?? 0;
+    const candidateAlpha = candidate[index] ?? 0;
+    const fused = directionalAlpha(intent, baseAlpha, candidateAlpha);
+    delta += Math.abs(fused - baseAlpha);
+  }
+  return constraints.influenceIndices.length === 0
+    ? 0
+    : 1 - delta / (constraints.influenceIndices.length * 255);
+}
+
+function directionalAlpha(intent: number, base: number, candidate: number): number {
+  if (intent === 1) return Math.max(base, candidate);
+  if (intent === 0) return Math.min(base, candidate);
+  return base;
+}
+
+function hardAlpha(intent: number, current: number): number {
+  if (intent === 1) return 255;
+  if (intent === 0) return 0;
+  return current;
+}
+
+function fuseAutomaticBase(
+  candidate: Uint8ClampedArray,
+  base: Uint8ClampedArray,
+  constraints: MagicConstraintMaps,
+): Uint8ClampedArray {
+  const data = base.slice();
+  for (const index of constraints.influenceIndices) {
+    const intent = constraints.influence[index] ?? -1;
+    data[index] = directionalAlpha(intent, base[index] ?? 0, candidate[index] ?? 0);
+  }
+  return data;
+}
+
+function fuseDirectGuidance(
+  candidate: Uint8ClampedArray,
+  constraints: MagicConstraintMaps,
+): Uint8ClampedArray {
+  const data = candidate.slice();
+  for (const index of constraints.hardIndices) {
+    const intent = constraints.hard[index] ?? -1;
+    data[index] = hardAlpha(intent, data[index] ?? 0);
+  }
+  return data;
 }
 
 function fuse(
@@ -118,19 +168,9 @@ function fuse(
   base: Uint8ClampedArray | null,
   constraints: MagicConstraintMaps,
 ): Uint8ClampedArray {
-  const data = base?.slice() ?? candidate.slice();
-  if (base !== null) {
-    constraints.influence.forEach((intent, index) => {
-      if (intent === 1) data[index] = Math.max(base[index] ?? 0, candidate[index] ?? 0);
-      else if (intent === 0)
-        data[index] = Math.min(base[index] ?? 0, candidate[index] ?? 0);
-    });
-  }
-  constraints.hard.forEach((intent, index) => {
-    if (intent === 1) data[index] = 255;
-    else if (intent === 0) data[index] = 0;
-  });
-  return data;
+  return base === null
+    ? fuseDirectGuidance(candidate, constraints)
+    : fuseAutomaticBase(candidate, base, constraints);
 }
 
 export function rankAndFuseMagicCandidates(options: {
@@ -145,7 +185,7 @@ export function rankAndFuseMagicCandidates(options: {
     throw new Error("Magic base matte dimensions do not match candidates");
   }
   const constraints = createMagicConstraints(options.strokes, first.width, first.height);
-  return options.candidates
+  const best = options.candidates
     .map((candidate, originalIndex) => {
       if (
         candidate.width !== first.width ||
@@ -155,14 +195,12 @@ export function rankAndFuseMagicCandidates(options: {
         throw new Error("Magic candidate dimensions do not match");
       }
       const raw = new Uint8ClampedArray(candidate.data);
-      const intentScore = agreement(raw, constraints.hard);
-      const data = fuse(raw, options.base, constraints);
       return {
-        data,
+        raw,
         height: candidate.height,
         modelScore: Number.isFinite(candidate.score) ? candidate.score : 0,
-        intentScore,
-        continuity: continuity(data, options.base, constraints.influence),
+        intentScore: agreement(raw, constraints.hard, constraints.hardIndices),
+        continuity: continuity(raw, options.base, constraints),
         originalIndex,
         width: candidate.width,
       };
@@ -174,11 +212,14 @@ export function rankAndFuseMagicCandidates(options: {
         right.modelScore - left.modelScore ||
         left.originalIndex - right.originalIndex,
     )
-    .slice(0, 3)
-    .map(({ data, height, modelScore, width }) => ({
-      data,
-      height,
-      score: modelScore,
-      width,
-    }));
+    .at(0);
+  if (best === undefined) return [];
+  return [
+    {
+      data: fuse(best.raw, options.base, constraints),
+      height: best.height,
+      score: best.modelScore,
+      width: best.width,
+    },
+  ];
 }

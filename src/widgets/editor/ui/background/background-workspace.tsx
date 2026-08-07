@@ -87,7 +87,11 @@ export function BackgroundWorkspace(props: Props) {
   return (
     <>
       <div className="[grid-area:surface]">
-        <EditorStage documentId={props.draft.documentId}>
+        <EditorStage
+          documentId={props.draft.documentId}
+          loading={busy}
+          loadingLabel={backgroundStatus(props)}
+        >
           <BeforeAfterUrlSlider
             afterUrl={props.foregroundUrl}
             beforeUrl={props.sourceUrl}

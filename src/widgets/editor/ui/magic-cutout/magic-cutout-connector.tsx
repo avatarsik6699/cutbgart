@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { selectMagicCandidates, selectMagicDraft } from "@/editor/application";
+import {
+  selectDocumentStatus,
+  selectMagicCandidates,
+  selectMagicDraft,
+} from "@/editor/application";
 import type { MagicCutoutTypes } from "@/editor/domain";
 
 import {
@@ -82,6 +86,7 @@ export function MagicCutoutConnector() {
   const width = useEditorSessionValue(selectActiveWidth);
   const height = useEditorSessionValue(selectActiveHeight);
   const runtimeProgress = useEditorSessionValue(selectActiveMagicProgress);
+  const status = useActiveDocumentActorSelector(selectDocumentStatus);
   const requestApply = useMagicApply(model, draft, candidates);
 
   const interaction = useMemo<MagicCutoutInteraction>(() => {
@@ -119,6 +124,7 @@ export function MagicCutoutConnector() {
   if (draft === null || currentUrl === null) return null;
   return (
     <MagicCutoutWorkspace
+      applying={status === "magic-applying"}
       draft={draft}
       height={height}
       runtimeProgress={runtimeProgress}

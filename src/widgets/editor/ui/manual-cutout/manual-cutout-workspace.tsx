@@ -51,6 +51,7 @@ export type ManualCutoutInteraction = Readonly<{
 
 export function ManualCutoutWorkspace(
   props: Readonly<{
+    busy: boolean;
     documentId: string;
     height: number;
     interaction: ManualCutoutInteraction;
@@ -79,6 +80,7 @@ export function ManualCutoutWorkspace(
   return (
     <>
       <ManualCutoutCanvas
+        busy={props.busy}
         currentUrl={props.currentUrl}
         documentId={props.documentId}
         height={props.height}
@@ -87,6 +89,7 @@ export function ManualCutoutWorkspace(
         width={props.width}
       />
       <ManualCutoutPanel
+        busy={props.busy}
         interaction={props.interaction}
         onBrushSizeChange={changeBrushSize}
         onCutoutModeChange={props.onCutoutModeChange}

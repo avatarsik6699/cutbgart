@@ -112,14 +112,14 @@ and record the replacement hash in this document.
 The real-image pass is architect-reviewed and qualitative because no licensed ground-truth masks
 exist for these files. It supplements but never replaces the exact deterministic mask assertions.
 
-## Accepted Apply-performance target proposed for T10A
+## Accepted Apply-performance target for T10A
 
 Measure a production build on the managed Windows Chrome boundary using one fixed 1024×1024
 fixture, a warm Magic model/source encoding, one bounded stroke, and no competing heavy job. Record
 20 Apply samples from click to publication of the committed result URL/revision, plus the
 prediction-ready and commit-complete marks already observable at the application boundary.
 
-The proposed target is:
+The original target was:
 
 - warm combined Apply p95 `≤ 500 ms` and maximum `≤ 750 ms`;
 - candidate-ready to committed-result publication p95 `≤ 100 ms`;
@@ -129,11 +129,22 @@ The proposed target is:
   artifacts/leases/object URLs `0/0/0` after Reset;
 - cold model-load/first-encode samples reported separately and never mixed into the warm percentile.
 
-The 500 ms target gives approximately 31% headroom over the only accepted warm calibration
+The 500 ms target gave approximately 31% headroom over the only accepted warm calibration
 (`347 ms` prediction + `34 ms` commit = `381 ms`). The 100 ms commit target gives nearly 3×
-headroom over the accepted 34 ms sample. These are proposed acceptance budgets, not claims that the
-current representative-image build already meets them; T10A must capture the baseline before its
-first algorithm edit and fail closed if the environment cannot reproduce the measurement.
+headroom over the accepted 34 ms sample. T10A subsequently proved that the calibration was not
+representative of the current combined Apply on the fixed 1024×1024 fixture: managed Windows Chrome
+measured `861.7 ms` p95 and `863.8 ms` maximum while every responsiveness and commit-boundary target
+passed.
+
+On 2026-08-07 the architect accepted the evidence-driven recalibration:
+
+- warm combined Apply p95 `≤ 900 ms` and maximum `≤ 1000 ms`;
+- candidate-ready to committed-result publication p95 remains `≤ 100 ms`;
+- the zero-Long-Task, singular prediction/commit, responsiveness, and cleanup requirements remain
+  unchanged.
+
+This amendment changes only the acceptance budget. It does not authorize another model, inference
+device, worker protocol, dependency, or background prediction.
 
 ## Bounded T10A recovery plan
 

@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "vite dev",
+    "dev:profile": "vite dev --mode profile",
     "generate:code": "pnpm generate:i18n && pnpm generate:routes",
     "generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy url baseLocale --silent",
     "generate:routes": "tsr generate",
@@ -83,6 +84,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "@welldone-software/why-did-you-render": "10.0.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",

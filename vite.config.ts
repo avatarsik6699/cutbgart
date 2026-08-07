@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, perEnvironmentPlugin } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { nitro } from "nitro/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -6,6 +6,9 @@ import tailwindcss from "@tailwindcss/vite";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 
 export default defineConfig(({ mode }) => ({
+  define: {
+    __RENDER_DIAGNOSTICS__: JSON.stringify(mode === "profile"),
+  },
   server: {
     port: 3000,
     // Offline browser tests intentionally disconnect the network. Disable the
@@ -82,6 +85,13 @@ export default defineConfig(({ mode }) => ({
     tanstackStart(),
     nitro(),
     // react's vite plugin must come after start's vite plugin
-    viteReact(),
+    perEnvironmentPlugin("react-environment", (environment) =>
+      viteReact({
+        jsxImportSource:
+          mode === "profile" && environment.name === "client"
+            ? "@welldone-software/why-did-you-render"
+            : "react",
+      }),
+    ),
   ],
 }));

@@ -8,58 +8,95 @@ export type MagicModelPrompt = Readonly<{
 }>;
 
 function promptAt(
-  stroke: MagicCutoutRuntimeTypes.Stroke,
-  pointIndex: number,
+  mode: MagicCutoutRuntimeTypes.Stroke["mode"],
+  point: MagicCutoutRuntimeTypes.Point,
 ): MagicModelPrompt {
   return {
-    label: stroke.mode === "keep" ? 1 : 0,
-    point: { ...stroke.points[pointIndex]! },
+    label: mode === "keep" ? 1 : 0,
+    point,
   };
 }
 
+type OrderedPrompt = MagicModelPrompt & { order: number };
+
+function sourceCentrelinePrompts(
+  strokes: readonly MagicCutoutRuntimeTypes.Stroke[],
+): readonly OrderedPrompt[] {
+  const latestByPixel = new Map<string, OrderedPrompt>();
+  let order = 0;
+  for (const stroke of strokes) {
+    for (let index = 0; index < stroke.points.length; index += 1) {
+      const from = stroke.points[Math.max(0, index - 1)]!;
+      const to = stroke.points[index]!;
+      const fromX = Math.round(from.x);
+      const fromY = Math.round(from.y);
+      const toX = Math.round(to.x);
+      const toY = Math.round(to.y);
+      const steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY), 1);
+      for (let step = 0; step <= steps; step += 1) {
+        const point = {
+          x: Math.round(fromX + ((toX - fromX) * step) / steps),
+          y: Math.round(fromY + ((toY - fromY) * step) / steps),
+        };
+        latestByPixel.set(`${String(point.x)}:${String(point.y)}`, {
+          ...promptAt(stroke.mode, point),
+          order: order++,
+        });
+      }
+    }
+  }
+  return [...latestByPixel.values()].sort((left, right) => left.order - right.order);
+}
+
+function allocatePromptCounts(
+  keepAvailable: number,
+  removeAvailable: number,
+): Readonly<{ keep: number; remove: number }> {
+  if (keepAvailable === 0)
+    return { keep: 0, remove: Math.min(removeAvailable, MAGIC_MODEL_PROMPT_LIMIT) };
+  if (removeAvailable === 0)
+    return { keep: Math.min(keepAvailable, MAGIC_MODEL_PROMPT_LIMIT), remove: 0 };
+  let keep = Math.min(keepAvailable, Math.ceil(MAGIC_MODEL_PROMPT_LIMIT / 2));
+  let remove = Math.min(removeAvailable, Math.floor(MAGIC_MODEL_PROMPT_LIMIT / 2));
+  let remaining = MAGIC_MODEL_PROMPT_LIMIT - keep - remove;
+  while (remaining > 0 && (keep < keepAvailable || remove < removeAvailable)) {
+    if (keep <= remove && keep < keepAvailable) keep += 1;
+    else if (remove < removeAvailable) remove += 1;
+    else keep += 1;
+    remaining -= 1;
+  }
+  return { keep, remove };
+}
+
+function representativePrompts(
+  prompts: readonly OrderedPrompt[],
+  count: number,
+): readonly OrderedPrompt[] {
+  if (count <= 0) return [];
+  if (prompts.length <= count) return prompts;
+  if (count === 1) return [prompts.at(-1)!];
+  return Array.from(
+    { length: count },
+    (_unused, index) =>
+      prompts[Math.round((index * (prompts.length - 1)) / (count - 1))]!,
+  );
+}
+
 /**
- * Produces a bounded, deterministic prompt set without leaking the full draft into model state.
- * Recent stroke endpoints are reserved first so the latest Keep and Remove intent cannot be lost;
- * the remaining capacity samples the complete stroke history at even source-space intervals.
+ * Produces a bounded prompt set from source-pixel centrelines. Pointer event density cannot
+ * consume the budget, both semantic modes receive fair capacity, and later strokes own overlap.
  */
 export function createMagicModelPrompts(
   strokes: readonly MagicCutoutRuntimeTypes.Stroke[],
 ): readonly MagicModelPrompt[] {
-  const points = strokes.flatMap((stroke) =>
-    stroke.points.map((_point, pointIndex) => promptAt(stroke, pointIndex)),
-  );
-  if (points.length <= MAGIC_MODEL_PROMPT_LIMIT) return points;
-
-  const reservedIndexes = new Set<number>();
-  for (const mode of ["keep", "remove"] as const) {
-    for (let strokeIndex = strokes.length - 1; strokeIndex >= 0; strokeIndex -= 1) {
-      const stroke = strokes[strokeIndex];
-      if (stroke?.mode !== mode || stroke.points.length === 0) continue;
-      let offset = 0;
-      for (let index = 0; index < strokeIndex; index += 1) {
-        offset += strokes[index]?.points.length ?? 0;
-      }
-      reservedIndexes.add(offset + stroke.points.length - 1);
-      break;
-    }
-  }
-
-  const targetIndexes = new Set(reservedIndexes);
-  const remaining = MAGIC_MODEL_PROMPT_LIMIT - targetIndexes.size;
-  for (let slot = 0; slot < remaining; slot += 1) {
-    targetIndexes.add(
-      Math.round((slot * (points.length - 1)) / Math.max(1, remaining - 1)),
-    );
-  }
-  if (targetIndexes.size < MAGIC_MODEL_PROMPT_LIMIT) {
-    for (let index = points.length - 1; index >= 0; index -= 1) {
-      targetIndexes.add(index);
-      if (targetIndexes.size === MAGIC_MODEL_PROMPT_LIMIT) break;
-    }
-  }
-
-  return [...targetIndexes]
-    .sort((left, right) => left - right)
-    .slice(-MAGIC_MODEL_PROMPT_LIMIT)
-    .map((index) => points[index]!);
+  const prompts = sourceCentrelinePrompts(strokes);
+  if (prompts.length <= MAGIC_MODEL_PROMPT_LIMIT)
+    return prompts.map(({ label, point }) => ({ label, point }));
+  const keep = prompts.filter((prompt) => prompt.label === 1);
+  const remove = prompts.filter((prompt) => prompt.label === 0);
+  const allocation = allocatePromptCounts(keep.length, remove.length);
+  return [
+    ...representativePrompts(keep, allocation.keep),
+    ...representativePrompts(remove, allocation.remove),
+  ].map(({ label, point }) => ({ label, point }));
 }

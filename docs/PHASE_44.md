@@ -125,7 +125,7 @@ render isolation.
   establish a reproducible accepted Apply-performance target from evidence, and write an
   architect-reviewed recovery plan under `docs/audits/`. Do not begin `T10A` until the architect
   accepts the diagnosis, target, and plan — _Depends on:_ `T9`
-- [ ] `T10A` Implement only the accepted T10 Magic recovery plan. Remove strokes must remove
+- [x] `T10A` Implement only the accepted T10 Magic recovery plan. Remove strokes must remove
   background while preserving crossed subject edges; Keep strokes must restore subject pixels
   without restoring crossed background; Apply must meet the evidenced target without weakening
   run/revision correlation, bounded work, cancellation, interaction responsiveness, or artifact
@@ -202,8 +202,9 @@ package.json
 pnpm-lock.yaml
 ~~~
 
-`package.json` and `pnpm-lock.yaml` may change only for the already accepted T2/T3/T8 cases. T9–T13
-must use the retained stack unless the architect first approves a phase amendment. Runtime,
+`package.json` and `pnpm-lock.yaml` may change only for the already accepted T2/T3/T8 cases and the
+architect-approved dev-only React render diagnostics added before T11 for use in T1. T9–T13 must
+otherwise use the retained stack unless the architect first approves a phase amendment. Runtime,
 application, and domain APIs may change only as narrowly required for the approved T9, T10A, or T12
 behavior; worker-protocol or broader ownership changes require an explicit phase amendment first.
 
@@ -394,6 +395,32 @@ waiver.
   polymorphic component.
 - [x] Apply the same ownership/repetition test to later Phase-44 checkpoints: extract meaningful
   subcomponents and shared primitives into capability-owned structure without speculative wrappers.
+- [x] Make editor processing feedback coherent across Magic, Manual, Background, and Enhancements:
+  explain at the Magic Apply control that the first on-device run can take longer, and show one
+  localized reduced-motion-aware branded blocking overlay over the workspace while an Apply is in
+  flight so no tool accepts conflicting edits.
+- [x] Restore workspace-scoped view input while the pointer is over the image stage: wheel and
+  keyboard zoom/pan commands must affect the editor rather than scroll or zoom the browser, without
+  trapping unrelated page input. Add a clear focus/hover treatment that truthfully communicates
+  when workspace shortcuts are active, with bilingual keyboard-accessible browser coverage.
+- [x] Diagnose and fix Manual Restore/Erase so both modes affect the intended pixels continuously,
+  quickly, and predictably at every zoom level. Preserve the committed baseline and history/resource
+  contracts, and add focused engine, pointer-coordinate, and browser regressions for both modes.
+- [x] Route Space synchronously to the active Cutout viewport so it never scrolls or selects the
+  surrounding page, and make both Space + primary-button and middle-button pan gestures switch to
+  grab/grabbing immediately without overlapping the brush cursor.
+- [x] Reduce Cutout view-control and pan render fan-out: keep high-frequency gesture state at the
+  imperative viewport boundary, prove drag movement does not commit the Magic/Manual React
+  workspace, and do not add a diagnostic runtime dependency unless profiling identifies a gap the
+  existing React Profiler cannot explain.
+- [x] Make the shared processing overlay translucent enough to retain image context and remove its
+  visible status copy while preserving a localized screen-reader status, blocking behavior,
+  branded shimmer, and reduced-motion treatment across all editor tools.
+- [x] Add architect-approved opt-in React render diagnostics for the final T1 audit. Use a React-19
+  compatible dev dependency and a dedicated profile command that initializes before hydration,
+  reports avoidable rerenders without changing workflow ownership, and is absent from ordinary dev,
+  E2E, production behavior, and production bundles. Document the evidence workflow and verify both
+  enabled and excluded paths before the T10A checkpoint commit.
 
 ---
 
@@ -501,6 +528,13 @@ waiver.
   began.
 - T10's diagnosis, fixtures, objective quality criteria, Apply-performance target, and bounded
   recovery plan were explicitly accepted by the architect before T10A began.
+- T10A's representative managed-Windows evidence supersedes the non-representative historical
+  calibration: the architect accepted p95 `≤ 900 ms` and maximum `≤ 1000 ms` for the unchanged
+  1024×1024 combined Apply. The `≤ 100 ms` commit boundary, responsiveness, singular-work, and
+  cleanup requirements remain unchanged and pass.
+- T10A and its processing-overlay, viewport-input, and Manual brush review fixes were manually
+  accepted before the architect requested the opt-in render-diagnostics amendment for the final T1
+  audit.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

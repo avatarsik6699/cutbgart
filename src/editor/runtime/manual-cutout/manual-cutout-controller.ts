@@ -39,14 +39,8 @@ export class ManualCutoutController {
     const next = actor.getSnapshot().context.document;
     if (next.activeDraft?.kind !== "manual-cutout" || next.committed === null) return;
     const value = this.#repository.read(next.committed.matte);
-    const baselineValue =
-      next.baseline === null ? null : this.#repository.read(next.baseline.matte);
     const metadata = this.#repository.metadata(next.committed.matte);
-    if (
-      !(value instanceof Uint8ClampedArray) ||
-      !(baselineValue instanceof Uint8ClampedArray) ||
-      metadata === null
-    ) {
+    if (!(value instanceof Uint8ClampedArray) || metadata === null) {
       return;
     }
     this.#drafts.create(
@@ -55,7 +49,6 @@ export class ManualCutoutController {
       value,
       metadata.width,
       metadata.height,
-      baselineValue,
     );
   }
 

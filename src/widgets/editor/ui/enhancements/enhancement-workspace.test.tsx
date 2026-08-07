@@ -121,7 +121,14 @@ describe("EnhancementWorkspace", () => {
       />,
     );
 
-    expect(screen.getByRole("status").textContent).toMatch(/42%/);
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => /42%/.test(status.textContent ?? "")),
+    ).toBe(true);
+    expect(screen.getByTestId("editor-stage-placeholder").textContent).toMatch(
+      /Encoding the enhanced result|Кодируем улучшенный результат/,
+    );
     expect(screen.queryByText(/score|confidence|точност|уверен/i)).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ export type EditorStageProps = Readonly<{
   children: ReactNode;
   documentId: string;
   loading?: boolean;
+  loadingLabel?: string;
   OverlaySlot?: ReactNode | ((controls: EditorStageFullscreenControls) => ReactNode);
 }>;
 
@@ -88,21 +89,24 @@ export function EditorStage(props: EditorStageProps) {
           : "editor-stage-grid relative h-[clamp(22rem,62dvh,46rem)] rounded-lg border border-border"
       }`}
     >
-      {props.loading ? (
-        <div
-          className="editor-stage-loading relative size-full cursor-wait overflow-hidden rounded-xl"
-          data-testid="editor-stage-placeholder"
-        >
-          <div className="absolute inset-0 grid place-items-center">{props.children}</div>
-        </div>
-      ) : (
-        <div className="grid size-full min-w-0 place-items-center [container-type:size]">
-          {props.children}
-        </div>
-      )}
+      <div className="grid size-full min-w-0 place-items-center [container-type:size]">
+        {props.children}
+      </div>
       {typeof props.OverlaySlot === "function"
         ? props.OverlaySlot({ expanded, toggleFullscreen })
         : props.OverlaySlot}
+      {props.loading ? (
+        <div
+          className="editor-stage-loading absolute inset-3 z-40 cursor-wait overflow-hidden rounded-xl"
+          data-testid="editor-stage-placeholder"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="sr-only">
+            {props.loadingLabel ?? m.editorProcessingLocally()}
+          </span>
+        </div>
+      ) : null}
     </section>
   );
 }

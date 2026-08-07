@@ -9,7 +9,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 import { m } from "@/paraglide/messages";
 import { CanvasViewIconButton } from "./canvas-view-icon-button";
@@ -30,41 +30,80 @@ export type CanvasViewControlsProps = Readonly<{
   onToggleFullscreen: () => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  shortcutsActive: boolean;
 }>;
 
+type CanvasViewShortcut =
+  "brush" | "fit" | "fullscreen" | "hand" | "zoom-in" | "zoom-out";
+
+const MODIFIED_SHORTCUTS: Readonly<Record<string, CanvasViewShortcut>> = {
+  "+": "zoom-in",
+  "=": "zoom-in",
+  add: "zoom-in",
+  "-": "zoom-out",
+  _: "zoom-out",
+  subtract: "zoom-out",
+  "0": "fit",
+};
+
+const PLAIN_SHORTCUTS: Readonly<Record<string, CanvasViewShortcut>> = {
+  b: "brush",
+  f: "fullscreen",
+  h: "hand",
+};
+
+function canvasViewShortcut(
+  event: KeyboardEvent,
+  active: boolean,
+  canPan: boolean,
+): CanvasViewShortcut | null {
+  const target = event.target;
+  const editable =
+    target instanceof Element &&
+    target.closest("input, textarea, select, [contenteditable]") !== null;
+  if (editable || !active || event.altKey) return null;
+  const key = event.key.toLowerCase();
+  const shortcut =
+    event.ctrlKey || event.metaKey ? MODIFIED_SHORTCUTS[key] : PLAIN_SHORTCUTS[key];
+  if (shortcut === "hand" && !canPan) return null;
+  return shortcut ?? null;
+}
+
 export function CanvasViewControls(props: CanvasViewControlsProps) {
-  const canPan = props.canPan;
-  const onInteractionModeChange = props.onInteractionModeChange;
-  const onToggleFullscreen = props.onToggleFullscreen;
-  useEffect(
-    function routeCanvasViewShortcutsFx() {
-      function handleShortcutFx(event: KeyboardEvent): void {
-        const target = event.target;
-        if (
-          target instanceof Element &&
-          target.closest("input, textarea, select, [contenteditable]")
-        )
-          return;
-        if (event.ctrlKey || event.metaKey || event.altKey) return;
-        const key = event.key.toLowerCase();
-        if (key === "h" && canPan) {
-          event.preventDefault();
-          onInteractionModeChange("hand");
-        } else if (key === "b") {
-          event.preventDefault();
-          onInteractionModeChange("brush");
-        } else if (key === "f") {
-          event.preventDefault();
-          onToggleFullscreen();
-        }
-      }
-      globalThis.addEventListener("keydown", handleShortcutFx);
-      return function removeCanvasViewShortcutsFx() {
-        globalThis.removeEventListener("keydown", handleShortcutFx);
-      };
-    },
-    [canPan, onInteractionModeChange, onToggleFullscreen],
-  );
+  const handleShortcutFx = useEffectEvent(function handleCanvasViewShortcutFx(
+    event: KeyboardEvent,
+  ): void {
+    const shortcut = canvasViewShortcut(event, props.shortcutsActive, props.canPan);
+    if (shortcut === null) return;
+    event.preventDefault();
+    switch (shortcut) {
+      case "brush":
+        props.onInteractionModeChange("brush");
+        break;
+      case "fit":
+        props.onResetView();
+        break;
+      case "fullscreen":
+        props.onToggleFullscreen();
+        break;
+      case "hand":
+        props.onInteractionModeChange("hand");
+        break;
+      case "zoom-in":
+        props.onZoomIn();
+        break;
+      case "zoom-out":
+        props.onZoomOut();
+        break;
+    }
+  });
+
+  useEffect(function routeCanvasViewShortcutsFx() {
+    globalThis.addEventListener("keydown", handleShortcutFx);
+    return function removeCanvasViewShortcutsFx() {
+      globalThis.removeEventListener("keydown", handleShortcutFx);
+    };
+  }, []);
 
   if (props.collapsed) {
     return (

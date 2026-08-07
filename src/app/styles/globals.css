@@ -369,11 +369,11 @@
     }
   }
 
-  /* Editor-stage "still loading" surface: a clearly darker scrim (not just a
-     faint pulse) with a diagonal shimmer sweep, so it reads unmistakably as
-     "busy" even glanced at from across the page. */
+  /* Preserve image context while the stage is locked; the restrained light sweep
+     is the visible busy signal and the DOM status remains screen-reader-only. */
   .editor-stage-loading {
-    background: color-mix(in oklch, var(--foreground) 10%, var(--muted));
+    background: color-mix(in oklch, var(--background) 18%, transparent);
+    backdrop-filter: saturate(0.82);
   }
 
   .editor-stage-loading::after {
@@ -383,9 +383,9 @@
     background: linear-gradient(
       100deg,
       transparent 30%,
-      color-mix(in oklch, var(--primary) 30%, transparent) 45%,
-      color-mix(in oklch, var(--primary) 50%, transparent) 50%,
-      color-mix(in oklch, var(--primary) 30%, transparent) 55%,
+      color-mix(in oklch, var(--primary) 10%, transparent) 44%,
+      color-mix(in oklch, var(--primary) 22%, transparent) 50%,
+      color-mix(in oklch, var(--primary) 10%, transparent) 56%,
       transparent 70%
     );
     background-size: 200% 100%;

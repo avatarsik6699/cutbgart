@@ -29,6 +29,7 @@ describe("CanvasViewControls", () => {
         onToggleFullscreen={onToggleFullscreen}
         collapsed={false}
         onCollapsedChange={onCollapsedChange}
+        shortcutsActive
       />,
     );
 
@@ -41,14 +42,20 @@ describe("CanvasViewControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /fullscreen/i }));
     fireEvent.click(screen.getByRole("button", { name: /collapse view controls/i }));
     fireEvent.keyDown(window, { key: "h" });
+    fireEvent.keyDown(window, { key: "b" });
+    fireEvent.keyDown(window, { key: "f" });
+    fireEvent.keyDown(window, { key: "+", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "-", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "0", ctrlKey: true });
 
     expect(onInteractionModeChange).toHaveBeenCalledWith("hand");
-    expect(onZoomOut).toHaveBeenCalledWith();
-    expect(onZoomIn).toHaveBeenCalledWith();
-    expect(onResetView).toHaveBeenCalledWith();
-    expect(onToggleFullscreen).toHaveBeenCalledWith();
+    expect(onZoomOut).toHaveBeenCalledTimes(2);
+    expect(onZoomIn).toHaveBeenCalledTimes(2);
+    expect(onResetView).toHaveBeenCalledTimes(2);
+    expect(onToggleFullscreen).toHaveBeenCalledTimes(2);
     expect(onCollapsedChange).toHaveBeenCalledWith(true);
     expect(onInteractionModeChange).toHaveBeenCalledWith("hand");
+    expect(onInteractionModeChange).toHaveBeenCalledWith("brush");
   });
 
   it("expands from a single compact action", () => {
@@ -68,6 +75,7 @@ describe("CanvasViewControls", () => {
         onToggleFullscreen={vi.fn()}
         collapsed
         onCollapsedChange={onCollapsedChange}
+        shortcutsActive={false}
       />,
     );
 

@@ -28,7 +28,7 @@ function copyRegion(
 }
 
 export class ManualDraftEngine {
-  readonly #baseline: Uint8ClampedArray;
+  #restoreAlpha: Uint8ClampedArray;
   readonly #height: number;
   readonly #initial: Uint8ClampedArray;
   readonly #working: Uint8ClampedArray;
@@ -42,17 +42,17 @@ export class ManualDraftEngine {
     alpha: Uint8ClampedArray,
     width: number,
     height: number,
-    baseline: Uint8ClampedArray = alpha,
+    restoreAlpha: Uint8ClampedArray = new Uint8ClampedArray(alpha.length).fill(255),
   ) {
     if (
       width <= 0 ||
       height <= 0 ||
       alpha.length !== width * height ||
-      baseline.length !== width * height
+      restoreAlpha.length !== width * height
     ) {
       throw new Error("Manual draft alpha dimensions are invalid");
     }
-    this.#baseline = baseline.slice();
+    this.#restoreAlpha = restoreAlpha.slice();
     this.#initial = alpha.slice();
     this.#working = alpha.slice();
     this.#width = width;
@@ -77,6 +77,12 @@ export class ManualDraftEngine {
 
   alphaCopy(): Uint8ClampedArray {
     return this.#working.slice();
+  }
+
+  setRestoreAlpha(alpha: Uint8ClampedArray): void {
+    if (alpha.length !== this.#width * this.#height)
+      throw new Error("Manual restore alpha dimensions are invalid");
+    this.#restoreAlpha = alpha.slice();
   }
 
   applyAlpha(image: ImageData, box?: ManualCutoutRuntimeTypes.Box): void {
@@ -182,7 +188,7 @@ export class ManualDraftEngine {
           distance <= hardness ? 1 : 1 - (distance - hardness) / (1 - hardness);
         const index = y * this.#width + x;
         const current = this.#working[index] ?? 0;
-        const target = brush.mode === "erase" ? 0 : (this.#baseline[index] ?? 0);
+        const target = brush.mode === "erase" ? 0 : (this.#restoreAlpha[index] ?? 0);
         this.#setAlpha(index, Math.round(current + (target - current) * influence));
       }
     }

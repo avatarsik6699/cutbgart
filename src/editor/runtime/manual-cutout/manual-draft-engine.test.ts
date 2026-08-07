@@ -17,7 +17,7 @@ describe("ManualDraftEngine", () => {
     expect(patch?.before.length).toBeLessThan(original.length);
   });
 
-  it("restores to the automatic baseline and rolls back a cancelled pointer gesture", () => {
+  it("restores to source alpha and rolls back a cancelled pointer gesture", () => {
     const engine = new ManualDraftEngine(
       new Uint8ClampedArray(9),
       3,
@@ -33,7 +33,17 @@ describe("ManualDraftEngine", () => {
     expect(engine.alphaCopy()[4]).toBe(180);
   });
 
-  it("tracks dirty state against the committed alpha while Restore targets automatic baseline", () => {
+  it("updates the restore target from decoded source alpha", () => {
+    const engine = new ManualDraftEngine(new Uint8ClampedArray(2), 2, 1);
+    engine.setRestoreAlpha(new Uint8ClampedArray([96, 224]));
+
+    engine.begin({ x: 0, y: 0 }, { mode: "restore", radius: 1, hardness: 1 });
+    engine.end();
+
+    expect(engine.alphaCopy()).toEqual(new Uint8ClampedArray([96, 0]));
+  });
+
+  it("tracks dirty state against the committed alpha while Restore targets source alpha", () => {
     const committed = new Uint8ClampedArray([0]);
     const automaticBaseline = new Uint8ClampedArray([255]);
     const engine = new ManualDraftEngine(committed, 1, 1, automaticBaseline);

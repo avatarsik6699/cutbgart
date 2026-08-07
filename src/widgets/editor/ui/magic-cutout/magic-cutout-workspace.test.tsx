@@ -50,6 +50,14 @@ function sessionHarness() {
   return { calls, interaction };
 }
 
+function supportPointerCapture(element: HTMLElement): void {
+  Object.assign(element, {
+    hasPointerCapture: vi.fn(() => true),
+    releasePointerCapture: vi.fn(),
+    setPointerCapture: vi.fn(),
+  });
+}
+
 describe("MagicCutoutWorkspace", () => {
   afterEach(cleanup);
 
@@ -69,6 +77,7 @@ describe("MagicCutoutWorkspace", () => {
     const harness = sessionHarness();
     render(
       <MagicCutoutWorkspace
+        applying={false}
         draft={draft}
         height={10}
         runtimeProgress={null}
@@ -109,6 +118,7 @@ describe("MagicCutoutWorkspace", () => {
     const harness = sessionHarness();
     render(
       <MagicCutoutWorkspace
+        applying={false}
         draft={{ ...draft, status: "dirty", selectedCandidateId: null }}
         height={10}
         runtimeProgress={null}
@@ -124,10 +134,31 @@ describe("MagicCutoutWorkspace", () => {
     expect(harness.calls.redo).not.toHaveBeenCalled();
   });
 
+  it("explains the cold start and blocks the stage during Apply", () => {
+    const harness = sessionHarness();
+    render(
+      <MagicCutoutWorkspace
+        applying
+        draft={draft}
+        height={10}
+        runtimeProgress={null}
+        interaction={harness.interaction}
+        currentUrl="blob:source"
+        width={10}
+      />,
+    );
+
+    expect(screen.getByTestId("editor-stage-placeholder").textContent).toMatch(
+      /Applying the selected Magic|Применяем выбранный магический/,
+    );
+    expect(screen.getByText(/first Magic Apply|Первое применение Magic/)).toBeDefined();
+  });
+
   it("keeps a circular cursor and caps the display-only stroke buffer", () => {
     const harness = sessionHarness();
     render(
       <MagicCutoutWorkspace
+        applying={false}
         draft={draft}
         height={2000}
         runtimeProgress={null}
@@ -157,6 +188,7 @@ describe("MagicCutoutWorkspace", () => {
     const harness = sessionHarness();
     render(
       <MagicCutoutWorkspace
+        applying={false}
         draft={draft}
         height={10}
         runtimeProgress={null}
@@ -167,17 +199,70 @@ describe("MagicCutoutWorkspace", () => {
     );
     const viewport = screen.getByTestId("cutout-stage-viewport");
     const canvas = screen.getByLabelText(/Paint Keep and Remove|Нарисуйте подсказки/);
+    supportPointerCapture(canvas);
 
-    fireEvent.keyDown(window, { key: " " });
+    fireEvent.pointerEnter(viewport);
+    expect(viewport.getAttribute("data-workspace-active")).toBe("true");
+    const spaceDown = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(spaceDown);
+    expect(spaceDown.defaultPrevented).toBe(true);
     expect(viewport.getAttribute("data-space-panning")).toBe("true");
-    expect(canvas.className).toContain("cursor-grab");
+    expect(canvas.style.cursor).toBe("grab");
     fireEvent.keyUp(window, { key: " " });
     expect(viewport.getAttribute("data-space-panning")).toBe("false");
-    expect(canvas.className).toContain("cursor-none");
+    expect(canvas.style.cursor).toBe("none");
+    fireEvent.pointerDown(canvas, { button: 1, pointerId: 4 });
+    expect(viewport.getAttribute("data-panning")).toBe("true");
+    expect(canvas.style.cursor).toBe("grabbing");
+    expect(screen.getByTestId("magic-brush-cursor").hidden).toBe(true);
+    fireEvent.pointerUp(canvas, { button: 1, pointerId: 4 });
+    expect(viewport.getAttribute("data-panning")).toBe("false");
     fireEvent.click(
       screen.getByRole("button", { name: /Pan image|Перемещать изображение/ }),
     );
-    expect(canvas.className).toContain("cursor-grab");
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
+  it("keeps Space and middle-button pan outside React commits", () => {
+    const harness = sessionHarness();
+    const onRender = vi.fn();
+    render(
+      <Profiler id="magic-workspace" onRender={onRender}>
+        <MagicCutoutWorkspace
+          applying={false}
+          draft={draft}
+          height={100}
+          runtimeProgress={null}
+          interaction={harness.interaction}
+          currentUrl="blob:source"
+          width={100}
+        />
+      </Profiler>,
+    );
+    const viewport = screen.getByTestId("cutout-stage-viewport");
+    const canvas = screen.getByLabelText(/Paint Keep and Remove|Нарисуйте подсказки/);
+    supportPointerCapture(canvas);
+    fireEvent.pointerEnter(viewport);
+    const committedBeforeGesture = onRender.mock.calls.length;
+
+    fireEvent.keyDown(window, { key: " " });
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 7,
+      clientX: 20,
+      clientY: 20,
+    });
+    fireEvent.pointerMove(canvas, { pointerId: 7, clientX: 30, clientY: 30 });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 7, clientX: 30, clientY: 30 });
+    fireEvent.keyUp(window, { key: " " });
+    fireEvent.pointerDown(canvas, { button: 1, pointerId: 8 });
+    fireEvent.pointerUp(canvas, { button: 1, pointerId: 8 });
+
+    expect(onRender).toHaveBeenCalledTimes(committedBeforeGesture);
   });
 
   it("updates brush radius without committing a React render", () => {
@@ -186,6 +271,7 @@ describe("MagicCutoutWorkspace", () => {
     render(
       <Profiler id="magic-workspace" onRender={onRender}>
         <MagicCutoutWorkspace
+          applying={false}
           draft={draft}
           height={2000}
           runtimeProgress={null}

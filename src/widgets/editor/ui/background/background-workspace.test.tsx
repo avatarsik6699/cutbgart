@@ -139,4 +139,23 @@ describe("BackgroundWorkspace", () => {
         .hasAttribute("disabled"),
     ).toBe(true);
   });
+
+  it("blocks the stage while Apply is in flight", () => {
+    const harness = sessionHarness();
+    render(
+      <BackgroundWorkspace
+        draft={{ ...draft, dirty: true, status: "applying" }}
+        foregroundUrl="blob:foreground"
+        height={100}
+        runtime={{ status: "ready", previewUrl: null, error: null }}
+        sourceUrl="blob:source"
+        interaction={harness.interaction}
+        width={100}
+      />,
+    );
+
+    expect(screen.getByTestId("editor-stage-placeholder").textContent).toMatch(
+      /Applying the background|Применяем фон/,
+    );
+  });
 });

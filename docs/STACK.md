@@ -154,6 +154,20 @@ diff before any fix. The optional local Codex MCP runs the same pinned dev depen
 structured read-only analysis. Product telemetry remains disabled unless the architect explicitly
 enables it.
 
+### Opt-in React render diagnostics
+
+Use `pnpm dev:profile` only for the final render audit or a focused rerender investigation. This
+profile mode initializes `@welldone-software/why-did-you-render` before hydration and switches the
+development JSX runtime to its React-19-compatible instrumentation. It tracks application
+components broadly and reports update reasons in the browser console.
+
+The profiler changes React execution cost, so its console output is causal evidence, not a timing
+benchmark. Confirm suspected owners with React DevTools Profiler commit data and use the managed
+Windows Chrome Performance tooling for long tasks, scripting/render time, memory, and resource
+evidence. Run ordinary `pnpm dev` or a production build for behavior and wall-time comparisons.
+The `profile` mode is never used by E2E, CI, release, or production commands, and a production build
+must not contain the WDYR package or diagnostics marker.
+
 ### Codex web-development diagnostics
 
 The architect's local Codex environment uses three complementary development integrations. They

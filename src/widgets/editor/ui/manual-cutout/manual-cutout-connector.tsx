@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 
-import { selectManualDraft } from "@/editor/application";
+import { selectDocumentStatus, selectManualDraft } from "@/editor/application";
 import { loadManualSourceBitmap, type ManualCutoutRuntimeTypes } from "@/editor/runtime";
 
 import {
@@ -8,7 +8,7 @@ import {
   useActiveDocumentModel,
   useEditorSessionValue,
   selectActiveHeight,
-  selectActiveResultUrl,
+  selectActivePreviewUrl,
   selectActiveWidth,
 } from "../../model";
 import {
@@ -19,7 +19,8 @@ import {
 export function ManualCutoutConnector() {
   const model = useActiveDocumentModel();
   const draft = useActiveDocumentActorSelector(selectManualDraft);
-  const currentUrl = useEditorSessionValue(selectActiveResultUrl);
+  const sourceUrl = useEditorSessionValue(selectActivePreviewUrl);
+  const status = useActiveDocumentActorSelector(selectDocumentStatus);
   const width = useEditorSessionValue(selectActiveWidth);
   const height = useEditorSessionValue(selectActiveHeight);
   const canvasBindingRef = useRef<Readonly<{
@@ -86,10 +87,15 @@ export function ManualCutoutConnector() {
               return;
             }
             context.drawImage(bitmap, 0, 0, sourceWidth, sourceHeight);
+            const imageData = context.getImageData(0, 0, sourceWidth, sourceHeight);
+            const restoreAlpha = new Uint8ClampedArray(sourceWidth * sourceHeight);
+            for (let index = 0; index < restoreAlpha.length; index += 1)
+              restoreAlpha[index] = imageData.data[index * 4 + 3] ?? 0;
+            session.manualDraft()?.setRestoreAlpha(restoreAlpha);
             canvasBindingRef.current = {
               bitmap,
               canvas,
-              imageData: context.getImageData(0, 0, sourceWidth, sourceHeight),
+              imageData,
               version,
             };
             repaintCanvas();
@@ -144,13 +150,14 @@ export function ManualCutoutConnector() {
     [interaction, model],
   );
 
-  if (draft === null || currentUrl === null) return null;
+  if (draft === null || sourceUrl === null) return null;
   return (
     <ManualCutoutWorkspace
+      busy={status === "manual-applying"}
       documentId={draft.documentId}
       height={height}
       interaction={interaction}
-      currentUrl={currentUrl}
+      currentUrl={sourceUrl}
       width={width}
       onCutoutModeChange={(mode) => model.requestCutoutMode(mode)}
     />

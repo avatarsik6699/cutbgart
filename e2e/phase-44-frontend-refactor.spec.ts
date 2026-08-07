@@ -169,6 +169,7 @@ test("committed history, Background preview, and tool viewports stay coherent in
       cutout: "Cutout",
       background: "Background",
       enhancements: "Enhancements",
+      enhancementApplying: "Encoding the enhanced result locally…",
       ocean: "Ocean",
       apply: "Apply",
       cancel: "Cancel",
@@ -184,6 +185,7 @@ test("committed history, Background preview, and tool viewports stay coherent in
       cutout: "Вырезание",
       background: "Фон",
       enhancements: "Улучшения",
+      enhancementApplying: "Кодируем улучшенный результат локально…",
       ocean: "Океан",
       apply: "Применить",
       cancel: "Отмена",
@@ -283,6 +285,18 @@ test("committed history, Background preview, and tool viewports stay coherent in
         ...new Set(images.map((image) => image.getAttribute("src"))),
       ]);
     expect(enhancementSources).toEqual([redoneUrl]);
+    await page.getByRole("button", { name: locale.apply, exact: true }).click();
+    await expect.poll(editor.scenario.enhancementRunCount).toBe(1);
+    await expect(page.getByTestId("editor-stage-placeholder")).toContainText(
+      locale.enhancementApplying,
+    );
+    await expect(
+      page.getByTestId("editor-stage-placeholder").getByText(locale.enhancementApplying),
+    ).toHaveClass(/sr-only/);
+    await editor.scenario.completeEnhancement();
+    await expect.poll(editor.scenario.enhancementRunCount).toBe(2);
+    await editor.scenario.completeEnhancement();
+    await expect(page.getByTestId("editor-stage-placeholder")).toHaveCount(0);
     await page.getByRole("button", { name: locale.cutout, exact: true }).click();
     const reopenedCutoutBox = await page
       .locator('[data-tool-image-viewport="true"]')
@@ -294,6 +308,150 @@ test("committed history, Background preview, and tool viewports stay coherent in
       expect(Math.abs(box!.width - cutoutViewport!.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(box!.height - cutoutViewport!.height)).toBeLessThanOrEqual(1);
     }
+
+    await editor.preview.resetButton.click();
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
+      artifacts: 0,
+      leases: 0,
+      objectUrls: 0,
+    });
+  }
+});
+
+test("Magic edge-recovery Apply stays singular and reversible in both locales", async ({
+  editor,
+  page,
+}) => {
+  const locales = [
+    {
+      path: "/en/",
+      upload: "Upload an image",
+      canvas: "Paint Keep and Remove guidance on the image",
+      controlsActive: "Workspace controls active",
+      keep: "Keep",
+      firstRunHint: "The first Magic Apply may take longer",
+      manual: "Manual",
+      magic: "Magic",
+      manualCanvas: "Manual cutout canvas",
+      erase: "Erase",
+      restore: "Restore",
+      remove: "Remove",
+      apply: "Apply",
+      undo: "Undo document change",
+      resultAlt: "Image with background removed",
+    },
+    {
+      path: "/",
+      upload: "Загрузить изображения",
+      canvas: "Нарисуйте подсказки «Сохранить» и «Удалить» на изображении",
+      controlsActive: "Управление рабочей областью активно",
+      keep: "Оставить",
+      firstRunHint: "Первое применение Magic может занять больше времени",
+      manual: "Вручную",
+      magic: "Магия",
+      manualCanvas: "Холст ручной коррекции",
+      erase: "Стереть",
+      restore: "Восстановить",
+      remove: "Удалить",
+      apply: "Применить",
+      undo: "Отменить изменение документа",
+      resultAlt: "Изображение с удалённым фоном",
+    },
+  ] as const;
+
+  for (const locale of locales) {
+    await page.goto(locale.path);
+    await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+    await page
+      .getByLabel(locale.upload)
+      .setInputFiles(phase33ImageCorpus.representative.path);
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
+
+    await page.getByRole("tab", { name: locale.manual, exact: true }).click();
+    const manualCanvas = page.getByRole("img", { name: locale.manualCanvas });
+    const manualBox = await manualCanvas.boundingBox();
+    if (manualBox === null) throw new Error("Manual canvas is not visible");
+    const centerAlpha = () =>
+      manualCanvas.evaluate((element: HTMLCanvasElement) => {
+        const context = element.getContext("2d");
+        if (context === null) return -1;
+        return (
+          context.getImageData(
+            Math.floor(element.width / 2),
+            Math.floor(element.height / 2),
+            1,
+            1,
+          ).data[3] ?? -1
+        );
+      });
+    await expect.poll(centerAlpha).toBeGreaterThan(0);
+    await page.getByRole("button", { name: locale.erase, exact: true }).click();
+    await manualCanvas.click({
+      position: { x: manualBox.width / 2, y: manualBox.height / 2 },
+    });
+    await expect.poll(centerAlpha).toBe(0);
+    await page.getByRole("button", { name: locale.restore, exact: true }).click();
+    await manualCanvas.click({
+      position: { x: manualBox.width / 2, y: manualBox.height / 2 },
+    });
+    await expect.poll(centerAlpha).toBeGreaterThan(0);
+    await page.getByRole("tab", { name: locale.magic, exact: true }).click();
+
+    const canvas = page.getByLabel(locale.canvas);
+    const box = await canvas.boundingBox();
+    if (box === null) throw new Error("Magic canvas is not visible");
+    await expect(page.getByText(locale.firstRunHint, { exact: false })).toBeVisible();
+    const viewport = page.getByTestId("cutout-stage-viewport");
+    await canvas.hover();
+    await expect(viewport).toHaveAttribute("data-workspace-active", "true");
+    await expect(page.getByText(locale.controlsActive)).toBeVisible();
+    const pageScrollBeforeWheel = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, -120);
+    await expect(viewport).toHaveAttribute("data-zoom", "1.25");
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBeforeWheel);
+    await page.keyboard.down("Control");
+    await page.keyboard.press("=");
+    await page.keyboard.up("Control");
+    await expect(viewport).toHaveAttribute("data-zoom", "1.5");
+    await page.keyboard.down("Control");
+    await page.keyboard.press("0");
+    await page.keyboard.up("Control");
+    await expect(viewport).toHaveAttribute("data-zoom", "1");
+    const pageScrollBeforePan = await page.evaluate(() => window.scrollY);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.keyboard.down("Space");
+    await expect(viewport).toHaveAttribute("data-space-panning", "true");
+    await expect(canvas).toHaveCSS("cursor", "grab");
+    await page.mouse.down({ button: "left" });
+    await expect(viewport).toHaveAttribute("data-panning", "true");
+    await expect(canvas).toHaveCSS("cursor", "grabbing");
+    await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12);
+    await page.mouse.up({ button: "left" });
+    await page.keyboard.up("Space");
+    await expect(viewport).toHaveAttribute("data-space-panning", "false");
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBeforePan);
+    await page.mouse.down({ button: "middle" });
+    await expect(viewport).toHaveAttribute("data-panning", "true");
+    await expect(canvas).toHaveCSS("cursor", "grabbing");
+    await page.mouse.up({ button: "middle" });
+    await expect(viewport).toHaveAttribute("data-panning", "false");
+    const baselineUrl = await page
+      .getByRole("img", { name: locale.resultAlt })
+      .getAttribute("src");
+    const y = box.height / 2;
+    await page.getByRole("button", { name: locale.remove, exact: true }).click();
+    await canvas.click({ position: { x: box.width / 2 - 4, y } });
+    await page.getByRole("button", { name: locale.keep, exact: true }).click();
+    await canvas.click({ position: { x: box.width / 2 + 4, y } });
+    await page.getByRole("button", { name: locale.apply, exact: true }).click();
+
+    await expect.poll(editor.scenario.magicPredictionCount).toBe(1);
+    await expect.poll(editor.scenario.magicCommitCount).toBe(1);
+    await expect(page.getByRole("button", { name: locale.undo })).toBeEnabled();
+    await expect
+      .poll(() => page.getByRole("img", { name: locale.resultAlt }).getAttribute("src"))
+      .not.toBe(baselineUrl);
 
     await editor.preview.resetButton.click();
     await expect.poll(editor.scenario.resourceCounts).toEqual({

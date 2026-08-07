@@ -12,6 +12,7 @@ import { GUIDED_MODEL } from "@/shared/lib/inference/production-model-config";
 import type { ProcessingError, ProcessingErrorCode } from "@/editor/domain";
 
 import { rankAndFuseMagicCandidates } from "../magic-candidate-policy";
+import { magicEncodingCacheKey } from "../magic-encoding-cache-policy";
 import { createMagicModelPrompts } from "../magic-prompt-policy";
 import {
   MAGIC_WORKER_PROTOCOL_VERSION,
@@ -186,12 +187,12 @@ async function encodeSource(
   request: NonNullable<typeof active>,
   runtime: { model: SamModel; processor: SamProcessor },
 ): Promise<Encoding> {
-  const cacheKey = [
-    command.correlation.documentId,
-    command.correlation.expectedRevision,
-    command.source.width,
-    command.source.height,
-  ].join(":");
+  const cacheKey = magicEncodingCacheKey({
+    documentId: command.correlation.documentId,
+    height: command.source.height,
+    mediaType: command.source.mediaType,
+    width: command.source.width,
+  });
   if (encoding?.cacheKey === cacheKey) return encoding;
   disposeEncoding();
   progress(command, "magic-encode", null);

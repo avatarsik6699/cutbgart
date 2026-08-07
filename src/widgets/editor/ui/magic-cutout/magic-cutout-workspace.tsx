@@ -14,9 +14,11 @@ import { CanvasViewControls, type CanvasInteractionMode } from "../editor-tools"
 import {
   CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
+  CanvasWorkspaceActiveIndicator,
   CutoutStagePanController,
   cutoutStageContentStyle,
-  isEditableCanvasShortcutTarget,
+  useCanvasViewportActivity,
+  useCutoutStagePanGesture,
 } from "../cutout-stage";
 import { MagicCutoutPanel } from "./magic-cutout-panel";
 
@@ -53,6 +55,23 @@ export type MagicCutoutInteraction = Readonly<{
 
 type DisplayStroke = ReturnType<MagicCutoutInteraction["displayStrokes"]>[number];
 
+function magicWorkspaceBusy(
+  draft: MagicCutoutTypes.Draft,
+  runtimeProgress: MagicRuntimeProgress | null,
+  applying: boolean,
+): boolean {
+  return (
+    applying ||
+    runtimeProgress !== null ||
+    draft.status === "encoding" ||
+    draft.status === "predicting"
+  );
+}
+
+function magicWorkspaceLoadingLabel(applying: boolean): string {
+  return applying ? m.editorMagicApplying() : m.editorMagicWorking();
+}
+
 function paintStroke(
   context: CanvasRenderingContext2D,
   stroke: DisplayStroke,
@@ -80,6 +99,7 @@ function paintStroke(
 
 export function MagicCutoutWorkspace(
   props: Readonly<{
+    applying: boolean;
     draft: MagicCutoutTypes.Draft;
     height: number;
     runtimeProgress: MagicRuntimeProgress | null;
@@ -94,11 +114,30 @@ export function MagicCutoutWorkspace(
   const radiusRef = useRef(initialView.radius);
   const [zoom, setZoom] = useState(1);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
-  const [spacePanning, setSpacePanning] = useState(false);
-  const [panning, setPanning] = useState(false);
   const [panController] = useState(() => new CutoutStagePanController(1));
-  const spacePanningRef = useRef(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
+  const busy = magicWorkspaceBusy(props.draft, props.runtimeProgress, props.applying);
+  const {
+    active: viewportActive,
+    connectViewport: connectViewportActivity,
+    isActive: isViewportActive,
+    onBlur: onViewportBlur,
+    onFocus: onViewportFocus,
+    onPointerEnter: onViewportPointerEnter,
+    onPointerLeave: onViewportPointerLeave,
+  } = useCanvasViewportActivity({
+    disabled: busy,
+    onZoomIn: () => changeZoom((value) => Math.min(3, value + 0.25)),
+    onZoomOut: () => changeZoom((value) => Math.max(0.5, value - 0.25)),
+  });
+  const panGesture = useCutoutStagePanGesture({
+    disabled: busy,
+    interactionMode,
+    isViewportActive,
+    panController,
+    viewportRef,
+  });
 
   function changeMode(nextMode: MagicCutoutTypes.Mode): void {
     setMode(nextMode);
@@ -126,6 +165,13 @@ export function MagicCutoutWorkspace(
     },
     [panController],
   );
+  const connectViewport = useCallback(
+    function connectMagicViewport(element: HTMLDivElement | null): void {
+      viewportRef.current = element;
+      connectViewportActivity(element);
+    },
+    [connectViewportActivity],
+  );
 
   function changeZoom(update: (zoom: number) => number): void {
     setZoom((currentZoom) => {
@@ -137,11 +183,11 @@ export function MagicCutoutWorkspace(
 
   function beginPan(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
     const handGesture =
-      interactionMode === "hand" || spacePanningRef.current || event.button === 1;
+      interactionMode === "hand" || panGesture.isSpacePressed() || event.button === 1;
     if (!handGesture || (event.button !== 0 && event.button !== 1)) return false;
     event.preventDefault();
     panController.start(event);
-    setPanning(true);
+    panGesture.setPanning(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     return true;
   }
@@ -152,7 +198,7 @@ export function MagicCutoutWorkspace(
 
   function endPan(event: ReactPointerEvent<HTMLCanvasElement>): boolean {
     if (!panController.stop(event.pointerId)) return false;
-    setPanning(false);
+    panGesture.setPanning(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
     return true;
@@ -224,44 +270,6 @@ export function MagicCutoutWorkspace(
   }, []);
 
   useEffect(
-    function routeMagicSpacePanFx() {
-      function keyDownFx(event: KeyboardEvent): void {
-        if (
-          event.key !== " " ||
-          event.repeat ||
-          isEditableCanvasShortcutTarget(event.target)
-        )
-          return;
-        event.preventDefault();
-        spacePanningRef.current = true;
-        setSpacePanning(true);
-      }
-      function releaseSpacePanFx(event?: KeyboardEvent): void {
-        if (event !== undefined && event.key !== " ") return;
-        spacePanningRef.current = false;
-        setSpacePanning(false);
-        panController.stop();
-        setPanning(false);
-      }
-      function keyUpFx(event: KeyboardEvent): void {
-        releaseSpacePanFx(event);
-      }
-      function blurFx(): void {
-        releaseSpacePanFx();
-      }
-      globalThis.addEventListener("keydown", keyDownFx);
-      globalThis.addEventListener("keyup", keyUpFx);
-      globalThis.addEventListener("blur", blurFx);
-      return function removeMagicSpacePanFx() {
-        globalThis.removeEventListener("keydown", keyDownFx);
-        globalThis.removeEventListener("keyup", keyUpFx);
-        globalThis.removeEventListener("blur", blurFx);
-      };
-    },
-    [panController],
-  );
-
-  useEffect(
     function guardDirtyMagicDraftUnloadFx() {
       function beforeUnloadFx(event: BeforeUnloadEvent): void {
         if (!props.draft.dirty) return;
@@ -277,12 +285,7 @@ export function MagicCutoutWorkspace(
   );
 
   function pointerDownFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (
-      activePointer.current !== null ||
-      props.draft.status === "encoding" ||
-      props.draft.status === "predicting"
-    )
-      return;
+    if (activePointer.current !== null || busy) return;
     if (beginPan(event)) {
       if (cursorRef.current !== null) cursorRef.current.hidden = true;
       return;
@@ -304,7 +307,8 @@ export function MagicCutoutWorkspace(
   function pointerMoveFx(event: ReactPointerEvent<HTMLCanvasElement>): void {
     if (movePan(event)) return;
     const point = sourcePoint(event);
-    if (interactionMode === "brush" && !spacePanning) positionCursor(point);
+    if (interactionMode === "brush" && !panGesture.isSpacePressed())
+      positionCursor(point);
     if (activePointer.current === event.pointerId) {
       props.interaction.appendPoint(point);
       scheduleStrokePaint();
@@ -339,15 +343,13 @@ export function MagicCutoutWorkspace(
     scheduleStrokePaint();
   }
 
-  let canvasCursorClassName = "cursor-none";
-  if (interactionMode === "hand" || spacePanning)
-    canvasCursorClassName = panning ? "cursor-grabbing" : "cursor-grab";
-
   return (
     <>
       <div className="[grid-area:surface]">
         <EditorStage
           documentId={props.draft.documentId}
+          loading={busy}
+          loadingLabel={magicWorkspaceLoadingLabel(props.applying)}
           OverlaySlot={({ expanded, toggleFullscreen }) => (
             <CanvasViewControls
               interactionMode={interactionMode}
@@ -366,18 +368,26 @@ export function MagicCutoutWorkspace(
               onToggleFullscreen={toggleFullscreen}
               collapsed={viewControlsCollapsed}
               onCollapsedChange={setViewControlsCollapsed}
+              shortcutsActive={viewportActive}
             />
           )}
         >
           <div
             className={CUTOUT_STAGE_VIEWPORT_CLASS_NAME}
+            ref={connectViewport}
             tabIndex={0}
             aria-label={m.editorMagicTitle()}
+            data-workspace-active={viewportActive}
             data-testid="cutout-stage-viewport"
-            data-space-panning={spacePanning}
-            data-panning={panning}
+            data-space-panning="false"
+            data-panning="false"
             data-zoom={zoom}
+            onBlur={onViewportBlur}
+            onFocus={onViewportFocus}
+            onPointerEnter={onViewportPointerEnter}
+            onPointerLeave={onViewportPointerLeave}
           >
+            <CanvasWorkspaceActiveIndicator active={viewportActive} />
             <div
               ref={connectContent}
               className={CUTOUT_STAGE_CONTENT_CLASS_NAME}
@@ -395,7 +405,9 @@ export function MagicCutoutWorkspace(
               />
               <canvas
                 ref={strokeCanvas}
-                className={`absolute inset-0 block h-full w-full touch-none ${canvasCursorClassName}`}
+                data-cutout-canvas
+                className="absolute inset-0 block h-full w-full touch-none"
+                style={{ cursor: interactionMode === "hand" ? "grab" : "none" }}
                 aria-label={m.editorMagicCanvas()}
                 onPointerDown={pointerDownFx}
                 onPointerMove={pointerMoveFx}
@@ -408,6 +420,7 @@ export function MagicCutoutWorkspace(
               />
               <span
                 ref={cursorRef}
+                data-brush-cursor
                 data-testid="magic-brush-cursor"
                 hidden
                 aria-hidden="true"
@@ -425,6 +438,7 @@ export function MagicCutoutWorkspace(
         </EditorStage>
       </div>
       <MagicCutoutPanel
+        busy={busy}
         draft={props.draft}
         initialRadius={initialView.radius}
         interaction={props.interaction}

@@ -12,14 +12,33 @@ import { EditorStage } from "@/shared/ui";
 import {
   CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
+  CanvasWorkspaceActiveIndicator,
   CutoutStagePanController,
   cutoutStageContentStyle,
-  isEditableCanvasShortcutTarget,
+  useCanvasViewportActivity,
+  useCutoutStagePanGesture,
 } from "../cutout-stage";
 import { CanvasViewControls, type CanvasInteractionMode } from "../editor-tools";
 import type { ManualCutoutInteraction } from "./manual-cutout-workspace";
 
+const MANUAL_BRUSH_HARDNESS = 1;
+
+function manualPointerIntent(
+  input: Readonly<{
+    button: number;
+    editable: boolean;
+    interactionMode: CanvasInteractionMode;
+    spacePanning: boolean;
+  }>,
+): "ignore" | "paint" | "pan" {
+  if (!input.editable) return "ignore";
+  const panRequested = input.interactionMode === "hand" || input.spacePanning;
+  if (panRequested && (input.button === 0 || input.button === 1)) return "pan";
+  return input.button === 0 ? "paint" : "ignore";
+}
+
 export function ManualCutoutCanvas({
+  busy,
   currentUrl,
   documentId,
   height,
@@ -27,6 +46,7 @@ export function ManualCutoutCanvas({
   onCursorElementChange,
   width,
 }: Readonly<{
+  busy: boolean;
   currentUrl: string;
   documentId: string;
   height: number;
@@ -37,17 +57,42 @@ export function ManualCutoutCanvas({
   const initialView = interaction.readViewState();
   const [zoom, setZoom] = useState(initialView.zoom);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
-  const [spacePanning, setSpacePanning] = useState(false);
-  const [panning, setPanning] = useState(false);
   const [panController] = useState(() => new CutoutStagePanController(initialView.zoom));
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [viewControlsCollapsed, setViewControlsCollapsed] = useState(false);
-  const spacePanningRef = useRef(false);
+  const {
+    active: viewportActive,
+    connectViewport: connectViewportActivity,
+    isActive: isViewportActive,
+    onBlur: onViewportBlur,
+    onFocus: onViewportFocus,
+    onPointerEnter: onViewportPointerEnter,
+    onPointerLeave: onViewportPointerLeave,
+  } = useCanvasViewportActivity({
+    disabled: busy,
+    onZoomIn: () => changeZoom((value) => Math.min(3, value + 0.25)),
+    onZoomOut: () => changeZoom((value) => Math.max(0.5, value - 0.25)),
+  });
+  const panGesture = useCutoutStagePanGesture({
+    disabled: busy,
+    interactionMode,
+    isViewportActive,
+    panController,
+    viewportRef,
+  });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLSpanElement>(null);
   const draftState = interaction.snapshot();
   const connectContent = useCallback(
     (element: HTMLDivElement | null) => panController.connect(element),
     [panController],
+  );
+  const connectViewport = useCallback(
+    (element: HTMLDivElement | null) => {
+      viewportRef.current = element;
+      connectViewportActivity(element);
+    },
+    [connectViewportActivity],
   );
   const connectCursor = useCallback(
     (element: HTMLSpanElement | null) => {
@@ -91,44 +136,48 @@ export function ManualCutoutCanvas({
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (draftState === null) return;
-    const handGesture =
-      interactionMode === "hand" || spacePanningRef.current || event.button === 1;
-    if (handGesture && (event.button === 0 || event.button === 1)) {
+    const intent = manualPointerIntent({
+      button: event.button,
+      editable: draftState !== null && !busy,
+      interactionMode,
+      spacePanning: panGesture.isSpacePressed() || event.button === 1,
+    });
+    if (intent === "ignore") return;
+    if (intent === "pan") {
       event.preventDefault();
       panController.start(event);
-      setPanning(true);
+      panGesture.setPanning(true);
       event.currentTarget.setPointerCapture(event.pointerId);
       if (cursorRef.current !== null) cursorRef.current.hidden = true;
       return;
     }
-    if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const view = interaction.readViewState();
     interaction.begin(sourcePoint(event), {
       mode: view.mode,
       radius: view.brushSize / 2,
-      hardness: 0.72,
+      hardness: MANUAL_BRUSH_HARDNESS,
     });
   }
 
   function pointerMove(event: ReactPointerEvent<HTMLCanvasElement>): void {
     if (panController.move(event)) return;
     const point = sourcePoint(event);
-    if (interactionMode === "brush" && !spacePanning) positionCursor(point);
+    if (interactionMode === "brush" && !panGesture.isSpacePressed())
+      positionCursor(point);
     if (draftState === null || !event.currentTarget.hasPointerCapture(event.pointerId))
       return;
     const view = interaction.readViewState();
     interaction.move(point, {
       mode: view.mode,
       radius: view.brushSize / 2,
-      hardness: 0.72,
+      hardness: MANUAL_BRUSH_HARDNESS,
     });
   }
 
   function pointerUp(event: ReactPointerEvent<HTMLCanvasElement>): void {
     if (panController.stop(event.pointerId)) {
-      setPanning(false);
+      panGesture.setPanning(false);
       if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
       return;
@@ -141,7 +190,7 @@ export function ManualCutoutCanvas({
 
   function pointerCancel(event: ReactPointerEvent<HTMLCanvasElement>): void {
     if (panController.stop(event.pointerId)) {
-      setPanning(false);
+      panGesture.setPanning(false);
       if (event.currentTarget.hasPointerCapture(event.pointerId))
         event.currentTarget.releasePointerCapture(event.pointerId);
       return;
@@ -176,49 +225,14 @@ export function ManualCutoutCanvas({
     [interaction],
   );
 
-  useEffect(
-    function routeManualSpacePanFx() {
-      function releaseSpacePanFx(event?: KeyboardEvent): void {
-        if (event !== undefined && event.key !== " ") return;
-        spacePanningRef.current = false;
-        setSpacePanning(false);
-        panController.stop();
-        setPanning(false);
-      }
-      function keyDownFx(event: KeyboardEvent): void {
-        if (
-          event.key !== " " ||
-          event.repeat ||
-          isEditableCanvasShortcutTarget(event.target)
-        )
-          return;
-        event.preventDefault();
-        spacePanningRef.current = true;
-        setSpacePanning(true);
-      }
-      const keyUpFx = (event: KeyboardEvent) => releaseSpacePanFx(event);
-      const blurFx = () => releaseSpacePanFx();
-      globalThis.addEventListener("keydown", keyDownFx);
-      globalThis.addEventListener("keyup", keyUpFx);
-      globalThis.addEventListener("blur", blurFx);
-      return function removeManualSpacePanFx() {
-        globalThis.removeEventListener("keydown", keyDownFx);
-        globalThis.removeEventListener("keyup", keyUpFx);
-        globalThis.removeEventListener("blur", blurFx);
-      };
-    },
-    [panController],
-  );
-
   if (draftState === null) return null;
-  let cursorClassName = "cursor-none";
-  if (interactionMode === "hand" || spacePanning)
-    cursorClassName = panning ? "cursor-grabbing" : "cursor-grab";
 
   return (
     <div className="[grid-area:surface]">
       <EditorStage
         documentId={documentId}
+        loading={busy}
+        loadingLabel={m.editorManualApplying()}
         OverlaySlot={({ expanded, toggleFullscreen }) => (
           <CanvasViewControls
             interactionMode={interactionMode}
@@ -238,18 +252,26 @@ export function ManualCutoutCanvas({
             onToggleFullscreen={toggleFullscreen}
             collapsed={viewControlsCollapsed}
             onCollapsedChange={setViewControlsCollapsed}
+            shortcutsActive={viewportActive}
           />
         )}
       >
         <div
           className={CUTOUT_STAGE_VIEWPORT_CLASS_NAME}
+          ref={connectViewport}
           tabIndex={0}
           aria-label={m.editorManualViewport()}
+          data-workspace-active={viewportActive}
           data-testid="cutout-stage-viewport"
-          data-space-panning={spacePanning}
-          data-panning={panning}
+          data-space-panning="false"
+          data-panning="false"
           data-zoom={zoom}
+          onBlur={onViewportBlur}
+          onFocus={onViewportFocus}
+          onPointerEnter={onViewportPointerEnter}
+          onPointerLeave={onViewportPointerLeave}
         >
+          <CanvasWorkspaceActiveIndicator active={viewportActive} />
           <div
             ref={connectContent}
             className={CUTOUT_STAGE_CONTENT_CLASS_NAME}
@@ -260,9 +282,11 @@ export function ManualCutoutCanvas({
             <canvas
               role="img"
               ref={canvasRef}
+              data-cutout-canvas
               width={width}
               height={height}
-              className={`block size-full touch-none select-none ${cursorClassName}`}
+              className="block size-full touch-none select-none"
+              style={{ cursor: interactionMode === "hand" ? "grab" : "none" }}
               onPointerDown={pointerDown}
               onPointerMove={pointerMove}
               onPointerUp={pointerUp}
@@ -274,6 +298,7 @@ export function ManualCutoutCanvas({
             />
             <span
               ref={connectCursor}
+              data-brush-cursor
               data-testid="manual-brush-cursor"
               hidden
               aria-hidden="true"

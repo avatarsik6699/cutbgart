@@ -11,6 +11,7 @@ import { cutoutStageContentStyle } from "../cutout-stage";
 function interactionHarness() {
   const calls = {
     apply: vi.fn(),
+    begin: vi.fn(),
     cancel: vi.fn(),
     connectCanvas: vi.fn(() => vi.fn()),
     redo: vi.fn(),
@@ -18,7 +19,7 @@ function interactionHarness() {
   };
   const interaction: ManualCutoutInteraction = {
     apply: calls.apply,
-    begin: vi.fn(),
+    begin: calls.begin,
     cancel: calls.cancel,
     cancelGesture: vi.fn(),
     connectCanvas: calls.connectCanvas,
@@ -33,6 +34,14 @@ function interactionHarness() {
   return { calls, interaction };
 }
 
+function supportPointerCapture(element: HTMLElement): void {
+  Object.assign(element, {
+    hasPointerCapture: vi.fn(() => true),
+    releasePointerCapture: vi.fn(),
+    setPointerCapture: vi.fn(),
+  });
+}
+
 describe("ManualCutoutWorkspace", () => {
   afterEach(cleanup);
 
@@ -40,6 +49,7 @@ describe("ManualCutoutWorkspace", () => {
     const harness = interactionHarness();
     render(
       <ManualCutoutWorkspace
+        busy={false}
         documentId="document-1"
         height={10}
         interaction={harness.interaction}
@@ -78,6 +88,7 @@ describe("ManualCutoutWorkspace", () => {
     render(
       <Profiler id="manual-workspace" onRender={onRender}>
         <ManualCutoutWorkspace
+          busy={false}
           documentId="document-1"
           height={2000}
           interaction={harness.interaction}
@@ -104,20 +115,50 @@ describe("ManualCutoutWorkspace", () => {
     expect(cursor.childElementCount).toBe(0);
   });
 
-  it("uses the shared full-fit viewport and Space grab mode", () => {
+  it("blocks brush input while the manual Apply is in flight", () => {
     const harness = interactionHarness();
     render(
       <ManualCutoutWorkspace
+        busy
         documentId="document-1"
-        height={2000}
+        height={10}
         interaction={harness.interaction}
-        currentUrl="blob:current-result"
-        width={4000}
+        currentUrl="blob:source"
+        width={10}
       />,
+    );
+
+    expect(screen.getByTestId("editor-stage-placeholder").textContent).toMatch(
+      /Applying the manual cutout|Применяем ручную коррекцию/,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /^Apply$|^Применить$/ })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    fireEvent.pointerDown(screen.getByRole("img"), { button: 0, pointerId: 1 });
+    expect(harness.calls.begin).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared full-fit viewport and Space grab mode", () => {
+    const harness = interactionHarness();
+    const onRender = vi.fn();
+    render(
+      <Profiler id="manual-workspace" onRender={onRender}>
+        <ManualCutoutWorkspace
+          busy={false}
+          documentId="document-1"
+          height={2000}
+          interaction={harness.interaction}
+          currentUrl="blob:current-result"
+          width={4000}
+        />
+      </Profiler>,
     );
     const viewport = screen.getByTestId("cutout-stage-viewport");
     const content = screen.getByTestId("cutout-stage-content");
     const canvas = screen.getByRole("img", { name: /Manual cutout|Ручн/ });
+    supportPointerCapture(canvas);
     expect(viewport.className).toContain("overflow-hidden");
     expect(content.getAttribute("data-tool-image-viewport")).toBe("true");
     expect(content.className).toContain("editor-image-frame");
@@ -126,10 +167,28 @@ describe("ManualCutoutWorkspace", () => {
       height: "min(100cqh, 50cqw)",
     });
 
-    fireEvent.keyDown(window, { key: " " });
+    fireEvent.pointerEnter(viewport);
+    expect(viewport.getAttribute("data-workspace-active")).toBe("true");
+    const committedBeforeGesture = onRender.mock.calls.length;
+    const spaceDown = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(spaceDown);
+    expect(spaceDown.defaultPrevented).toBe(true);
     expect(viewport.getAttribute("data-space-panning")).toBe("true");
-    expect(canvas.className).toContain("cursor-grab");
+    expect(canvas.style.cursor).toBe("grab");
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 7 });
+    expect(canvas.style.cursor).toBe("grabbing");
+    fireEvent.pointerMove(canvas, { pointerId: 7, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 7 });
     fireEvent.keyUp(window, { key: " " });
     expect(viewport.getAttribute("data-space-panning")).toBe("false");
+    fireEvent.pointerDown(canvas, { button: 1, pointerId: 8 });
+    expect(canvas.style.cursor).toBe("grabbing");
+    expect(screen.getByTestId("manual-brush-cursor").hidden).toBe(true);
+    fireEvent.pointerUp(canvas, { button: 1, pointerId: 8 });
+    expect(onRender).toHaveBeenCalledTimes(committedBeforeGesture);
   });
 });

@@ -49,7 +49,11 @@ export function EnhancementWorkspace(props: Props) {
   return (
     <>
       <div className="[grid-area:surface]">
-        <EditorStage documentId={props.draft.documentId}>
+        <EditorStage
+          documentId={props.draft.documentId}
+          loading={busy}
+          loadingLabel={m.editorEnhancementsApplying()}
+        >
           <BeforeAfterUrlSlider
             afterUrl={props.previewUrl}
             beforeUrl={props.sourceUrl}

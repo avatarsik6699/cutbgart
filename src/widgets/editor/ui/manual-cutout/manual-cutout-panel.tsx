@@ -10,6 +10,7 @@ import type { ManualCutoutInteraction } from "./manual-cutout-workspace";
 
 export function ManualCutoutPanel(
   props: Readonly<{
+    busy: boolean;
     interaction: ManualCutoutInteraction;
     onBrushSizeChange(brushSize: number): void;
     onCutoutModeChange?(mode: "magic" | "manual"): void;
@@ -81,7 +82,7 @@ export function ManualCutoutPanel(
             <Button
               className="w-full"
               onClick={props.interaction.apply}
-              disabled={!draftState.dirty}
+              disabled={!draftState.dirty || props.busy}
             >
               {m.cutoutApply()}
             </Button>
@@ -89,6 +90,7 @@ export function ManualCutoutPanel(
               className="w-full"
               variant="outline"
               onClick={props.interaction.cancel}
+              disabled={props.busy}
             >
               {m.cancel()}
             </Button>

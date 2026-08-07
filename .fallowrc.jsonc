@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
   "entry": ["scripts/profiling/editor/verify-phase-43-reports.ts"],
-  "ignoreDependencies": ["onnxruntime-web"],
+  "ignoreDependencies": ["@welldone-software/why-did-you-render", "onnxruntime-web"],
   "health": {
     "thresholdOverrides": [
       {
