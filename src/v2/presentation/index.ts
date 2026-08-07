@@ -1,5 +1,4 @@
 export { useDocumentActorSelectors } from "./use-document-actor-selectors";
-export { useEditorSession } from "./use-editor-session";
 export { EditorWorkspaceStrip } from "./workspace";
 export { ManualCutoutWorkspace } from "./manual-cutout";
 export type { ManualCutoutInteraction } from "./manual-cutout";
@@ -21,13 +20,14 @@ export type {
   EditorToolWorkspacePresentationProps,
   EditorToolWorkspaceProjection,
 } from "./editor-tools";
-export type {
-  BatchMainPageIntent,
-  BatchMainPageItemProjection,
-  BatchMainPageProjection,
-  ExportSize,
-  MainPageEditorIntent,
-  MainPageEditorPresentationProps,
-  MainPageEditorProjection,
+export type { MainPageEditorTypes, ExportSize } from "./main-page";
+export {
+  MainPageBatchActions,
+  MainPageBatchRail,
+  MainPageImageAdmission,
+  ProcessingRecovery,
+  ProcessingStatus,
+  SingleImageStage,
+  isAutomaticProcessingPhase,
+  processingStatusText,
 } from "./main-page";
-export { MainPageBatchActions, MainPageBatchRail, MainPageEditorView } from "./main-page";

@@ -9,7 +9,7 @@ export {
   IMPORT_PREPARATION_CONCURRENCY,
   WORKSPACE_ITEM_LIMIT,
 } from "./batch-import";
-export type { BatchImportResult, BatchImportTask } from "./batch-import";
+export type { BatchImportTypes } from "./batch-import";
 export { BatchExportCoordinator } from "./batch-export";
 export type { BatchExportEntry } from "./batch-export";
 export type {
@@ -43,19 +43,7 @@ export type {
   PreparedBackgroundRecord,
 } from "./background";
 export { createEditorSession } from "./editor-session";
-export type {
-  ActiveEditorSessionSnapshot,
-  EditorImportError,
-  EditorSession,
-  EditorSessionOptions,
-  EditorSessionSnapshot,
-  BatchExportSnapshot,
-  SingleExportSnapshot,
-  AutomaticProcessingSelection,
-  EditorWorkspaceSnapshot,
-  WorkspaceItemStatus,
-  WorkspaceItemSummary,
-} from "./editor-session";
+export type { EditorSessionTypes } from "./editor-session";
 export {
   createNativeEnhancementWorkerFactory,
   ENHANCEMENT_WORKER_PROTOCOL_VERSION,
@@ -91,25 +79,14 @@ export {
   loadManualSourceBitmap,
   installManualDraftUnloadGuard,
 } from "./manual-cutout";
-export type {
-  ManualCutoutBox,
-  ManualCutoutBrush,
-  ManualCutoutPatch,
-  ManualCutoutPoint,
-} from "./manual-cutout";
+export type { ManualCutoutRuntimeTypes } from "./manual-cutout";
 export {
   MAGIC_STROKE_LIMIT,
   MAGIC_STROKE_POINT_LIMIT,
   MagicDraftEngine,
   MagicDraftRepository,
 } from "./magic-cutout";
-export type {
-  MagicDraftSnapshot,
-  MagicRuntimeProgress,
-  MagicPoint,
-  MagicStroke,
-  MagicStrokeStart,
-} from "./magic-cutout";
+export type { MagicCutoutRuntimeTypes, MagicRuntimeProgress } from "./magic-cutout";
 export {
   createNativeDownloadAdapter,
   createNativeEditorIdSource,

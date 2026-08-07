@@ -1,9 +1,5 @@
 import type { DocumentState } from "../document";
-import type {
-  DocumentCommandEnvelope,
-  DocumentDecision,
-  DocumentEffect,
-} from "./document-transition.types";
+import type { DocumentTransitionTypes } from "./document-transition.types";
 import {
   accepted,
   clearRun,
@@ -22,8 +18,8 @@ import { changeEnhancementDraft, ENHANCEMENT_OPERATION_ORDER } from "../enhancem
 
 export function decideDocumentCommand(
   state: DocumentState,
-  envelope: DocumentCommandEnvelope,
-): DocumentDecision {
+  envelope: DocumentTransitionTypes.CommandEnvelope,
+): DocumentTransitionTypes.Decision {
   const command = envelope.command;
   if (state.status === "disposed") return rejectDecision(state, command.type, "disposed");
   if (command.documentId !== state.documentId) {
@@ -42,7 +38,7 @@ export function decideDocumentCommand(
         return rejectDecision(state, command.type, "stale-revision");
       const draftId = (
         envelope as Extract<
-          DocumentCommandEnvelope,
+          DocumentTransitionTypes.CommandEnvelope,
           { command: { type: "BEGIN_BACKGROUND" } }
         >
       ).draftId;
@@ -164,7 +160,7 @@ export function decideDocumentCommand(
         return rejectDecision(state, command.type, "stale-revision");
       const draftId = (
         envelope as Extract<
-          DocumentCommandEnvelope,
+          DocumentTransitionTypes.CommandEnvelope,
           { command: { type: "BEGIN_ENHANCEMENTS" } }
         >
       ).draftId;
@@ -268,7 +264,7 @@ export function decideDocumentCommand(
         return rejectDecision(state, command.type, "not-ready");
       const draftId = (
         envelope as Extract<
-          DocumentCommandEnvelope,
+          DocumentTransitionTypes.CommandEnvelope,
           { command: { type: "BEGIN_MAGIC_CUTOUT" } }
         >
       ).draftId;
@@ -311,7 +307,7 @@ export function decideDocumentCommand(
       if (command.draftRevision !== draft.draftRevision + 1) {
         return rejectDecision(state, command.type, "draft-revision-stale");
       }
-      const effects: DocumentEffect[] = [];
+      const effects: DocumentTransitionTypes.Effect[] = [];
       if (state.activeMagicPrediction !== null) {
         effects.push({
           type: "cancel-magic-prediction",
@@ -450,7 +446,7 @@ export function decideDocumentCommand(
       if (draft?.kind !== "magic-cutout" || draft.draftId !== command.draftId) {
         return rejectDecision(state, command.type, "no-draft");
       }
-      const effects: DocumentEffect[] = [];
+      const effects: DocumentTransitionTypes.Effect[] = [];
       if (state.activeMagicPrediction !== null) {
         effects.push({
           type: "cancel-magic-prediction",
@@ -483,7 +479,7 @@ export function decideDocumentCommand(
         return rejectDecision(state, command.type, "not-ready");
       const draftId = (
         envelope as Extract<
-          DocumentCommandEnvelope,
+          DocumentTransitionTypes.CommandEnvelope,
           { command: { type: "BEGIN_MANUAL_CUTOUT" } }
         >
       ).draftId;
@@ -682,7 +678,7 @@ export function decideDocumentCommand(
       };
     case "RESET_DOCUMENT": {
       const correlation = correlationFor(state);
-      const effects: DocumentEffect[] = [];
+      const effects: DocumentTransitionTypes.Effect[] = [];
       if (correlation !== null) {
         effects.push({ type: "cancel-processing", ...correlation });
         effects.push({

@@ -1,13 +1,15 @@
-import type { ReactNode } from "react";
-
+import { ModelStorageTrigger } from "@/features/model-storage";
 import { m } from "@/paraglide/messages";
 import { FeedbackLink, SiteLink } from "@/shared/ui";
+import { DiagnosticsSheet } from "@/v2/presentation/shared";
 
 import { LanguageSwitcher } from "./language-switcher";
 
+const EMPTY_DIAGNOSTIC_LOGS = [] as const;
+
 type Props = Readonly<{
-  HeaderUtilities?: ReactNode;
   homeActive?: boolean;
+  variant?: "default" | "home";
 }>;
 
 export function SiteHeaderNavigation(props: Props) {
@@ -30,7 +32,10 @@ export function SiteHeaderNavigation(props: Props) {
         </SiteLink>
         <FeedbackLink variant="header" />
       </div>
-      <div className="flex shrink-0 items-center gap-x-1">{props.HeaderUtilities}</div>
+      <div className="flex shrink-0 items-center gap-x-1">
+        {props.variant === "home" ? <ModelStorageTrigger /> : null}
+        <DiagnosticsSheet logs={EMPTY_DIAGNOSTIC_LOGS} />
+      </div>
       <LanguageSwitcher />
     </nav>
   );

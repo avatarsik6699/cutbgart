@@ -12,11 +12,11 @@ import { buildDocumentSnapshot, buildDocumentState } from "@/v2/testing";
 
 import {
   createDocumentMachine,
-  type DocumentArtifactEffects,
+  type DocumentMachineTypes,
   type ManualCutoutCommitter,
 } from "./index";
 
-function artifacts(): DocumentArtifactEffects {
+function artifacts(): DocumentMachineTypes.ArtifactEffects {
   return {
     estimateHistoricalBytes: () => 12,
     exportPng: vi.fn(),

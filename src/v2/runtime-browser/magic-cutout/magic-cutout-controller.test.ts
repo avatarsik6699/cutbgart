@@ -1,7 +1,7 @@
 import { createActor } from "xstate";
 import { describe, expect, it, vi } from "vitest";
 
-import { createDocumentMachine, type DocumentArtifactEffects } from "@/v2/application";
+import { createDocumentMachine, type DocumentMachineTypes } from "@/v2/application";
 import {
   createArtifactId,
   createDocumentId,
@@ -17,7 +17,7 @@ import { MagicCandidateRepository } from "./magic-candidate-repository";
 import { MagicCutoutController } from "./magic-cutout-controller";
 import { MagicDraftRepository } from "./magic-draft-repository";
 
-function artifactEffects(): DocumentArtifactEffects {
+function artifactEffects(): DocumentMachineTypes.ArtifactEffects {
   return {
     estimateHistoricalBytes: () => 0,
     exportPng: vi.fn(),

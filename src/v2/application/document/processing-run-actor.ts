@@ -1,11 +1,12 @@
 import { fromCallback } from "xstate";
 
-import type { DocumentEffect, ProcessingRequest, RunCorrelation } from "@/v2/domain";
-
 import type {
-  DocumentActorEvent,
-  DocumentMachineDependencies,
-} from "./document-machine.types";
+  DocumentTransitionTypes,
+  ProcessingRequest,
+  RunCorrelation,
+} from "@/v2/domain";
+
+import type { DocumentMachineTypes } from "./document-machine.types";
 
 type ProcessingRunActorEvent = { type: "CANCEL" };
 
@@ -17,7 +18,9 @@ function correlationFromRequest(request: ProcessingRequest): RunCorrelation {
   };
 }
 
-export function createProcessingRunActor(dependencies: DocumentMachineDependencies) {
+export function createProcessingRunActor(
+  dependencies: DocumentMachineTypes.Dependencies,
+) {
   return fromCallback<ProcessingRunActorEvent, ProcessingRequest>(
     function processingRunCallback(args) {
       const cancellation = dependencies.cancellation.create();
@@ -27,7 +30,7 @@ export function createProcessingRunActor(dependencies: DocumentMachineDependenci
         args.sendBack({
           type: "DOMAIN_EVENT",
           event: { type: "PROCESSING_PROGRESS", ...progress },
-        } satisfies DocumentActorEvent);
+        } satisfies DocumentMachineTypes.ActorEvent);
       });
 
       void run.terminal.then((terminal) => {
@@ -39,17 +42,17 @@ export function createProcessingRunActor(dependencies: DocumentMachineDependenci
               snapshot: terminal.snapshot,
               ...correlation,
             },
-          } satisfies DocumentActorEvent);
+          } satisfies DocumentMachineTypes.ActorEvent);
         } else if (terminal.type === "failed") {
           args.sendBack({
             type: "DOMAIN_EVENT",
             event: { type: "PROCESSING_FAILED", error: terminal.error, ...correlation },
-          } satisfies DocumentActorEvent);
+          } satisfies DocumentMachineTypes.ActorEvent);
         } else {
           args.sendBack({
             type: "DOMAIN_EVENT",
             event: { type: "PROCESSING_CANCELLED", ...correlation },
-          } satisfies DocumentActorEvent);
+          } satisfies DocumentMachineTypes.ActorEvent);
         }
       });
 
@@ -66,7 +69,7 @@ export function createProcessingRunActor(dependencies: DocumentMachineDependenci
           type: "release-run-if-owned",
           documentId: args.input.documentId,
           runId: args.input.runId,
-        } satisfies DocumentEffect);
+        } satisfies DocumentTransitionTypes.Effect);
       };
     },
   );

@@ -2,18 +2,17 @@ import type {
   ArtifactId,
   DocumentId,
   MagicCandidateId,
-  MagicCandidateSummary,
+  MagicCutoutTypes,
   MagicDraftId,
-  MagicPredictionCorrelation,
 } from "@/v2/domain";
 
-import type { MagicStroke } from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 import { rankAndFuseMagicCandidates } from "./magic-candidate-policy";
 import type { TransferableMagicCandidate } from "./magic-worker-protocol";
 
 export type MagicCandidate = Readonly<{
   candidateId: MagicCandidateId;
-  correlation: MagicPredictionCorrelation;
+  correlation: MagicCutoutTypes.PredictionCorrelation;
   data: Uint8ClampedArray;
   height: number;
   score: number;
@@ -36,11 +35,11 @@ export class MagicCandidateRepository {
 
   replace(options: {
     base: Uint8ClampedArray | null;
-    correlation: MagicPredictionCorrelation;
+    correlation: MagicCutoutTypes.PredictionCorrelation;
     raw: readonly TransferableMagicCandidate[];
     source: ArtifactId;
-    strokes: readonly MagicStroke[];
-  }): readonly MagicCandidateSummary[] {
+    strokes: readonly MagicCutoutRuntimeTypes.Stroke[];
+  }): readonly MagicCutoutTypes.CandidateSummary[] {
     const ranked = rankAndFuseMagicCandidates({
       base: options.base,
       candidates: options.raw,
@@ -57,10 +56,10 @@ export class MagicCandidateRepository {
   }
 
   replaceRanked(options: {
-    correlation: MagicPredictionCorrelation;
+    correlation: MagicCutoutTypes.PredictionCorrelation;
     ranked: readonly TransferableMagicCandidate[];
     source: ArtifactId;
-  }): readonly MagicCandidateSummary[] {
+  }): readonly MagicCutoutTypes.CandidateSummary[] {
     this.releaseDraft(options.correlation.draftId);
     return options.ranked.map((candidate) => {
       const candidateId = this.#nextId();

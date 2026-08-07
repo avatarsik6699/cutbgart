@@ -1,10 +1,10 @@
-import type { MagicCandidateSummary, MagicPredictionCorrelation } from "@/v2/domain";
+import type { MagicCutoutTypes } from "@/v2/domain";
 
-export type MagicPredictionInput = MagicPredictionCorrelation;
+export type MagicPredictionInput = MagicCutoutTypes.PredictionCorrelation;
 
 export type MagicCutoutPredictor = {
   predict(
     input: MagicPredictionInput,
     signal: AbortSignal,
-  ): Promise<readonly MagicCandidateSummary[]>;
+  ): Promise<readonly MagicCutoutTypes.CandidateSummary[]>;
 };

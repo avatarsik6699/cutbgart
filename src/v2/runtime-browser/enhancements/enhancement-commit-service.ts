@@ -7,7 +7,7 @@ import {
   orderEnhancementOperations,
   sameBackgroundFill,
   type ArtifactId,
-  type EnhancementOperationId,
+  type EnhancementTypes,
   type LocalInferencePath,
 } from "@/v2/domain";
 
@@ -22,7 +22,7 @@ import type {
 
 export type EnhancementRuntimeSnapshot = Readonly<{
   status: "ready" | "queued" | "running" | "applying" | "no-change" | "error";
-  activeOperationId: EnhancementOperationId | null;
+  activeOperationId: EnhancementTypes.OperationId | null;
   fraction: number | null;
   error: string | null;
 }>;
@@ -301,7 +301,7 @@ export class EnhancementCommitService implements EnhancementRuntimeService {
   }
 
   #progress(
-    operationId: EnhancementOperationId,
+    operationId: EnhancementTypes.OperationId,
     progress: EnhancementWorkerProgress,
   ): void {
     this.#publish({

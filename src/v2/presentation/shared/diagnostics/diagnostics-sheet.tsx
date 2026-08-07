@@ -1,8 +1,8 @@
 import { DiagnosticsDesktopSheet } from "./components/diagnostics-desktop-sheet";
 import { DiagnosticsMobileDrawer } from "./components/diagnostics-mobile-drawer";
-import type { DiagnosticsSheetProps } from "./diagnostics.types";
+import type { DiagnosticsTypes } from "./diagnostics.types";
 
-export function DiagnosticsSheet(props: DiagnosticsSheetProps) {
+export function DiagnosticsSheet(props: DiagnosticsTypes.SheetProps) {
   return (
     <>
       <DiagnosticsDesktopSheet {...props} />

@@ -1,6 +1,6 @@
 import type { DocumentEvent } from "../events";
 import type { DocumentState } from "../document";
-import type { DocumentTransition } from "./document-transition.types";
+import type { DocumentTransitionTypes } from "./document-transition.types";
 import {
   clearRun,
   isActiveRunStatus,
@@ -15,7 +15,7 @@ import { matchesMagicPrediction } from "../magic-cutout";
 export function transitionDocument(
   state: DocumentState,
   event: DocumentEvent,
-): DocumentTransition {
+): DocumentTransitionTypes.Transition {
   if (event.documentId !== state.documentId || state.status === "disposed") {
     return { outcome: "ignored-stale", state, effects: [] };
   }

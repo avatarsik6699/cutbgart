@@ -9,7 +9,7 @@ import type {
   RunId,
 } from "./ids";
 
-import type { BackgroundFillDescriptor } from "./background";
+import type { BackgroundTypes } from "./background";
 
 export type ArtifactKind =
   "source" | "matte" | "foreground" | "composite" | "png" | "background-image";
@@ -55,5 +55,5 @@ export type DocumentSnapshot = {
   matte: ArtifactId;
   foreground: ArtifactId | null;
   composite: ArtifactId;
-  background: BackgroundFillDescriptor;
+  background: BackgroundTypes.FillDescriptor;
 };

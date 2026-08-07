@@ -1,19 +1,5 @@
 export { createEditorSession } from "./editor-session";
-export type {
-  ActiveEditorSessionSnapshot,
-  EditorImportError,
-  EditorSession,
-  EditorSessionOptions,
-  EditorSessionSnapshot,
-  EmptyEditorSessionSnapshot,
-  PreparingEditorSessionSnapshot,
-  BatchExportSnapshot,
-  SingleExportSnapshot,
-  AutomaticProcessingSelection,
-  EditorWorkspaceSnapshot,
-  WorkspaceItemStatus,
-  WorkspaceItemSummary,
-} from "./editor-session.types";
+export type { EditorSessionTypes } from "./editor-session.types";
 export {
   IMAGE_IMPORT_MAX_BYTES,
   IMAGE_IMPORT_MAX_DIMENSION,

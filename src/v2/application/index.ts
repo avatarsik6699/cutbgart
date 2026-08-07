@@ -7,16 +7,7 @@ export type {
   ProcessingTerminalOutcome,
 } from "./processing";
 export { createDocumentMachine } from "./document";
-export type {
-  DocumentActorContext,
-  DocumentActorEvent,
-  DocumentActorInput,
-  DocumentActorRef,
-  DocumentArtifactEffects,
-  DocumentMachineDependencies,
-  DocumentFinishingIdSource,
-  DocumentRunIdSource,
-} from "./document";
+export type { DocumentMachineTypes } from "./document";
 export type { ManualCutoutCommitRequest, ManualCutoutCommitter } from "./document";
 export type {
   BackgroundCommitInput,

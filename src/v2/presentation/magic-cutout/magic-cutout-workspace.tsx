@@ -10,7 +10,7 @@ import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { Button, EditorStage, Image, Typography } from "@/shared/ui";
-import type { MagicCutoutDraft, MagicCutoutMode } from "@/v2/domain";
+import type { MagicCutoutTypes } from "@/v2/domain";
 import type { MagicRuntimeProgress } from "@/v2/runtime-browser";
 import { CanvasViewControls, ToolPanelSlot, type CanvasInteractionMode } from "../shared";
 import {
@@ -22,7 +22,7 @@ import {
 import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
 
 type Props = {
-  draft: MagicCutoutDraft;
+  draft: MagicCutoutTypes.Draft;
   height: number;
   runtimeProgress: MagicRuntimeProgress | null;
   interaction: MagicCutoutInteraction;
@@ -37,7 +37,7 @@ export type MagicCutoutInteraction = Readonly<{
   beginStroke(
     input: Readonly<{
       id: string;
-      mode: MagicCutoutMode;
+      mode: MagicCutoutTypes.Mode;
       point: Readonly<{ x: number; y: number }>;
       radius: number;
     }>,
@@ -47,11 +47,11 @@ export type MagicCutoutInteraction = Readonly<{
   commitStroke(): boolean;
   displayStrokes(): readonly Readonly<{
     id: string;
-    mode: MagicCutoutMode;
+    mode: MagicCutoutTypes.Mode;
     points: readonly Readonly<{ x: number; y: number }>[];
     radius: number;
   }>[];
-  readViewState(): Readonly<{ mode: MagicCutoutMode; radius: number }>;
+  readViewState(): Readonly<{ mode: MagicCutoutTypes.Mode; radius: number }>;
   redo(): void;
   snapshot(): Readonly<{
     canRedo: boolean;
@@ -59,11 +59,11 @@ export type MagicCutoutInteraction = Readonly<{
     strokeCount: number;
   }> | null;
   undo(): void;
-  writeViewState(state: Readonly<{ mode: MagicCutoutMode; radius: number }>): void;
+  writeViewState(state: Readonly<{ mode: MagicCutoutTypes.Mode; radius: number }>): void;
 }>;
 
 function statusLabel(
-  draft: MagicCutoutDraft,
+  draft: MagicCutoutTypes.Draft,
   runtimeProgress: MagicRuntimeProgress | null,
 ): string {
   if (runtimeProgress?.stage === "magic-queued") return m.editorV2MagicQueued();
@@ -80,7 +80,7 @@ function statusLabel(
 
 export function MagicCutoutWorkspace(props: Props) {
   const initialView = props.interaction.readViewState();
-  const [mode, setMode] = useState<MagicCutoutMode>(initialView.mode);
+  const [mode, setMode] = useState<MagicCutoutTypes.Mode>(initialView.mode);
   const radiusRef = useRef(initialView.radius);
   const [zoom, setZoom] = useState(1);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
@@ -95,7 +95,7 @@ export function MagicCutoutWorkspace(props: Props) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const previousConfirmDiscardRef = useRef(false);
 
-  function changeMode(nextMode: MagicCutoutMode): void {
+  function changeMode(nextMode: MagicCutoutTypes.Mode): void {
     setMode(nextMode);
     props.interaction.writeViewState({ mode: nextMode, radius: radiusRef.current });
   }

@@ -3,7 +3,7 @@ import { fromCallback, fromPromise, setup } from "xstate";
 import {
   decideDocumentCommand,
   transitionDocument,
-  type DocumentEffect,
+  type DocumentTransitionTypes,
   type DocumentSnapshot,
   type DocumentState,
   type ProcessingError,
@@ -11,12 +11,7 @@ import {
 } from "@/v2/domain";
 
 import { executeArtifactEffect } from "./artifact-effect-executor";
-import type {
-  DocumentActorContext,
-  DocumentActorEvent,
-  DocumentActorInput,
-  DocumentMachineDependencies,
-} from "./document-machine.types";
+import type { DocumentMachineTypes } from "./document-machine.types";
 import { createProcessingRunActor } from "./processing-run-actor";
 import { ProcessingGatewayError } from "../processing";
 
@@ -83,12 +78,12 @@ function processingRequestFromState(state: DocumentState): ProcessingRequest {
   };
 }
 
-export function createDocumentMachine(dependencies: DocumentMachineDependencies) {
+export function createDocumentMachine(dependencies: DocumentMachineTypes.Dependencies) {
   const machineSetup = setup({
     types: {
-      context: {} as DocumentActorContext,
-      events: {} as DocumentActorEvent,
-      input: {} as DocumentActorInput,
+      context: {} as DocumentMachineTypes.ActorContext,
+      events: {} as DocumentMachineTypes.ActorEvent,
+      input: {} as DocumentMachineTypes.ActorInput,
     },
     actors: {
       documentLifetime: fromCallback<
@@ -107,7 +102,7 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
         async ({ input, signal }) => dependencies.manualCommitter.commit(input, signal),
       ),
       magicPrediction: fromPromise<
-        readonly import("@/v2/domain").MagicCandidateSummary[],
+        readonly import("@/v2/domain").MagicCutoutTypes.CandidateSummary[],
         MagicPredictionInput
       >(async ({ input, signal }) => {
         if (dependencies.magicPredictor === undefined) {
@@ -222,7 +217,10 @@ export function createDocumentMachine(dependencies: DocumentMachineDependencies)
     const transition = transitionDocument(context.document, event.event);
     enqueue.assign({ document: transition.state });
 
-    let promotion: Extract<DocumentEffect, { type: "promote-run" }> | null = null;
+    let promotion: Extract<
+      DocumentTransitionTypes.Effect,
+      { type: "promote-run" }
+    > | null = null;
     for (const effect of transition.effects) {
       if (effect.type === "promote-run") {
         promotion = effect;

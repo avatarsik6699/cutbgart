@@ -21,6 +21,7 @@ Recoverable source baseline: immutable tag `v0.43.0` at `2b2c46c`
 | `src/widgets/public-editor/ui/editor-v2-document-panel.tsx` | No production importer or barrel export; superseded by active-document/main-page/tool-workspace composition. |
 | `src/widgets/public-editor/ui/editor-v2-status-rail.tsx` | Imported only by the dead document panel, so it became unreachable with that panel. |
 | `src/widgets/public-editor/ui/editor-v2-document-panel.test.tsx` | Tested only the removed dead panel and had no independent contract owner. |
+| `src/features/upload-image/{model,worker}` and legacy prepared-upload UI | T4 traced every symbol to the feature barrel and its self-tests only. The public v2 editor admits raw `File` values through `FileAdmission`; `runtime-browser/editor-session/image-import-preparation.ts` is the sole active validation, resize, cancellation, and preparation owner. The duplicate legacy worker/hook/validation path and its tests were removed together. |
 
 The matching stale rows were removed from `docs/ARCHITECTURE_V2.md`. No runtime API, actor,
 artifact ownership, route, browser-resource lifetime, or user-facing behavior changed.

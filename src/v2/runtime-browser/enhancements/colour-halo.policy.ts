@@ -1,4 +1,4 @@
-import type { AlphaPlane } from "./enhancement-pixels.types";
+import type { EnhancementPixelTypes } from "./enhancement-pixels.types";
 
 const BACKGROUND_ALPHA_LIMIT = 8;
 const FOREGROUND_ALPHA_LIMIT = 247;
@@ -7,7 +7,7 @@ const SAMPLE_RADIUS = 8;
 
 export type ColourHaloResult = {
   rgba: Uint8ClampedArray;
-  matte: AlphaPlane;
+  matte: EnhancementPixelTypes.AlphaPlane;
   changed: boolean;
   actualPath: "decontaminate" | "edge-aware-fallback" | "unchanged";
   fallback: "none" | "no-soft-edge" | "no-background-samples";
@@ -15,20 +15,25 @@ export type ColourHaloResult = {
 
 type ColourSample = { red: number; green: number; blue: number };
 
-function assertMatte(matte: AlphaPlane): void {
+function assertMatte(matte: EnhancementPixelTypes.AlphaPlane): void {
   const pixels = matte.width * matte.height;
   if (matte.width <= 0 || matte.height <= 0 || matte.data.length !== pixels) {
     throw new Error("Colour-halo matte dimensions are invalid");
   }
 }
 
-function assertInput(rgba: Uint8ClampedArray, matte: AlphaPlane): void {
+function assertInput(
+  rgba: Uint8ClampedArray,
+  matte: EnhancementPixelTypes.AlphaPlane,
+): void {
   assertMatte(matte);
   if (rgba.length !== matte.width * matte.height * 4)
     throw new Error("Colour-halo source and matte dimensions must match");
 }
 
-export function cleanupIsolatedSoftComponents(matte: AlphaPlane): AlphaPlane {
+export function cleanupIsolatedSoftComponents(
+  matte: EnhancementPixelTypes.AlphaPlane,
+): EnhancementPixelTypes.AlphaPlane {
   assertMatte(matte);
   const data = matte.data.slice();
   const visited = new Uint8Array(data.length);
@@ -68,7 +73,7 @@ export function cleanupIsolatedSoftComponents(matte: AlphaPlane): AlphaPlane {
 
 function sampleNearestClass(
   rgba: Uint8ClampedArray,
-  matte: AlphaPlane,
+  matte: EnhancementPixelTypes.AlphaPlane,
   x: number,
   y: number,
   predicate: (alpha: number) => boolean,
@@ -121,7 +126,7 @@ function fallback(composite: number, foreground: number, alpha: number): number 
 
 export function removeColourHalo(
   rgba: Uint8ClampedArray,
-  matte: AlphaPlane,
+  matte: EnhancementPixelTypes.AlphaPlane,
 ): ColourHaloResult {
   assertInput(rgba, matte);
   const result = rgba.slice();

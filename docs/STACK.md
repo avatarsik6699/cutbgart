@@ -193,9 +193,11 @@ directory and record its hash. Do not pass `/home/...` paths to a Windows browse
   isolated profile and privacy flags; Playwright remains the behavioral E2E owner.
 - Fallow MCP exposes the pinned repository dev dependency as structured static analysis. The CLI
   scripts remain the reproducible gate and fallback.
-- `review-v2-architecture` under `.agents/skills/` composes these layers into this repository's
-  ownership/performance review. Start a new Codex conversation after installing or changing a
-  plugin/MCP so the tool and skill inventory is refreshed.
+- `frontend-implementation` under `.agents/skills/` applies the repository's ownership,
+  render-boundary, selective-FSD, and lifecycle contract during frontend implementation and review.
+  Final performance/resource evidence remains owned by the active phase and `/phase-gate`. Start a
+  new Codex conversation after installing or changing a plugin/MCP so the tool and skill inventory
+  is refreshed.
 
 Verify local discovery with `codex plugin list` and `codex mcp list`. Never enable Fallow telemetry
 or relax Chrome profile/network privacy settings on the user's behalf.

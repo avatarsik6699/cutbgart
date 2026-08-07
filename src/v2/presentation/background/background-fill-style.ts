@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
 
-import type { BackgroundFillDescriptor } from "@/v2/domain";
+import type { BackgroundTypes } from "@/v2/domain";
 
 export function backgroundFillStyle(
-  fill: BackgroundFillDescriptor,
+  fill: BackgroundTypes.FillDescriptor,
   imageUrl: string | null,
 ): CSSProperties {
   if (fill.type === "transparent") return {};

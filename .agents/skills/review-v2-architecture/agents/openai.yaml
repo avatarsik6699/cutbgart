@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review V2 Architecture"
-  short_description: "Review v2 changes with focused or final depth"
-  default_prompt: "Use $review-v2-architecture to review the changed surface at the depth appropriate for this checkpoint."

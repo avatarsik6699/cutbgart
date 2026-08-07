@@ -1,7 +1,7 @@
 export { DownloadResultButton } from "./ui/DownloadResultButton";
 export { DownloadSplitButton } from "./ui/download-split-button";
-export { DownloadSplitControl } from "./ui/download-split-control";
-export type { DownloadSplitControlProps } from "./ui/download-split-control";
+export { DownloadControl } from "./ui/download-control";
+export type { DownloadControlTypes } from "./ui/download-control";
 export {
   availableExportSizes,
   calculateExportDimensions,

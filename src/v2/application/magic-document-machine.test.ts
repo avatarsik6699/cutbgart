@@ -13,15 +13,14 @@ import { buildDocumentSnapshot, buildDocumentState } from "@/v2/testing";
 import {
   createDocumentMachine,
   ProcessingGatewayError,
-  type DocumentActorRef,
-  type DocumentArtifactEffects,
+  type DocumentMachineTypes,
 } from "./index";
 
 const draftId = createMagicDraftId("magic-draft-1");
 const candidateId = createMagicCandidateId("candidate-1");
 const runId = createRunId("magic-run-1");
 
-function artifacts(): DocumentArtifactEffects {
+function artifacts(): DocumentMachineTypes.ArtifactEffects {
   return {
     estimateHistoricalBytes: () => 12,
     exportPng: vi.fn(),
@@ -84,7 +83,7 @@ function resultDocument() {
   });
 }
 
-function beginAndDirty(actor: DocumentActorRef) {
+function beginAndDirty(actor: DocumentMachineTypes.ActorRef) {
   const documentId = actor.getSnapshot().context.document.documentId;
   actor.send({
     type: "COMMAND",

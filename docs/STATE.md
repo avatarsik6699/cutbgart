@@ -29,12 +29,12 @@
 | 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
 | 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
-| 44 | 🔄 in-progress | `v0.44.0`; T3 awaiting architect review | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
+| 44 | 🔄 in-progress | `v0.44.0`; T5 ownership rework complete, awaiting architect acceptance | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
 
 **Latest closed phase:** `43`
 
-**Implementation in progress:** Phase 44 checkpoint `T3`; implementation and focused checks are
-complete, awaiting architect review before commit.
+**Implementation in progress:** Phase 44 checkpoint `T5` has been reworked under the architect-
+approved frontend ownership/render contract and awaits checkpoint acceptance before T6.
 
 **Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), executed through targeted
 `/impl-assist 44 <ID>` checkpoints. Production deployment remains a separate authorized-operator
@@ -99,6 +99,10 @@ workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and the ar
   dependencies and entity/feature slice isolation while allowing direct same-layer widget/page
   composition. Product behavior, routes, domain/runtime ownership, privacy, models, exports, and
   deployment remain unchanged.
+- The Phase-44 frontend contract uses a stable public-editor session/view-model boundary, leaf
+  XState/external-store selectors, controller-neutral views, semantic commands, and abstraction
+  justification. FSD remains a layer/import vocabulary rather than a folder or wrapper mandate;
+  no additional workflow store is authorized.
 
 ### Core models
 
@@ -397,7 +401,7 @@ separately gated work.
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
 | Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
-| Phase 44 | Pending; checkpoint order T2–T8 then final evidence/gate T1; no implementation accepted yet |
+| Phase 44 | In progress; T2–T4 accepted, T5 ownership rework is complete and awaits architect acceptance before T6 |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log

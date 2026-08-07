@@ -2,7 +2,7 @@ import type { DocumentId, DocumentSnapshot } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
 import type { DownloadAdapter } from "../platform";
-import type { BatchExportSnapshot } from "../editor-session/editor-session.types";
+import type { EditorSessionTypes } from "../editor-session/editor-session.types";
 
 export type BatchExportEntry = Readonly<{
   documentId: DocumentId;
@@ -16,7 +16,7 @@ export class BatchExportCoordinator {
   readonly #repository: ArtifactRepository;
   readonly #listeners = new Set<() => void>();
   #cancelled = false;
-  #snapshot: BatchExportSnapshot = {
+  #snapshot: EditorSessionTypes.BatchExportSnapshot = {
     status: "idle",
     includedCount: 0,
     skippedCount: 0,
@@ -28,7 +28,7 @@ export class BatchExportCoordinator {
     this.#repository = options.repository;
   }
 
-  getSnapshot = (): BatchExportSnapshot => this.#snapshot;
+  getSnapshot = (): EditorSessionTypes.BatchExportSnapshot => this.#snapshot;
 
   subscribe(listener: () => void): () => void {
     this.#listeners.add(listener);
@@ -106,7 +106,7 @@ export class BatchExportCoordinator {
     this.#listeners.clear();
   }
 
-  #publish(snapshot: BatchExportSnapshot): void {
+  #publish(snapshot: EditorSessionTypes.BatchExportSnapshot): void {
     this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }

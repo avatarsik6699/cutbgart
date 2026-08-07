@@ -1,6 +1,6 @@
 import { setup, type AnyStateMachine } from "xstate";
 
-import type { DocumentActorEvent, DocumentActorInput } from "../document";
+import type { DocumentMachineTypes } from "../document";
 import type { DocumentId, WorkspaceCommand, WorkspaceCommandOutcome } from "@/v2/domain";
 
 export type WorkspaceActorContext = {
@@ -78,7 +78,9 @@ export function createWorkspaceMachine(dependencies: WorkspaceMachineDependencie
                   { type: "REGISTER_DOCUMENT" }
                 >;
                 const documentId = registerEvent.document.documentId;
-                const input: DocumentActorInput = { document: registerEvent.document };
+                const input: DocumentMachineTypes.ActorInput = {
+                  document: registerEvent.document,
+                };
                 enqueue.spawnChild("document", {
                   id: getDocumentActorId(documentId),
                   input,
@@ -151,7 +153,7 @@ export function createWorkspaceMachine(dependencies: WorkspaceMachineDependencie
                 enqueue.sendTo(getDocumentActorId(commandEvent.documentId), {
                   type: "COMMAND",
                   command: commandEvent.command,
-                } satisfies DocumentActorEvent);
+                } satisfies DocumentMachineTypes.ActorEvent);
                 enqueue.assign({
                   lastCommandOutcome: accepted(
                     "DOCUMENT_COMMAND",

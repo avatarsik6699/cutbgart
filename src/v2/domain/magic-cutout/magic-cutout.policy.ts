@@ -1,11 +1,11 @@
 import type { DocumentId, MagicDraftId, Revision } from "../ids";
-import type { MagicCutoutDraft, MagicPredictionCorrelation } from "./magic-cutout.types";
+import type { MagicCutoutTypes } from "./magic-cutout.types";
 
 export function createMagicCutoutDraft(input: {
   documentId: DocumentId;
   draftId: MagicDraftId;
   baselineRevision: Revision;
-}): MagicCutoutDraft {
+}): MagicCutoutTypes.Draft {
   return {
     kind: "magic-cutout",
     draftId: input.draftId,
@@ -19,8 +19,8 @@ export function createMagicCutoutDraft(input: {
 }
 
 export function advanceMagicDraftRevision(
-  draft: MagicCutoutDraft,
-): MagicCutoutDraft | null {
+  draft: MagicCutoutTypes.Draft,
+): MagicCutoutTypes.Draft | null {
   if (draft.draftRevision === Number.MAX_SAFE_INTEGER) return null;
   return {
     ...draft,
@@ -32,9 +32,9 @@ export function advanceMagicDraftRevision(
 }
 
 export function matchesMagicPrediction(
-  draft: MagicCutoutDraft,
+  draft: MagicCutoutTypes.Draft,
   documentRevision: Revision,
-  correlation: MagicPredictionCorrelation,
+  correlation: MagicCutoutTypes.PredictionCorrelation,
 ): boolean {
   return (
     draft.documentId === correlation.documentId &&

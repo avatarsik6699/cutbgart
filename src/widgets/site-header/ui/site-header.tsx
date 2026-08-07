@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { useIsHydrated, cn } from "@/shared/lib";
 
 import { SiteHeaderBrand } from "./site-header-brand";
@@ -8,7 +6,7 @@ import { SiteHeaderNavigation } from "./site-header-navigation";
 type Props = Readonly<{
   className?: string;
   homeActive?: boolean;
-  HeaderUtilities?: ReactNode;
+  variant?: "default" | "home";
 }>;
 
 export function SiteHeader(props: Props) {
@@ -25,10 +23,7 @@ export function SiteHeader(props: Props) {
     >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-4 sm:px-8">
         <SiteHeaderBrand />
-        <SiteHeaderNavigation
-          HeaderUtilities={props.HeaderUtilities}
-          homeActive={props.homeActive}
-        />
+        <SiteHeaderNavigation homeActive={props.homeActive} variant={props.variant} />
       </div>
     </header>
   );

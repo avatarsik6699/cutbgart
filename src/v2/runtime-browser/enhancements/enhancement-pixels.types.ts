@@ -1,9 +1,11 @@
-export type AlphaPlane = {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-};
+export declare namespace EnhancementPixelTypes {
+  type AlphaPlane = {
+    width: number;
+    height: number;
+    data: Uint8ClampedArray;
+  };
 
-export type PixelRect = { x: number; y: number; width: number; height: number };
+  type Rect = { x: number; y: number; width: number; height: number };
 
-export type RefinementTrimap = AlphaPlane & { unknownBounds: PixelRect | null };
+  type Trimap = AlphaPlane & { unknownBounds: Rect | null };
+}

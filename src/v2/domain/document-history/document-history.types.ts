@@ -1,36 +1,38 @@
 import type { DocumentSnapshot } from "../artifacts";
 import type { DocumentId, EditOperationId, ManualDraftId, Revision } from "../ids";
 
-export type ManualCutoutMode = "restore" | "erase";
+export declare namespace DocumentHistoryTypes {
+  type ManualMode = "restore" | "erase";
 
-export type ManualCutoutDraft = {
-  kind: "manual-cutout";
-  draftId: ManualDraftId;
-  documentId: DocumentId;
-  baselineRevision: Revision;
-  dirty: boolean;
-};
+  type ManualDraft = {
+    kind: "manual-cutout";
+    draftId: ManualDraftId;
+    documentId: DocumentId;
+    baselineRevision: Revision;
+    dirty: boolean;
+  };
 
-export type DocumentHistoryEntry = {
-  operationId: EditOperationId;
-  kind: "manual-cutout" | "magic-cutout" | "background" | "enhance";
-  before: DocumentSnapshot;
-  after: DocumentSnapshot;
-  estimatedHistoricalBytes: number;
-};
+  type Entry = {
+    operationId: EditOperationId;
+    kind: "manual-cutout" | "magic-cutout" | "background" | "enhance";
+    before: DocumentSnapshot;
+    after: DocumentSnapshot;
+    estimatedHistoricalBytes: number;
+  };
 
-export type DocumentHistory = {
-  past: readonly DocumentHistoryEntry[];
-  future: readonly DocumentHistoryEntry[];
-  retainedHistoricalBytes: number;
-};
+  type State = {
+    past: readonly Entry[];
+    future: readonly Entry[];
+    retainedHistoricalBytes: number;
+  };
 
-export type DocumentHistoryChange = {
-  history: DocumentHistory;
-  released: readonly DocumentHistoryEntry[];
-};
+  type Change = {
+    history: State;
+    released: readonly Entry[];
+  };
 
-export type DocumentHistoryMove = DocumentHistoryChange & {
-  entry: DocumentHistoryEntry | null;
-  snapshot: DocumentSnapshot | null;
-};
+  type Move = Change & {
+    entry: Entry | null;
+    snapshot: DocumentSnapshot | null;
+  };
+}

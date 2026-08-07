@@ -9,9 +9,9 @@ import {
   redoDocumentHistory,
   undoDocumentHistory,
 } from "./index";
-import type { DocumentHistoryEntry } from "./document-history.types";
+import type { DocumentHistoryTypes } from "./document-history.types";
 
-function entry(index: number, bytes = 1): DocumentHistoryEntry {
+function entry(index: number, bytes = 1): DocumentHistoryTypes.Entry {
   return {
     operationId: createEditOperationId(`operation-${index}`),
     kind: "manual-cutout",
@@ -49,7 +49,7 @@ describe("document history policy", () => {
 
   it("prunes oldest entries at both committed-history caps", () => {
     let history = createEmptyDocumentHistory();
-    const released: DocumentHistoryEntry[] = [];
+    const released: DocumentHistoryTypes.Entry[] = [];
     for (let index = 0; index < DOCUMENT_HISTORY_ENTRY_LIMIT + 5; index += 1) {
       const change = commitDocumentHistory(history, entry(index));
       history = change.history;

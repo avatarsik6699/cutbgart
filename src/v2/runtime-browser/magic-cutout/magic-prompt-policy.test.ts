@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { MagicStroke } from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 import { createMagicModelPrompts, MAGIC_MODEL_PROMPT_LIMIT } from "./magic-prompt-policy";
 
 describe("createMagicModelPrompts", () => {
   it("keeps small drafts unchanged with semantic labels", () => {
-    const strokes: MagicStroke[] = [
+    const strokes: MagicCutoutRuntimeTypes.Stroke[] = [
       { id: "keep", mode: "keep", radius: 4, points: [{ x: 1, y: 2 }] },
       { id: "remove", mode: "remove", radius: 4, points: [{ x: 3, y: 4 }] },
     ];
@@ -17,7 +17,7 @@ describe("createMagicModelPrompts", () => {
   });
 
   it("bounds dense histories and retains the latest endpoint of both modes", () => {
-    const strokes: MagicStroke[] = [
+    const strokes: MagicCutoutRuntimeTypes.Stroke[] = [
       {
         id: "keep",
         mode: "keep",

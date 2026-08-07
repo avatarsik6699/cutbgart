@@ -1,11 +1,9 @@
 import type {
-  BackgroundDraft,
-  BackgroundFillDescriptor,
+  BackgroundTypes,
   DocumentId,
-  EnhancementDraft,
-  EnhancementOperationId,
-  MagicCutoutDraft,
-  ManualCutoutDraft,
+  EnhancementTypes,
+  MagicCutoutTypes,
+  DocumentHistoryTypes,
 } from "@/v2/domain";
 
 export type EditorToolId = "cutout" | "enhance" | "background";
@@ -27,10 +25,10 @@ export type EditorToolWorkspaceProjection = Readonly<{
   committedResultUrl: string;
   width: number;
   height: number;
-  manualDraft: ManualCutoutDraft | null;
-  magicDraft: MagicCutoutDraft | null;
-  backgroundDraft: BackgroundDraft | null;
-  enhancementDraft: EnhancementDraft | null;
+  manualDraft: DocumentHistoryTypes.ManualDraft | null;
+  magicDraft: MagicCutoutTypes.Draft | null;
+  backgroundDraft: BackgroundTypes.Draft | null;
+  enhancementDraft: EnhancementTypes.Draft | null;
 }>;
 
 export type EditorToolWorkspaceIntent =
@@ -47,10 +45,10 @@ export type EditorToolWorkspaceIntent =
         | "download-committed"
         | "leave-workspace";
     }>
-  | Readonly<{ type: "choose-background"; fill: BackgroundFillDescriptor }>
+  | Readonly<{ type: "choose-background"; fill: BackgroundTypes.FillDescriptor }>
   | Readonly<{
       type: "choose-enhancements";
-      operationIds: readonly EnhancementOperationId[];
+      operationIds: readonly EnhancementTypes.OperationId[];
     }>;
 
 export type EditorToolWorkspacePresentationProps = Readonly<{

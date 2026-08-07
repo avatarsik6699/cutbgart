@@ -12,17 +12,19 @@ import type {
   RunId,
 } from "./ids";
 import type { ProcessingError, ProcessingStage } from "./processing";
-import type { DocumentHistory, ManualCutoutDraft } from "./document-history";
-import type { MagicCutoutDraft } from "./magic-cutout";
-import type { BackgroundDraft } from "./background";
-import type { EnhancementDraft } from "./enhancements";
-import type { MagicCandidateSummary } from "./magic-cutout";
+import type { DocumentHistoryTypes } from "./document-history";
+import type { MagicCutoutTypes } from "./magic-cutout";
+import type { BackgroundTypes } from "./background";
+import type { EnhancementTypes } from "./enhancements";
 import type { AutomaticModelMode } from "@/shared/lib";
 
 export type { DocumentSnapshot } from "./artifacts";
 
 export type ActiveToolDraft =
-  ManualCutoutDraft | MagicCutoutDraft | BackgroundDraft | EnhancementDraft;
+  | DocumentHistoryTypes.ManualDraft
+  | MagicCutoutTypes.Draft
+  | BackgroundTypes.Draft
+  | EnhancementTypes.Draft;
 
 export type ActiveRun = {
   runId: RunId;
@@ -35,7 +37,7 @@ export type PendingCommit = ActiveRun & {
 };
 
 export type PendingManualCommit = {
-  draftId: ManualCutoutDraft["draftId"];
+  draftId: DocumentHistoryTypes.ManualDraft["draftId"];
   draftMatte: ArtifactId;
   expectedRevision: Revision;
   operationId: EditOperationId;
@@ -104,9 +106,9 @@ export type DocumentState = {
   pendingMagicCommit: PendingMagicCommit | null;
   pendingBackgroundCommit: PendingBackgroundCommit | null;
   pendingEnhancementCommit: PendingEnhancementCommit | null;
-  magicCandidates: readonly MagicCandidateSummary[];
+  magicCandidates: readonly MagicCutoutTypes.CandidateSummary[];
   activeDraft: ActiveToolDraft | null;
-  history: DocumentHistory;
+  history: DocumentHistoryTypes.State;
   status: DocumentStatus;
   stage: ProcessingStage | null;
   progress: number | null;

@@ -7,7 +7,7 @@ import {
   createEditOperationId,
   createManualDraftId,
   commitDocumentHistory,
-  type DocumentHistory,
+  type DocumentHistoryTypes,
   type DocumentSnapshot,
 } from "@/v2/domain";
 
@@ -264,7 +264,7 @@ describe("editor artifact effects", () => {
       ),
       background: { type: "transparent" },
     };
-    let history: DocumentHistory = {
+    let history: DocumentHistoryTypes.State = {
       past: [],
       future: [],
       retainedHistoricalBytes: 0,

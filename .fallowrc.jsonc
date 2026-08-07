@@ -12,13 +12,6 @@
         "reason": "Accepted Phase-42 controller-neutral composition relocated unchanged into the public editor owner during Phase 43.",
       },
       {
-        "files": ["src/widgets/public-editor/ui/public-editor.tsx"],
-        "maxCyclomatic": 25,
-        "maxCognitive": 28,
-        "maxCrap": 149,
-        "reason": "Accepted Phase-42 v2 session projection now serves every public route; decomposition is deferred to avoid cutover behavior drift.",
-      },
-      {
         "files": ["src/v2/presentation/shared/enhancements-tool-panel.tsx"],
         "maxCyclomatic": 26,
         "maxCognitive": 27,
@@ -28,11 +21,6 @@
         "files": ["src/v2/presentation/shared/editor-toolbar.tsx"],
         "maxCognitive": 28,
         "reason": "Accepted Phase-42 presentation moved from the deleted legacy-named widget into v2 presentation ownership.",
-      },
-      {
-        "files": ["src/widgets/public-editor/ui/editor-v2-main-page-active.tsx"],
-        "maxCognitive": 21,
-        "reason": "Accepted Phase-42 composition relocated into the public editor owner during Phase 43.",
       },
       {
         "files": [

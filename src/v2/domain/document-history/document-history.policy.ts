@@ -1,18 +1,13 @@
-import type {
-  DocumentHistory,
-  DocumentHistoryChange,
-  DocumentHistoryEntry,
-  DocumentHistoryMove,
-} from "./document-history.types";
+import type { DocumentHistoryTypes } from "./document-history.types";
 
 export const DOCUMENT_HISTORY_ENTRY_LIMIT = 20;
 export const DOCUMENT_HISTORY_BYTE_LIMIT = 96 * 1024 * 1024;
 
-export function createEmptyDocumentHistory(): DocumentHistory {
+export function createEmptyDocumentHistory(): DocumentHistoryTypes.State {
   return { past: [], future: [], retainedHistoricalBytes: 0 };
 }
 
-function retainedBytes(entries: readonly DocumentHistoryEntry[]): number {
+function retainedBytes(entries: readonly DocumentHistoryTypes.Entry[]): number {
   return entries.reduce(
     (total, entry) => total + Math.max(0, entry.estimatedHistoricalBytes),
     0,
@@ -20,9 +15,9 @@ function retainedBytes(entries: readonly DocumentHistoryEntry[]): number {
 }
 
 export function commitDocumentHistory(
-  history: DocumentHistory,
-  entry: DocumentHistoryEntry,
-): DocumentHistoryChange {
+  history: DocumentHistoryTypes.State,
+  entry: DocumentHistoryTypes.Entry,
+): DocumentHistoryTypes.Change {
   const released = [...history.future];
   const past = [...history.past, entry].slice(-DOCUMENT_HISTORY_ENTRY_LIMIT);
   const countPruned = history.past.length + 1 - past.length;
@@ -39,7 +34,9 @@ export function commitDocumentHistory(
   };
 }
 
-export function undoDocumentHistory(history: DocumentHistory): DocumentHistoryMove {
+export function undoDocumentHistory(
+  history: DocumentHistoryTypes.State,
+): DocumentHistoryTypes.Move {
   const entry = history.past.at(-1) ?? null;
   if (entry === null) return { history, entry: null, snapshot: null, released: [] };
   const past = history.past.slice(0, -1);
@@ -56,7 +53,9 @@ export function undoDocumentHistory(history: DocumentHistory): DocumentHistoryMo
   };
 }
 
-export function redoDocumentHistory(history: DocumentHistory): DocumentHistoryMove {
+export function redoDocumentHistory(
+  history: DocumentHistoryTypes.State,
+): DocumentHistoryTypes.Move {
   const entry = history.future.at(-1) ?? null;
   if (entry === null) return { history, entry: null, snapshot: null, released: [] };
   const past = [...history.past, entry];
@@ -73,7 +72,9 @@ export function redoDocumentHistory(history: DocumentHistory): DocumentHistoryMo
   };
 }
 
-export function clearDocumentHistory(history: DocumentHistory): DocumentHistoryChange {
+export function clearDocumentHistory(
+  history: DocumentHistoryTypes.State,
+): DocumentHistoryTypes.Change {
   return {
     history: createEmptyDocumentHistory(),
     released: [...history.past, ...history.future],

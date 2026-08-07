@@ -11,7 +11,7 @@ import {
   createManualDraftId,
   createRunId,
 } from "@/v2/domain";
-import type { ActiveEditorSessionSnapshot, EditorSession } from "@/v2/runtime-browser";
+import type { EditorSessionTypes } from "@/v2/runtime-browser";
 import { buildDocumentSnapshot, buildDocumentState } from "@/v2/testing";
 
 import { EditorV2ActiveDocument } from "./editor-v2-active-document";
@@ -86,8 +86,8 @@ describe("EditorV2ActiveDocument", () => {
       processingSelection: () => null,
       subscribeActive: () => () => undefined,
       workspaceSnapshot: () => ({ selectedDocumentId: buildDocumentState().documentId }),
-    } as unknown as EditorSession;
-    const snapshot: ActiveEditorSessionSnapshot = {
+    } as unknown as EditorSessionTypes.Session;
+    const snapshot: EditorSessionTypes.ActiveSnapshot = {
       kind: "document",
       actor,
       error: null,
@@ -138,8 +138,8 @@ describe("EditorV2ActiveDocument", () => {
       subscribeActive: () => () => undefined,
       workspaceSnapshot: () => ({ selectedDocumentId: buildDocumentState().documentId }),
       undoDocument: calls.undo,
-    } as unknown as EditorSession;
-    const snapshot: ActiveEditorSessionSnapshot = {
+    } as unknown as EditorSessionTypes.Session;
+    const snapshot: EditorSessionTypes.ActiveSnapshot = {
       kind: "document",
       actor,
       error: null,

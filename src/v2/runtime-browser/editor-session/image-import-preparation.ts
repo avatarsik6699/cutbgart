@@ -1,7 +1,7 @@
 import { inspectEncodedImageDimensions } from "@/shared/lib";
 import type { ArtifactMediaType } from "@/v2/domain";
 
-import type { EditorImportError } from "./editor-session.types";
+import type { EditorSessionTypes } from "./editor-session.types";
 import { resizeImageInWorker } from "../export";
 
 const SUPPORTED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -16,7 +16,8 @@ export type PreparedImageImport = {
 };
 
 export type ImageImportPreparation =
-  { ok: true; value: PreparedImageImport } | { ok: false; error: EditorImportError };
+  | { ok: true; value: PreparedImageImport }
+  | { ok: false; error: EditorSessionTypes.ImportError };
 
 type ImageImportRuntime = Readonly<{
   resize(

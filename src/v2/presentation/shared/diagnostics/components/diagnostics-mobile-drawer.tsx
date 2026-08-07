@@ -14,9 +14,9 @@ import {
 
 import { DiagnosticsContent } from "./diagnostics-content";
 import { DiagnosticsTriggerButton } from "./diagnostics-trigger-button";
-import type { DiagnosticsSheetProps } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
-export function DiagnosticsMobileDrawer(props: DiagnosticsSheetProps) {
+export function DiagnosticsMobileDrawer(props: DiagnosticsTypes.SheetProps) {
   return (
     <Drawer>
       <DrawerTrigger

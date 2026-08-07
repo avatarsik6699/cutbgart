@@ -2,7 +2,7 @@ import type { CommandOutcome, DocumentCommand } from "../commands";
 import type { DocumentState } from "../document";
 import type { ProcessingLifecycleEvent } from "../events";
 import type { ProcessingError, ProcessingStage, RunCorrelation } from "../processing";
-import type { DocumentDecision, DocumentTransition } from "./document-transition.types";
+import type { DocumentTransitionTypes } from "./document-transition.types";
 
 const ACTIVE_RUN_STATUSES = [
   "queued",
@@ -20,7 +20,7 @@ export function rejectDecision(
   state: DocumentState,
   command: DocumentCommand["type"],
   reason: Extract<CommandOutcome, { status: "rejected" }>["reason"],
-): DocumentDecision {
+): DocumentTransitionTypes.Decision {
   return { outcome: { status: "rejected", command, reason }, state, effects: [] };
 }
 
@@ -79,7 +79,7 @@ export function clearRun(
 export function staleTerminalTransition(
   state: DocumentState,
   event: ProcessingLifecycleEvent,
-): DocumentTransition {
+): DocumentTransitionTypes.Transition {
   if (
     event.type === "PROCESSING_SUCCEEDED" ||
     event.type === "PROCESSING_FAILED" ||

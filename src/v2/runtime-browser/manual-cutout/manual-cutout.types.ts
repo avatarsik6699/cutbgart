@@ -1,23 +1,25 @@
-import type { DocumentId, ManualCutoutMode, ManualDraftId } from "@/v2/domain";
+import type { DocumentId, DocumentHistoryTypes, ManualDraftId } from "@/v2/domain";
 
-export type ManualCutoutPoint = { x: number; y: number };
-export type ManualCutoutBox = { minX: number; minY: number; maxX: number; maxY: number };
+export declare namespace ManualCutoutRuntimeTypes {
+  type Point = { x: number; y: number };
+  type Box = { minX: number; minY: number; maxX: number; maxY: number };
 
-export type ManualCutoutPatch = {
-  box: ManualCutoutBox;
-  before: Uint8ClampedArray;
-  after: Uint8ClampedArray;
-};
+  type Patch = {
+    box: Box;
+    before: Uint8ClampedArray;
+    after: Uint8ClampedArray;
+  };
 
-export type ManualCutoutBrush = {
-  mode: ManualCutoutMode;
-  radius: number;
-  hardness: number;
-};
+  type Brush = {
+    mode: DocumentHistoryTypes.ManualMode;
+    radius: number;
+    hardness: number;
+  };
 
-export type ManualDraftRuntime = {
-  draftId: ManualDraftId;
-  documentId: DocumentId;
-  width: number;
-  height: number;
-};
+  type Draft = {
+    draftId: ManualDraftId;
+    documentId: DocumentId;
+    width: number;
+    height: number;
+  };
+}

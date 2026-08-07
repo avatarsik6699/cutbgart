@@ -24,8 +24,7 @@ import {
   selectDocumentStatus,
   selectSelectedDocumentId,
   selectWorkspaceDocumentCount,
-  type DocumentArtifactEffects,
-  type DocumentRunIdSource,
+  type DocumentMachineTypes,
   type ProcessingGateway,
   type ProcessingRun,
 } from "./index";
@@ -120,20 +119,23 @@ function createGatewayHarness() {
 
 function createArtifactsHarness() {
   return {
-    estimateHistoricalBytes: vi.fn<DocumentArtifactEffects["estimateHistoricalBytes"]>(
-      () => 0,
-    ),
-    exportPng: vi.fn<DocumentArtifactEffects["exportPng"]>(),
-    promoteRun: vi.fn<DocumentArtifactEffects["promoteRun"]>(() => true),
-    releaseDocument: vi.fn<DocumentArtifactEffects["releaseDocument"]>(),
-    releaseRun: vi.fn<DocumentArtifactEffects["releaseRun"]>(),
-    releaseManualDraft: vi.fn<DocumentArtifactEffects["releaseManualDraft"]>(),
-    commitManualHistory: vi.fn<DocumentArtifactEffects["commitManualHistory"]>(),
-    moveDocumentHistory: vi.fn<DocumentArtifactEffects["moveDocumentHistory"]>(),
-  } satisfies DocumentArtifactEffects;
+    estimateHistoricalBytes: vi.fn<
+      DocumentMachineTypes.ArtifactEffects["estimateHistoricalBytes"]
+    >(() => 0),
+    exportPng: vi.fn<DocumentMachineTypes.ArtifactEffects["exportPng"]>(),
+    promoteRun: vi.fn<DocumentMachineTypes.ArtifactEffects["promoteRun"]>(() => true),
+    releaseDocument: vi.fn<DocumentMachineTypes.ArtifactEffects["releaseDocument"]>(),
+    releaseRun: vi.fn<DocumentMachineTypes.ArtifactEffects["releaseRun"]>(),
+    releaseManualDraft:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["releaseManualDraft"]>(),
+    commitManualHistory:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["commitManualHistory"]>(),
+    moveDocumentHistory:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["moveDocumentHistory"]>(),
+  } satisfies DocumentMachineTypes.ArtifactEffects;
 }
 
-function createRunIds(...ids: RunId[]): DocumentRunIdSource {
+function createRunIds(...ids: RunId[]): DocumentMachineTypes.RunIdSource {
   let index = 0;
   return {
     next() {

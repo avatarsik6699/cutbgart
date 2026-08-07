@@ -5,10 +5,4 @@ export {
   ENHANCEMENT_OPERATION_REGISTRY,
   orderEnhancementOperations,
 } from "./enhancements.policy";
-export type {
-  EnhancementDraft,
-  EnhancementDraftStatus,
-  EnhancementExecutionAdapter,
-  EnhancementOperationDefinition,
-  EnhancementOperationId,
-} from "./enhancements.types";
+export type { EnhancementTypes } from "./enhancements.types";

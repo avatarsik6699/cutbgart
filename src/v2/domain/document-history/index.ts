@@ -7,11 +7,4 @@ export {
   redoDocumentHistory,
   undoDocumentHistory,
 } from "./document-history.policy";
-export type {
-  DocumentHistory,
-  DocumentHistoryChange,
-  DocumentHistoryEntry,
-  DocumentHistoryMove,
-  ManualCutoutDraft,
-  ManualCutoutMode,
-} from "./document-history.types";
+export type { DocumentHistoryTypes } from "./document-history.types";

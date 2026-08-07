@@ -46,8 +46,10 @@ runtime wrappers—then grows it only from concrete consumers. Every new file fo
 | Persistence | browser memory, model Cache Storage, limited `localStorage` | session artifacts and preferences only |
 | Server | TanStack Start/Nitro SSR shell | no image-processing API |
 
-Feature-Sliced Design currently gives useful source-code import boundaries, but it does not define
-runtime ownership. The editor's application workflow is still distributed across hooks.
+Feature-Sliced Design gives useful layer names and import boundaries, but it does not define
+runtime ownership and is not a mandate to create wrappers, barrels, or role folders. The project
+keeps one-way dependencies plus entity/feature isolation and otherwise organizes code around real
+capability owners.
 
 ### 2.2 Current data flow
 
@@ -330,6 +332,11 @@ Phase-33 compliance inventory confirms their API and implementation satisfy
 `FRONTEND_CONVENTIONS.md`. Reuse happens through the module public API; legacy feature hooks and
 state never cross into v2.
 
+Complex presentation composition uses a stable model boundary: Context carries only stable
+session/view-model or actor references, leaf connectors select the exact state they consume, and
+controller-neutral views receive narrow semantic props. Current snapshots, broad projections,
+universal intent relays, and browser resources never flow through Context or intermediate UI.
+
 The first foundation includes:
 
 - `Typography`: typed semantic element plus a finite visual-variant registry; no page-local
@@ -360,7 +367,7 @@ new namespaced API. Secrets are never exposed through client config.
 | TanStack Start/Router | Keep for SSR, SEO pages, routing, and web delivery |
 | Tailwind + shadcn/ui/Base UI | Keep for presentation primitives |
 | Paraglide | Keep bilingual URL/message contract |
-| FSD | Keep one-way UI layer dependencies and strict entity/feature slice isolation; allow direct widget/page same-layer composition when it removes adapter-only indirection |
+| Selective FSD | Keep layer names, one-way dependencies, and strict entity/feature slice isolation; allow direct widget/page same-layer composition and create folders/barrels only for real owners or public boundaries |
 | Transformers.js + ONNX Runtime Web | Keep as the free local processing adapter |
 | Vitest + Playwright | Keep; reorganize tests around contracts and vertical slices |
 
@@ -919,17 +926,16 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/shared/config/runtime.test.ts` | X | SSR without window and dynamically changed globals |
 | `src/shared/config/index.ts` | C | typed API plus backward-compatible legacy exports |
 | `src/v2/presentation/use-document-actor-selectors.ts` | P | selector-only `@xstate/react` binding over narrow application selectors |
-| `src/v2/presentation/use-editor-session.ts` | P | React route-lifetime signal plus external-store subscription; runtime remains owner |
 | `src/v2/presentation/index.ts` | P | explicit presentation public API only |
-| `src/widgets/public-editor/ui/public-editor.tsx` | P | sole public editor session lifetime and workspace composition |
-| `src/widgets/public-editor/ui/public-editor-diagnostics.tsx` | P | editor-owned diagnostics trigger composed into the site header without portal state |
+| `src/widgets/public-editor/model/` | P | stable session/view-model lifetime, cached external-store binding, semantic commands, and pure public-admission policies without mirrored workflow state |
+| `src/widgets/public-editor/ui/public-editor.tsx` | P | thin provider/surface root and route-lifetime resource-count synchronization |
+| `src/widgets/public-editor/ui/connectors/` | P | leaf subscriptions that adapt session/XState owners to controller-neutral presentation contracts |
 | `src/widgets/public-editor/ui/editor-v2-stage.tsx` | P | one-image input and leased Typography/Image preview only |
 | `src/widgets/public-editor/ui/editor-v2-active-document.tsx` | P | active-document connector and accepted tool/canvas composition |
-| `src/widgets/public-editor/ui/editor-v2-main-page-active.tsx` | P | main-page result and processing composition |
 | `src/widgets/public-editor/ui/editor-v2-tool-workspace.tsx` | P | active tool workspace composition |
 | `src/shared/ui/scenario/` | U | shared static localized scenario layout with an explicit editor slot |
 | `src/widgets/site-shell/` | P | route-neutral application shell that composes the site header/footer widgets directly |
-| `src/widgets/site-header/` | P | application brand, navigation, locale, and PascalCase header-composition slot |
+| `src/widgets/site-header/` | P | application brand, navigation, locale, diagnostics, and home-only model-storage composition selected by a semantic variant |
 | `src/widgets/site-footer/` | P | application footer navigation, trust, and feedback composition |
 | `src/shared/ui/site/site-link.tsx` | U | typed TanStack `createLink` boundary with finite presentation presets |
 | `src/shared/ui/site/feedback-link.tsx` | U | sole Telegram URL, safe external attributes, icon, and presentation variants |
@@ -937,6 +943,11 @@ row and review the boundary before creating it; do not create a speculative help
 | `src/v2/presentation/shared/diagnostics/` | P | main diagnostics overlay plus capability-root API/types/utils; child UI in `components/`, including declarative `react-error-boundary` plus React `lazy`/`Suspense` chunk containment |
 | `src/v2/presentation/shared/tests/` | X | shared-presentation unit/component tests kept outside production capability folders |
 | `src/v2/presentation/shared/` | P | remaining controller-neutral toolbar, canvas, panel, registry, and execution presentation pending consumer-led grouping in T5/T6 |
+| `src/v2/presentation/main-page/image-admission/` | P | controller-neutral empty input/quality/error and batch-capacity presentation with semantic callbacks |
+| `src/v2/presentation/main-page/single-image/` | P | controller-neutral preparation, progress, recovery, comparison, and result presentation with narrow child props |
+| `src/features/upload-image/ui/file-admission/` | P | active file input/drop/paste capability with child controls and a lifecycle-owned paste hook; no image validation or worker ownership |
+| `src/features/quality-mode-toggle/ui/{quality-mode-selector,quality-mode-popover}/` | P | processing-mode capabilities with responsibility-led local structure and feature-level tests |
+| `src/features/download-result/ui/download-control/` | P | declarative single-image PNG size, download, announcement, and recovery control; runtime export remains session-owned |
 | `src/routes/index.tsx` and localized/scenario routes | R | public page/SEO composition; never workflow ownership |
 | `src/routes/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/` only |
 | `src/routes/en/editor-v2.tsx` | R | TanStack filename exception; permanent redirect to `/en/` only |
@@ -966,9 +977,9 @@ row and review the boundary before creating it; do not create a speculative help
 Profiles expand to mandatory rules: **D** framework-free pure TypeScript, kebab-case, type aliases,
 no React/browser/worker/provider/binary values; **A** D plus injected ports and XState ID-only
 context; **B** tested browser adapter with one platform owner and deterministic cleanup/failures;
-**W** typed protocol, transferable ownership, no React/DOM UI/env access; **U/P** one function
-component per file, local `Props` type, no prop/hook destructuring or inline JSX variables, named
-`useEffect` callbacks, and v2 Typography/Image use; **C/L** SSR-safe typed public boundary with no
+**W** typed protocol, transferable ownership, no React/DOM UI/env access; **U/P** focused render
+ownership, stable narrow subscriptions, semantic connector-to-view contracts, named `useEffect`
+callbacks, and repository Typography/Image use; **C/L** SSR-safe typed public boundary with no
 direct consumer platform access; **T/X** observable behavior, isolated fakes/globals, fake time/IDs
 where applicable, complete cleanup; **M** typed support-aware measurement with no free-form marks;
 **E** role/label locators, web-first assertions, no hidden assertions/sleeps/global state/retries;
@@ -1001,7 +1012,7 @@ Evidence-driven deviations and rejected upgrades:
 |----------|--------------------------|
 | `File` exists only in the application-edge import command | Browser import necessarily begins with a `File`; it is stored immediately and never enters domain/actor snapshots, preserving the no-binary-state invariant |
 | Routes are `/editor-v2` and `/en/editor-v2` | both are separately reachable and noindex; TanStack file-route naming remains the documented kebab-case exception |
-| Presentation is split between a thin hook and page-owned components | the runtime composition root proved to be browser infrastructure rather than a React provider; one component per file and selector-only workflow reads remain intact |
+| Presentation binds through a stable model provider and leaf connectors | the provider exposes only stable session/view-model identity; cached external-store and XState selectors stay at real consumers while controller-neutral views receive semantic props |
 | Raw `<img>` exists only in `image.tsx` | `FRONTEND_CONVENTIONS.md` explicitly reserves this implementation exception for the Image primitive |
 | Platform globals exist only in named adapters | Worker, object URL, decode, capability, env, and performance access require real browser boundaries; callers consume typed ports |
 | XState upgraded from the earlier research snapshot | npm stable versions `xstate@5.32.5` and `@xstate/react@6.1.0` are mutually compatible and support React 19; implementation follows current `setup()`/selector APIs |

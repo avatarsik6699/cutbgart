@@ -3,7 +3,7 @@ import { ErrorBoundary } from "react-error-boundary";
 
 import { DiagnosticsLoadError } from "./diagnostics-load-error";
 import { DiagnosticsLoading } from "./diagnostics-loading";
-import type { DiagnosticsSheetProps } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
 const LazyDiagnosticsBody = lazy(async function loadDiagnosticsBodyModule() {
   const module = await import("./diagnostics-body");
@@ -11,7 +11,7 @@ const LazyDiagnosticsBody = lazy(async function loadDiagnosticsBodyModule() {
   return { default: module.DiagnosticsBody };
 });
 
-export function DiagnosticsContent(props: DiagnosticsSheetProps) {
+export function DiagnosticsContent(props: DiagnosticsTypes.SheetProps) {
   return (
     <ErrorBoundary fallback={<DiagnosticsLoadError />}>
       <Suspense fallback={<DiagnosticsLoading />}>

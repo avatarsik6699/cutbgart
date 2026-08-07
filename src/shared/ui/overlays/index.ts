@@ -7,6 +7,7 @@ export {
   DrawerTitle,
   DrawerTrigger,
 } from "./drawer";
+export { InteractivePopover } from "./interactive-popover";
 export {
   Popover,
   PopoverContent,

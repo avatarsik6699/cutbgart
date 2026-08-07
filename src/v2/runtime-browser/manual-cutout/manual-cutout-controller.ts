@@ -1,4 +1,4 @@
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import type { DocumentId } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
@@ -6,13 +6,13 @@ import type { ManualDraftEngine } from "./manual-draft-engine";
 import type { ManualDraftRepository } from "./manual-draft-repository";
 
 export class ManualCutoutController {
-  readonly #actor: () => DocumentActorRef | null;
+  readonly #actor: () => DocumentMachineTypes.ActorRef | null;
   readonly #documentId: () => DocumentId | null;
   readonly #drafts: ManualDraftRepository;
   readonly #repository: ArtifactRepository;
 
   constructor(options: {
-    actor(): DocumentActorRef | null;
+    actor(): DocumentMachineTypes.ActorRef | null;
     documentId(): DocumentId | null;
     drafts: ManualDraftRepository;
     repository: ArtifactRepository;

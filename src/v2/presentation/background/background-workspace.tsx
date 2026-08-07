@@ -4,7 +4,7 @@ import { m } from "@/paraglide/messages";
 import { BACKGROUND_GRADIENT_PRESETS } from "@/shared/lib";
 import { Button, buttonVariants, EditorStage, Typography } from "@/shared/ui";
 import { BeforeAfterUrlSlider } from "@/entities/processed-image";
-import type { BackgroundDraft, BackgroundFillDescriptor } from "@/v2/domain";
+import type { BackgroundTypes } from "@/v2/domain";
 import type { BackgroundRuntimeSnapshot } from "@/v2/runtime-browser";
 import { ToolPanelSlot } from "../shared";
 
@@ -12,7 +12,7 @@ import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-i
 import { backgroundFillStyle } from "./background-fill-style";
 
 type Props = {
-  draft: BackgroundDraft;
+  draft: BackgroundTypes.Draft;
   foregroundUrl: string;
   height: number;
   runtime: BackgroundRuntimeSnapshot;
@@ -24,7 +24,7 @@ type Props = {
 export type BackgroundInteraction = Readonly<{
   apply(): void;
   cancel(): void;
-  change(fill: BackgroundFillDescriptor): void;
+  change(fill: BackgroundTypes.FillDescriptor): void;
   selectImage(file: File): void;
 }>;
 
@@ -42,7 +42,7 @@ function presetLabel(id: (typeof BACKGROUND_GRADIENT_PRESETS)[number]["id"]): st
 
 function presetFill(
   preset: (typeof BACKGROUND_GRADIENT_PRESETS)[number],
-): BackgroundFillDescriptor {
+): BackgroundTypes.FillDescriptor {
   return {
     type: "gradient",
     kind: preset.kind,
@@ -54,7 +54,7 @@ function presetFill(
 }
 
 function presetSelected(
-  fill: BackgroundFillDescriptor,
+  fill: BackgroundTypes.FillDescriptor,
   preset: (typeof BACKGROUND_GRADIENT_PRESETS)[number],
 ): boolean {
   return (

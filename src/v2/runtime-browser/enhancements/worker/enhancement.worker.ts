@@ -17,11 +17,7 @@ import {
 import type { ProcessingError, ProcessingErrorCode } from "@/v2/domain";
 
 import { removeColourHalo } from "../colour-halo.policy";
-import type {
-  AlphaPlane,
-  PixelRect,
-  RefinementTrimap,
-} from "../enhancement-pixels.types";
+import type { EnhancementPixelTypes } from "../enhancement-pixels.types";
 import {
   buildRefinementTrimap,
   computeMattingInputSize,
@@ -142,7 +138,7 @@ function transferable(data: Uint8ClampedArray): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function matte(command: RunCommand): AlphaPlane {
+function matte(command: RunCommand): EnhancementPixelTypes.AlphaPlane {
   const data = new Uint8ClampedArray(command.matte);
   if (
     command.width <= 0 ||
@@ -219,7 +215,9 @@ async function loadModel(
   return resource;
 }
 
-function alphaImage(matteValue: AlphaPlane | RefinementTrimap): RawImage {
+function alphaImage(
+  matteValue: EnhancementPixelTypes.AlphaPlane | EnhancementPixelTypes.Trimap,
+): RawImage {
   const rgba = new Uint8ClampedArray(matteValue.data.length * 4);
   for (let index = 0; index < matteValue.data.length; index += 1) {
     const value = matteValue.data[index] ?? 0;
@@ -236,7 +234,7 @@ function alphaImage(matteValue: AlphaPlane | RefinementTrimap): RawImage {
 
 async function cropSource(
   command: FineDetailCommand,
-  crop: PixelRect,
+  crop: EnhancementPixelTypes.Rect,
   size: { width: number; height: number },
 ): Promise<Blob> {
   const bitmap = await createImageBitmap(
@@ -266,10 +264,10 @@ async function cropSource(
 }
 
 function resizeTrimap(
-  trimap: RefinementTrimap,
-  crop: PixelRect,
+  trimap: EnhancementPixelTypes.Trimap,
+  crop: EnhancementPixelTypes.Rect,
   size: { width: number; height: number },
-): RefinementTrimap {
+): EnhancementPixelTypes.Trimap {
   const data = new Uint8ClampedArray(size.width * size.height);
   for (let y = 0; y < size.height; y += 1) {
     const sourceY = Math.min(
@@ -293,7 +291,7 @@ function resizeTrimap(
   };
 }
 
-function predictedAlpha(alphas: Tensor): AlphaPlane {
+function predictedAlpha(alphas: Tensor): EnhancementPixelTypes.AlphaPlane {
   const height = alphas.dims.at(-2);
   const width = alphas.dims.at(-1);
   if (height === undefined || width === undefined || height <= 0 || width <= 0)
@@ -312,12 +310,12 @@ function predictedAlpha(alphas: Tensor): AlphaPlane {
 
 async function inferFineDetail(
   command: FineDetailCommand,
-  prior: AlphaPlane,
-  trimap: RefinementTrimap,
-  crop: PixelRect,
+  prior: EnhancementPixelTypes.AlphaPlane,
+  trimap: EnhancementPixelTypes.Trimap,
+  crop: EnhancementPixelTypes.Rect,
   mode: MattingRefinementMode,
   path: BrowserInferencePath,
-): Promise<AlphaPlane> {
+): Promise<EnhancementPixelTypes.AlphaPlane> {
   const size = computeMattingInputSize(crop);
   const resource = await loadModel(command, mode, path);
   if (!isCurrent(command.correlation)) throw new DOMException("Cancelled", "AbortError");
@@ -376,7 +374,7 @@ async function fineDetail(command: FineDetailCommand): Promise<void> {
   let mode = command.requestedMode;
   let path = command.requestedPath;
   let fallback: "none" | "balanced" | "wasm" = "none";
-  let result: AlphaPlane | null = null;
+  let result: EnhancementPixelTypes.AlphaPlane | null = null;
   while (result === null) {
     try {
       result = await inferFineDetail(command, prior, trimap, crop, mode, path);

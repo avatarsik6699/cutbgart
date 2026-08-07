@@ -35,8 +35,9 @@ renumbered: `T1` is the final end-state verification requested by the architect.
 For each implementation checkpoint:
 
 1. Run `/impl-assist 44 <ID>` for one task only.
-2. Use focused `review-v2-architecture`, Fallow guard/trace where relevant, and only task-specific
-   unit/component/Playwright/type/lint checks.
+2. Apply `frontend-implementation`, Fallow guard/trace where relevant, and only task-specific
+   unit/component/render/Playwright/type/lint checks. A frontend checkpoint requires
+   `Frontend contract: PASS` before completion.
 3. Stop for architect manual behavior and code review. Record actionable findings under Architect
    Review Notes and resolve them with `/impl-assist 44 R[N]`.
 4. After explicit architect acceptance, create one conventional checkpoint commit and only then
@@ -47,6 +48,17 @@ Phase-44 exception to the repository's usual pre-commit gate rule, not a general
 No checkpoint commit closes the phase or authorizes deployment. `T1`, `/phase-gate 44`, resolved
 review notes, final architect acceptance, `/context-update 44`, and the final phase commit/tag remain
 mandatory for closure.
+
+### Prospective frontend contract
+
+T4–T7 apply `FRONTEND_CONVENTIONS.md` to every capability deliberately touched. Keep stable
+session/view-model references above leaf connectors; do not pass session objects, actor snapshots,
+broad projections, catch-all intents, or JSX slots through intermediate presentation components.
+Every extraction must own state/lifecycle, policy, accessibility/error behavior, a meaningful
+layout region, or proven repeated behavior. FSD layer direction and entity/feature isolation stay
+strict, while barrels and role folders are created only for real public or navigation boundaries.
+Each checkpoint verifies ownership, selector identity, meaningful abstractions, behavior, and
+render isolation.
 
 ---
 
@@ -63,24 +75,27 @@ mandatory for closure.
   layout, header, footer, localized scenario content, diagnostics boundary, and session lifetime.
   Keep route/SEO/SSR/visual behavior unchanged and prevent shell-level state from invalidating the
   editor subtree without need — _Depends on:_ `T2`
-- [ ] `T4` Decompose image admission and processing-mode presentation into focused input, drop/
+- [x] `T4` Decompose image admission and processing-mode presentation into focused input, drop/
   paste, validation/error, quality-selection, and batch-admission owners. Subscribe or hold local UI
   state at the smallest consumer and preserve current validation, focus, accessibility, and
-  localized behavior — _Depends on:_ `T3`
-- [ ] `T5` Decompose the single-image preparation, automatic processing, progress, result,
+  localized behavior. Apply the prospective decomposition contract above to every touched
+  capability — _Depends on:_ `T3`
+- [x] `T5` Decompose the single-image preparation, automatic processing, progress, result,
   comparison, recovery, export-size, and PNG presentation. Replace broad parent projections with
   narrow stable selectors/props while preserving current session commands, cancellation,
-  correlation, committed-result, and export behavior — _Depends on:_ `T4`
+  correlation, committed-result, and export behavior. Apply the prospective decomposition contract
+  above to every touched capability — _Depends on:_ `T4`
 - [ ] `T6` Decompose batch, active-document, toolbar, Manual/Magic Cutout, Background, Enhancements,
   history, canvas, and navigation-guard presentation into explicit render owners. Keep high-frequency
   pointer/canvas/view state imperative or tool-local, and preserve the accepted v2 controllers,
   artifact/resource lifecycle, per-document isolation, and one workflow source of truth —
-  _Depends on:_ `T5`
+  apply the prospective decomposition contract above to every touched capability — _Depends on:_
+  `T5`
 - [ ] `T7` Audit the decomposed surface for remaining broad subscriptions, unstable projections,
   callback/slot fan-out, and unrelated subtree invalidation. Move XState/external-store selectors
   to leaf connectors, stabilize identities, and add `memo`/`useMemo`/`useCallback` only across
-  meaningful stable boundaries; add focused render-regression tests where deterministic —
-  _Depends on:_ `T6`
+  meaningful stable boundaries; add focused render-regression tests where deterministic and retain
+  the prospective decomposition contract in every follow-up extraction — _Depends on:_ `T6`
 - [ ] `T8` Decide whether a state-manager spike is still justified after T7. Default to the
   existing XState/runtime/React mechanisms; if a remaining render problem warrants MobX or another
   dependency, isolate the spike, consult current primary docs, prove one-way UI/view-model
@@ -101,7 +116,7 @@ mandatory for closure.
 ### Create / modify
 
 ~~~text
-.agents/skills/review-v2-architecture/
+.agents/skills/frontend-implementation/
 eslint.config.js
 steiger.config.ts
 docs/SPEC.md
@@ -210,8 +225,8 @@ pnpm release:test
 pnpm release:test:docker
 ```
 
-T1 must also use the final mode of `review-v2-architecture`, verify the managed Windows browser
-boundary, collect end-state Chrome render/performance/resource evidence for the accepted flows, and
+T1 must apply the final frontend contract checklist, verify the managed Windows browser boundary,
+collect end-state Chrome render/performance/resource evidence for the accepted flows, and
 exercise repeated import/reset/batch/tool/apply/cancel/dispose churn. Fail on visible/behavioral/
 accessibility drift, unrelated render fan-out without justification, mirrored workflow state, stale
 publication, resource leakage, missing checkpoint acceptance, unchecked review notes, or any gate
@@ -221,6 +236,52 @@ waiver.
 
 ## Architect Review Notes
 
+- [x] Replace the imported ceremony-heavy frontend rules with the approved ownership/render
+  contract, add the project-local `frontend-implementation` skill, make it mandatory in
+  `/impl-assist`, remove `review-v2-architecture`, and align SPEC/architecture/stack/state without
+  duplicating the canonical rules.
+- [x] Remove `PublicEditorDiagnostics` and the `HeaderUtilities` relay. Let the application-specific
+  site header own diagnostics and the home-only model-storage utility through a semantic page
+  variant while preserving all accepted header interactions and route behavior.
+- [x] Rework the current uncommitted T5 public-editor composition around one stable
+  `EditorSession`/view-model provider, cached external-store snapshots, leaf XState/session
+  selectors, and semantic commands. Remove intermediate session/snapshot/broad-projection/intent
+  drilling and add focused behavior, lifecycle, and render-isolation coverage before T6.
+
+- [x] Rename the design-system popover wrapper from the scenario-specific `HelpPopover` to a
+  capability-neutral public name, including its file, test, exports, consumers, and documentation,
+  without changing the already verified interaction contract.
+- [x] Apply the approved capability namespace convention consistently to every production
+  `.types.ts` module and the T4 `main-page-editor-contract.ts` type surface; use concise namespace
+  members, update public APIs/consumers/tests, and add lint enforcement so newly added standalone
+  exports cannot silently reintroduce prefixed type names.
+- [x] Clean `MainPageImageAdmission` and the other T4-touched components of redundant prop aliases;
+  move multi-branch admission-state derivation behind one named local hook/policy with an explicit
+  switch while preserving stable callbacks, reset-based preparation cancellation, and one workflow
+  source of truth. Make the no-redundant-alias rule prospective documentation.
+- [x] Introduce a design-system-owned declarative popover/tooltip primitive under the nearest
+  `shared/ui` capability, centralizing Base UI composition, controlled open/dismiss arbitration,
+  portal positioning, close affordance, and accepted styling; migrate `MaximumQualityHelp` to
+  content/trigger props or children without capability-owned `useState`/`useRef` machinery and add
+  focused interaction coverage.
+- [x] Remove the nested conditional class selection from `QualityModeOption` through a named style
+  policy and enforce the existing no-nested-ternary rule across all frontend code. Evaluate a
+  shared Input primitive against proven repetition, extracting one only if it can own a coherent
+  reusable contract rather than merely wrapping the native quality-mode radio.
+- [x] Replace prefixed exports in the `.types.ts` files introduced by T4 with capability-owned
+  TypeScript namespaces and update the frontend convention so consumers use explicit
+  `CapabilityTypes.Member` ownership without repeating the capability prefix on every member.
+- [x] Refine T4 file-admission internals: use the approved narrow default-destructuring exception
+  instead of reassigning optional params, prevent callback identity from re-subscribing paste
+  listeners through a reusable `useLatest`-style shared hook or the current React equivalent, and
+  replace avoidable clipboard collection transformations with a bounded allocation-conscious loop;
+  make these hard prospective conventions and cover callback freshness/listener stability.
+- [x] Make clipboard image admission discoverable inside the drop-zone presentation with a
+  design-system-aligned localized affordance and browser coverage, while preserving desktop/mobile,
+  keyboard, focus, MIME, multiple-file, and disabled behavior.
+- [x] Make file admission a cohesive state owner: render validation, preparation/progress,
+  cancellation, and failure feedback inside the drop-zone/choose-file surface rather than as
+  detached sibling blocks, without moving runtime validation or processing truth into presentation.
 - [x] Supersede the earlier hand-written dynamic-import hook/loader with the
   architect-approved `react-error-boundary` plus React `lazy`/`Suspense`; preserve open-triggered
   loading, accessible loading/error feedback, chunk caching, and focused rejection coverage while
@@ -302,11 +363,11 @@ waiver.
   path-relative report treats moved legacy exports and complexity as introduced code; rename-aware
   diff review confirmed those findings belong to unchanged files and no new boundary, cycle,
   unresolved-import, or duplication finding was introduced by the grouping.
-- T3 review replaced the temporary header portal/context/state bridge with direct composition:
-  `widgets/site-shell` imports the application-specific header and footer widgets, while pages
-  compose editor-owned diagnostics and feature-owned model storage through `HeaderUtilities`.
-  SPEC v1.44 retains strict downward layer dependencies and entity/feature slice isolation but
-  deliberately permits same-layer widget/page imports; Steiger enforces that narrower contract.
+- T3 review replaced the temporary header portal/context/state bridge with direct composition.
+  The later ownership review removed its `HeaderUtilities` relay as well: `widgets/site-header`
+  now owns diagnostics and its home-only model-storage utility behind a semantic shell variant.
+  SPEC v1.44 retains downward layer dependencies and entity/feature slice isolation while
+  permitting same-layer widget/page composition where it removes adapter-only code.
 - T3 review consolidated `Image` and `Typography` under repository-wide `shared/ui`; large editor
   owners received import-only changes for that move, while their decomposition remains scoped to
   T5/T6 and their render/subscription audit remains scoped to T7.
@@ -318,10 +379,37 @@ waiver.
   `Date` values, explicit test fixtures, model-lab report clocks, and the injected performance
   collector clock remain at their non-presentation ownership boundaries; replacing them with a
   display formatter would weaken deterministic or injectable contracts.
-- Latest T3 architect review supersedes the earlier preference for flat capability modules:
-  capability-local `components/`, `hooks/`, `model/`, `.types.ts`, and `.utils.ts` ownership is now
-  mandatory, while anonymous layer-wide dumping grounds remain forbidden. Diagnostics and all
-  `presentation/shared` tests are the first enforced reference layout.
+- The ownership review supersedes T3's mandatory folder template. Capability-local `components/`,
+  `hooks/`, `model/`, `.types.ts`, `.utils.ts`, and barrels are used only when they clarify a real
+  responsibility or public boundary; anonymous layer-wide dumping grounds and one-file ceremony
+  remain forbidden.
+- T4 consumer tracing removed the unreachable legacy `features/upload-image` preparation worker,
+  hook, validator, and prepared-result UI. Active public input now emits raw `File` values through
+  `FileAdmission`; the cancellable `runtime-browser/editor-session/image-import-preparation.ts`
+  boundary remains the sole validation, resizing, and preparation owner.
+- T4 review uses React 19.2 `useEffectEvent` for the paste listener instead of a repository-owned
+  `useLatest` ref relay: the listener remains registered while the Effect Event observes the latest
+  committed callback. Admission preparation maps its Cancel control to the existing `reset` intent,
+  because that path removes the pending item and cancels its import; `session.cancel()` intentionally
+  targets an already-created document's active processing run.
+- T4 review did not introduce a generic `Input` wrapper: the quality selector's visually hidden
+  full-card radio is the only consumer with that exact accessibility/layout contract, while the
+  other native inputs are file, range, colour, or internal-lab controls. A tag-only wrapper would
+  add indirection without a reusable validation, styling, or behavior policy.
+- Chromium interaction verification exposed a Base UI arbitration edge case where pointer movement
+  opened help transiently before the same click attempted to close it. `InteractivePopover` now
+  promotes that hover-open state to a persistent press-open state while retaining repeat-press,
+  Escape, outside-press, and explicit Close dismissal; the phase E2E owns the real-browser
+  regression.
+- T5 now binds one stable `PublicEditorModel`/`EditorSession` provider to leaf connectors. Cached
+  external-store snapshots and XState selectors publish only values consumed by each view, while
+  semantic commands replace broad projection/intent relays. `EditorV2ActiveDocument` and the
+  remaining `editor-v2-*` tool/canvas owners stay unchanged for T6 rather than mixing tool
+  decomposition into this ownership correction.
+- The T5 ownership correction passed TypeScript, ESLint, Steiger, focused Fallow changed-path
+  analysis, the full Vitest suite, and all three Phase-44 Chromium journeys. The repository-wide
+  Fallow audit still reports accumulated Phase-44 findings outside this correction and remains a
+  T1 end-state obligation; no finding on the corrected paths gates this checkpoint.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

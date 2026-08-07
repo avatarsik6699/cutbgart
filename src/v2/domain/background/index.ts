@@ -5,10 +5,4 @@ export {
   sameBackgroundFill,
   TRANSPARENT_BACKGROUND,
 } from "./background.policy";
-export type {
-  BackgroundDraft,
-  BackgroundDraftStatus,
-  BackgroundFillDescriptor,
-  BackgroundGradientStop,
-  HexColor,
-} from "./background.types";
+export type { BackgroundTypes } from "./background.types";

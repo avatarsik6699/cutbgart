@@ -4,22 +4,24 @@ import {
   BatchWorkspaceRail,
   Image,
   Skeleton,
+  Typography,
   type BatchWorkspaceRailItem,
 } from "@/shared/ui";
-import { batchMainPageProjectionEqual } from "./main-page-editor-contract";
+import { batchMainPageProjectionEqual } from "./main-page-editor.utils";
+import { BatchAdmissionError } from "./image-admission";
 
-import type {
-  BatchMainPageIntent,
-  BatchMainPageProjection,
-} from "./main-page-editor-contract";
+import type { MainPageEditorTypes } from "./main-page-editor.types";
+import type { DocumentId, WorkspaceItemId } from "@/v2/domain";
 
-function qualityLabel(item: BatchMainPageProjection["items"][number]): string {
+function qualityLabel(
+  item: MainPageEditorTypes.BatchProjection["items"][number],
+): string {
   if (item.qualityMode === "isnet-fp32") return m.processingModePrecise();
   if (item.qualityMode === "ben2-fp16") return m.processingModeBen2();
   return m.processingModeFast();
 }
 
-function detailText(item: BatchMainPageProjection["items"][number]): string {
+function detailText(item: MainPageEditorTypes.BatchProjection["items"][number]): string {
   if (item.status === "queued" && item.queuePosition !== null)
     return m.editorV2QueuePosition({ position: String(item.queuePosition) });
   if (item.status === "preparing") return m.editorV2BatchPreparing();
@@ -30,12 +32,15 @@ function detailText(item: BatchMainPageProjection["items"][number]): string {
 }
 
 type Props = {
-  batch: BatchMainPageProjection;
-  onIntent: (intent: BatchMainPageIntent) => void;
+  batch: MainPageEditorTypes.BatchProjection;
+  onDownload: (documentId: DocumentId) => void;
+  onRemove: (itemId: WorkspaceItemId) => void;
+  onRetry: (itemId: WorkspaceItemId) => void;
+  onSelect: (documentId: DocumentId) => void;
 };
 
 function MainPageBatchRailView(props: Props) {
-  const byId = new Map<string, BatchMainPageProjection["items"][number]>(
+  const byId = new Map<string, MainPageEditorTypes.BatchProjection["items"][number]>(
     props.batch.items.map((item) => [item.itemId, item]),
   );
   const items: readonly BatchWorkspaceRailItem[] = props.batch.items.map((item) => ({
@@ -76,15 +81,10 @@ function MainPageBatchRailView(props: Props) {
   return (
     <div className="space-y-3">
       {props.batch.admissionError ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          {m.batchCapacityExceeded({
-            limit: String(props.batch.capacity.limit),
-            rejected: String(props.batch.admissionError.rejectedCount),
-          })}
-        </p>
+        <BatchAdmissionError
+          admissionError={props.batch.admissionError}
+          limit={props.batch.capacity.limit}
+        />
       ) : null}
       <BatchWorkspaceRail
         items={items}
@@ -98,35 +98,39 @@ function MainPageBatchRailView(props: Props) {
         }}
         onSelect={(id) => {
           const documentId = byId.get(id)?.documentId;
-          if (documentId !== null && documentId !== undefined)
-            props.onIntent({ type: "select-item", documentId });
+          if (documentId !== null && documentId !== undefined) props.onSelect(documentId);
         }}
         onDownload={(id) => {
           const documentId = byId.get(id)?.documentId;
           if (documentId !== null && documentId !== undefined)
-            props.onIntent({ type: "download-item", documentId });
+            props.onDownload(documentId);
         }}
         onRetry={(id) => {
           const itemId = byId.get(id)?.itemId;
-          if (itemId !== undefined) props.onIntent({ type: "retry-item", itemId });
+          if (itemId !== undefined) props.onRetry(itemId);
         }}
         onRemove={(id) => {
           const itemId = byId.get(id)?.itemId;
-          if (itemId !== undefined) props.onIntent({ type: "remove-item", itemId });
+          if (itemId !== undefined) props.onRemove(itemId);
         }}
       />
       {props.batch.export.error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <Typography variant="body-small" as="p" role="alert" className="text-destructive">
           {props.batch.export.error}
-        </p>
+        </Typography>
       ) : null}
       {props.batch.export.includedCount > 0 ? (
-        <p role="status" className="font-mono text-xs text-muted-foreground">
+        <Typography
+          variant="caption"
+          as="p"
+          role="status"
+          className="font-mono text-muted-foreground"
+        >
           {m.editorV2DownloadAllSummary({
             included: String(props.batch.export.includedCount),
             skipped: String(props.batch.export.skippedCount),
           })}
-        </p>
+        </Typography>
       ) : null}
     </div>
   );
@@ -135,6 +139,9 @@ function MainPageBatchRailView(props: Props) {
 export const MainPageBatchRail = memo(
   MainPageBatchRailView,
   (previous, next) =>
-    previous.onIntent === next.onIntent &&
+    previous.onDownload === next.onDownload &&
+    previous.onRemove === next.onRemove &&
+    previous.onRetry === next.onRetry &&
+    previous.onSelect === next.onSelect &&
     batchMainPageProjectionEqual(previous.batch, next.batch),
 );

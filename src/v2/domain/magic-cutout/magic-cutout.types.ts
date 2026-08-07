@@ -1,30 +1,31 @@
 import type { DocumentId, MagicCandidateId, MagicDraftId, Revision, RunId } from "../ids";
 
-export type MagicCutoutMode = "keep" | "remove";
+export declare namespace MagicCutoutTypes {
+  type Mode = "keep" | "remove";
 
-export type MagicCutoutStatus =
-  "ready" | "dirty" | "encoding" | "predicting" | "preview" | "error";
+  type Status = "ready" | "dirty" | "encoding" | "predicting" | "preview" | "error";
 
-export type MagicCutoutDraft = {
-  kind: "magic-cutout";
-  draftId: MagicDraftId;
-  documentId: DocumentId;
-  baselineRevision: Revision;
-  draftRevision: Revision;
-  dirty: boolean;
-  status: MagicCutoutStatus;
-  selectedCandidateId: MagicCandidateId | null;
-};
+  type Draft = {
+    kind: "magic-cutout";
+    draftId: MagicDraftId;
+    documentId: DocumentId;
+    baselineRevision: Revision;
+    draftRevision: Revision;
+    dirty: boolean;
+    status: Status;
+    selectedCandidateId: MagicCandidateId | null;
+  };
 
-export type MagicCandidateSummary = {
-  candidateId: MagicCandidateId;
-  score: number;
-};
+  type CandidateSummary = {
+    candidateId: MagicCandidateId;
+    score: number;
+  };
 
-export type MagicPredictionCorrelation = {
-  documentId: DocumentId;
-  draftId: MagicDraftId;
-  runId: RunId;
-  expectedRevision: Revision;
-  draftRevision: Revision;
-};
+  type PredictionCorrelation = {
+    documentId: DocumentId;
+    draftId: MagicDraftId;
+    runId: RunId;
+    expectedRevision: Revision;
+    draftRevision: Revision;
+  };
+}

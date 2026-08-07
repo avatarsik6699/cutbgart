@@ -1,6 +1,2 @@
 export { DiagnosticsSheet } from "./diagnostics-sheet";
-export type {
-  DiagnosticsLogEntry,
-  DiagnosticsRunInfo,
-  DiagnosticsSheetProps,
-} from "./diagnostics.types";
+export type { DiagnosticsTypes } from "./diagnostics.types";

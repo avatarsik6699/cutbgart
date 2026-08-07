@@ -1,9 +1,5 @@
 import { ProcessingGatewayError } from "@/v2/application";
-import type {
-  ArtifactId,
-  MagicPredictionCorrelation,
-  ProcessingError,
-} from "@/v2/domain";
+import type { ArtifactId, MagicCutoutTypes, ProcessingError } from "@/v2/domain";
 import { GUIDED_MODEL } from "@/shared/lib/inference/production-model-config";
 
 import type { ArtifactRepository } from "../artifacts";
@@ -12,7 +8,7 @@ import {
   type HeavyJobCoordinator,
   transferableBytes,
 } from "../processing";
-import type { MagicStroke } from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 import type { MagicWorker, MagicWorkerFactory } from "./magic-worker-factory";
 import {
   MAGIC_WORKER_PROTOCOL_VERSION,
@@ -22,10 +18,10 @@ import {
   type TransferableMagicCandidate,
 } from "./magic-worker-protocol";
 
-export type MagicWorkerPredictionInput = MagicPredictionCorrelation & {
+export type MagicWorkerPredictionInput = MagicCutoutTypes.PredictionCorrelation & {
   base: Uint8ClampedArray | null;
   source: ArtifactId;
-  strokes: readonly MagicStroke[];
+  strokes: readonly MagicCutoutRuntimeTypes.Stroke[];
 };
 
 export type MagicPredictionProgress = {

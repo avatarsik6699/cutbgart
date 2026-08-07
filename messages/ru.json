@@ -86,6 +86,7 @@
   "recommended": "Рекомендуется",
   "uploadPrompt": "Перетащите изображения сюда, вставьте из буфера или",
   "uploadBrowse": "выберите файлы",
+  "uploadPasteHint": "Вставить из буфера обмена",
   "uploadAria": "Загрузить изображения",
   "uploadBatchHint": "Перетащите сразу несколько — обработаются пакетом",
   "uploadSingleHint": "JPEG, PNG или WebP · до 20 МБ",

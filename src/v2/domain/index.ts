@@ -13,13 +13,7 @@ export {
   sameBackgroundFill,
   TRANSPARENT_BACKGROUND,
 } from "./background";
-export type {
-  BackgroundDraft,
-  BackgroundDraftStatus,
-  BackgroundFillDescriptor,
-  BackgroundGradientStop,
-  HexColor,
-} from "./background";
+export type { BackgroundTypes } from "./background";
 export type {
   BrowserProcessingCapabilities,
   CapabilitySupport,
@@ -118,13 +112,7 @@ export {
   ENHANCEMENT_OPERATION_REGISTRY,
   orderEnhancementOperations,
 } from "./enhancements";
-export type {
-  EnhancementDraft,
-  EnhancementDraftStatus,
-  EnhancementExecutionAdapter,
-  EnhancementOperationDefinition,
-  EnhancementOperationId,
-} from "./enhancements";
+export type { EnhancementTypes } from "./enhancements";
 export {
   clearDocumentHistory,
   commitDocumentHistory,
@@ -139,21 +127,8 @@ export {
   createMagicCutoutDraft,
   matchesMagicPrediction,
 } from "./magic-cutout";
-export type {
-  MagicCandidateSummary,
-  MagicCutoutDraft,
-  MagicCutoutMode,
-  MagicCutoutStatus,
-  MagicPredictionCorrelation,
-} from "./magic-cutout";
-export type {
-  DocumentHistory,
-  DocumentHistoryChange,
-  DocumentHistoryEntry,
-  DocumentHistoryMove,
-  ManualCutoutDraft,
-  ManualCutoutMode,
-} from "./document-history";
+export type { MagicCutoutTypes } from "./magic-cutout";
+export type { DocumentHistoryTypes } from "./document-history";
 export { isProcessingErrorCode, isProcessingTerminalEvent } from "./processing";
 export type {
   ProcessingBackend,
@@ -166,9 +141,4 @@ export type {
   RunCorrelation,
 } from "./processing";
 export { decideDocumentCommand, transitionDocument } from "./document-transition";
-export type {
-  DocumentCommandEnvelope,
-  DocumentDecision,
-  DocumentEffect,
-  DocumentTransition,
-} from "./document-transition";
+export type { DocumentTransitionTypes } from "./document-transition";

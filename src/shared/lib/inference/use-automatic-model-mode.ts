@@ -7,7 +7,9 @@ import type { AutomaticModelMode, AutomaticQualityMode } from "./production-mode
 export const QUALITY_MODE_STORAGE_KEY = "qualityMode";
 
 function normalize(mode: AutomaticQualityMode): AutomaticModelMode {
-  return mode === "fast" ? "isnet-q8" : mode === "max" ? "isnet-fp32" : mode;
+  if (mode === "fast") return "isnet-q8";
+  if (mode === "max") return "isnet-fp32";
+  return mode;
 }
 
 export type UseAutomaticModelModeResult = Readonly<{

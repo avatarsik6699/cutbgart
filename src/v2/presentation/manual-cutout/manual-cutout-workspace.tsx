@@ -9,7 +9,7 @@ import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { Button, EditorStage, Typography } from "@/shared/ui";
-import type { ManualCutoutMode } from "@/v2/domain";
+import type { DocumentHistoryTypes } from "@/v2/domain";
 import { CanvasViewControls, ToolPanelSlot, type CanvasInteractionMode } from "../shared";
 import {
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
@@ -32,7 +32,11 @@ export type ManualCutoutInteraction = Readonly<{
   apply(): void;
   begin(
     point: Readonly<{ x: number; y: number }>,
-    brush: Readonly<{ mode: ManualCutoutMode; radius: number; hardness: number }>,
+    brush: Readonly<{
+      mode: DocumentHistoryTypes.ManualMode;
+      radius: number;
+      hardness: number;
+    }>,
   ): void;
   cancel(): void;
   cancelGesture(): void;
@@ -45,16 +49,20 @@ export type ManualCutoutInteraction = Readonly<{
   end(): void;
   move(
     point: Readonly<{ x: number; y: number }>,
-    brush: Readonly<{ mode: ManualCutoutMode; radius: number; hardness: number }>,
+    brush: Readonly<{
+      mode: DocumentHistoryTypes.ManualMode;
+      radius: number;
+      hardness: number;
+    }>,
   ): void;
   readViewState(): Readonly<{
-    mode: ManualCutoutMode;
+    mode: DocumentHistoryTypes.ManualMode;
     brushSize: number;
     zoom: number;
   }>;
   writeViewState(
     state: Readonly<{
-      mode: ManualCutoutMode;
+      mode: DocumentHistoryTypes.ManualMode;
       brushSize: number;
       zoom: number;
     }>,
@@ -66,7 +74,7 @@ export type ManualCutoutInteraction = Readonly<{
 
 export function ManualCutoutWorkspace(props: Props) {
   const initialView = props.interaction.readViewState();
-  const [mode, setMode] = useState<ManualCutoutMode>(initialView.mode);
+  const [mode, setMode] = useState<DocumentHistoryTypes.ManualMode>(initialView.mode);
   const brushSizeRef = useRef(initialView.brushSize);
   const [zoom, setZoom] = useState(initialView.zoom);
   const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>("brush");
@@ -86,7 +94,7 @@ export function ManualCutoutWorkspace(props: Props) {
     [panController],
   );
 
-  function changeMode(nextMode: ManualCutoutMode): void {
+  function changeMode(nextMode: DocumentHistoryTypes.ManualMode): void {
     setMode(nextMode);
     props.interaction.writeViewState({
       mode: nextMode,

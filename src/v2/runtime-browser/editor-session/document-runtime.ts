@@ -1,11 +1,11 @@
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import type {
-  BackgroundFillDescriptor,
+  BackgroundTypes,
   DocumentId,
-  EnhancementOperationId,
+  EnhancementTypes,
   MagicCandidateId,
-  MagicCutoutMode,
-  ManualCutoutMode,
+  MagicCutoutTypes,
+  DocumentHistoryTypes,
 } from "@/v2/domain";
 
 import { BackgroundController } from "../background";
@@ -13,18 +13,19 @@ import { EnhancementController } from "../enhancements";
 import { MagicCutoutController } from "../magic-cutout";
 import { ManualCutoutController } from "../manual-cutout";
 import { DocumentResultProjection } from "./document-result-projection";
-import type {
-  ActiveEditorSessionSnapshot,
-  EditorSessionDependencies,
-} from "./editor-session.types";
+import type { EditorSessionTypes } from "./editor-session.types";
 
-type ManualViewState = { mode: ManualCutoutMode; brushSize: number; zoom: number };
-type MagicViewState = { mode: MagicCutoutMode; radius: number };
+type ManualViewState = {
+  mode: DocumentHistoryTypes.ManualMode;
+  brushSize: number;
+  zoom: number;
+};
+type MagicViewState = { mode: MagicCutoutTypes.Mode; radius: number };
 
 export class DocumentRuntime {
-  readonly #actor: DocumentActorRef;
+  readonly #actor: DocumentMachineTypes.ActorRef;
   readonly #background: BackgroundController;
-  readonly #dependencies: EditorSessionDependencies;
+  readonly #dependencies: EditorSessionTypes.Dependencies;
   readonly #documentId: DocumentId;
   readonly #enhancements: EnhancementController;
   readonly #magic: MagicCutoutController;
@@ -33,7 +34,7 @@ export class DocumentRuntime {
   readonly #onChange: () => void;
   readonly #projection: DocumentResultProjection;
   readonly #stops: (() => void)[] = [];
-  #snapshot: ActiveEditorSessionSnapshot;
+  #snapshot: EditorSessionTypes.ActiveSnapshot;
   #disposed = false;
   #manualView: ManualViewState = {
     mode: "erase",
@@ -46,8 +47,8 @@ export class DocumentRuntime {
   };
 
   constructor(options: {
-    actor: DocumentActorRef;
-    dependencies: EditorSessionDependencies;
+    actor: DocumentMachineTypes.ActorRef;
+    dependencies: EditorSessionTypes.Dependencies;
     documentId: DocumentId;
     fileName: string;
     height: number;
@@ -125,7 +126,7 @@ export class DocumentRuntime {
     this.#stops.push(() => subscription.unsubscribe());
   }
 
-  get actor(): DocumentActorRef {
+  get actor(): DocumentMachineTypes.ActorRef {
     return this.#actor;
   }
 
@@ -133,11 +134,11 @@ export class DocumentRuntime {
     return this.#documentId;
   }
 
-  getSnapshot(): ActiveEditorSessionSnapshot {
+  getSnapshot(): EditorSessionTypes.ActiveSnapshot {
     return this.#snapshot;
   }
 
-  setMagicProgress(progress: ActiveEditorSessionSnapshot["magicProgress"]): void {
+  setMagicProgress(progress: EditorSessionTypes.ActiveSnapshot["magicProgress"]): void {
     if (this.#disposed) return;
     this.#snapshot = { ...this.#snapshot, magicProgress: progress };
     this.#onChange();
@@ -179,10 +180,10 @@ export class DocumentRuntime {
   cancelManual(): void {
     this.#manual.cancel();
   }
-  changeBackground(fill: BackgroundFillDescriptor): void {
+  changeBackground(fill: BackgroundTypes.FillDescriptor): void {
     this.#background.change(fill);
   }
-  changeEnhancements(ids: readonly EnhancementOperationId[]): void {
+  changeEnhancements(ids: readonly EnhancementTypes.OperationId[]): void {
     this.#enhancements.change(ids);
   }
   manualDraft(): ReturnType<ManualCutoutController["draft"]> {

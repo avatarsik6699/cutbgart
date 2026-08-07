@@ -3,7 +3,7 @@ import type {
   DocumentId,
   DocumentSnapshot,
   EnhancementDraftId,
-  EnhancementOperationId,
+  EnhancementTypes,
   Revision,
   RunId,
 } from "@/v2/domain";
@@ -15,7 +15,7 @@ export type EnhancementCommitInput = {
   expectedRevision: Revision;
   source: ArtifactId;
   snapshot: DocumentSnapshot;
-  operationIds: readonly EnhancementOperationId[];
+  operationIds: readonly EnhancementTypes.OperationId[];
 };
 
 export type EnhancementCommitResult =

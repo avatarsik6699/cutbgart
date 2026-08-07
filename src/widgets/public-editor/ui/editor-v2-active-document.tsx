@@ -25,9 +25,8 @@ import {
 } from "@/v2/presentation";
 import {
   loadManualSourceBitmap,
-  type ActiveEditorSessionSnapshot,
-  type EditorSession,
-  type ManualCutoutBox,
+  type EditorSessionTypes,
+  type ManualCutoutRuntimeTypes,
 } from "@/v2/runtime-browser";
 import { LocalExecutionReadout } from "@/v2/presentation/shared";
 
@@ -37,8 +36,8 @@ export type EditorV2ActiveDocumentProps = Readonly<{
   DownloadSlot?: ReactNode;
   locale: "ru" | "en";
   onLeave(): void;
-  session: EditorSession;
-  snapshot: ActiveEditorSessionSnapshot;
+  session: EditorSessionTypes.Session;
+  snapshot: EditorSessionTypes.ActiveSnapshot;
   WorkspaceActionsSlot?: ReactNode;
 }>;
 
@@ -126,7 +125,7 @@ export function EditorV2ActiveDocument(props: EditorV2ActiveDocumentProps) {
   );
   const toolInteractions = useMemo(
     function createToolInteractions() {
-      function repaintManualCanvas(box?: ManualCutoutBox): void {
+      function repaintManualCanvas(box?: ManualCutoutRuntimeTypes.Box): void {
         const binding = manualCanvasBindingRef.current;
         const engine = props.session.manualDraft();
         if (binding === null || engine === null) return;

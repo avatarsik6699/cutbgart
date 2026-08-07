@@ -1,6 +1,6 @@
 import type {
   BackgroundDraftId,
-  BackgroundFillDescriptor,
+  BackgroundTypes,
   DocumentId,
   DocumentSnapshot,
   Revision,
@@ -13,7 +13,7 @@ export type BackgroundCommitInput = {
   draftRevision: Revision;
   source: import("@/v2/domain").ArtifactId;
   snapshot: DocumentSnapshot;
-  fill: BackgroundFillDescriptor;
+  fill: BackgroundTypes.FillDescriptor;
 };
 
 export type BackgroundCommitter = {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Implementation"
+  short_description: "Enforce frontend ownership and render boundaries"
+  default_prompt: "Use $frontend-implementation to plan, implement, and verify this frontend change against the project contract."

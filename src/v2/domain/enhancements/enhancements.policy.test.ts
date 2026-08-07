@@ -8,7 +8,7 @@ import {
   ENHANCEMENT_OPERATION_REGISTRY,
   orderEnhancementOperations,
 } from "./enhancements.policy";
-import type { EnhancementDraft } from "./enhancements.types";
+import type { EnhancementTypes } from "./enhancements.types";
 
 describe("enhancement policy", () => {
   it("freezes the typed operation registry and adapter order", () => {
@@ -27,7 +27,7 @@ describe("enhancement policy", () => {
   });
 
   it("keeps selection changes as bounded draft metadata", () => {
-    const draft: EnhancementDraft = {
+    const draft: EnhancementTypes.Draft = {
       kind: "enhance",
       draftId: createEnhancementDraftId("enhancement-draft-1"),
       documentId: createDocumentId("document-1"),

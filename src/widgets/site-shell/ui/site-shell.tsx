@@ -5,17 +5,17 @@ import { SiteHeader } from "@/widgets/site-header";
 
 type Props = Readonly<{
   children: ReactNode;
-  HeaderUtilities?: ReactNode;
   homeNavigationActive?: boolean;
+  variant?: "default" | "home";
 }>;
 
 function SiteShell(props: Props) {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-clip">
       <SiteHeader
-        HeaderUtilities={props.HeaderUtilities}
         className="relative z-30"
         homeActive={props.homeNavigationActive}
+        variant={props.variant}
       />
       <div className="relative z-20 flex-1">
         <div

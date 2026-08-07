@@ -1,30 +1,32 @@
-import type { DocumentId, MagicCutoutMode, MagicDraftId, Revision } from "@/v2/domain";
+import type { DocumentId, MagicCutoutTypes, MagicDraftId, Revision } from "@/v2/domain";
 
-export type MagicPoint = Readonly<{ x: number; y: number }>;
+export declare namespace MagicCutoutRuntimeTypes {
+  type Point = Readonly<{ x: number; y: number }>;
 
-export type MagicStroke = Readonly<{
-  id: string;
-  mode: MagicCutoutMode;
-  points: readonly MagicPoint[];
-  radius: number;
-}>;
+  type Stroke = Readonly<{
+    id: string;
+    mode: MagicCutoutTypes.Mode;
+    points: readonly Point[];
+    radius: number;
+  }>;
 
-export type MagicDraftSnapshot = Readonly<{
-  documentId: DocumentId;
-  draftId: MagicDraftId;
-  revision: Revision;
-  dirty: boolean;
-  strokeCount: number;
-  redoCount: number;
-  canUndo: boolean;
-  canRedo: boolean;
-  gestureActive: boolean;
-  disposed: boolean;
-}>;
+  type DraftSnapshot = Readonly<{
+    documentId: DocumentId;
+    draftId: MagicDraftId;
+    revision: Revision;
+    dirty: boolean;
+    strokeCount: number;
+    redoCount: number;
+    canUndo: boolean;
+    canRedo: boolean;
+    gestureActive: boolean;
+    disposed: boolean;
+  }>;
 
-export type MagicStrokeStart = Readonly<{
-  id: string;
-  mode: MagicCutoutMode;
-  point: MagicPoint;
-  radius: number;
-}>;
+  type StrokeStart = Readonly<{
+    id: string;
+    mode: MagicCutoutTypes.Mode;
+    point: Point;
+    radius: number;
+  }>;
+}

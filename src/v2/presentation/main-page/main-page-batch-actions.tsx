@@ -3,21 +3,19 @@ import { ChooseFilesButton } from "@/features/upload-image";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui";
 import { memo } from "react";
-import { batchMainPageProjectionEqual } from "./main-page-editor-contract";
+import { batchMainPageProjectionEqual } from "./main-page-editor.utils";
 
-import type {
-  BatchMainPageIntent,
-  BatchMainPageProjection,
-  MainPageEditorIntent,
-  MainPageEditorProjection,
-} from "./main-page-editor-contract";
+import type { MainPageEditorTypes } from "./main-page-editor.types";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 type Props = {
-  batch: BatchMainPageProjection;
+  batch: MainPageEditorTypes.BatchProjection;
   disabled: boolean;
-  onBatchIntent: (intent: BatchMainPageIntent) => void;
-  onEditorIntent: (intent: MainPageEditorIntent) => void;
-  qualityMode: MainPageEditorProjection["qualityMode"];
+  onAddFiles: (files: readonly File[]) => void;
+  onCancelDownloadAll: () => void;
+  onChooseQualityMode: (mode: AutomaticModelMode) => void;
+  onDownloadAll: () => void;
+  qualityMode: AutomaticModelMode;
 };
 
 function MainPageBatchActionsView(props: Props) {
@@ -26,9 +24,7 @@ function MainPageBatchActionsView(props: Props) {
     <div className="flex flex-wrap items-center gap-2" aria-label={m.batchActionsAria()}>
       <QualityModePopover
         qualityMode={props.qualityMode}
-        onQualityModeChange={(mode) =>
-          props.onEditorIntent({ type: "choose-quality", mode })
-        }
+        onQualityModeChange={props.onChooseQualityMode}
         disabled={props.disabled}
       />
       <ChooseFilesButton
@@ -38,18 +34,14 @@ function MainPageBatchActionsView(props: Props) {
         }
         label={m.addImages()}
         multiple
-        onFiles={(files) => props.onBatchIntent({ type: "add-files", files })}
+        onFiles={props.onAddFiles}
       />
       <Button
         type="button"
         size="sm"
         variant="outline"
         disabled={props.batch.counts.completed === 0 && !exporting}
-        onClick={() =>
-          props.onBatchIntent({
-            type: exporting ? "cancel-download-all" : "download-all",
-          })
-        }
+        onClick={exporting ? props.onCancelDownloadAll : props.onDownloadAll}
       >
         {exporting ? m.cancel() : m.downloadAllZip()}
       </Button>
@@ -62,7 +54,9 @@ export const MainPageBatchActions = memo(
   (previous, next) =>
     previous.disabled === next.disabled &&
     previous.qualityMode === next.qualityMode &&
-    previous.onBatchIntent === next.onBatchIntent &&
-    previous.onEditorIntent === next.onEditorIntent &&
+    previous.onAddFiles === next.onAddFiles &&
+    previous.onCancelDownloadAll === next.onCancelDownloadAll &&
+    previous.onChooseQualityMode === next.onChooseQualityMode &&
+    previous.onDownloadAll === next.onDownloadAll &&
     batchMainPageProjectionEqual(previous.batch, next.batch),
 );

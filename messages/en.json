@@ -86,6 +86,7 @@
   "recommended": "Recommended",
   "uploadPrompt": "Drag and drop an image, paste from clipboard, or",
   "uploadBrowse": "click to browse",
+  "uploadPasteHint": "Paste from clipboard",
   "uploadAria": "Upload an image",
   "uploadBatchHint": "Drop several at once to batch-process them",
   "uploadSingleHint": "JPEG, PNG, or WebP · up to 20 MB",

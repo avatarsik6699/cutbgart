@@ -1,14 +1,5 @@
 export { createDocumentMachine } from "./document-machine";
-export type {
-  DocumentActorContext,
-  DocumentActorEvent,
-  DocumentActorInput,
-  DocumentActorRef,
-  DocumentArtifactEffects,
-  DocumentMachineDependencies,
-  DocumentFinishingIdSource,
-  DocumentRunIdSource,
-} from "./document-machine.types";
+export type { DocumentMachineTypes } from "./document-machine.types";
 export type {
   ManualCutoutCommitRequest,
   ManualCutoutCommitter,

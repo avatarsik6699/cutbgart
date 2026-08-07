@@ -300,8 +300,9 @@ function stampBrush(
 
       const index = y * width + x;
       const current = data[index] ?? 0;
-      const target =
-        mode === "add" ? 255 : mode === "erase" ? 0 : (originalData[index] ?? 0);
+      let target = originalData[index] ?? 0;
+      if (mode === "add") target = 255;
+      else if (mode === "erase") target = 0;
       data[index] = applyBrushTarget(current, target, influence);
       rowTouched = true;
       if (x < rowMinX) rowMinX = x;
@@ -400,8 +401,9 @@ export function stampBrushAlphaInPlace(
       const pixelIndex = y * width + x;
       const alphaIndex = pixelIndex * 4 + 3;
       const current = rgba[alphaIndex] ?? 0;
-      const target =
-        mode === "add" ? 255 : mode === "erase" ? 0 : (originalAlpha[pixelIndex] ?? 0);
+      let target = originalAlpha[pixelIndex] ?? 0;
+      if (mode === "add") target = 255;
+      else if (mode === "erase") target = 0;
       rgba[alphaIndex] = applyBrushTarget(current, target, influence);
       rowTouched = true;
       if (x < rowMinX) rowMinX = x;

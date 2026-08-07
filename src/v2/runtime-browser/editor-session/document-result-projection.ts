@@ -1,4 +1,4 @@
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import type { ArtifactId, DocumentId } from "@/v2/domain";
 
 import type { ArtifactRepository } from "../artifacts";
@@ -16,7 +16,7 @@ export class DocumentResultProjection {
   }
 
   watch(
-    actor: DocumentActorRef,
+    actor: DocumentMachineTypes.ActorRef,
     documentId: DocumentId,
     publishResultUrls: (resultUrl: string | null, foregroundUrl: string | null) => void,
   ): void {

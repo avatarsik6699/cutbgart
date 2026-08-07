@@ -38,9 +38,4 @@ export type {
   TransferableMagicCandidate,
   TransferableMagicSource,
 } from "./magic-worker-protocol";
-export type {
-  MagicDraftSnapshot,
-  MagicPoint,
-  MagicStroke,
-  MagicStrokeStart,
-} from "./magic-cutout.types";
+export type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";

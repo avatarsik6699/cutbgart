@@ -13,11 +13,11 @@ import { buildDocumentSnapshot, buildDocumentState } from "@/v2/testing";
 import {
   createDocumentMachine,
   type BackgroundCommitter,
-  type DocumentArtifactEffects,
+  type DocumentMachineTypes,
   type EnhancementCommitter,
 } from "./index";
 
-function artifactEffects(): DocumentArtifactEffects {
+function artifactEffects(): DocumentMachineTypes.ArtifactEffects {
   return {
     estimateHistoricalBytes: () => 10,
     exportPng: vi.fn(),

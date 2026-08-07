@@ -250,11 +250,9 @@ async function handleProcess(request: ModelLabProcessRequest): Promise<void> {
       }),
     });
   } catch (error) {
-    const code: EvaluationErrorCode = isOutOfMemoryError(error)
-      ? "device-out-of-memory"
-      : activePipeline
-        ? "processing-failed"
-        : "model-load-failed";
+    let code: EvaluationErrorCode = "model-load-failed";
+    if (isOutOfMemoryError(error)) code = "device-out-of-memory";
+    else if (activePipeline) code = "processing-failed";
     post({
       type: "error",
       requestId: request.requestId,

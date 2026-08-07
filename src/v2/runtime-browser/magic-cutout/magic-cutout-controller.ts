@@ -1,4 +1,4 @@
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import type { DocumentId, MagicCandidateId, RunId } from "@/v2/domain";
 
 import type { MagicCandidateRepository } from "./magic-candidate-repository";
@@ -6,7 +6,7 @@ import type { MagicDraftEngine } from "./magic-draft-engine";
 import type { MagicDraftRepository } from "./magic-draft-repository";
 
 export class MagicCutoutController {
-  readonly #actor: () => DocumentActorRef | null;
+  readonly #actor: () => DocumentMachineTypes.ActorRef | null;
   readonly #candidates: MagicCandidateRepository;
   readonly #dimensions: () => { width: number; height: number } | null;
   readonly #documentId: () => DocumentId | null;
@@ -14,7 +14,7 @@ export class MagicCutoutController {
   readonly #nextRunId: () => RunId;
 
   constructor(options: {
-    actor(): DocumentActorRef | null;
+    actor(): DocumentMachineTypes.ActorRef | null;
     candidates: MagicCandidateRepository;
     dimensions(): { width: number; height: number } | null;
     documentId(): DocumentId | null;

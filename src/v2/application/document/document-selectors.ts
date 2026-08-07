@@ -1,18 +1,17 @@
 import type {
   CommandOutcome,
-  BackgroundDraft,
+  BackgroundTypes,
   DocumentState,
   DocumentStatus,
-  EnhancementDraft,
-  ManualCutoutDraft,
-  MagicCandidateSummary,
-  MagicCutoutDraft,
+  EnhancementTypes,
+  DocumentHistoryTypes,
+  MagicCutoutTypes,
   Revision,
 } from "@/v2/domain";
 
-import type { DocumentActorContext } from "./document-machine.types";
+import type { DocumentMachineTypes } from "./document-machine.types";
 
-export type DocumentSnapshotLike = { context: DocumentActorContext };
+export type DocumentSnapshotLike = { context: DocumentMachineTypes.ActorContext };
 
 export function selectDocumentState(snapshot: DocumentSnapshotLike): DocumentState {
   return snapshot.context.document;
@@ -38,35 +37,35 @@ export function selectLastDocumentCommandOutcome(
 
 export function selectManualDraft(
   snapshot: DocumentSnapshotLike,
-): ManualCutoutDraft | null {
+): DocumentHistoryTypes.ManualDraft | null {
   const draft = snapshot.context.document.activeDraft;
   return draft?.kind === "manual-cutout" ? draft : null;
 }
 
 export function selectMagicDraft(
   snapshot: DocumentSnapshotLike,
-): MagicCutoutDraft | null {
+): MagicCutoutTypes.Draft | null {
   const draft = snapshot.context.document.activeDraft;
   return draft?.kind === "magic-cutout" ? draft : null;
 }
 
 export function selectBackgroundDraft(
   snapshot: DocumentSnapshotLike,
-): BackgroundDraft | null {
+): BackgroundTypes.Draft | null {
   const draft = snapshot.context.document.activeDraft;
   return draft?.kind === "background" ? draft : null;
 }
 
 export function selectEnhancementDraft(
   snapshot: DocumentSnapshotLike,
-): EnhancementDraft | null {
+): EnhancementTypes.Draft | null {
   const draft = snapshot.context.document.activeDraft;
   return draft?.kind === "enhance" ? draft : null;
 }
 
 export function selectMagicCandidates(
   snapshot: DocumentSnapshotLike,
-): readonly MagicCandidateSummary[] {
+): readonly MagicCutoutTypes.CandidateSummary[] {
   return snapshot.context.document.magicCandidates;
 }
 

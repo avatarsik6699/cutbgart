@@ -1,11 +1,8 @@
 import type { ReactNode } from "react";
 
 export type MainPageEmptySurfaceProps = Readonly<{
-  ErrorSlot?: ReactNode;
-  PreparationSlot?: ReactNode;
+  FileAdmissionSlot: ReactNode;
   QualitySlot: ReactNode;
-  UploadButtonSlot: ReactNode;
-  UploadDropzoneSlot: ReactNode;
 }>;
 
 /** Shared visual composition; admission and workflow ownership stay in adapters. */
@@ -21,10 +18,7 @@ export function MainPageEmptySurface(props: MainPageEmptySurfaceProps) {
         className="command-deck-ambient command-deck-ambient-secondary"
       />
       {props.QualitySlot}
-      {props.UploadDropzoneSlot}
-      {props.UploadButtonSlot}
-      {props.PreparationSlot}
-      {props.ErrorSlot}
+      {props.FileAdmissionSlot}
     </section>
   );
 }

@@ -6,7 +6,7 @@ import {
   createMagicCandidateId,
   createMagicDraftId,
   createRunId,
-  type MagicPredictionCorrelation,
+  type MagicCutoutTypes,
 } from "@/v2/domain";
 
 import { MagicCandidateRepository } from "./magic-candidate-repository";
@@ -63,7 +63,7 @@ function createHarness() {
   const published: Array<MagicRuntimeProgress | null> = [];
   const publish = vi.fn(
     (
-      _correlation: MagicPredictionCorrelation,
+      _correlation: MagicCutoutTypes.PredictionCorrelation,
       progress: MagicRuntimeProgress | null,
     ): void => {
       published.push(progress);

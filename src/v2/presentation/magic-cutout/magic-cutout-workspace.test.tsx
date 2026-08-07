@@ -6,7 +6,7 @@ import {
   createDocumentId,
   createMagicCandidateId,
   createMagicDraftId,
-  type MagicCutoutDraft,
+  type MagicCutoutTypes,
 } from "@/v2/domain";
 import {
   MagicCutoutWorkspace,
@@ -15,7 +15,7 @@ import {
 import { cutoutStageContentStyle } from "../cutout-stage";
 
 const candidateId = createMagicCandidateId("candidate-1");
-const draft: MagicCutoutDraft = {
+const draft: MagicCutoutTypes.Draft = {
   kind: "magic-cutout",
   documentId: createDocumentId("document-1"),
   draftId: createMagicDraftId("draft-1"),

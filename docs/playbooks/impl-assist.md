@@ -39,6 +39,8 @@ are thin stubs — every workflow detail lives in this file.
 - `docs/STATE.md` § Current Contract — current technical contract
 - `docs/STACK.md` — stack conventions, command rules, file layout, gate commands
 - `docs/KNOWN_GOTCHAS.md` — project pitfalls
+- For any frontend surface, `docs/FRONTEND_CONVENTIONS.md` and the project-local
+  `frontend-implementation` skill
 - Relevant source files and git history — verify current implementation before editing; recent
   commits and diffs are the record of *how* prior work was done, so read them instead of expecting
   a separate execution-memory file
@@ -118,6 +120,10 @@ before editing code:
 - **Steps:** short ordered implementation steps
 - **Checks:** focused commands/tests to run
 
+For a frontend item, the plan must also include the design note required by
+`frontend-implementation`: owners, selector/data-flow boundaries, justified abstractions/public
+exports, and render/lifecycle/E2E evidence.
+
 The plan must stay inside the active phase contract (for Scope tasks) or narrowly inside the
 targeted note (for Review Notes) — do not use a review-note fix to broaden scope.
 
@@ -150,7 +156,9 @@ After implementing each item:
    first pass of the architect's manual browser check, not a substitute for it (AGENTS.md core
    rule 8).
 4. Report the commands run and their results; if a check was not run, state the reason.
-5. Mark the item:
+5. For a frontend item, apply the `frontend-implementation` completion checklist and report
+   `Frontend contract: PASS|FAIL` with evidence. A `FAIL` blocks completion.
+6. Mark the item:
    - Scope task → check off the matching item in `docs/PHASE_XX.md` § Scope.
    - Review Note → check off the matching item in `docs/PHASE_XX.md` § Architect Review Notes.
 
@@ -199,6 +207,8 @@ Next: manually verify the product, add any findings to Architect Review Notes, t
 - Do not commit automatically.
 - Do not classify a Review Note as a new task, bug, chore, or scope item.
 - Follow all rules in `AGENTS.md` and stack-specific rules in `docs/STACK.md`.
+- Apply `frontend-implementation` whenever the changed surface contains frontend code; do not
+  substitute a generic architecture review or an automated green result for its checklist.
 
 ## Done when
 

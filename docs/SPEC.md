@@ -523,19 +523,28 @@ The phase covers:
   than moved under a compilable `src/archive` tree;
 - decompose the page shell and route-neutral public composition, then upload/mode selection,
   single-image processing/result/export, batch, active-document, and editor-tool surfaces into
-  focused components with explicit render owners;
+  focused connectors and controller-neutral views with explicit render owners;
 - move XState and external-store subscriptions near their leaf consumers, select primitive or
   stable-identity values, avoid freshly allocated broad projections at high-level parents, and
   stabilize callbacks or derived objects only where they cross a meaningful memoization boundary;
+- provide the public editor through one stable session/view-model context whose value never contains
+  current snapshots or projections. The view model may own UI-only preferences and semantic
+  commands, but must not mirror XState workflow state or runtime-browser resources;
+- forbid model/session/snapshot and catch-all intent relays through intermediate presentation
+  components. A direct connector-to-view boundary may use narrow semantic data and callbacks;
+- require every wrapper, component, service, barrel, and public export to own state/lifecycle,
+  policy, accessibility/error behavior, a meaningful layout region, or proven repeated behavior;
+  otherwise inline or remove it;
 - keep pointer movement, brush preview, pan/zoom, canvas pixels, binary artifacts, object URLs,
   workers, and other high-frequency/runtime resources outside broad React state and actor snapshots;
 - retain XState/application as the sole durable workflow source of truth. Another state manager,
   including MobX, requires a late isolated spike and architect decision showing a remaining problem
   after decomposition, a measurable benefit, one-way ownership, and no mirrored workflow state;
-- use the focused `review-v2-architecture` mode and task-specific unit/component/Playwright checks
-  during checkpoints. The architect manually reviews and accepts each task before its checkpoint
-  commit; full architecture, performance, real-model, security, container, and release evidence is
-  deferred to the final task and phase gate;
+- use the project-local `frontend-implementation` workflow and task-specific
+  unit/component/render/Playwright checks during checkpoints. A frontend task cannot complete
+  without `Frontend contract: PASS`; the architect manually reviews and accepts each task before
+  its checkpoint commit. Full performance, real-model, security, container, and release evidence
+  is deferred to the final task and phase gate;
 - finish with end-state render/subscription inspection, Chrome performance/resource evidence,
   repeated workflow churn, full automated gates, and architect acceptance. The phase deliberately
   has no mandatory pre-refactor render-counter or trace baseline; it proves the final acceptance
@@ -905,6 +914,11 @@ All frontend work follows [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md)
 - source layers keep one-way dependencies from higher layers to lower layers. Same-layer slice
   composition is allowed for `widgets` and `pages` when it makes an application composition
   materially simpler; cross-slice imports remain forbidden for `entities` and `features`;
+- FSD is a dependency and naming vocabulary, not a folder-generation mandate: capability folders,
+  barrels, role subfolders, wrappers, and shared abstractions exist only when they express a real
+  owner or public boundary;
+- complex React surfaces expose stable model/service references, subscribe at leaf connectors, and
+  keep controller-neutral views free of XState/runtime objects and broad intent/projection relays;
 - `Typography` separates semantic element from finite visual variants;
 - `Image` has typed content/hero/preview/thumbnail presets, intrinsic/aspect/object-fit policy,
   accessible alt/decorative semantics, and explicit loading/decoding/fetch-priority defaults;

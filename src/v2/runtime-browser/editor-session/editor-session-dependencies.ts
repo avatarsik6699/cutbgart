@@ -31,13 +31,10 @@ import { WorkerSnapshotCommitter } from "../snapshot-commit";
 import type { DocumentId } from "@/v2/domain";
 import type { ProcessingRequest } from "@/v2/domain";
 import type { AutomaticModelMode, BrowserInferencePath } from "@/shared/lib";
-import type {
-  EditorSessionDependencies,
-  EditorSessionOptions,
-} from "./editor-session.types";
+import type { EditorSessionTypes } from "./editor-session.types";
 
 export function createEditorSessionDependencies(
-  options: EditorSessionOptions,
+  options: EditorSessionTypes.Options,
   runtimeEvents?: Readonly<{
     onExecutionSelected(
       request: ProcessingRequest,
@@ -47,7 +44,7 @@ export function createEditorSessionDependencies(
       }>,
     ): void;
   }>,
-): EditorSessionDependencies {
+): EditorSessionTypes.Dependencies {
   const ids = options.ids ?? createNativeEditorIdSource();
   const repository =
     options.repository ??

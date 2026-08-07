@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { m } from "@/paraglide/messages";
 import { BeforeAfterUrlSlider } from "@/entities/processed-image";
 import { EditorStage } from "@/shared/ui";
-import type { EnhancementDraft, EnhancementOperationId } from "@/v2/domain";
+import type { EnhancementTypes } from "@/v2/domain";
 import type { EnhancementRuntimeSnapshot } from "@/v2/runtime-browser";
 import {
   createEnhancementOperationRegistry,
@@ -14,7 +14,7 @@ import {
 import { WorkspaceComparisonImage } from "../editor-tools/workspace-comparison-image";
 
 type Props = {
-  draft: EnhancementDraft;
+  draft: EnhancementTypes.Draft;
   height: number;
   previewUrl: string;
   runtime: EnhancementRuntimeSnapshot;
@@ -26,7 +26,7 @@ type Props = {
 export type EnhancementInteraction = Readonly<{
   apply(): void;
   cancel(): void;
-  change(operationIds: readonly EnhancementOperationId[]): void;
+  change(operationIds: readonly EnhancementTypes.OperationId[]): void;
   retry(): void;
 }>;
 
@@ -39,7 +39,7 @@ export function EnhancementWorkspace(props: Props) {
   if (props.runtime.status === "error") panelStatus = "error";
   else if (busy) panelStatus = "applying";
 
-  function toggleOperation(operationId: EnhancementOperationId): void {
+  function toggleOperation(operationId: EnhancementTypes.OperationId): void {
     const selected = new Set(props.draft.selectedOperationIds);
     if (selected.has(operationId)) selected.delete(operationId);
     else selected.add(operationId);

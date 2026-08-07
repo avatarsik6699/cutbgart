@@ -1,33 +1,33 @@
 import type { DocumentId, MagicDraftId } from "@/v2/domain";
 
-import type {
-  MagicDraftSnapshot,
-  MagicPoint,
-  MagicStroke,
-  MagicStrokeStart,
-} from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 
 export const MAGIC_STROKE_LIMIT = 50;
 export const MAGIC_STROKE_POINT_LIMIT = 512;
 
 type MutableStroke = {
   id: string;
-  mode: MagicStroke["mode"];
-  points: MagicPoint[];
+  mode: MagicCutoutRuntimeTypes.Stroke["mode"];
+  points: MagicCutoutRuntimeTypes.Point[];
   radius: number;
 };
 
-function validPoint(point: MagicPoint): boolean {
+function validPoint(point: MagicCutoutRuntimeTypes.Point): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y);
 }
 
-function distanceSquared(left: MagicPoint, right: MagicPoint): number {
+function distanceSquared(
+  left: MagicCutoutRuntimeTypes.Point,
+  right: MagicCutoutRuntimeTypes.Point,
+): number {
   const x = left.x - right.x;
   const y = left.y - right.y;
   return x * x + y * y;
 }
 
-function copyStroke(stroke: MagicStroke): MagicStroke {
+function copyStroke(
+  stroke: MagicCutoutRuntimeTypes.Stroke,
+): MagicCutoutRuntimeTypes.Stroke {
   return { ...stroke, points: stroke.points.map((point) => ({ ...point })) };
 }
 
@@ -36,8 +36,8 @@ export class MagicDraftEngine {
   readonly draftId: MagicDraftId;
   readonly height: number;
   readonly width: number;
-  readonly #strokes: MagicStroke[] = [];
-  readonly #redo: MagicStroke[] = [];
+  readonly #strokes: MagicCutoutRuntimeTypes.Stroke[] = [];
+  readonly #redo: MagicCutoutRuntimeTypes.Stroke[] = [];
   #activeStroke: MutableStroke | null = null;
   #disposed = false;
   #revision = 0;
@@ -60,7 +60,7 @@ export class MagicDraftEngine {
     this.height = options.height;
   }
 
-  beginStroke(input: MagicStrokeStart): boolean {
+  beginStroke(input: MagicCutoutRuntimeTypes.StrokeStart): boolean {
     this.#assertUsable();
     if (
       this.#activeStroke !== null ||
@@ -81,7 +81,7 @@ export class MagicDraftEngine {
     return true;
   }
 
-  appendPoint(point: MagicPoint): boolean {
+  appendPoint(point: MagicCutoutRuntimeTypes.Point): boolean {
     this.#assertUsable();
     const stroke = this.#activeStroke;
     if (stroke === null || !validPoint(point)) return false;
@@ -101,7 +101,7 @@ export class MagicDraftEngine {
     return true;
   }
 
-  commitStroke(): MagicStroke | null {
+  commitStroke(): MagicCutoutRuntimeTypes.Stroke | null {
     this.#assertUsable();
     const stroke = this.#activeStroke;
     this.#activeStroke = null;
@@ -120,7 +120,7 @@ export class MagicDraftEngine {
     return true;
   }
 
-  undo(): MagicStroke | null {
+  undo(): MagicCutoutRuntimeTypes.Stroke | null {
     this.#assertUsable();
     if (this.#activeStroke !== null) return null;
     const stroke = this.#strokes.pop();
@@ -130,7 +130,7 @@ export class MagicDraftEngine {
     return copyStroke(stroke);
   }
 
-  redo(): MagicStroke | null {
+  redo(): MagicCutoutRuntimeTypes.Stroke | null {
     this.#assertUsable();
     if (this.#activeStroke !== null || this.#strokes.length >= MAGIC_STROKE_LIMIT) {
       return null;
@@ -142,12 +142,12 @@ export class MagicDraftEngine {
     return copyStroke(stroke);
   }
 
-  predictionStrokes(): readonly MagicStroke[] {
+  predictionStrokes(): readonly MagicCutoutRuntimeTypes.Stroke[] {
     this.#assertUsable();
     return this.#strokes.map(copyStroke);
   }
 
-  displayStrokes(): readonly MagicStroke[] {
+  displayStrokes(): readonly MagicCutoutRuntimeTypes.Stroke[] {
     this.#assertUsable();
     return [
       ...this.#strokes.map(copyStroke),
@@ -155,7 +155,7 @@ export class MagicDraftEngine {
     ];
   }
 
-  snapshot(): MagicDraftSnapshot {
+  snapshot(): MagicCutoutRuntimeTypes.DraftSnapshot {
     return {
       documentId: this.documentId,
       draftId: this.draftId,
@@ -185,7 +185,7 @@ export class MagicDraftEngine {
     this.#revision += 1;
   }
 
-  #normalizePoint(point: MagicPoint): MagicPoint {
+  #normalizePoint(point: MagicCutoutRuntimeTypes.Point): MagicCutoutRuntimeTypes.Point {
     return {
       x: Math.max(0, Math.min(this.width - 1, point.x)),
       y: Math.max(0, Math.min(this.height - 1, point.y)),

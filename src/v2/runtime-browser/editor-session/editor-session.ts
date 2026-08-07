@@ -4,7 +4,7 @@ import {
   createDocumentMachine,
   createWorkspaceMachine,
   getDocumentActorId,
-  type DocumentActorRef,
+  type DocumentMachineTypes,
   type ProcessingCancellation,
 } from "@/v2/application";
 import {
@@ -22,15 +22,7 @@ import { MagicPredictionService } from "../magic-cutout";
 import { createNativeProcessingCancellationSource, startBlobDownload } from "../platform";
 import { createEditorArtifactEffects } from "./editor-artifact-effects";
 import { createEditorSessionDependencies } from "./editor-session-dependencies";
-import type {
-  EditorImportError,
-  EditorSession,
-  EditorSessionOptions,
-  EditorSessionSnapshot,
-  SingleExportSnapshot,
-  EditorWorkspaceSnapshot,
-  WorkspaceItemStatus,
-} from "./editor-session.types";
+import type { EditorSessionTypes } from "./editor-session.types";
 import { DocumentRuntime } from "./document-runtime";
 import { exportFileName, resizeExportPng, selectedExportDimensions } from "../export";
 import type { ExportSize } from "@/v2/domain";
@@ -44,7 +36,7 @@ type ItemRecord = {
   file: File;
   documentId: DocumentId | null;
   runtime: DocumentRuntime | null;
-  error: EditorImportError | null;
+  error: EditorSessionTypes.ImportError | null;
   preparing: boolean;
   removed: boolean;
   modelMode: AutomaticModelMode;
@@ -81,7 +73,7 @@ function documentState(
   };
 }
 
-function itemStatus(item: ItemRecord): WorkspaceItemStatus {
+function itemStatus(item: ItemRecord): EditorSessionTypes.ItemStatus {
   if (item.preparing) return "preparing";
   if (item.error !== null || item.runtime === null) return "error";
   const status = item.runtime.actor.getSnapshot().context.document.status;
@@ -92,7 +84,9 @@ function itemStatus(item: ItemRecord): WorkspaceItemStatus {
   return "processing";
 }
 
-export function createEditorSession(options: EditorSessionOptions = {}): EditorSession {
+export function createEditorSession(
+  options: EditorSessionTypes.Options = {},
+): EditorSessionTypes.Session {
   const activeListeners = new Set<() => void>();
   const listeners = new Set<() => void>();
   const items: ItemRecord[] = [];
@@ -124,7 +118,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   let itemSequence = 0;
   const exportCancellationSource = createNativeProcessingCancellationSource();
   let exportCancellation: ProcessingCancellation | null = null;
-  let singleExport: SingleExportSnapshot = {
+  let singleExport: EditorSessionTypes.SingleExportSnapshot = {
     status: "idle",
     error: null,
     size: null,
@@ -194,7 +188,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   const workspace = createActor(createWorkspaceMachine({ documentMachine }));
   workspace.start();
 
-  let snapshot: EditorSessionSnapshot = {
+  let snapshot: EditorSessionTypes.Snapshot = {
     kind: "empty",
     actor: null,
     error: null,
@@ -204,8 +198,10 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     resultUrl: null,
     width: null,
   };
+  let cachedWorkspaceSnapshot: EditorSessionTypes.WorkspaceSnapshot | null = null;
 
   function publish(): void {
+    cachedWorkspaceSnapshot = null;
     const next = computeSnapshot();
     snapshot = next.kind === "document" ? { ...next } : next;
     for (const listener of activeListeners) listener();
@@ -213,6 +209,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
   }
 
   function publishDocument(): void {
+    cachedWorkspaceSnapshot = null;
     if (snapshot.kind === "document") snapshot = { ...snapshot };
     for (const listener of listeners) listener();
   }
@@ -224,7 +221,9 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     return selected === null ? null : (runtimes.get(selected) ?? null);
   }
 
-  function emptySnapshot(error: EditorImportError | null): EditorSessionSnapshot {
+  function emptySnapshot(
+    error: EditorSessionTypes.ImportError | null,
+  ): EditorSessionTypes.Snapshot {
     return {
       kind: "empty",
       actor: null,
@@ -237,7 +236,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     };
   }
 
-  function computeSnapshot(): EditorSessionSnapshot {
+  function computeSnapshot(): EditorSessionTypes.Snapshot {
     const selected = selectedRuntime();
     if (selected !== null) return selected.getSnapshot();
     const preparing = items.find((item) => !item.removed && item.preparing);
@@ -256,11 +255,11 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
     return emptySnapshot(failed?.error ?? null);
   }
 
-  function getSnapshot(): EditorSessionSnapshot {
+  function getSnapshot(): EditorSessionTypes.Snapshot {
     return snapshot;
   }
 
-  function workspaceSnapshot(): EditorWorkspaceSnapshot {
+  function computeWorkspaceSnapshot(): EditorSessionTypes.WorkspaceSnapshot {
     const visible = items.filter((item) => !item.removed);
     let queued = 0;
     return {
@@ -284,6 +283,11 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       }),
       export: batchExport.getSnapshot(),
     };
+  }
+
+  function workspaceSnapshot(): EditorSessionTypes.WorkspaceSnapshot {
+    cachedWorkspaceSnapshot ??= computeWorkspaceSnapshot();
+    return cachedWorkspaceSnapshot;
   }
 
   function nextItemId(): WorkspaceItemId {
@@ -337,7 +341,7 @@ export function createEditorSession(options: EditorSessionOptions = {}): EditorS
       const child = workspace.getSnapshot().children[getDocumentActorId(documentId)];
       if (child === undefined) throw new Error("Document actor was not registered");
       const runtime = new DocumentRuntime({
-        actor: child as DocumentActorRef,
+        actor: child as DocumentMachineTypes.ActorRef,
         dependencies,
         documentId,
         fileName: item.file.name,

@@ -9,10 +9,4 @@ export {
 } from "./worker-manual-cutout-committer";
 export type { ManualCutoutWorkerFactory } from "./worker-manual-cutout-committer";
 export { brushBox, interpolatePoints, unionBox } from "./manual-cutout-geometry";
-export type {
-  ManualCutoutBox,
-  ManualCutoutBrush,
-  ManualCutoutPatch,
-  ManualCutoutPoint,
-  ManualDraftRuntime,
-} from "./manual-cutout.types";
+export type { ManualCutoutRuntimeTypes } from "./manual-cutout.types";

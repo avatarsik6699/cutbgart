@@ -17,7 +17,7 @@ import {
   FakeProcessingGateway,
 } from "@/v2/testing";
 
-import { createDocumentMachine, type DocumentArtifactEffects } from "./index";
+import { createDocumentMachine, type DocumentMachineTypes } from "./index";
 
 const cancellableStages = [
   "queued",
@@ -33,17 +33,20 @@ function createHarness(ids: string[]) {
   const gateway = new FakeProcessingGateway();
   const runIds = createDeterministicIds(ids.map(createRunId));
   const artifacts = {
-    estimateHistoricalBytes: vi.fn<DocumentArtifactEffects["estimateHistoricalBytes"]>(
-      () => 0,
-    ),
-    exportPng: vi.fn<DocumentArtifactEffects["exportPng"]>(),
-    promoteRun: vi.fn<DocumentArtifactEffects["promoteRun"]>(() => true),
-    releaseDocument: vi.fn<DocumentArtifactEffects["releaseDocument"]>(),
-    releaseRun: vi.fn<DocumentArtifactEffects["releaseRun"]>(),
-    releaseManualDraft: vi.fn<DocumentArtifactEffects["releaseManualDraft"]>(),
-    commitManualHistory: vi.fn<DocumentArtifactEffects["commitManualHistory"]>(),
-    moveDocumentHistory: vi.fn<DocumentArtifactEffects["moveDocumentHistory"]>(),
-  } satisfies DocumentArtifactEffects;
+    estimateHistoricalBytes: vi.fn<
+      DocumentMachineTypes.ArtifactEffects["estimateHistoricalBytes"]
+    >(() => 0),
+    exportPng: vi.fn<DocumentMachineTypes.ArtifactEffects["exportPng"]>(),
+    promoteRun: vi.fn<DocumentMachineTypes.ArtifactEffects["promoteRun"]>(() => true),
+    releaseDocument: vi.fn<DocumentMachineTypes.ArtifactEffects["releaseDocument"]>(),
+    releaseRun: vi.fn<DocumentMachineTypes.ArtifactEffects["releaseRun"]>(),
+    releaseManualDraft:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["releaseManualDraft"]>(),
+    commitManualHistory:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["commitManualHistory"]>(),
+    moveDocumentHistory:
+      vi.fn<DocumentMachineTypes.ArtifactEffects["moveDocumentHistory"]>(),
+  } satisfies DocumentMachineTypes.ArtifactEffects;
   const machine = createDocumentMachine({
     artifacts,
     gateway,

@@ -8,7 +8,7 @@ import {
   sameBackgroundFill,
   TRANSPARENT_BACKGROUND,
 } from "./background.policy";
-import type { BackgroundDraft } from "./background.types";
+import type { BackgroundTypes } from "./background.types";
 
 describe("background policy", () => {
   it("normalizes only complete six-digit colours", () => {
@@ -67,7 +67,7 @@ describe("background policy", () => {
   });
 
   it("increments the draft revision without mutating the baseline", () => {
-    const draft: BackgroundDraft = {
+    const draft: BackgroundTypes.Draft = {
       kind: "background",
       draftId: createBackgroundDraftId("background-draft-1"),
       documentId: createDocumentId("document-1"),

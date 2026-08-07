@@ -1,8 +1,8 @@
 import { formatLocalTime } from "@/shared/lib";
 
-import type { DiagnosticsLogEntry } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
-type Props = Readonly<{ logs: readonly DiagnosticsLogEntry[] }>;
+type Props = Readonly<{ logs: readonly DiagnosticsTypes.LogEntry[] }>;
 
 export function DiagnosticsLogList(props: Props) {
   if (props.logs.length === 0) return null;

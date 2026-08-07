@@ -15,8 +15,8 @@ import type {
   ProcessingTerminalEvent,
   RunCorrelation,
 } from "./processing";
-import type { MagicCandidateSummary, MagicPredictionCorrelation } from "./magic-cutout";
-import type { EnhancementOperationId } from "./enhancements";
+import type { MagicCutoutTypes } from "./magic-cutout";
+import type { EnhancementTypes } from "./enhancements";
 import type { AutomaticModelMode } from "@/shared/lib";
 
 export type SourceRegisteredEvent = {
@@ -78,12 +78,12 @@ export type ManualCutoutEvent =
     };
 
 export type MagicCutoutEvent =
-  | (MagicPredictionCorrelation & { type: "MAGIC_PREDICTION_STARTED" })
-  | (MagicPredictionCorrelation & {
+  | (MagicCutoutTypes.PredictionCorrelation & { type: "MAGIC_PREDICTION_STARTED" })
+  | (MagicCutoutTypes.PredictionCorrelation & {
       type: "MAGIC_PREVIEW_READY";
-      candidates: readonly MagicCandidateSummary[];
+      candidates: readonly MagicCutoutTypes.CandidateSummary[];
     })
-  | (MagicPredictionCorrelation & {
+  | (MagicCutoutTypes.PredictionCorrelation & {
       type: "MAGIC_PREDICTION_FAILED";
       error: ProcessingError;
     })
@@ -131,7 +131,7 @@ export type EnhancementEvent =
       draftId: EnhancementDraftId;
       runId: RunId;
       expectedRevision: Revision;
-      operationIds: readonly EnhancementOperationId[];
+      operationIds: readonly EnhancementTypes.OperationId[];
     }
   | {
       type: "ENHANCEMENT_COMMIT_SUCCEEDED";

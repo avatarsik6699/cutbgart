@@ -1,11 +1,11 @@
-import type { ManualCutoutBox, ManualCutoutPoint } from "./manual-cutout.types";
+import type { ManualCutoutRuntimeTypes } from "./manual-cutout.types";
 
 export function brushBox(
-  point: ManualCutoutPoint,
+  point: ManualCutoutRuntimeTypes.Point,
   radius: number,
   width: number,
   height: number,
-): ManualCutoutBox | null {
+): ManualCutoutRuntimeTypes.Box | null {
   if (radius <= 0 || width <= 0 || height <= 0) return null;
   const box = {
     minX: Math.max(0, Math.floor(point.x - radius)),
@@ -17,9 +17,9 @@ export function brushBox(
 }
 
 export function unionBox(
-  left: ManualCutoutBox | null,
-  right: ManualCutoutBox | null,
-): ManualCutoutBox | null {
+  left: ManualCutoutRuntimeTypes.Box | null,
+  right: ManualCutoutRuntimeTypes.Box | null,
+): ManualCutoutRuntimeTypes.Box | null {
   if (left === null) return right;
   if (right === null) return left;
   return {
@@ -31,10 +31,10 @@ export function unionBox(
 }
 
 export function interpolatePoints(
-  from: ManualCutoutPoint,
-  to: ManualCutoutPoint,
+  from: ManualCutoutRuntimeTypes.Point,
+  to: ManualCutoutRuntimeTypes.Point,
   radius: number,
-): readonly ManualCutoutPoint[] {
+): readonly ManualCutoutRuntimeTypes.Point[] {
   const distance = Math.hypot(to.x - from.x, to.y - from.y);
   const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * 0.5)));
   return Array.from({ length: steps }, (_, index) => {

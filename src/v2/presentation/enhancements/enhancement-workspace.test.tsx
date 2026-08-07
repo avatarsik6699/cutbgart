@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDocumentId,
   createEnhancementDraftId,
-  type EnhancementDraft,
+  type EnhancementTypes,
 } from "@/v2/domain";
 import {
   EnhancementWorkspace,
@@ -13,7 +13,7 @@ import {
 
 afterEach(cleanup);
 
-const draft: EnhancementDraft = {
+const draft: EnhancementTypes.Draft = {
   kind: "enhance",
   draftId: createEnhancementDraftId("enhancement-draft-1"),
   documentId: createDocumentId("document-1"),

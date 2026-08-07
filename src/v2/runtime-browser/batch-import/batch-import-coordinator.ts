@@ -7,20 +7,19 @@ import { createNativeProcessingCancellationSource } from "../platform";
 import { prepareImageImport } from "../editor-session/image-import-preparation";
 import {
   IMPORT_PREPARATION_CONCURRENCY,
-  type BatchImportResult,
-  type BatchImportTask,
+  type BatchImportTypes,
 } from "./batch-import.types";
 
 type PendingTask = {
-  task: BatchImportTask;
-  resolve(result: BatchImportResult): void;
+  task: BatchImportTypes.Task;
+  resolve(result: BatchImportTypes.Result): void;
 };
 
 export class BatchImportCoordinator {
   readonly #pending: PendingTask[] = [];
   readonly #prepare: typeof prepareImageImport;
   readonly #activeControllers = new Map<
-    BatchImportTask["itemId"],
+    BatchImportTypes.Task["itemId"],
     ProcessingCancellation
   >();
   readonly #cancellation: ProcessingCancellationSource;
@@ -35,7 +34,7 @@ export class BatchImportCoordinator {
     this.#cancellation = cancellation;
   }
 
-  prepare(task: BatchImportTask): Promise<BatchImportResult> {
+  prepare(task: BatchImportTypes.Task): Promise<BatchImportTypes.Result> {
     if (this.#disposed)
       return Promise.resolve({ ...task, ok: false, error: "cancelled" });
     return new Promise((resolve) => {
@@ -44,7 +43,7 @@ export class BatchImportCoordinator {
     });
   }
 
-  cancel(itemId: BatchImportTask["itemId"]): void {
+  cancel(itemId: BatchImportTypes.Task["itemId"]): void {
     const index = this.#pending.findIndex((entry) => entry.task.itemId === itemId);
     if (index < 0) {
       this.#activeControllers.get(itemId)?.abort();

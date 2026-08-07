@@ -1,9 +1,9 @@
 import { DescriptionList, DescriptionListItem } from "@/shared/ui";
 
-import type { DiagnosticsSheetProps } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
 type Props = Pick<
-  DiagnosticsSheetProps,
+  DiagnosticsTypes.SheetProps,
   "fallbackUsed" | "lightweightMode" | "modelLoadBytes" | "runInfo"
 >;
 

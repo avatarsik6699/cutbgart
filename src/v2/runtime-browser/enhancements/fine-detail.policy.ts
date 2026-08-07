@@ -1,6 +1,6 @@
 import type { LocalInferencePath } from "@/v2/domain";
 
-import type { AlphaPlane, PixelRect, RefinementTrimap } from "./enhancement-pixels.types";
+import type { EnhancementPixelTypes } from "./enhancement-pixels.types";
 
 export const MAX_MATTING_INPUT_SIDE = 1024;
 export const MAX_MATTING_INPUT_PIXELS = 1024 * 1024;
@@ -10,7 +10,7 @@ export type MattingAttempt = {
   path: LocalInferencePath;
 };
 
-function assertAlphaPlane(matte: AlphaPlane): void {
+function assertAlphaPlane(matte: EnhancementPixelTypes.AlphaPlane): void {
   if (
     !Number.isSafeInteger(matte.width) ||
     !Number.isSafeInteger(matte.height) ||
@@ -22,7 +22,11 @@ function assertAlphaPlane(matte: AlphaPlane): void {
   }
 }
 
-function bounds(mask: Uint8Array, width: number, height: number): PixelRect | null {
+function bounds(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): EnhancementPixelTypes.Rect | null {
   let minX = width;
   let minY = height;
   let maxX = -1;
@@ -73,7 +77,9 @@ function dilate(
   return current;
 }
 
-export function buildRefinementTrimap(matte: AlphaPlane): RefinementTrimap {
+export function buildRefinementTrimap(
+  matte: EnhancementPixelTypes.AlphaPlane,
+): EnhancementPixelTypes.Trimap {
   assertAlphaPlane(matte);
   const uncertain = new Uint8Array(matte.data.length);
   function classify(value: number): 0 | 1 | 2 {
@@ -124,9 +130,9 @@ export function buildRefinementTrimap(matte: AlphaPlane): RefinementTrimap {
 }
 
 export function computeRefinementCrop(
-  trimap: RefinementTrimap,
+  trimap: EnhancementPixelTypes.Trimap,
   padding = 32,
-): PixelRect | null {
+): EnhancementPixelTypes.Rect | null {
   const unknown = trimap.unknownBounds;
   if (unknown === null) return null;
   const x = Math.max(0, unknown.x - padding);
@@ -139,7 +145,9 @@ export function computeRefinementCrop(
   };
 }
 
-export function computeMattingInputSize(crop: Pick<PixelRect, "width" | "height">): {
+export function computeMattingInputSize(
+  crop: Pick<EnhancementPixelTypes.Rect, "width" | "height">,
+): {
   width: number;
   height: number;
 } {
@@ -157,7 +165,7 @@ export function computeMattingInputSize(crop: Pick<PixelRect, "width" | "height"
   };
 }
 
-function bilinear(matte: AlphaPlane, x: number, y: number): number {
+function bilinear(matte: EnhancementPixelTypes.AlphaPlane, x: number, y: number): number {
   const floorX = Math.floor(x);
   const floorY = Math.floor(y);
   const left = Math.max(0, Math.min(matte.width - 1, floorX));
@@ -176,11 +184,11 @@ function bilinear(matte: AlphaPlane, x: number, y: number): number {
 }
 
 export function restoreRefinedCrop(input: {
-  predicted: AlphaPlane;
-  prior: AlphaPlane;
-  trimap: RefinementTrimap;
-  crop: PixelRect;
-}): AlphaPlane {
+  predicted: EnhancementPixelTypes.AlphaPlane;
+  prior: EnhancementPixelTypes.AlphaPlane;
+  trimap: EnhancementPixelTypes.Trimap;
+  crop: EnhancementPixelTypes.Rect;
+}): EnhancementPixelTypes.AlphaPlane {
   assertAlphaPlane(input.predicted);
   assertAlphaPlane(input.prior);
   const data = input.prior.data.slice();
@@ -202,9 +210,9 @@ export function restoreRefinedCrop(input: {
 }
 
 export function deterministicRefinement(
-  prior: AlphaPlane,
-  trimap: RefinementTrimap,
-): AlphaPlane {
+  prior: EnhancementPixelTypes.AlphaPlane,
+  trimap: EnhancementPixelTypes.Trimap,
+): EnhancementPixelTypes.AlphaPlane {
   assertAlphaPlane(prior);
   const data = prior.data.slice();
   for (let index = 0; index < data.length; index += 1) {
@@ -214,7 +222,10 @@ export function deterministicRefinement(
   return { width: prior.width, height: prior.height, data };
 }
 
-export function sameAlphaPlane(left: AlphaPlane, right: AlphaPlane): boolean {
+export function sameAlphaPlane(
+  left: EnhancementPixelTypes.AlphaPlane,
+  right: EnhancementPixelTypes.AlphaPlane,
+): boolean {
   return (
     left.width === right.width &&
     left.height === right.height &&

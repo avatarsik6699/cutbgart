@@ -1,11 +1,5 @@
 import { ProcessingGatewayError, type MagicCutoutPredictor } from "@/v2/application";
-import type {
-  ArtifactId,
-  DocumentId,
-  MagicCandidateSummary,
-  MagicPredictionCorrelation,
-  Revision,
-} from "@/v2/domain";
+import type { ArtifactId, DocumentId, MagicCutoutTypes, Revision } from "@/v2/domain";
 
 import { MagicCandidateRepository } from "./magic-candidate-repository";
 import { MagicDraftRepository } from "./magic-draft-repository";
@@ -46,7 +40,7 @@ export class MagicPredictionService implements MagicCutoutPredictor {
   readonly #client: MagicPredictionClient;
   readonly #drafts: MagicDraftRepository;
   readonly #publish: (
-    correlation: MagicPredictionCorrelation,
+    correlation: MagicCutoutTypes.PredictionCorrelation,
     progress: MagicRuntimeProgress | null,
   ) => void;
 
@@ -56,7 +50,7 @@ export class MagicPredictionService implements MagicCutoutPredictor {
     client: MagicPredictionClient;
     drafts: MagicDraftRepository;
     publish?: (
-      correlation: MagicPredictionCorrelation,
+      correlation: MagicCutoutTypes.PredictionCorrelation,
       progress: MagicRuntimeProgress | null,
     ) => void;
   }) {
@@ -68,9 +62,9 @@ export class MagicPredictionService implements MagicCutoutPredictor {
   }
 
   async predict(
-    input: MagicPredictionCorrelation,
+    input: MagicCutoutTypes.PredictionCorrelation,
     signal: AbortSignal,
-  ): Promise<readonly MagicCandidateSummary[]> {
+  ): Promise<readonly MagicCutoutTypes.CandidateSummary[]> {
     const draft = this.#drafts.get(input.draftId);
     const artifacts = this.#artifactsFor(input.documentId);
     if (

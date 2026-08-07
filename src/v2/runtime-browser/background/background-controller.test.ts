@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import { createArtifactId, createBackgroundDraftId, createDocumentId } from "@/v2/domain";
 import { buildDocumentSnapshot, buildDocumentState } from "@/v2/testing";
 
@@ -51,7 +51,7 @@ function actorHarness() {
   const actor = {
     getSnapshot: () => ({ context: { document } }),
     send,
-  } as unknown as DocumentActorRef;
+  } as unknown as DocumentMachineTypes.ActorRef;
   return { actor, documentId, draftId, send };
 }
 

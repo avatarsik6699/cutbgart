@@ -2,9 +2,9 @@ import { hasDiagnosticsDetails } from "../diagnostics-details.utils";
 import { DiagnosticsEmptyState } from "./diagnostics-empty-state";
 import { DiagnosticsLogList } from "./diagnostics-log-list";
 import { DiagnosticsRuntimeDetails } from "./diagnostics-runtime-details";
-import type { DiagnosticsSheetProps } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
-export function DiagnosticsBody(props: DiagnosticsSheetProps) {
+export function DiagnosticsBody(props: DiagnosticsTypes.SheetProps) {
   if (!hasDiagnosticsDetails(props)) return <DiagnosticsEmptyState />;
 
   return (

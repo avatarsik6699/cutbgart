@@ -1,19 +1,19 @@
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import { selectEnhancementDraft } from "@/v2/application";
-import type { EnhancementDraftId, EnhancementOperationId, RunId } from "@/v2/domain";
+import type { EnhancementDraftId, EnhancementTypes, RunId } from "@/v2/domain";
 
 import type { EnhancementRuntimeService } from "./enhancement-commit-service";
 import type { EnhancementDraftRepository } from "./enhancement-draft-repository";
 
 export class EnhancementController {
-  readonly #actor: () => DocumentActorRef | null;
+  readonly #actor: () => DocumentMachineTypes.ActorRef | null;
   readonly #drafts: EnhancementDraftRepository;
   readonly #nextRunId: () => RunId;
   readonly #service: EnhancementRuntimeService;
   #capturedDraftId: EnhancementDraftId | null = null;
 
   constructor(options: {
-    actor: () => DocumentActorRef | null;
+    actor: () => DocumentMachineTypes.ActorRef | null;
     drafts: EnhancementDraftRepository;
     nextRunId: () => RunId;
     service: EnhancementRuntimeService;
@@ -68,7 +68,7 @@ export class EnhancementController {
     }
   }
 
-  change(operationIds: readonly EnhancementOperationId[]): void {
+  change(operationIds: readonly EnhancementTypes.OperationId[]): void {
     const actor = this.#actor();
     if (actor === null) return;
     const document = actor.getSnapshot().context.document;

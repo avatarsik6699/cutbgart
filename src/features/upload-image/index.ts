@@ -1,12 +1,2 @@
-export { validateAndPrepareUpload } from "./model/validate-and-prepare-upload";
-export { useUploadPreparation } from "./model/use-upload-preparation";
-export type { UploadErrorCode, UploadValidationError, UploadResult } from "./model/types";
-export { UploadDropzone } from "./ui/upload-dropzone";
-export type { UploadDropzoneProps } from "./ui/upload-dropzone";
-export { FileDropzone } from "./ui/file-dropzone";
-export type { FileDropzoneProps } from "./ui/file-dropzone";
-export { ChooseFilesButton } from "./ui/choose-files-button";
-export type { ChooseFilesButtonProps } from "./ui/choose-files-button";
-export { ChoosePhotoButton } from "./ui/choose-photo-button";
-export type { ChoosePhotoButtonProps } from "./ui/choose-photo-button";
-export { UploadPreparationNotice } from "./ui/UploadPreparationNotice";
+export { ChooseFilesButton, FileAdmission } from "./ui/file-admission";
+export type { FileAdmissionTypes } from "./ui/file-admission";

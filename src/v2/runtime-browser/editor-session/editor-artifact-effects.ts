@@ -1,8 +1,8 @@
-import type { DocumentArtifactEffects } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import type {
   ArtifactId,
   ArtifactLeaseOwner,
-  DocumentEffect,
+  DocumentTransitionTypes,
   DocumentSnapshot,
 } from "@/v2/domain";
 
@@ -26,7 +26,7 @@ function snapshotIds(snapshot: DocumentSnapshot): readonly ArtifactId[] {
 }
 
 type DraftHistoryEffect = Extract<
-  DocumentEffect,
+  DocumentTransitionTypes.Effect,
   {
     type:
       | "commit-manual-history"
@@ -84,9 +84,9 @@ function commitDraftHistory(
 
 export function createEditorArtifactEffects(options: {
   download: DownloadAdapter;
-  fileName(documentId: DocumentEffect["documentId"]): string | null;
+  fileName(documentId: DocumentTransitionTypes.Effect["documentId"]): string | null;
   repository: ArtifactRepository;
-}): DocumentArtifactEffects {
+}): DocumentMachineTypes.ArtifactEffects {
   return {
     estimateHistoricalBytes(snapshot) {
       return snapshotIds(snapshot).reduce(

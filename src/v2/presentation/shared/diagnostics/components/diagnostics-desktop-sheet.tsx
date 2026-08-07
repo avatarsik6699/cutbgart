@@ -10,9 +10,9 @@ import {
 
 import { DiagnosticsContent } from "./diagnostics-content";
 import { DiagnosticsTriggerButton } from "./diagnostics-trigger-button";
-import type { DiagnosticsSheetProps } from "../diagnostics.types";
+import type { DiagnosticsTypes } from "../diagnostics.types";
 
-export function DiagnosticsDesktopSheet(props: DiagnosticsSheetProps) {
+export function DiagnosticsDesktopSheet(props: DiagnosticsTypes.SheetProps) {
   return (
     <Sheet>
       <SheetTrigger

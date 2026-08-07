@@ -9,8 +9,8 @@ import type {
   Revision,
   RunId,
 } from "./ids";
-import type { BackgroundFillDescriptor } from "./background";
-import type { EnhancementOperationId } from "./enhancements";
+import type { BackgroundTypes } from "./background";
+import type { EnhancementTypes } from "./enhancements";
 import type { AutomaticModelMode } from "@/shared/lib";
 
 export type StartAutomaticRemovalCommand = {
@@ -116,7 +116,7 @@ export type ChangeBackgroundCommand = {
   draftId: BackgroundDraftId;
   expectedRevision: Revision;
   draftRevision: Revision;
-  fill: BackgroundFillDescriptor;
+  fill: BackgroundTypes.FillDescriptor;
 };
 
 export type ApplyBackgroundCommand = {
@@ -144,7 +144,7 @@ export type ChangeEnhancementsCommand = {
   documentId: DocumentId;
   draftId: EnhancementDraftId;
   expectedRevision: Revision;
-  operationIds: readonly EnhancementOperationId[];
+  operationIds: readonly EnhancementTypes.OperationId[];
 };
 
 export type ApplyEnhancementsCommand = {

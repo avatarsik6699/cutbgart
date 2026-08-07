@@ -2,20 +2,15 @@ import type { ChangeEvent } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Button, Image, Typography } from "@/shared/ui";
-import type {
-  ActiveEditorSessionSnapshot,
-  EditorSession,
-  EditorWorkspaceSnapshot,
-  WorkspaceItemSummary,
-} from "@/v2/runtime-browser";
+import type { EditorSessionTypes } from "@/v2/runtime-browser";
 
 type Props = {
-  active: ActiveEditorSessionSnapshot | null;
-  session: EditorSession;
-  workspace: EditorWorkspaceSnapshot;
+  active: EditorSessionTypes.ActiveSnapshot | null;
+  session: EditorSessionTypes.Session;
+  workspace: EditorSessionTypes.WorkspaceSnapshot;
 };
 
-function itemLabel(item: WorkspaceItemSummary): string {
+function itemLabel(item: EditorSessionTypes.ItemSummary): string {
   if (item.status === "preparing") return m.editorV2BatchPreparing();
   if (item.status === "result") return m.editorV2BatchResult();
   if (item.status === "error") return m.editorV2BatchError();
@@ -24,7 +19,7 @@ function itemLabel(item: WorkspaceItemSummary): string {
   return m.editorV2BatchProcessing();
 }
 
-function errorDetail(item: WorkspaceItemSummary): string | null {
+function errorDetail(item: EditorSessionTypes.ItemSummary): string | null {
   if (item.error === null) return null;
   if (typeof item.error === "string") return item.error;
   return `${item.error.code}: ${item.error.message}`;
@@ -44,7 +39,7 @@ export function EditorWorkspaceStrip(props: Props) {
     event.currentTarget.value = "";
   }
 
-  function removeFx(item: WorkspaceItemSummary): void {
+  function removeFx(item: EditorSessionTypes.ItemSummary): void {
     const activeWork =
       item.documentId === activeDocument?.documentId &&
       (activeDraftDirty || !["ready", "result", "error"].includes(activeDocument.status));

@@ -1,20 +1,20 @@
-import type {
-  BackgroundDraft,
-  BackgroundFillDescriptor,
-  HexColor,
-} from "./background.types";
+import type { BackgroundTypes } from "./background.types";
 import type { ArtifactId } from "../ids";
 
 export const TRANSPARENT_BACKGROUND = {
   type: "transparent",
-} as const satisfies BackgroundFillDescriptor;
+} as const satisfies BackgroundTypes.FillDescriptor;
 
-export function normalizeHexColor(value: string): HexColor | null {
+export function normalizeHexColor(value: string): BackgroundTypes.HexColor | null {
   const normalized = value.trim().toUpperCase();
-  return /^#[0-9A-F]{6}$/.test(normalized) ? (normalized as HexColor) : null;
+  return /^#[0-9A-F]{6}$/.test(normalized)
+    ? (normalized as BackgroundTypes.HexColor)
+    : null;
 }
 
-export function normalizeBackgroundFill(value: unknown): BackgroundFillDescriptor | null {
+export function normalizeBackgroundFill(
+  value: unknown,
+): BackgroundTypes.FillDescriptor | null {
   if (typeof value !== "object" || value === null || !("type" in value)) return null;
   const fill = value as Record<string, unknown>;
   if (fill.type === "transparent") return TRANSPARENT_BACKGROUND;
@@ -71,8 +71,8 @@ export function normalizeBackgroundFill(value: unknown): BackgroundFillDescripto
 }
 
 export function sameBackgroundFill(
-  left: BackgroundFillDescriptor,
-  right: BackgroundFillDescriptor,
+  left: BackgroundTypes.FillDescriptor,
+  right: BackgroundTypes.FillDescriptor,
 ): boolean {
   if (left.type !== right.type) return false;
   switch (left.type) {
@@ -93,9 +93,9 @@ export function sameBackgroundFill(
 }
 
 export function changeBackgroundDraft(
-  draft: BackgroundDraft,
-  fill: BackgroundFillDescriptor,
-): BackgroundDraft {
+  draft: BackgroundTypes.Draft,
+  fill: BackgroundTypes.FillDescriptor,
+): BackgroundTypes.Draft {
   return {
     ...draft,
     draftRevision: draft.draftRevision + 1,

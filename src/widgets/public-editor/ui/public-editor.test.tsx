@@ -14,13 +14,20 @@ import {
   createMagicDraftId,
   createRunId,
 } from "@/v2/domain";
-import { ArtifactRepository, type EditorSessionOptions } from "@/v2/runtime-browser";
+import { ArtifactRepository, type EditorSessionTypes } from "@/v2/runtime-browser";
 
 import { PublicEditorWorkspace } from "./public-editor";
+import {
+  PublicEditorModelProvider,
+  useEditorSessionSelector,
+  usePublicEditorModel,
+  usePublicEditorViewSelector,
+  type PublicEditorViewSnapshot,
+} from "../model";
 
 afterEach(cleanup);
 
-function sessionOptions(): EditorSessionOptions {
+function sessionOptions(): EditorSessionTypes.Options {
   const gateway: ProcessingGateway = {
     start() {
       throw new Error("Invalid input must not start processing");
@@ -99,6 +106,51 @@ describe("PublicEditorWorkspace", () => {
     await waitFor(() =>
       expect(screen.getByTestId("batch-filmstrip").children).toHaveLength(20),
     );
-    expect(screen.getByRole("alert").textContent).toMatch(/up to 20|до 20/);
+    expect(screen.getByText(/up to 20|до 20/)).toBeTruthy();
+  });
+
+  it("rerenders only consumers whose selected model value changes", () => {
+    const renders = { exportSize: 0, qualityMode: 0, sessionKind: 0 };
+    const selectExportSize = (snapshot: PublicEditorViewSnapshot) => snapshot.exportSize;
+    const selectQualityMode = (snapshot: PublicEditorViewSnapshot) =>
+      snapshot.qualityMode;
+    const selectSessionKind = (snapshot: EditorSessionTypes.Snapshot) => snapshot.kind;
+
+    function ExportSizeProbe() {
+      renders.exportSize += 1;
+      return <span>{usePublicEditorViewSelector(selectExportSize)}</span>;
+    }
+
+    function QualityModeProbe() {
+      renders.qualityMode += 1;
+      return <span>{usePublicEditorViewSelector(selectQualityMode)}</span>;
+    }
+
+    function SessionKindProbe() {
+      renders.sessionKind += 1;
+      return <span>{useEditorSessionSelector(selectSessionKind)}</span>;
+    }
+
+    function ModelControls() {
+      const model = usePublicEditorModel();
+      return (
+        <button type="button" onClick={() => model.chooseExportSize(1024)}>
+          choose 1024
+        </button>
+      );
+    }
+
+    render(
+      <PublicEditorModelProvider sessionOptions={sessionOptions()}>
+        <ExportSizeProbe />
+        <QualityModeProbe />
+        <SessionKindProbe />
+        <ModelControls />
+      </PublicEditorModelProvider>,
+    );
+
+    expect(renders).toEqual({ exportSize: 1, qualityMode: 1, sessionKind: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "choose 1024" }));
+    expect(renders).toEqual({ exportSize: 2, qualityMode: 1, sessionKind: 1 });
   });
 });

@@ -1,10 +1,10 @@
-import type { DocumentEffect } from "@/v2/domain";
+import type { DocumentTransitionTypes } from "@/v2/domain";
 
-import type { DocumentMachineDependencies } from "./document-machine.types";
+import type { DocumentMachineTypes } from "./document-machine.types";
 
 export function executeArtifactEffect(
-  dependencies: DocumentMachineDependencies,
-  effect: DocumentEffect,
+  dependencies: DocumentMachineTypes.Dependencies,
+  effect: DocumentTransitionTypes.Effect,
 ): boolean | null {
   switch (effect.type) {
     case "export-png":

@@ -1,4 +1,4 @@
-import type { MagicStroke } from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 import type { TransferableMagicCandidate } from "./magic-worker-protocol";
 
 export type MagicConstraintMaps = Readonly<{
@@ -19,7 +19,7 @@ const HARD_CORE_RATIO = 0.35;
 
 function stampStroke(
   target: Int8Array,
-  stroke: MagicStroke,
+  stroke: MagicCutoutRuntimeTypes.Stroke,
   width: number,
   height: number,
   radius: number,
@@ -56,7 +56,7 @@ function stampStroke(
 }
 
 export function createMagicConstraints(
-  strokes: readonly MagicStroke[],
+  strokes: readonly MagicCutoutRuntimeTypes.Stroke[],
   width: number,
   height: number,
 ): MagicConstraintMaps {
@@ -136,7 +136,7 @@ function fuse(
 export function rankAndFuseMagicCandidates(options: {
   base: Uint8ClampedArray | null;
   candidates: readonly TransferableMagicCandidate[];
-  strokes: readonly MagicStroke[];
+  strokes: readonly MagicCutoutRuntimeTypes.Stroke[];
 }): readonly RankedMagicCandidate[] {
   const first = options.candidates[0];
   if (first === undefined) return [];

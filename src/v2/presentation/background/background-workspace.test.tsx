@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createBackgroundDraftId,
   createDocumentId,
-  type BackgroundDraft,
+  type BackgroundTypes,
 } from "@/v2/domain";
 import { BackgroundWorkspace, type BackgroundInteraction } from "./background-workspace";
 
 afterEach(cleanup);
 
-const draft: BackgroundDraft = {
+const draft: BackgroundTypes.Draft = {
   kind: "background",
   draftId: createBackgroundDraftId("background-draft-1"),
   documentId: createDocumentId("document-1"),

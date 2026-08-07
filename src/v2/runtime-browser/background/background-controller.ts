@@ -1,5 +1,5 @@
 import type {
-  DocumentActorRef,
+  DocumentMachineTypes,
   ProcessingCancellation,
   ProcessingCancellationSource,
 } from "@/v2/application";
@@ -7,7 +7,7 @@ import { selectBackgroundDraft } from "@/v2/application";
 import {
   normalizeBackgroundFill,
   type BackgroundDraftId,
-  type BackgroundFillDescriptor,
+  type BackgroundTypes,
 } from "@/v2/domain";
 
 import { BackgroundDraftRepository } from "./background-draft-repository";
@@ -27,7 +27,7 @@ const READY_SNAPSHOT: BackgroundRuntimeSnapshot = {
 };
 
 export class BackgroundController {
-  readonly #actor: () => DocumentActorRef | null;
+  readonly #actor: () => DocumentMachineTypes.ActorRef | null;
   readonly #drafts: BackgroundDraftRepository;
   readonly #images: BackgroundImagePreparer;
   readonly #cancellation: ProcessingCancellationSource;
@@ -38,7 +38,7 @@ export class BackgroundController {
   #snapshot = READY_SNAPSHOT;
 
   constructor(options: {
-    actor: () => DocumentActorRef | null;
+    actor: () => DocumentMachineTypes.ActorRef | null;
     drafts: BackgroundDraftRepository;
     images: BackgroundImagePreparer;
     cancellation?: ProcessingCancellationSource;
@@ -91,7 +91,7 @@ export class BackgroundController {
     });
   }
 
-  change(fill: BackgroundFillDescriptor): void {
+  change(fill: BackgroundTypes.FillDescriptor): void {
     const actor = this.#actor();
     if (actor === null) return;
     const document = actor.getSnapshot().context.document;

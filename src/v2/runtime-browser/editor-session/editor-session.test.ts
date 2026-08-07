@@ -25,7 +25,7 @@ import {
 import { ArtifactRepository } from "../artifacts";
 import type { EnhancementRuntimeService } from "../enhancements";
 import { createEditorSession } from "./editor-session";
-import type { EditorSessionOptions } from "./editor-session.types";
+import type { EditorSessionTypes } from "./editor-session.types";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -94,7 +94,7 @@ function createGatewayHarness() {
 function createHarness(
   runtimeOptions: (
     repository: ArtifactRepository,
-  ) => Partial<EditorSessionOptions> = () => ({}),
+  ) => Partial<EditorSessionTypes.Options> = () => ({}),
 ) {
   let nextArtifact = 0;
   let nextUrl = 0;
@@ -147,6 +147,21 @@ function enhancementRuntime(
 }
 
 describe("editor v2 browser session", () => {
+  it("caches workspace snapshot identity until the session publishes a change", async () => {
+    const harness = createHarness();
+    const initial = harness.session.workspaceSnapshot();
+    expect(harness.session.workspaceSnapshot()).toBe(initial);
+
+    await harness.session.importImage(
+      new File([new Uint8Array([1, 2, 3])], "broken.png", { type: "image/png" }),
+    );
+
+    const changed = harness.session.workspaceSnapshot();
+    expect(changed).not.toBe(initial);
+    expect(harness.session.workspaceSnapshot()).toBe(changed);
+    await harness.session.dispose();
+  });
+
   it("owns import, actor processing, committed preview, export, and reset lifetimes", async () => {
     const harness = createHarness();
     await harness.session.importImage(pngFile());

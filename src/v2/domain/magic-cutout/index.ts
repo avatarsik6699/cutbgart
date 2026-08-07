@@ -3,10 +3,4 @@ export {
   createMagicCutoutDraft,
   matchesMagicPrediction,
 } from "./magic-cutout.policy";
-export type {
-  MagicCandidateSummary,
-  MagicCutoutDraft,
-  MagicCutoutMode,
-  MagicCutoutStatus,
-  MagicPredictionCorrelation,
-} from "./magic-cutout.types";
+export type { MagicCutoutTypes } from "./magic-cutout.types";

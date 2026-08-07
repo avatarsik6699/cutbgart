@@ -38,11 +38,20 @@ export default tseslint.config(
     },
   },
   {
-    // V2 presentation avoids nested conditional expressions: named decisions
-    // are easier to inspect and keep localization/state branches independent.
-    files: ["src/v2/**/*.{ts,tsx}", "src/pages/editor-v2/**/*.tsx"],
+    // Nested conditional expressions hide branch ownership in both domain
+    // policy and presentation. Named decisions are enforced frontend-wide.
+    files: ["src/**/*.{ts,tsx}"],
     rules: {
       "no-nested-ternary": "error",
+    },
+  },
+  {
+    // Existing capability contracts may still use type-only namespaces.
+    // The frontend contract no longer requires them, so ordinary module
+    // exports and retained namespaces coexist without a migration sweep.
+    files: ["src/**/*.types.ts"],
+    rules: {
+      "@typescript-eslint/no-namespace": "off",
     },
   },
   {
@@ -78,37 +87,6 @@ export default tseslint.config(
       // React 19 exposes ref as a normal prop. The hooks plugin currently marks
       // the complete props object as ref-tainted and reports ordinary fields.
       "react-hooks/refs": "off",
-    },
-  },
-  {
-    files: [
-      "src/v2/presentation/shared/*.test.{ts,tsx}",
-      "src/v2/presentation/shared/diagnostics/**/*.test.{ts,tsx}",
-    ],
-    ignores: ["src/v2/presentation/shared/tests/**"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Program",
-          message:
-            "Shared presentation tests belong in src/v2/presentation/shared/tests.",
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/v2/presentation/shared/diagnostics/*.tsx"],
-    ignores: ["src/v2/presentation/shared/diagnostics/diagnostics-sheet.tsx"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Program",
-          message:
-            "Diagnostics child components belong in diagnostics/components; keep only the main component at the capability root.",
-        },
-      ],
     },
   },
   {

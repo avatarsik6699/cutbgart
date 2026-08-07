@@ -1,24 +1,19 @@
 import { brushBox, interpolatePoints, unionBox } from "./manual-cutout-geometry";
-import type {
-  ManualCutoutBox,
-  ManualCutoutBrush,
-  ManualCutoutPatch,
-  ManualCutoutPoint,
-} from "./manual-cutout.types";
+import type { ManualCutoutRuntimeTypes } from "./manual-cutout.types";
 
 export const MANUAL_DRAFT_PATCH_LIMIT = 20;
 
 type ActiveGesture = {
   beforeAlpha: Uint8ClampedArray;
-  box: ManualCutoutBox | null;
+  box: ManualCutoutRuntimeTypes.Box | null;
   differenceCount: number;
-  last: ManualCutoutPoint;
+  last: ManualCutoutRuntimeTypes.Point;
 };
 
 function copyRegion(
   alpha: Uint8ClampedArray,
   width: number,
-  box: ManualCutoutBox,
+  box: ManualCutoutRuntimeTypes.Box,
 ): Uint8ClampedArray {
   const boxWidth = box.maxX - box.minX + 1;
   const result = new Uint8ClampedArray(boxWidth * (box.maxY - box.minY + 1));
@@ -38,9 +33,9 @@ export class ManualDraftEngine {
   readonly #initial: Uint8ClampedArray;
   readonly #working: Uint8ClampedArray;
   readonly #width: number;
-  #future: ManualCutoutPatch[] = [];
+  #future: ManualCutoutRuntimeTypes.Patch[] = [];
   #gesture: ActiveGesture | null = null;
-  #past: ManualCutoutPatch[] = [];
+  #past: ManualCutoutRuntimeTypes.Patch[] = [];
   #differenceCount = 0;
 
   constructor(
@@ -84,7 +79,7 @@ export class ManualDraftEngine {
     return this.#working.slice();
   }
 
-  applyAlpha(image: ImageData, box?: ManualCutoutBox): void {
+  applyAlpha(image: ImageData, box?: ManualCutoutRuntimeTypes.Box): void {
     if (image.width !== this.#width || image.height !== this.#height) {
       throw new Error("Manual preview dimensions changed");
     }
@@ -102,7 +97,10 @@ export class ManualDraftEngine {
     }
   }
 
-  begin(point: ManualCutoutPoint, brush: ManualCutoutBrush): ManualCutoutBox | null {
+  begin(
+    point: ManualCutoutRuntimeTypes.Point,
+    brush: ManualCutoutRuntimeTypes.Brush,
+  ): ManualCutoutRuntimeTypes.Box | null {
     if (this.#gesture !== null) this.cancelGesture();
     this.#gesture = {
       beforeAlpha: this.#working.slice(),
@@ -113,10 +111,13 @@ export class ManualDraftEngine {
     return this.#stamp(point, brush);
   }
 
-  move(point: ManualCutoutPoint, brush: ManualCutoutBrush): ManualCutoutBox | null {
+  move(
+    point: ManualCutoutRuntimeTypes.Point,
+    brush: ManualCutoutRuntimeTypes.Brush,
+  ): ManualCutoutRuntimeTypes.Box | null {
     const gesture = this.#gesture;
     if (gesture === null) return null;
-    let changed: ManualCutoutBox | null = null;
+    let changed: ManualCutoutRuntimeTypes.Box | null = null;
     for (const candidate of interpolatePoints(gesture.last, point, brush.radius)) {
       changed = unionBox(changed, this.#stamp(candidate, brush));
     }
@@ -124,7 +125,7 @@ export class ManualDraftEngine {
     return changed;
   }
 
-  end(): ManualCutoutPatch | null {
+  end(): ManualCutoutRuntimeTypes.Patch | null {
     const gesture = this.#gesture;
     this.#gesture = null;
     if (gesture?.box === null || gesture === null) return null;
@@ -139,7 +140,7 @@ export class ManualDraftEngine {
     return patch;
   }
 
-  cancelGesture(): ManualCutoutBox | null {
+  cancelGesture(): ManualCutoutRuntimeTypes.Box | null {
     const gesture = this.#gesture;
     if (gesture === null) return null;
     this.#working.set(gesture.beforeAlpha);
@@ -148,7 +149,7 @@ export class ManualDraftEngine {
     return gesture.box;
   }
 
-  undo(): ManualCutoutBox | null {
+  undo(): ManualCutoutRuntimeTypes.Box | null {
     const patch = this.#past.at(-1);
     if (patch === undefined) return null;
     this.#writeRegion(patch.box, patch.before);
@@ -157,7 +158,7 @@ export class ManualDraftEngine {
     return patch.box;
   }
 
-  redo(): ManualCutoutBox | null {
+  redo(): ManualCutoutRuntimeTypes.Box | null {
     const patch = this.#future.at(-1);
     if (patch === undefined) return null;
     this.#writeRegion(patch.box, patch.after);
@@ -166,7 +167,10 @@ export class ManualDraftEngine {
     return patch.box;
   }
 
-  #stamp(point: ManualCutoutPoint, brush: ManualCutoutBrush): ManualCutoutBox | null {
+  #stamp(
+    point: ManualCutoutRuntimeTypes.Point,
+    brush: ManualCutoutRuntimeTypes.Brush,
+  ): ManualCutoutRuntimeTypes.Box | null {
     const box = brushBox(point, brush.radius, this.#width, this.#height);
     if (box === null) return null;
     const hardness = Math.min(1, Math.max(0, brush.hardness));
@@ -194,7 +198,7 @@ export class ManualDraftEngine {
     this.#working[index] = value;
   }
 
-  #writeRegion(box: ManualCutoutBox, region: Uint8ClampedArray): void {
+  #writeRegion(box: ManualCutoutRuntimeTypes.Box, region: Uint8ClampedArray): void {
     const boxWidth = box.maxX - box.minX + 1;
     for (let y = box.minY; y <= box.maxY; y += 1) {
       for (let x = box.minX; x <= box.maxX; x += 1) {

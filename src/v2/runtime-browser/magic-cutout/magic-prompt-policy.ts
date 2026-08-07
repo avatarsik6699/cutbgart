@@ -1,13 +1,16 @@
-import type { MagicPoint, MagicStroke } from "./magic-cutout.types";
+import type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";
 
 export const MAGIC_MODEL_PROMPT_LIMIT = 32;
 
 export type MagicModelPrompt = Readonly<{
   label: 0 | 1;
-  point: MagicPoint;
+  point: MagicCutoutRuntimeTypes.Point;
 }>;
 
-function promptAt(stroke: MagicStroke, pointIndex: number): MagicModelPrompt {
+function promptAt(
+  stroke: MagicCutoutRuntimeTypes.Stroke,
+  pointIndex: number,
+): MagicModelPrompt {
   return {
     label: stroke.mode === "keep" ? 1 : 0,
     point: { ...stroke.points[pointIndex]! },
@@ -20,7 +23,7 @@ function promptAt(stroke: MagicStroke, pointIndex: number): MagicModelPrompt {
  * the remaining capacity samples the complete stroke history at even source-space intervals.
  */
 export function createMagicModelPrompts(
-  strokes: readonly MagicStroke[],
+  strokes: readonly MagicCutoutRuntimeTypes.Stroke[],
 ): readonly MagicModelPrompt[] {
   const points = strokes.flatMap((stroke) =>
     stroke.points.map((_point, pointIndex) => promptAt(stroke, pointIndex)),

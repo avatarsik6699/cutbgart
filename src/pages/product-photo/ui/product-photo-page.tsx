@@ -1,6 +1,6 @@
 import { m } from "@/paraglide/messages";
 import { ScenarioPageLayout } from "@/shared/ui";
-import { PublicEditorDiagnostics, PublicEditorWorkspace } from "@/widgets/public-editor";
+import { PublicEditorWorkspace } from "@/widgets/public-editor";
 import { SiteShell } from "@/widgets/site-shell";
 
 /**
@@ -10,7 +10,7 @@ import { SiteShell } from "@/widgets/site-shell";
  */
 export function ProductPhotoPage() {
   return (
-    <SiteShell HeaderUtilities={<PublicEditorDiagnostics />}>
+    <SiteShell>
       <ScenarioPageLayout
         body={[m.productPhotoBody1(), m.productPhotoBody2()]}
         example={{

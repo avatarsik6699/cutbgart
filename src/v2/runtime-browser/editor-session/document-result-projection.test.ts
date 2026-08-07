@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { DocumentActorRef } from "@/v2/application";
+import type { DocumentMachineTypes } from "@/v2/application";
 import { createArtifactId, createDocumentId } from "@/v2/domain";
 import { buildDocumentState } from "@/v2/testing";
 
@@ -25,7 +25,7 @@ describe("DocumentResultProjection", () => {
         listener({ context: { document } });
         return { unsubscribe };
       },
-    } as unknown as DocumentActorRef;
+    } as unknown as DocumentMachineTypes.ActorRef;
     const repository = {
       createObjectUrl: vi.fn(() => ({ artifactId: composite, url: "blob:result" })),
       releaseObjectUrl: vi.fn(() => true),
@@ -58,7 +58,7 @@ describe("DocumentResultProjection", () => {
         listener({ context: { document } });
         return { unsubscribe: vi.fn() };
       },
-    } as unknown as DocumentActorRef;
+    } as unknown as DocumentMachineTypes.ActorRef;
     const repository = {
       createObjectUrl: vi.fn((artifactId: string) => ({
         artifactId,

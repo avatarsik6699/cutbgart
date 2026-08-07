@@ -15,10 +15,10 @@ import {
   selectHasPastDocumentHistory,
   selectBackgroundDraft,
   selectEnhancementDraft,
-  type DocumentActorRef,
+  type DocumentMachineTypes,
 } from "@/v2/application";
 
-export function useDocumentActorSelectors(actor: DocumentActorRef) {
+export function useDocumentActorSelectors(actor: DocumentMachineTypes.ActorRef) {
   const status = useSelector(actor, selectDocumentStatus);
   const progress = useSelector(actor, selectDocumentProgress);
   const error = useSelector(actor, selectDocumentError);

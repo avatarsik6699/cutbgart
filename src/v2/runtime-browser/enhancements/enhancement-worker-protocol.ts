@@ -1,7 +1,7 @@
 import type {
   DocumentId,
   EnhancementDraftId,
-  EnhancementOperationId,
+  EnhancementTypes,
   LocalInferencePath,
   Revision,
   RunId,
@@ -16,7 +16,7 @@ export type EnhancementRunCorrelation = {
   draftId: EnhancementDraftId;
   runId: RunId;
   expectedRevision: Revision;
-  operationId: EnhancementOperationId;
+  operationId: EnhancementTypes.OperationId;
 };
 
 export type EnhancementWorkerStage =
