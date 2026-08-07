@@ -105,7 +105,7 @@ render isolation.
   to leaf connectors, stabilize identities, and add `memo`/`useMemo`/`useCallback` only across
   meaningful stable boundaries; add focused render-regression tests where deterministic and retain
   the prospective decomposition contract in every follow-up extraction — _Depends on:_ `T6`
-- [ ] `T8` Decide whether a state-manager spike is still justified after T7. Default to the
+- [x] `T8` Decide whether a state-manager spike is still justified after T7. Default to the
   existing XState/runtime/React mechanisms; if a remaining render problem warrants MobX or another
   dependency, isolate the spike, consult current primary docs, prove one-way UI/view-model
   ownership and measurable benefit, and obtain explicit architect approval before retaining it.
@@ -442,6 +442,12 @@ waiver.
   relaying through intermediate components. Whole active-document subscriptions and root-level
   progress/revision invalidation were removed instead.
 - T7 was manually accepted by the architect before the T8 state-manager decision began.
+- T8 records a no-add decision. After T7, XState remains the sole workflow owner,
+  `EditorSession`/runtime stores retain resource and publication ownership, stable presentation
+  models retain UI-only commands/preferences, and leaf React selectors pass the focused render
+  regressions. No remaining measured render defect justifies a MobX or other state-manager spike,
+  mirrored workflow state, or another runtime dependency.
+- T8 was manually accepted by the architect before final T1 verification began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

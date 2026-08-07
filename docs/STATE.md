@@ -29,12 +29,12 @@
 | 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
 | 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
 | 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
-| 44 | 🔄 in-progress | `v0.44.0`; T7 accepted, T8 next | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
+| 44 | 🔄 in-progress | `v0.44.0`; T8 accepted, T1 next | [`PHASE_44.md`](./PHASE_44.md): checkpoint-driven frontend decomposition and render ownership |
 
 **Latest closed phase:** `43`
 
-**Implementation in progress:** Phase 44 checkpoints through `T7` are architect-accepted. `T8` is
-the next implementation checkpoint.
+**Implementation in progress:** Phase 44 checkpoints through `T8` are architect-accepted. `T1` is
+the final implementation and evidence checkpoint.
 
 **Only active implementation scope:** [`PHASE_44.md`](./PHASE_44.md), executed through targeted
 `/impl-assist 44 <ID>` checkpoints. Production deployment remains a separate authorized-operator
@@ -402,7 +402,7 @@ separately gated work.
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
 | Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
-| Phase 44 | In progress; T2–T7 accepted, T8 next |
+| Phase 44 | In progress; T2–T8 accepted, T1 next |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
