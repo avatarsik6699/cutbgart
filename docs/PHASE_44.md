@@ -119,7 +119,7 @@ render isolation.
   and standardize all three tool viewports to the accepted Enhancements size, spacing, scroll, zoom,
   and control behavior. Preserve tool-local drafts until Apply/Cancel and add focused contract,
   render, resource, and bilingual Playwright coverage — _Depends on:_ `T8`
-- [ ] `T10` Diagnose the Magic Cutout quality and Apply-latency regression without changing the
+- [x] `T10` Diagnose the Magic Cutout quality and Apply-latency regression without changing the
   algorithm. Trace the responsible path against retained Git/evidence, record representative
   subject-edge and foreground/background fixtures, define objective Remove/Keep quality criteria,
   establish a reproducible accepted Apply-performance target from evidence, and write an
@@ -499,6 +499,8 @@ waiver.
   until they are accepted.
 - T9 was manually accepted by the architect before the T10 diagnosis and recovery-plan checkpoint
   began.
+- T10's diagnosis, fixtures, objective quality criteria, Apply-performance target, and bounded
+  recovery plan were explicitly accepted by the architect before T10A began.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

@@ -1,8 +1,9 @@
 # Active phase evidence
 
 This directory is reserved for evidence produced by the currently active phase. Phase 44 final
-evidence is created only by checkpoint `T1`; T2 intentionally does not establish a pre-refactor
-render-counter or Chrome-trace baseline.
+evidence is created by checkpoint `T1`; the earlier T10 diagnosis and recovery-plan gate is
+recorded in [`PHASE_44_T10_MAGIC_DIAGNOSIS.md`](./PHASE_44_T10_MAGIC_DIAGNOSIS.md). T2
+intentionally does not establish a pre-refactor render-counter or Chrome-trace baseline.
 
 Historical Phase-31–43 evidence is indexed under [`docs/archive/audits/`](../archive/audits/).
 Archived reports remain reproducible inputs for their retained `profile:phase-* -- --verify`
