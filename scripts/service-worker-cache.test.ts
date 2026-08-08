@@ -27,9 +27,27 @@ describe("model Service Worker cache policy", () => {
     const source = await readFile(path.join(root, "public", "sw.js"), "utf8");
     expect(source).toContain("GET_MODEL_CACHE_STATUS");
     expect(source).toContain("CLEAR_MODEL_CACHE");
+    expect(source).toContain("cachedAssets");
+    expect(source).toContain("({ path, revision, byteSize })");
     expect(source).toContain("navigator.storage?.estimate");
     expect(source).toContain('"corrupt-entry"');
-    expect(source).toContain('"quota-or-write-failed"');
+    expect(source).toContain('"quota-exceeded"');
+    expect(source).toContain('"write-failed"');
+    expect(source).toContain('error.name === "QuotaExceededError"');
     expect(source).not.toMatch(/localStorage|indexedDB|image\/png/);
+  });
+
+  it("only wipes the cache on real quota exhaustion, never on a transient write error", async () => {
+    const source = await readFile(path.join(root, "public", "sw.js"), "utf8");
+    const catchBlock = source.slice(
+      source.indexOf("try {\n          await cache.put"),
+      source.indexOf("return verifiedReleaseResponse;"),
+    );
+    expect(catchBlock).toContain(
+      'if (error instanceof DOMException && error.name === "QuotaExceededError") {',
+    );
+    expect(catchBlock.indexOf("caches.delete(CACHE_NAME)")).toBeLessThan(
+      catchBlock.indexOf("notifyClients"),
+    );
   });
 });

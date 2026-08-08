@@ -115,7 +115,9 @@ export const PRODUCTION_MODELS = [
 ] as const satisfies readonly ProductionModelProfile[];
 
 export function normalizeModelMode(mode: AutomaticQualityMode): AutomaticModelMode {
-  return mode === "fast" ? "isnet-q8" : mode === "max" ? "isnet-fp32" : mode;
+  if (mode === "fast") return "isnet-q8";
+  if (mode === "max") return "isnet-fp32";
+  return mode;
 }
 
 export function getProductionModel(mode: AutomaticQualityMode): ProductionModelProfile {

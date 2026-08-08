@@ -220,13 +220,15 @@ export function ModelLab() {
                           alt={`${getEvaluationModel(modelId).label}, результат для изображения ${String(image.ordinal)}`}
                           className="max-h-full max-w-full object-contain"
                         />
-                      ) : measurement?.status === "error" ? (
+                      ) : null}
+                      {!result && measurement?.status === "error" ? (
                         <p className="p-3 text-center text-xs text-destructive">
                           {measurement.errorCode}
                         </p>
-                      ) : (
+                      ) : null}
+                      {!result && measurement?.status !== "error" ? (
                         <span className="text-xs text-muted-foreground">ожидает</span>
-                      )}
+                      ) : null}
                     </div>
                     <figcaption className="space-y-1 text-sm">
                       <strong>{getEvaluationModel(modelId).label}</strong>

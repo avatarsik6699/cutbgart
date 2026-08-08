@@ -123,7 +123,7 @@ and animations to near-zero duration (`globals.css`, pre-existing).
 ## 3. Background Pattern (`T4`)
 
 Implemented as `.site-background-pattern` (`globals.css`), rendered once at the `site-shell` level
-(`src/shared/ui/site-shell.tsx`) so every page gets it without per-page wiring:
+(`src/widgets/site-shell/ui/site-shell.tsx`) so every page gets it without per-page wiring:
 
 - A static engineering-line grid uses 32px minor and 160px major cells. The second architect
   review reduces the foreground mix to 3%/6% respectively and narrows the radial/vertical mask so
@@ -285,8 +285,12 @@ Replaced every hand-rolled `animate-pulse` loading placeholder with the new `Ske
 overridden via `className` merge, verified by targeted test runs): `EditorStage`'s loading state,
 the `ToolPanelSlot` Suspense fallback in `ToolWorkspace`, and `BatchGrid`'s thumbnail-loading state.
 
-The upload surface (`UploadDropzone`, `ChoosePhotoButton`, `UploadPreparationNotice`) and
-`ProcessingLog` were reviewed and are already fully token-consistent — no ad hoc values to replace.
+The active upload surface (`FileAdmission`, its dropzone, and mobile choose-files control) and
+diagnostics presentation were reviewed and are fully token-consistent — no ad hoc values to replace.
+The upload surface also owns its complete admission feedback: an explicit clipboard shortcut makes
+paste discoverable, while preparation/cancel and validation/retry replace the input in the same
+bounded surface instead of mounting detached notices below it. Runtime-browser remains the source
+of validation, preparation, cancellation, and processing truth.
 `ProcessingLog`'s technical diagnostic copy (`runtime: …`, `model bytes: …`) is an intentional,
 existing opt-in "Details" disclosure (its own doc comment, Phase 12), not superseded pre-redesign
 debris — left as-is; not a `T11` removal target.
@@ -394,18 +398,22 @@ Checklist from `docs/archive/phases/PHASE_30.md` `T16`, each verified against cu
   (`warning`/`info`/`success`, formalizing `BatchGrid`'s per-status pill colors — deferred from `T9`)
   measure 8.17–12.03:1 in both themes, computed the same OKLCH→luminance→WCAG-ratio way as §2's
   table.
-- **Mobile camera/upload**: `ChoosePhotoButton`'s `capture="environment"` input is unchanged.
+- **Mobile camera/upload**: `FileAdmission`'s mobile choose-files input keeps
+  `capture="environment"`.
 - **Icon tooltips**: `EditorToolbar`'s Undo/Redo — the two icon-only controls without persistent
   visible text most likely to need one — now use the `T5` `Tooltip` component (composed onto
   `Button` via Base UI's `render` prop) instead of a bare `title` attribute. Verified via
   `EditorToolbar.test.tsx` and the full Chromium e2e suite (undo/redo interactions still pass
-  unchanged). Other icon controls (`ModelStorageTrigger`, `MaximumQualityHelp`) already disclose
-  their full content through a `Popover` on click, which doubles as their hover/focus affordance —
-  left as-is rather than stacking a second `Tooltip` on top (see §4, `T8`).
+  unchanged). Other icon controls (`ModelStorageTrigger`, `MaximumQualityHelp`) disclose their full
+  content through a `Popover` on click, which doubles as their hover/focus affordance. The reusable
+  `InteractivePopover` now owns the latter contract's controlled hover/focus/click dismissal
+  arbitration,
+  positioning, Close affordance, and styling; capability consumers provide only their semantic
+  label, title, icon, and body children.
 
 Final second-review verification: `pnpm tsc --noEmit`, `pnpm exec steiger ./src`,
 `pnpm vitest run` (86 files, 363 tests), `pnpm lint` (no errors; one pre-existing Fast Refresh
-warning in `shared/ui/button.tsx`), and the full deterministic `pnpm e2e` result recorded in §5c.
+warning in `shared/ui/controls/button.tsx`), and the full deterministic `pnpm e2e` result recorded in §5c.
 
 ## 7. Before/After Screenshots
 
@@ -540,7 +548,7 @@ the product that actually carry the user through the flow.
   `tw-animate-css` `animate-in fade-in slide-in-from-bottom-2`, gated by `motion-safe:`, in place of
   an unannounced unmount/mount swap.
 - **Batch-mode discoverability**: multi-file drop was only reachable by already knowing it existed.
-  `UploadDropzone` now shows an explicit mono hint line under the primary prompt.
+  `FileAdmission`'s dropzone shows an explicit mono hint line under the primary prompt.
 - **Magic-mode auto-extraction felt like a dead end**: the "preparing…" placeholder is now a spinner
   plus explicit copy pointing at the always-visible Manual tab as an immediate alternative — no
   fabricated cancel button was added, since the extraction itself isn't abortable client-side; the fix

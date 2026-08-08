@@ -17,7 +17,7 @@ import {
   type ExportSettings,
   type ExportSize,
 } from "../model/types";
-import { DownloadSplitControl } from "./download-split-control";
+import { DownloadControl } from "./download-control";
 
 export type DownloadSplitButtonProps = {
   image?: Blob;
@@ -140,7 +140,7 @@ export function DownloadSplitButton(props: DownloadSplitButtonProps) {
 
   if (hasCurrent && batchItems.length === 0) {
     return (
-      <DownloadSplitControl
+      <DownloadControl
         announcement={announcement}
         busy={busy}
         className={className}
@@ -164,6 +164,10 @@ export function DownloadSplitButton(props: DownloadSplitButtonProps) {
     );
   }
 
+  let downloadLabel = m.downloadAll();
+  if (busy) downloadLabel = m.exportPreparing();
+  else if (hasCurrent) downloadLabel = m.download();
+
   return (
     <div className={cn("relative flex flex-col items-end", className)}>
       <Menu.Root disabled={disabled || busy || (!hasCurrent && batchDownloadDisabled)}>
@@ -181,7 +185,7 @@ export function DownloadSplitButton(props: DownloadSplitButtonProps) {
             className="rounded-r-none border-r-primary-foreground/30 px-3 sm:px-4"
           >
             <Download aria-hidden="true" />
-            {busy ? m.exportPreparing() : hasCurrent ? m.download() : m.downloadAll()}
+            {downloadLabel}
           </Button>
           <Menu.Trigger
             render={

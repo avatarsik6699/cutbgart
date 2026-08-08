@@ -1,4 +1,5 @@
 import { Database } from "lucide-react";
+import { lazy, Suspense } from "react";
 
 import { m } from "@/paraglide/messages";
 import {
@@ -8,7 +9,13 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/shared/ui";
-import { ModelStorageManager } from "./ModelStorageManager";
+
+import { ModelStorageLoading } from "./model-storage-states";
+
+const LazyModelStorageManager = lazy(async () => {
+  const module = await import("./ModelStorageManager");
+  return { default: module.ModelStorageManager };
+});
 
 /**
  * Header entry point for `ModelStorageManager` (Phase 30 `T6`) — replaces the
@@ -27,11 +34,13 @@ export function ModelStorageTrigger() {
       >
         <Database className="size-4" aria-hidden="true" />
       </PopoverTrigger>
-      <PopoverContent align="end">
+      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)]">
         <PopoverHeader>
           <PopoverTitle>{m.modelStorageTitle()}</PopoverTitle>
         </PopoverHeader>
-        <ModelStorageManager />
+        <Suspense fallback={<ModelStorageLoading />}>
+          <LazyModelStorageManager />
+        </Suspense>
       </PopoverContent>
     </Popover>
   );

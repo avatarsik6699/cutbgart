@@ -38,17 +38,50 @@ export default tseslint.config(
     },
   },
   {
-    // V2 presentation avoids nested conditional expressions: named decisions
-    // are easier to inspect and keep localization/state branches independent.
-    files: ["src/v2/**/*.{ts,tsx}", "src/pages/editor-v2/**/*.tsx"],
+    // Nested conditional expressions hide branch ownership in both domain
+    // policy and presentation. Named decisions are enforced frontend-wide.
+    files: ["src/**/*.{ts,tsx}"],
     rules: {
       "no-nested-ternary": "error",
     },
   },
   {
-    // Primitive prop filters intentionally omit consumed sibling properties
-    // before forwarding the safe remainder to the underlying DOM element.
-    files: ["src/v2/shared/ui/**/*.{ts,tsx}"],
+    // Existing capability contracts may still use type-only namespaces.
+    // The frontend contract no longer requires them, so ordinary module
+    // exports and retained namespaces coexist without a migration sweep.
+    files: ["src/**/*.types.ts"],
+    rules: {
+      "@typescript-eslint/no-namespace": "off",
+    },
+  },
+  {
+    // Rendered JSX slots are PascalCase so they are visually distinct from
+    // ordinary data and callback props at both declaration and call sites.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "TSPropertySignature[key.type='Identifier'][key.name=/^[a-z].*Slot$/]",
+          message: "Renderable slot props must use a PascalCase name.",
+        },
+        {
+          selector: "JSXAttribute[name.name=/^[a-z].*Slot$/]",
+          message: "Renderable slot props must use a PascalCase name.",
+        },
+      ],
+    },
+  },
+  {
+    // Primitive/trigger prop filters intentionally omit consumed sibling
+    // properties before forwarding the safe remainder to the underlying element.
+    files: [
+      "src/shared/ui/media/**/*.{ts,tsx}",
+      "src/shared/ui/site/site-link-anchor.tsx",
+      "src/shared/ui/typography/**/*.{ts,tsx}",
+      "src/widgets/editor/ui/diagnostics/components/diagnostics-trigger-button.tsx",
+    ],
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
       // React 19 exposes ref as a normal prop. The hooks plugin currently marks

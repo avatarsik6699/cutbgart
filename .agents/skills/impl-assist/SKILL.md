@@ -9,6 +9,6 @@ You are running the SDD `impl-assist` workflow.
 
 **Arguments**: the arguments supplied in the user's request
 
-Execute the canonical playbook in [docs/playbooks/impl-assist.md](../../../docs/playbooks/impl-assist.md). That file is the source of truth for task-source resolution (Scope vs. `review`), dependency/safety checks, implementation, verification, and the final report format.
+Execute the canonical playbook in [docs/playbooks/impl-assist.md](../../../docs/playbooks/impl-assist.md). That file is the source of truth for task-source resolution (Scope vs. `review`), dependency/safety checks, implementation, verification, and the final report format. When the resolved surface includes frontend code, also apply the project-local `frontend-implementation` skill and require its `Frontend contract: PASS` result before completion.
 
 If `the arguments supplied in the user's request` is empty, ask: "Which phase? e.g. $impl-assist 01, $impl-assist 01 B3, or $impl-assist 01 review"

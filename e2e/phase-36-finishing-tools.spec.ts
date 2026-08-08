@@ -1,29 +1,29 @@
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 test("Background and Enhancements remain explicit atomic document edits", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
   await page.getByRole("button", { name: "Background", exact: true }).click();
   await expect(page.getByRole("region", { name: "Background" })).toBeFocused();
   await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Ocean" }).click();
   await expect(page.getByText("Background preview has unapplied changes.")).toBeVisible();
-  expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
+  expect((await editor.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",
   );
   await expect(page.getByText("Document revision 1")).toBeVisible();
-  await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(0);
+  await expect.poll(editor.scenario.backgroundCommitCount).toBe(0);
 
   await page.keyboard.press("Escape");
   await expect(
@@ -33,7 +33,7 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await page.getByRole("button", { name: "Ocean" }).click();
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Document revision 2")).toBeVisible();
-  await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(1);
+  await expect.poll(editor.scenario.backgroundCommitCount).toBe(1);
   await expect(page.getByTestId("editor-tool-workspace")).toHaveAttribute(
     "data-active-tool",
     "background",
@@ -52,33 +52,36 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   ).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Remove colour halo/ })).toBeChecked();
   await page.keyboard.press("Escape");
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(0);
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(0);
 
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(1);
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(1);
   await page.keyboard.press("Control+Enter");
-  expect(await editorV2.scenario.enhancementRunCount()).toBe(1);
-  await expect(page.getByRole("status")).toContainText("Improve fine details · 50%");
-  await editorV2.scenario.completeEnhancement();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(2);
-  await expect(page.getByRole("status")).toContainText("Remove colour halo · 50%");
-  await editorV2.scenario.completeEnhancement();
+  expect(await editor.scenario.enhancementRunCount()).toBe(1);
+  const enhancementStatus = page
+    .getByTestId("enhancements-tool-panel")
+    .getByRole("status");
+  await expect(enhancementStatus).toContainText("Improve fine details · 50%");
+  await editor.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(2);
+  await expect(enhancementStatus).toContainText("Remove colour halo · 50%");
+  await editor.scenario.completeEnhancement();
   await expect(page.getByText("Document revision 5")).toBeVisible();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(2);
-  await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(1);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(2);
+  await expect.poll(editor.scenario.enhancementCommitCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
   await expect(page.getByTestId("editor-tool-workspace")).toHaveAttribute(
     "data-active-tool",
     "enhance",
   );
   await expect(page.getByTestId("enhancements-tool-panel")).toBeVisible();
 
-  expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
+  expect((await editor.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",
   );
-  await editorV2.preview.resetButton.click();
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await editor.preview.resetButton.click();
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
@@ -86,67 +89,67 @@ test("Background and Enhancements remain explicit atomic document edits", async 
 });
 
 test("Enhancement no-op, failure retry, and cancelled stale terminal stay atomic", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
-  await editorV2.scenario.setEnhancementOutcome("unchanged");
+  await editor.scenario.setEnhancementOutcome("unchanged");
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(1);
-  await editorV2.scenario.completeEnhancement();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(2);
-  await editorV2.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(1);
+  await editor.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(2);
+  await editor.scenario.completeEnhancement();
   await expect(page.getByText(/No safe visible change was needed/)).toBeVisible();
   await expect(page.getByText("Document revision 1")).toBeVisible();
-  await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(0);
+  await expect.poll(editor.scenario.enhancementCommitCount).toBe(0);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await editorV2.scenario.setEnhancementOutcome("failed");
+  await editor.scenario.setEnhancementOutcome("failed");
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(3);
-  await editorV2.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(3);
+  await editor.scenario.completeEnhancement();
   await expect(page.getByText(/Enhancements could not be completed/)).toBeVisible();
   await expect(page.getByText("Document revision 1")).toBeVisible();
-  await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(0);
+  await expect.poll(editor.scenario.enhancementCommitCount).toBe(0);
 
-  await editorV2.scenario.setEnhancementOutcome("changed");
+  await editor.scenario.setEnhancementOutcome("changed");
   await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(4);
-  await editorV2.scenario.completeEnhancement();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(5);
-  await editorV2.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(4);
+  await editor.scenario.completeEnhancement();
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(5);
+  await editor.scenario.completeEnhancement();
   await expect(page.getByText("Document revision 2")).toBeVisible();
-  await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(1);
+  await expect.poll(editor.scenario.enhancementCommitCount).toBe(1);
 
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect.poll(editorV2.scenario.enhancementRunCount).toBe(6);
+  await expect.poll(editor.scenario.enhancementRunCount).toBe(6);
   await page.keyboard.press("Escape");
-  await editorV2.scenario.completeEnhancement();
+  await editor.scenario.completeEnhancement();
   await expect(
     page.getByRole("button", { name: "Enhancements", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Document revision 2")).toBeVisible();
-  await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(1);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.enhancementCommitCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
 });
 
 test("custom Background validation and finishing controls are localized in Russian", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
   await page.getByRole("button", { name: "Фон", exact: true }).click();
   const input = page.getByLabel("Выбрать изображение для фона");
@@ -154,14 +157,14 @@ test("custom Background validation and finishing controls are localized in Russi
   await expect(page.getByRole("alert")).toContainText(
     "Не удалось подготовить изображение фона",
   );
-  await expect.poll(editorV2.scenario.backgroundPreparationCount).toBe(0);
+  await expect.poll(editor.scenario.backgroundPreparationCount).toBe(0);
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
 
   await page.getByRole("button", { name: "Фон", exact: true }).click();
   await page
     .getByLabel("Выбрать изображение для фона")
     .setInputFiles(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.backgroundPreparationCount).toBe(1);
+  await expect.poll(editor.scenario.backgroundPreparationCount).toBe(1);
   await expect(
     page.getByText("В предпросмотре фона есть неприменённые изменения."),
   ).toBeVisible();
@@ -169,5 +172,5 @@ test("custom Background validation and finishing controls are localized in Russi
   await expect(
     page.getByRole("button", { name: "Улучшения", exact: true }),
   ).toBeVisible();
-  await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(0);
+  await expect.poll(editor.scenario.backgroundCommitCount).toBe(0);
 });

@@ -1,45 +1,33 @@
 import { m } from "@/paraglide/messages";
-import { PublicEditorWorkspace } from "@/widgets/public-editor";
-import { SiteShell } from "@/shared/ui";
+import { ScenarioPageLayout } from "@/shared/ui";
+import { EditorWorkspace } from "@/widgets/editor";
+import { SiteShell } from "@/widgets/site-shell";
 
 /**
  * `/udalit-fon-s-foto-na-dokumenty` (ru) / `/en/remove-background-from-id-photo`
  * (en) — ID/document photo scenario. The surrounding content stays
- * locale-driven while the editor uses the sole public v2 composition.
+ * locale-driven while the editor uses the sole public editor composition.
  */
 export function DocumentPhotoPage() {
   return (
     <SiteShell>
-      <main
-        data-testid="document-photo-page"
-        className="mx-auto flex max-w-6xl flex-col gap-6 p-6 sm:p-8"
+      <ScenarioPageLayout
+        body={[m.documentPhotoBody1(), m.documentPhotoBody2()]}
+        example={{
+          alt: m.documentPhotoExampleAlt(),
+          caption: m.documentPhotoExampleCaption(),
+          height: 1448,
+          src: "/images/document-photo-example.webp",
+          width: 1086,
+        }}
+        exampleHeading={m.scenarioExampleHeading()}
+        lead={m.documentPhotoLead()}
+        testId="document-photo-page"
+        title={m.documentPhotoTitle()}
+        trust={m.trustBadge()}
       >
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold">{m.documentPhotoTitle()}</h1>
-          <p className="text-sm text-muted-foreground">{m.documentPhotoLead()}</p>
-          <p className="text-xs text-muted-foreground">{m.trustBadge()}</p>
-        </header>
-
-        <p className="text-sm text-muted-foreground">{m.documentPhotoBody1()}</p>
-        <p className="text-sm text-muted-foreground">{m.documentPhotoBody2()}</p>
-
-        <PublicEditorWorkspace />
-
-        <section className="flex flex-col gap-3 border-t border-border pt-6">
-          <h2 className="text-lg font-medium">{m.scenarioExampleHeading()}</h2>
-          <img
-            src="/images/document-photo-example.webp"
-            alt={m.documentPhotoExampleAlt()}
-            loading="lazy"
-            width={1086}
-            height={1448}
-            className="mx-auto h-auto w-auto max-w-[min(100%,40rem)] rounded-xl border border-border"
-          />
-          <p className="text-sm text-muted-foreground">
-            {m.documentPhotoExampleCaption()}
-          </p>
-        </section>
-      </main>
+        <EditorWorkspace />
+      </ScenarioPageLayout>
     </SiteShell>
   );
 }

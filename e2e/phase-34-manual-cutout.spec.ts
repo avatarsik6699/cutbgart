@@ -1,18 +1,18 @@
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.representative.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.representative.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
   await expect(page.getByRole("tab", { name: "Manual" })).toBeVisible();
 
   await page.getByRole("tab", { name: "Manual" }).click();
@@ -23,8 +23,8 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   const brushCursorBox = await brushCursor.boundingBox();
   if (brushCursorBox === null) throw new Error("Manual brush cursor is not visible");
   expect(Math.abs(brushCursorBox.width - brushCursorBox.height)).toBeLessThanOrEqual(1);
-  await expect(brushCursor).toHaveCSS("border-top-color", "rgb(255, 255, 255)");
-  await expect(brushCursor).toHaveCSS("border-top-style", "solid");
+  await expect(brushCursor).toHaveCSS("border-top-width", "0px");
+  await expect(brushCursor).toHaveCSS("background-color", "rgba(239, 68, 68, 0.42)");
   await canvas.click({ position: { x: 1, y: 1 } });
   await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
   await page.keyboard.press("Control+z");
@@ -47,31 +47,31 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
     "true",
   );
   await expect(page.getByRole("button", { name: "Undo document change" })).toBeEnabled();
-  await expect.poll(editorV2.scenario.manualCommitCount).toBe(1);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.manualCommitCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
 
   await page.keyboard.press("Control+z");
   await expect(page.getByRole("button", { name: "Redo document change" })).toBeEnabled();
   await page.keyboard.press("Control+y");
   await expect(page.getByRole("button", { name: "Undo document change" })).toBeEnabled();
-  expect((await editorV2.exportPng.download()).suggestedFilename()).toBe(
+  expect((await editor.exportPng.download()).suggestedFilename()).toBe(
     "cutbg-result.png",
   );
 
-  await editorV2.preview.resetButton.click();
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await editor.preview.resetButton.click();
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
   });
 });
 
-test("Manual cutout controls are localized in Russian", async ({ editorV2, page }) => {
+test("Manual cutout controls are localized in Russian", async ({ editor, page }) => {
   await page.goto("/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
   await page.getByRole("tab", { name: "Вручную" }).click();
   await expect(page.getByRole("button", { name: "Восстановить" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Стереть" })).toBeVisible();
@@ -80,14 +80,14 @@ test("Manual cutout controls are localized in Russian", async ({ editorV2, page 
 });
 
 test("committed history prunes to twenty operations and releases all churn resources", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
   await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
-  await editorV2.upload.choose(phase33ImageCorpus.smoke.path);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await editorV2.scenario.completeRun();
+  await editor.upload.choose(phase33ImageCorpus.smoke.path);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
 
   for (let operation = 0; operation < 22; operation += 1) {
     await page.getByRole("tab", { name: "Manual" }).click();
@@ -109,10 +109,10 @@ test("committed history prunes to twenty operations and releases all churn resou
     undoCount += 1;
   }
   expect(undoCount).toBe(20);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
-  await expect.poll(editorV2.scenario.manualCommitCount).toBe(22);
-  await editorV2.preview.resetButton.click();
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.manualCommitCount).toBe(22);
+  await editor.preview.resetButton.click();
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,

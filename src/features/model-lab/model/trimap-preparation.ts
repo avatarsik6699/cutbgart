@@ -25,7 +25,10 @@ export function createEvaluationTrimap(
           maximum = Math.max(maximum, value);
         }
       }
-      data[y * groundTruth.width + x] = minimum >= 250 ? 255 : maximum <= 5 ? 0 : 128;
+      let trimapValue = 128;
+      if (minimum >= 250) trimapValue = 255;
+      else if (maximum <= 5) trimapValue = 0;
+      data[y * groundTruth.width + x] = trimapValue;
     }
   }
   return { width: groundTruth.width, height: groundTruth.height, data };

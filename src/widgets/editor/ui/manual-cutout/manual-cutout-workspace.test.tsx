@@ -1,0 +1,226 @@
+import { Profiler } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  ManualCutoutWorkspace,
+  type ManualCutoutInteraction,
+} from "./manual-cutout-workspace";
+import { cutoutStageContentStyle } from "../cutout-stage";
+
+function interactionHarness() {
+  const calls = {
+    apply: vi.fn(),
+    begin: vi.fn(),
+    cancel: vi.fn(),
+    connectCanvas: vi.fn(() => vi.fn()),
+    redo: vi.fn(),
+    undo: vi.fn(),
+  };
+  const interaction: ManualCutoutInteraction = {
+    apply: calls.apply,
+    begin: calls.begin,
+    cancel: calls.cancel,
+    cancelGesture: vi.fn(),
+    connectCanvas: calls.connectCanvas,
+    end: vi.fn(),
+    move: vi.fn(),
+    readViewState: () => ({ mode: "restore", brushSize: 48, zoom: 1 }),
+    redo: calls.redo,
+    snapshot: () => ({ canRedo: true, canUndo: true, dirty: true }),
+    undo: calls.undo,
+    writeViewState: vi.fn(),
+  };
+  return { calls, interaction };
+}
+
+function supportPointerCapture(element: HTMLElement): void {
+  Object.assign(element, {
+    hasPointerCapture: vi.fn(() => true),
+    releasePointerCapture: vi.fn(),
+    setPointerCapture: vi.fn(),
+  });
+}
+
+describe("ManualCutoutWorkspace", () => {
+  afterEach(cleanup);
+
+  it("uses semantic commands and leaves global history routing to the document owner", () => {
+    const harness = interactionHarness();
+    render(
+      <ManualCutoutWorkspace
+        backgroundUrl={null}
+        busy={false}
+        documentId="document-1"
+        height={10}
+        interaction={harness.interaction}
+        currentUrl="blob:source"
+        width={10}
+      />,
+    );
+
+    expect(harness.calls.connectCanvas).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      "blob:source",
+      10,
+      10,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Undo stroke|Отменить мазок/ }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Redo stroke|Повторить мазок/ }),
+    ).toBeNull();
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true, shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: /^Apply$|^Применить$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$|^Отменить$/ }));
+
+    expect(harness.calls.undo).not.toHaveBeenCalled();
+    expect(harness.calls.redo).not.toHaveBeenCalled();
+    expect(harness.calls.apply).toHaveBeenCalledOnce();
+    expect(harness.calls.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("updates brush size without committing a React render", () => {
+    const harness = interactionHarness();
+    const onRender = vi.fn();
+    render(
+      <Profiler id="manual-workspace" onRender={onRender}>
+        <ManualCutoutWorkspace
+          backgroundUrl={null}
+          busy={false}
+          documentId="document-1"
+          height={2000}
+          interaction={harness.interaction}
+          currentUrl="blob:source"
+          width={4000}
+        />
+      </Profiler>,
+    );
+    const committedBeforeInput = onRender.mock.calls.length;
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "80" } });
+
+    expect(onRender).toHaveBeenCalledTimes(committedBeforeInput);
+    expect(harness.interaction.writeViewState).toHaveBeenLastCalledWith({
+      mode: "restore",
+      brushSize: 80,
+      zoom: 1,
+    });
+    const cursor = screen.getByTestId("manual-brush-cursor");
+    expect(cursor.style.width).toBe("2%");
+    expect(cursor.style.height).toBe("4%");
+    expect(cursor.className).not.toContain("border-white");
+    expect(cursor.className).not.toContain("border-dashed");
+    expect(cursor.className).toContain("rounded-full");
+    expect(cursor.style.backgroundColor).toBe("rgba(34, 197, 94, 0.42)");
+    expect(cursor.childElementCount).toBe(0);
+  });
+
+  it("recolors the brush cursor imperatively when the erase/restore mode changes", () => {
+    const harness = interactionHarness();
+    render(
+      <ManualCutoutWorkspace
+        backgroundUrl={null}
+        busy={false}
+        documentId="document-1"
+        height={2000}
+        interaction={harness.interaction}
+        currentUrl="blob:source"
+        width={4000}
+      />,
+    );
+    const cursor = screen.getByTestId("manual-brush-cursor");
+    expect(cursor.style.backgroundColor).toBe("rgba(34, 197, 94, 0.42)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Erase" }));
+
+    expect(harness.interaction.writeViewState).toHaveBeenLastCalledWith({
+      mode: "erase",
+      brushSize: 48,
+      zoom: 1,
+    });
+    expect(cursor.style.backgroundColor).toBe("rgba(239, 68, 68, 0.42)");
+  });
+
+  it("blocks brush input while the manual Apply is in flight", () => {
+    const harness = interactionHarness();
+    render(
+      <ManualCutoutWorkspace
+        backgroundUrl={null}
+        busy
+        documentId="document-1"
+        height={10}
+        interaction={harness.interaction}
+        currentUrl="blob:source"
+        width={10}
+      />,
+    );
+
+    expect(screen.getByTestId("editor-stage-placeholder").textContent).toMatch(
+      /Applying the manual cutout|Применяем ручную коррекцию/,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /^Apply$|^Применить$/ })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    fireEvent.pointerDown(screen.getByRole("img"), { button: 0, pointerId: 1 });
+    expect(harness.calls.begin).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared full-fit viewport and Space grab mode", () => {
+    const harness = interactionHarness();
+    const onRender = vi.fn();
+    render(
+      <Profiler id="manual-workspace" onRender={onRender}>
+        <ManualCutoutWorkspace
+          backgroundUrl={null}
+          busy={false}
+          documentId="document-1"
+          height={2000}
+          interaction={harness.interaction}
+          currentUrl="blob:current-result"
+          width={4000}
+        />
+      </Profiler>,
+    );
+    const viewport = screen.getByTestId("cutout-stage-viewport");
+    const content = screen.getByTestId("cutout-stage-content");
+    const canvas = screen.getByRole("img", { name: /Manual cutout|Ручн/ });
+    supportPointerCapture(canvas);
+    expect(viewport.className).toContain("overflow-hidden");
+    expect(content.getAttribute("data-tool-image-viewport")).toBe("true");
+    expect(content.className).toContain("editor-image-frame");
+    expect(cutoutStageContentStyle(4000, 2000)).toMatchObject({
+      width: "min(100cqw, 200cqh)",
+      height: "min(100cqh, 50cqw)",
+    });
+
+    fireEvent.pointerEnter(viewport);
+    expect(viewport.getAttribute("data-workspace-active")).toBe("true");
+    const committedBeforeGesture = onRender.mock.calls.length;
+    const spaceDown = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(spaceDown);
+    expect(spaceDown.defaultPrevented).toBe(true);
+    expect(viewport.getAttribute("data-space-panning")).toBe("true");
+    expect(canvas.style.cursor).toBe("grab");
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 7 });
+    expect(canvas.style.cursor).toBe("grabbing");
+    fireEvent.pointerMove(canvas, { pointerId: 7, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 7 });
+    fireEvent.keyUp(window, { key: " " });
+    expect(viewport.getAttribute("data-space-panning")).toBe("false");
+    fireEvent.pointerDown(canvas, { button: 1, pointerId: 8 });
+    expect(canvas.style.cursor).toBe("grabbing");
+    expect(screen.getByTestId("manual-brush-cursor").hidden).toBe(true);
+    fireEvent.pointerUp(canvas, { button: 1, pointerId: 8 });
+    expect(onRender).toHaveBeenCalledTimes(committedBeforeGesture);
+  });
+});

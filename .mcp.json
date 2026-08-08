@@ -7,6 +7,19 @@
     "openaiDeveloperDocs": {
       "url": "https://developers.openai.com/mcp",
       "note": "Project-local OpenAI developer docs MCP declaration for OpenAI API/platform guidance."
+    },
+    "chrome-devtools": {
+      "command": "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\Users\\user\\AppData\\Local\\cutbg-tools\\start-chrome-devtools-mcp.ps1"
+      ],
+      "note": "Native-Windows Chrome debugging/profiling through the isolated project wrapper; Linux/WSL Chrome is not target-device evidence."
     }
   }
 }

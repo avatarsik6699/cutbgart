@@ -1,15 +1,26 @@
-import { formatBytesLadder } from "@/shared/lib/format-bytes";
+import { formatBytesLadder } from "@/shared/lib";
 
 export interface ModelCacheStatus {
   release: string;
   assetCount: number;
   usageBytes: number;
+  cachedAssets: readonly ModelCacheAsset[];
   quotaBytes: number | null;
   totalOriginUsageBytes: number | null;
 }
 
+export interface ModelCacheAsset {
+  path: string;
+  revision: string;
+  byteSize: number;
+}
+
+type ModelCacheStatusReply = Omit<ModelCacheStatus, "cachedAssets"> & {
+  cachedAssets?: readonly ModelCacheAsset[];
+};
+
 type WorkerReply =
-  | ({ type: "MODEL_CACHE_STATUS" } & ModelCacheStatus)
+  | ({ type: "MODEL_CACHE_STATUS" } & ModelCacheStatusReply)
   | { type: "MODEL_CACHE_CLEARED" }
   | { type: "MODEL_CACHE_ERROR"; code: string; message?: string };
 
@@ -47,7 +58,7 @@ export async function getModelCacheStatus(): Promise<ModelCacheStatus> {
   if (reply.type !== "MODEL_CACHE_STATUS") {
     throw new Error("Unexpected model storage response");
   }
-  return reply;
+  return { ...reply, cachedAssets: reply.cachedAssets ?? [] };
 }
 
 export async function clearModelCache(): Promise<void> {

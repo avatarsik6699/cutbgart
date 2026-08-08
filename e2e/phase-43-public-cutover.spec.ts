@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -79,7 +79,7 @@ function uploadLabel(locale: PublicRoute["locale"]): string {
   return locale === "en" ? "Upload an image" : "Загрузить изображения";
 }
 
-async function expectV2Workspace(page: Page, route: PublicRoute): Promise<void> {
+async function expectEditorWorkspace(page: Page, route: PublicRoute): Promise<void> {
   await expect(page.getByLabel(uploadLabel(route.locale))).toBeEnabled();
   if (route.pageTestId !== undefined)
     await expect(page.getByTestId(route.pageTestId)).toBeVisible();
@@ -89,12 +89,12 @@ async function expectV2Workspace(page: Page, route: PublicRoute): Promise<void> 
     ).toBeVisible();
 }
 
-test("all public and scenario routes compose the hydrated v2 workspace", async ({
+test("all public and scenario routes compose the hydrated editor workspace", async ({
   page,
 }) => {
   for (const route of publicRoutes) {
     await page.goto(route.path);
-    await expectV2Workspace(page, route);
+    await expectEditorWorkspace(page, route);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       "href",
       new RegExp(`${route.canonicalPath === "/" ? "/?$" : `${route.canonicalPath}/?$`}`),
@@ -102,8 +102,8 @@ test("all public and scenario routes compose the hydrated v2 workspace", async (
   }
 });
 
-test("root and scenario uploads cross the v2 worker boundary in both locales", async ({
-  editorV2,
+test("root and scenario uploads cross the editor worker boundary in both locales", async ({
+  editor,
   page,
 }) => {
   const routes: readonly PublicRoute[] = [
@@ -115,13 +115,13 @@ test("root and scenario uploads cross the v2 worker boundary in both locales", a
 
   for (const route of routes) {
     await page.goto(route.path);
-    await expectV2Workspace(page, route);
+    await expectEditorWorkspace(page, route);
     await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
     await page
       .getByLabel(uploadLabel(route.locale))
       .setInputFiles(phase33ImageCorpus.smoke.path);
-    await expect.poll(editorV2.scenario.runCount).toBe(1);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.completeRun();
     await expect(page.getByRole("slider")).toBeVisible();
   }
 });

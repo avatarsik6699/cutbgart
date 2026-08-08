@@ -1,0 +1,552 @@
+import type { Page } from "@playwright/test";
+
+export async function installMockEditorWorker(
+  page: Page,
+  options: { manualStages?: boolean } = {},
+): Promise<void> {
+  await page.addInitScript(
+    ({ manualStages }) => {
+      type RunCommand = {
+        protocol: 1;
+        type: "RUN";
+        correlation: { documentId: string; runId: string; expectedRevision: number };
+        model?: { mode?: string };
+        source?: { height: number; width: number };
+      };
+      type WorkerCommand = {
+        protocol: number;
+        type: string;
+        correlation?: Record<string, unknown>;
+        bytes?: ArrayBuffer;
+        mediaType?: string;
+        matte?: ArrayBuffer;
+        blob?: Blob;
+        height?: number;
+        width?: number;
+      };
+      type TestWindow = Window & {
+        __completeEditorRun?: () => void;
+        __failEditorRun?: () => void;
+        __advanceEditorRunStage?: (
+          stage: "model-loading" | "automatic-remove",
+          fraction: number,
+        ) => void;
+        __v2RunCount?: number;
+        __v2RunModelModes?: string[];
+        __v2ManualCommitCount?: number;
+        __v2MagicCommitCount?: number;
+        __v2MagicPredictionCount?: number;
+        __v2BackgroundCommitCount?: number;
+        __v2BackgroundPreparationCount?: number;
+        __v2EnhancementCommitCount?: number;
+        __v2EnhancementRunCount?: number;
+        __completeEditorEnhancement?: () => void;
+        __v2EnhancementOutcome?: "changed" | "unchanged" | "failed";
+      };
+
+      const testWindow = window as TestWindow;
+      const workers = new Set<MockEditorWorker>();
+      class MockEditorWorker extends EventTarget {
+        active: RunCommand | null = null;
+
+        constructor() {
+          super();
+          workers.add(this);
+        }
+
+        postMessage(command: WorkerCommand): void {
+          if (
+            command.type === "RESIZE_EXPORT" &&
+            command.blob !== undefined &&
+            command.width !== undefined &&
+            command.height !== undefined
+          ) {
+            void createImageBitmap(command.blob).then(async (bitmap) => {
+              try {
+                const canvas = new OffscreenCanvas(command.width!, command.height!);
+                const context = canvas.getContext("2d")!;
+                context.drawImage(bitmap, 0, 0, command.width!, command.height!);
+                const blob = await canvas.convertToBlob({ type: "image/png" });
+                this.emit({ type: "RESIZED", blob });
+              } finally {
+                bitmap.close();
+              }
+            });
+            return;
+          }
+          if (command.type === "RUN" && command.correlation?.operationId !== undefined) {
+            const operationId = command.correlation.operationId;
+            const correlation = command.correlation;
+            testWindow.__v2EnhancementRunCount =
+              (testWindow.__v2EnhancementRunCount ?? 0) + 1;
+            const complete = (): void => {
+              if (testWindow.__completeEditorEnhancement !== complete) return;
+              delete testWindow.__completeEditorEnhancement;
+              const outcome = testWindow.__v2EnhancementOutcome ?? "changed";
+              if (outcome === "failed") {
+                this.emit({
+                  protocol: command.protocol,
+                  type: "FAILED",
+                  correlation,
+                  error: {
+                    code: "processing-failed",
+                    message: "Mock enhancement failure",
+                    retryable: true,
+                  },
+                });
+                return;
+              }
+              const matte = new Uint8Array(command.matte ?? new ArrayBuffer(1));
+              const changedMatte = matte.slice();
+              if (outcome === "changed")
+                changedMatte[0] = Math.max(0, (changedMatte[0] ?? 255) - 1);
+              this.emit({
+                protocol: command.protocol,
+                type: "SUCCEEDED",
+                correlation,
+                output:
+                  operationId === "fine-detail"
+                    ? {
+                        operationId,
+                        matte: changedMatte.buffer,
+                        changed: outcome === "changed",
+                        actualMode: "deterministic",
+                        actualPath: null,
+                        fallback: "deterministic",
+                      }
+                    : {
+                        operationId,
+                        matte: changedMatte.buffer,
+                        foregroundPng: outcome === "changed" ? this.png().buffer : null,
+                        changed: outcome === "changed",
+                        actualPath:
+                          outcome === "changed" ? "edge-aware-fallback" : "unchanged",
+                        fallback:
+                          outcome === "changed" ? "none" : "no-background-samples",
+                      },
+              });
+            };
+            testWindow.__completeEditorEnhancement = complete;
+            queueMicrotask(() => {
+              this.emit({ protocol: command.protocol, type: "ACCEPTED", correlation });
+              this.emit({
+                protocol: command.protocol,
+                type: "PROGRESS",
+                correlation,
+                stage:
+                  operationId === "fine-detail"
+                    ? "enhancement-fine-detail"
+                    : "enhancement-colour-halo",
+                fraction: 0.5,
+              });
+            });
+            return;
+          }
+          if (command.type === "RUN") {
+            this.active = command as RunCommand;
+            testWindow.__completeEditorRun = () => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor run");
+              activeWorker.complete();
+            };
+            testWindow.__failEditorRun = () => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor run");
+              activeWorker.fail();
+            };
+            testWindow.__advanceEditorRunStage = (stage, fraction) => {
+              const activeWorker = [...workers].find((worker) => worker.active !== null);
+              if (activeWorker === undefined) throw new Error("No active editor run");
+              activeWorker.progress(stage, fraction);
+            };
+            testWindow.__v2RunCount = (testWindow.__v2RunCount ?? 0) + 1;
+            testWindow.__v2RunModelModes = [
+              ...(testWindow.__v2RunModelModes ?? []),
+              (command as RunCommand).model?.mode ?? "unknown",
+            ];
+            this.emit({
+              protocol: 1,
+              type: "ACCEPTED",
+              correlation: this.active.correlation,
+            });
+            if (!manualStages) {
+              queueMicrotask(() => {
+                this.progress("model-loading", 1);
+                this.progress("automatic-remove", 0.5);
+              });
+            }
+            return;
+          }
+          if (
+            command.type === "PREPARE_BACKGROUND_IMAGE" &&
+            command.correlation !== undefined &&
+            command.bytes !== undefined &&
+            (command.mediaType === "image/png" ||
+              command.mediaType === "image/jpeg" ||
+              command.mediaType === "image/webp")
+          ) {
+            testWindow.__v2BackgroundPreparationCount =
+              (testWindow.__v2BackgroundPreparationCount ?? 0) + 1;
+            const correlation = command.correlation;
+            queueMicrotask(() =>
+              this.emit({
+                protocol: command.protocol,
+                type: "SUCCEEDED",
+                correlation,
+                bytes: command.bytes,
+                mediaType: command.mediaType,
+                width: 1,
+                height: 1,
+              }),
+            );
+            return;
+          }
+          if (command.type === "PREDICT" && command.correlation !== undefined) {
+            testWindow.__v2MagicPredictionCount =
+              (testWindow.__v2MagicPredictionCount ?? 0) + 1;
+            const correlation = command.correlation;
+            queueMicrotask(() => {
+              this.emit({
+                protocol: command.protocol,
+                type: "PROGRESS",
+                correlation,
+                stage: "magic-encode",
+                fraction: null,
+              });
+              this.emit({
+                protocol: command.protocol,
+                type: "PROGRESS",
+                correlation,
+                stage: "magic-predict",
+                fraction: null,
+              });
+              this.emit({
+                protocol: command.protocol,
+                type: "SUCCEEDED",
+                correlation,
+                candidates: [
+                  {
+                    data: new Uint8Array([255]).buffer,
+                    width: 1,
+                    height: 1,
+                    score: 0.9,
+                  },
+                ],
+              });
+            });
+            return;
+          }
+          if (
+            command.type === "MATERIALIZE_SNAPSHOT" &&
+            command.correlation !== undefined
+          ) {
+            if (
+              "operation" in command.correlation &&
+              command.correlation.operation === "magic-cutout"
+            ) {
+              testWindow.__v2MagicCommitCount =
+                (testWindow.__v2MagicCommitCount ?? 0) + 1;
+            } else {
+              if (
+                "operation" in command.correlation &&
+                command.correlation.operation === "background"
+              ) {
+                testWindow.__v2BackgroundCommitCount =
+                  (testWindow.__v2BackgroundCommitCount ?? 0) + 1;
+              } else if (
+                "operation" in command.correlation &&
+                command.correlation.operation === "enhancement"
+              ) {
+                testWindow.__v2EnhancementCommitCount =
+                  (testWindow.__v2EnhancementCommitCount ?? 0) + 1;
+              } else {
+                testWindow.__v2ManualCommitCount =
+                  (testWindow.__v2ManualCommitCount ?? 0) + 1;
+              }
+            }
+            const png = Uint8Array.from([
+              137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+              0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8,
+              215, 99, 96, 96, 96, 0, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69,
+              78, 68, 174, 66, 96, 130,
+            ]);
+            queueMicrotask(() =>
+              this.emit({
+                protocol: command.protocol,
+                type: "SUCCEEDED",
+                correlation: command.correlation,
+                compositePng: png.buffer,
+              }),
+            );
+            return;
+          }
+          if (command.type === "CANCEL" && this.active !== null) {
+            const correlation = this.active.correlation;
+            this.active = null;
+            this.emit({ protocol: 1, type: "CANCELLED", correlation, timings: [] });
+            return;
+          }
+          if (command.type === "DISPOSE_RUNTIME") {
+            this.emit({ protocol: command.protocol, type: "DISPOSED" });
+          }
+        }
+
+        terminate(): void {
+          this.active = null;
+          workers.delete(this);
+        }
+
+        complete(): void {
+          const command = this.active;
+          if (command === null) {
+            throw new Error("No active editor run");
+          }
+          this.active = null;
+          const width = command.source?.width ?? 1;
+          const height = command.source?.height ?? 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d")!;
+          context.fillStyle = "#FFFFFF";
+          context.fillRect(0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob === null) throw new Error("Could not encode mock editor result");
+            void blob.arrayBuffer().then((compositePng) =>
+              this.emit({
+                protocol: 1,
+                type: "SUCCEEDED",
+                correlation: command.correlation,
+                outputs: {
+                  matte: new Uint8Array(width * height).fill(255).buffer,
+                  compositePng,
+                  width,
+                  height,
+                },
+                timings: [],
+              }),
+            );
+          }, "image/png");
+        }
+
+        fail(): void {
+          const command = this.active;
+          if (command === null) throw new Error("No active editor run");
+          this.active = null;
+          this.emit({
+            protocol: 1,
+            type: "FAILED",
+            correlation: command.correlation,
+            error: {
+              code: "processing-failed",
+              message: "Mock automatic processing failure",
+              retryable: true,
+            },
+            timings: [],
+          });
+        }
+
+        png(): Uint8Array {
+          return Uint8Array.from([
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+            0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 215,
+            99, 96, 96, 96, 0, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68,
+            174, 66, 96, 130,
+          ]);
+        }
+
+        progress(stage: "model-loading" | "automatic-remove", fraction: number): void {
+          if (this.active === null) throw new Error("No active editor run");
+          this.emit({
+            protocol: 1,
+            type: "PROGRESS",
+            correlation: this.active.correlation,
+            stage,
+            fraction,
+            timing:
+              stage === "model-loading"
+                ? { stage: "model-loading", durationMs: 1 }
+                : null,
+          });
+        }
+
+        emit(data: unknown): void {
+          this.dispatchEvent(new MessageEvent("message", { data }));
+        }
+      }
+
+      Object.defineProperty(window, "Worker", {
+        configurable: true,
+        value: MockEditorWorker,
+      });
+    },
+    { manualStages: options.manualStages ?? true },
+  );
+}
+
+export async function advanceMockEditorStage(
+  page: Page,
+  stage: "model-loading" | "automatic-remove",
+  fraction = 0.5,
+): Promise<void> {
+  await page.evaluate(
+    ({ nextFraction, nextStage }) => {
+      const advance = (
+        window as Window & {
+          __advanceEditorRunStage?: (
+            stage: "model-loading" | "automatic-remove",
+            fraction: number,
+          ) => void;
+        }
+      ).__advanceEditorRunStage;
+      if (advance === undefined) throw new Error("Mock editor worker is not installed");
+      advance(nextStage, nextFraction);
+    },
+    { nextFraction: fraction, nextStage: stage },
+  );
+}
+
+export async function completeMockEditorRun(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const complete = (window as Window & { __completeEditorRun?: () => void })
+      .__completeEditorRun;
+    if (complete === undefined) throw new Error("Mock editor worker is not installed");
+    complete();
+  });
+}
+
+export async function mockEditorRunCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () => (window as Window & { __v2RunCount?: number }).__v2RunCount ?? 0,
+  );
+}
+
+export async function mockEditorRunModelModes(page: Page): Promise<readonly string[]> {
+  return page.evaluate(
+    () => (window as Window & { __v2RunModelModes?: string[] }).__v2RunModelModes ?? [],
+  );
+}
+
+export async function failMockEditorRun(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const fail = (window as Window & { __failEditorRun?: () => void }).__failEditorRun;
+    if (fail === undefined) throw new Error("No active mock editor run");
+    fail();
+  });
+}
+
+export async function mockEditorManualCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2ManualCommitCount?: number }).__v2ManualCommitCount ?? 0,
+  );
+}
+
+export async function mockEditorMagicPredictionCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2MagicPredictionCount?: number })
+        .__v2MagicPredictionCount ?? 0,
+  );
+}
+
+export async function mockEditorMagicCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2MagicCommitCount?: number }).__v2MagicCommitCount ?? 0,
+  );
+}
+
+export async function mockEditorBackgroundCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2BackgroundCommitCount?: number })
+        .__v2BackgroundCommitCount ?? 0,
+  );
+}
+
+export async function mockEditorBackgroundPreparationCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2BackgroundPreparationCount?: number })
+        .__v2BackgroundPreparationCount ?? 0,
+  );
+}
+
+export async function mockEditorEnhancementCommitCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2EnhancementCommitCount?: number })
+        .__v2EnhancementCommitCount ?? 0,
+  );
+}
+
+export async function mockEditorEnhancementRunCount(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as Window & { __v2EnhancementRunCount?: number }).__v2EnhancementRunCount ??
+      0,
+  );
+}
+
+export async function completeMockEditorEnhancement(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const complete = (window as Window & { __completeEditorEnhancement?: () => void })
+      .__completeEditorEnhancement;
+    if (complete === undefined) throw new Error("No active mock Enhancement stage");
+    complete();
+  });
+}
+
+export async function setMockEditorEnhancementOutcome(
+  page: Page,
+  outcome: "changed" | "unchanged" | "failed",
+): Promise<void> {
+  await page.evaluate((value) => {
+    (
+      window as Window & {
+        __v2EnhancementOutcome?: "changed" | "unchanged" | "failed";
+      }
+    ).__v2EnhancementOutcome = value;
+  }, outcome);
+}
+
+export async function resetMockEditorWorker(page: Page): Promise<void> {
+  await page
+    .evaluate(() => {
+      const testWindow = window as Window & {
+        __completeEditorRun?: () => void;
+        __failEditorRun?: () => void;
+        __advanceEditorRunStage?: (
+          stage: "model-loading" | "automatic-remove",
+          fraction: number,
+        ) => void;
+        __v2RunCount?: number;
+        __v2RunModelModes?: string[];
+        __v2ManualCommitCount?: number;
+        __v2MagicCommitCount?: number;
+        __v2MagicPredictionCount?: number;
+        __v2BackgroundCommitCount?: number;
+        __v2BackgroundPreparationCount?: number;
+        __v2EnhancementCommitCount?: number;
+        __v2EnhancementRunCount?: number;
+        __completeEditorEnhancement?: () => void;
+        __v2EnhancementOutcome?: "changed" | "unchanged" | "failed";
+      };
+      delete testWindow.__completeEditorRun;
+      delete testWindow.__failEditorRun;
+      delete testWindow.__advanceEditorRunStage;
+      delete testWindow.__v2RunCount;
+      delete testWindow.__v2RunModelModes;
+      delete testWindow.__v2ManualCommitCount;
+      delete testWindow.__v2MagicCommitCount;
+      delete testWindow.__v2MagicPredictionCount;
+      delete testWindow.__v2BackgroundCommitCount;
+      delete testWindow.__v2BackgroundPreparationCount;
+      delete testWindow.__v2EnhancementCommitCount;
+      delete testWindow.__v2EnhancementRunCount;
+      delete testWindow.__completeEditorEnhancement;
+      delete testWindow.__v2EnhancementOutcome;
+    })
+    .catch(() => undefined);
+}

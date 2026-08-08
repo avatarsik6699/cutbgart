@@ -1,4 +1,10 @@
-import { useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useRouterState,
+  useSearch,
+} from "@tanstack/react-router";
 
 /**
  * Single entry point for TanStack Router hooks (`docs/FRONTEND_CONVENTIONS.md`
@@ -15,4 +21,13 @@ export function useRouter() {
   const location = useLocation();
 
   return { navigate, params, search, location };
+}
+
+/**
+ * Real router navigation truth for `NavigationProgress`
+ * (`docs/PHASE_44.md` T13) — `state.isLoading` reflects TanStack Router's own
+ * pending/foreground transition, never editor processing/inference state.
+ */
+export function useRouterLoadingState(): boolean {
+  return useRouterState({ select: (state) => state.isLoading });
 }

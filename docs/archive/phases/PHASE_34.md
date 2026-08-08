@@ -1,4 +1,4 @@
-# PHASE 34 — Final Legal, Consent & Release Readiness
+# PHASE 34 — Editor v2 Document History & Manual Cutout
 
 <!-- TOKEN BUDGET: keep this file under 10,000 tokens. Be concise. -->
 
@@ -7,103 +7,88 @@
 | Field | Value |
 |-------|-------|
 | Phase | `34` |
-| Title | Final Legal, Consent & Release Readiness |
-| Status | `⏳ pending` |
+| Title | Editor v2 Document History & Manual Cutout |
+| Status | `✅ done` |
 | Tag | `v0.34.0` |
-| Depends on | PHASE_33 gate passing; Phase-24 audit retained as the baseline input |
+| Depends on | PHASE_33 gate and architect acceptance passed |
 
 ---
 
-> ⚠️ **NEEDS_REVIEW** — Spec changed on 2026-08-01.
-> This legal/release contract depends on the superseded legacy roadmap. Preserve it as future input,
-> but renumber and re-scope it only after Phase 33 v2 evidence.
-
 ## Phase Goal
 
-After the product functionality and validation are complete, refresh the Phase-24 legal/data audit
-against the actual final application and current provider configuration, obtain a new explicit
-approval, then implement that final transparency, legal-page, footer, and privacy-choice contract.
-Behavior must match the refreshed data inventory, keep the editor usable after refusal, avoid dark
-patterns and false compliance/cookie claims, and introduce no future metadata merely because
-governance is ready (SPEC.md §3, §5.1–§5.2, §5.4–§5.5, §7.2, §7.5–§7.8, §8).
+Extend the accepted v2 one-image slice with bounded committed document history and deterministic
+Manual Cutout, as specified by [`SPEC.md`](../../SPEC.md#23-active-v2-scope--phase-34). Keep large alpha,
+canvas, and patch buffers outside React/XState; make Apply one atomic artifact-aware history commit,
+Cancel a true no-op on committed state, and Undo/Redo safe under pruning and stale revisions. Preserve
+the Phase-33 automatic-removal, export, responsiveness, SSR, and cleanup guarantees.
 
 ---
 
 ## Scope
 
-### Final legal/data refresh
+### Architecture and domain
 
-- [ ] `L1` Re-inspect the Phase-33 product and deployed provider configuration. Refresh
-  `DATA_INVENTORY.md`, `PROPOSED_METADATA.md`, the storage/request evidence, processor/transfer
-  register, retention/deletion rules, localization/notification duties, and rights/security
-  procedures. Explicitly cover all storage, editor/export behavior and Phase-32 runtime/error state,
-  analytics requests, logs, support paths, and providers added or changed since Phase 24 —
-  _Depends on:_ —
-- [ ] `L2` Re-evaluate jurisdiction, target-market, minors, controller identity/contact, legal
-  bases, route/footer requirements, consent/storage choices, translations, terms/offer needs, and
-  every draft against the refreshed facts. Update `APPLICABILITY_MATRIX.md`,
-  `IMPLEMENTATION_MATRIX.md`, and the versioned RU/EN drafts; unresolved facts remain visible
-  blockers and are never invented — _Depends on:_ `L1`
-- [ ] `L3` Record a new dated approval of the final implementation matrix and texts. Qualified
-  legal review is recommended; if the owner proceeds without it, record a new explicit residual-
-  risk acceptance that names the final-product evidence and must not be presented as legal review
-  or universal compliance — _Depends on:_ `L2`
+- [x] `T1` Freeze the Phase-34 command/event/state chart, draft/runtime ownership, two-level history
+  semantics, artifact lease graph, pruning policy, keyboard routing, accessibility behavior, and
+  performance marks. Audit the legacy Manual/history implementation signal by signal; record pure
+  policies eligible for extraction, but import no legacy React hook/store/workflow state — _Depends on:_ —
+- [x] `T2` Add framework-free Manual draft/history vocabulary and pure decisions for begin, dirty,
+  cancel, apply, document undo/redo, stale revision, redo invalidation, and 20-operation/96-MiB
+  pruning. Actor state remains ID-only and exhaustive illegal outcomes stay typed — _Depends on:_ `T1`
+- [x] `T3` Extend the document XState actor and narrow selectors with one manual draft and committed
+  history. Apply is one invoked, cancellable commit; failure retains the draft for retry/cancel;
+  reset/dispose releases draft/history ownership; no additional stateful orchestration service is
+  introduced around the actor — _Depends on:_ `T2`
+
+### Browser runtime
+
+- [x] `T4` Extend `ArtifactRepository` with explicit draft/history lease owners and atomic snapshot
+  promotion. Pruning or redo invalidation releases only unreachable artifacts; baseline, current,
+  preview, export, past, and future owners remain independently auditable — _Depends on:_ `T2`
+- [x] `T5` Implement a runtime-owned Manual draft repository/engine: source-space Restore/Erase,
+  deterministic hardness falloff, untouched-byte preservation, pointer-cancel rollback, bounded
+  dirty-rectangle gesture patches, and draft Undo/Redo. Full alpha planes and patches never enter
+  React props/state or actor snapshots — _Depends on:_ `T4`
+- [x] `T6` Extend the typed worker/gateway boundary with `manual-cutout-commit` to composite and
+  encode accepted draft alpha without inference. Transfer eligible buffers, correlate revision and
+  draft identity, return exactly one snapshot, and preserve the editable draft on retryable failure
+  while releasing stale/cancelled outputs — _Depends on:_ `T3`, `T5`
 
 ### Frontend
 
-- [ ] `F1` Add a versioned legal-content manifest and render the re-approved bilingual final route
-  set: revised `/privacy`, `/terms`, `/cookies`, English counterparts, and only conditional
-  operator/consent routes listed in the implementation matrix. Include effective date, operator,
-  contact, purposes/data/recipients/location/retention/rights, and change navigation exactly where
-  approved — _Depends on:_ `L3`
-- [ ] `F2` Update the shared footer in both locales with the approved operator/contact disclosure
-  and links to Privacy, Terms, Cookie & storage notice, and `Privacy choices` when applicable.
-  Links are usable on every public/scenario/legal page and do not crowd the primary editor action —
-  _Depends on:_ `F1`
-- [ ] `F3` Implement `features/privacy-choices` only to the extent required by the matrix. The
-  first layer gives equally clear Accept/Reject and Settings for non-essential categories; no
-  preselection, scroll-to-consent, cookie wall, or manipulative hierarchy. If no banner is legally
-  required, render the approved notice/settings path without manufacturing consent — _Depends on:_
-  `F1`
-- [ ] `F4` Gate each non-essential integration/storage operation before its script/request/write,
-  including the matrix's decision for Cloudflare Web Analytics and Umami. Necessary
-  quality/editor/model-cache functionality remains available and documented; rejection never blocks
-  upload/edit/download — _Depends on:_ `F3`
-- [ ] `F5` Store only the approved minimal, versioned choice evidence with no random/user ID.
-  Apply the reviewed expiry/re-prompt rule, migrate invalid/old versions safely, and expose an
-  always-available footer control to change or withdraw as easily as acceptance — _Depends on:_
-  `F3`, `F4`
-- [ ] `F6` Keep any separate personal-data consent independent from Terms and other confirmations
-  when required by the matrix. Do not request consent where another approved legal basis applies
-  and do not add a form or metadata field that the final matrix did not approve — _Depends on:_
-  `F1`, `F3`
-- [ ] `F7` Add accessible dialog/banner/settings focus management, keyboard operation, screen-reader
-  labels/status, no motion dependency, responsive layout, and SSR-readable legal content. Add
-  canonical/hreflang/sitemap/meta policy from the approved manifest without making thin pages —
-  _Depends on:_ `F1`–`F6`
-- [ ] `F8` Add unit/component tests for manifest/versioning, gating-before-choice, accept/reject/
-  granular/change/withdraw, no-ID evidence, invalid/expired state, analytics disabled/enabled
-  branches, core-service availability, footer/routes/locales, and accessible interactions —
-  _Depends on:_ `F1`–`F7`
-- [ ] `F9` Add bilingual configured-Chromium Playwright request/storage inspection: before choice, after
-  Reject, Accept, granular settings, withdrawal, and notice-version change. Assert only approved
-  cookies/storage/analytics requests occur and complete single plus multiple-upload edit/download
-  flows after rejection — _Depends on:_ `F8`
+- [x] `F1` Add the bilingual Manual workspace to the existing noindex v2 route using cohesive v2
+  presentation modules and existing design tokens: Restore/Erase, brush size, zoom/pan/fit, visible
+  source-space cursor, checkerboard preview, explicit Apply/Cancel, and truthful applying/error state.
+  Do not add Magic, Enhancements, Background, batch, or public-route migration — _Depends on:_ `T5`
+- [x] `F2` Implement accessible draft behavior: each gesture is one local undo step; Ctrl/Cmd+Z and
+  redo variants target draft history while Manual is open; pointer capture/cancel is deterministic;
+  dirty reset/navigation is guarded; Cancel restores the committed preview and revision exactly;
+  Apply commits once and closes/refreshes the draft baseline — _Depends on:_ `F1`, `T6`
+- [x] `F3` Add committed document Undo/Redo controls and announcements. Outside an active Manual
+  draft shortcuts target document history; Undo/Redo updates preview/export without inference,
+  increments revision, invalidates stale work, and disables honestly at history boundaries —
+  _Depends on:_ `T3`, `T4`, `F2`
 
-### Infra
+### Verification and infrastructure
 
-- [ ] `I1` Align CSP/script loading and deployment configuration with the approved gating strategy.
-  Add no CMP/third-party tracker/package unless the refreshed final matrix explicitly approves it
-  and its license, payload, processor, retention, and loading behavior are documented in
-  `docs/STACK.md` — _Depends on:_ `F9`
-
-### Release readiness
-
-- [ ] `R1` Produce `docs/audits/PHASE_34_RELEASE_READINESS.md` linking the Phase-33 product evidence,
-  refreshed legal/data evidence, final approval, implemented matrix, tests, known limitations and
-  owner-accepted residual risks. Final readiness cannot be marked PASS while a mandatory fact,
-  P0/P1, non-essential pre-choice request, publication blocker or unapproved claim remains —
-  _Depends on:_ `L3`, `I1`
+- [x] `I1` Add table/model-based domain and actor tests for legal/illegal begin/apply/cancel,
+  multi-gesture single commit, stale apply, apply failure/retry, undo/redo boundaries, redo branch
+  invalidation, pruning, reset/unmount, and randomized history churn with zero reachable leaked
+  leases — _Depends on:_ `T3`, `T4`
+- [x] `I2` Add draft/canvas/worker contract tests for exact untouched alpha, Restore/Erase output,
+  hardness footprint, source-space geometry across zoom/pan, pointer cancellation, patch bounds,
+  transfer/correlation, no inference, and no full-image React/XState payload — _Depends on:_ `T5`, `T6`
+- [x] `I3` Add deterministic bilingual Playwright for automatic result → Manual draft → local
+  undo/redo → Cancel/Apply → document undo/redo → export/reset, including keyboard, dirty guard,
+  viewport controls, one-commit/zero-reinference assertions, and artifact cleanup. Keep the lane
+  parallel-safe, zero-retry, and free of arbitrary sleeps — _Depends on:_ `F3`, `I1`, `I2`
+- [x] `I4` Add one serialized real-model/manual smoke and target-device evidence for brush/action
+  responsiveness, Apply/Undo/Redo paint latency, unchanged automatic/export behavior, bounded
+  history resources at both caps, and zero leases after churn. Unsupported signals remain explicit —
+  _Depends on:_ `I3`
+- [x] `I5` Run `/phase-gate 34`, production build/container smoke, dependency/license/model/security
+  checks, Phase-34 suites, report verification, and architect affected-device review. Record versions,
+  limitations, results, and unresolved review notes — _Depends on:_ `I4`
 
 ---
 
@@ -112,130 +97,188 @@ governance is ready (SPEC.md §3, §5.1–§5.2, §5.4–§5.5, §7.2, §7.5–�
 ### Create / modify
 
 ~~~
-src/shared/config/legal-content.ts
-src/pages/privacy/
-src/pages/terms/
-src/pages/cookies/
-src/routes/privacy.tsx
-src/routes/terms.tsx
-src/routes/cookies.tsx
-src/routes/en/privacy.tsx
-src/routes/en/terms.tsx
-src/routes/en/cookies.tsx
-src/features/privacy-choices/model/types.ts
-src/features/privacy-choices/model/privacy-choices.ts
-src/features/privacy-choices/model/*.test.ts
-src/features/privacy-choices/ui/PrivacyNotice.tsx
-src/features/privacy-choices/ui/PrivacySettings.tsx
-src/features/privacy-choices/ui/*.test.tsx
-src/features/privacy-choices/index.ts
-src/routes/__root.tsx
-src/shared/lib/analytics/
-src/shared/ui/site-footer/
-scripts/generate-sitemap.ts
-messages/ru.json
-messages/en.json
-e2e/privacy-legal.spec.ts
-docs/audits/PHASE_34_RELEASE_READINESS.md
-docs/legal/
-docs/STACK.md
+docs/ARCHITECTURE_V2.md
 docs/PHASE_34.md
+docs/SPEC.md
+docs/STACK.md
+docs/STATE.md
+docs/audits/PHASE_34_RESULTS.md
+src/v2/domain/document.ts
+src/v2/domain/commands.ts
+src/v2/domain/events.ts
+src/v2/domain/document-history/
+src/v2/application/document/
+src/v2/runtime-browser/artifacts/
+src/v2/runtime-browser/manual-cutout/
+src/v2/runtime-browser/processing/
+src/v2/presentation/manual-cutout/
+src/pages/editor-v2/
+src/v2/testing/
+messages/en.json
+messages/ru.json
+e2e/phase-34-manual-cutout.spec.ts
+e2e/phase-34-manual-cutout.real.spec.ts
+e2e/support/v2/
+scripts/profiling/v2/
+package.json
+pnpm-lock.yaml
 ~~~
 
-Conditional routes/files from the re-approved final manifest are added surgically; unapproved
-placeholder pages are not created.
+Existing files may be split only along semantic ownership boundaries required by this phase. Every
+new module exposes a narrow `index.ts`; imports outside the module use that public API.
 
 ### Do NOT touch
 
-- Add server metadata storage, database/API, account, contact form, advertising, or payments
-- Change image-local processing or send image/image-derived bytes to analytics
-- Add legal claims, processors, categories, routes, consent purposes, or retention beyond the
-  refreshed and re-approved final matrix
+- Legacy behavior/workspace/Cutout/Manual/history except a documented extraction of pure,
+  framework-free geometry/pixel policy with backward-compatible imports
+- Main public/scenario routes, sitemap indexing policy, or legacy feature removal
+- Magic Cutout, matting/foreground refinement, Enhancements, Background, batch/multi-document UI
+- Accounts, auth, billing, payments, database, storage, queues, server upload/processing, generated
+  backgrounds, model family/weights/revisions, CDN manifest, privacy behavior, or new env flags
+- Comlink, workerpool/threads.js, canvas frameworks, generic event buses, or speculative utilities
 
 ---
 
 ## Contracts
 
+> This section is the source of truth for `/context-update`. Fill it in **before** handing to AI.
+
 ### New persistent data (tables / collections / files)
 
-Only if the refreshed final matrix requires a stored privacy choice:
-
-```text
-localStorage.privacyChoices = {
-  schemaVersion: 1,
-  noticeVersion: string,
-  decidedAt: ISO-8601 string,
-  expiresAt: ISO-8601 string | null,
-  choices: { analytics: boolean }
-}
-```
-
-The final categories and expiry come verbatim from the approved matrix. No unique visitor ID,
-fingerprint, image/filename, interaction history, or server-side consent profile is added.
+Repository Phase-34 results/evidence documentation only. Draft, patch, history, alpha, snapshot, and
+artifact state is browser-tab memory only. No database, IndexedDB, image storage, account, remote
+job, or new `localStorage` key.
 
 ### New API endpoints / RPC methods / events
 
-SSR `GET` routes for the approved bilingual legal-page manifest only. No data-submission endpoint
-or analytics event is added.
+No server API/RPC endpoint. New commands/events are in-process only:
+
+```ts
+type ManualCutoutCommand =
+  | { type: "BEGIN_MANUAL_CUTOUT"; documentId: DocumentId; expectedRevision: Revision }
+  | { type: "APPLY_MANUAL_CUTOUT"; documentId: DocumentId; draftId: ManualDraftId;
+      expectedRevision: Revision; draftMatte: ArtifactId }
+  | { type: "CANCEL_MANUAL_CUTOUT"; documentId: DocumentId; draftId: ManualDraftId }
+  | { type: "UNDO_DOCUMENT"; documentId: DocumentId; expectedRevision: Revision }
+  | { type: "REDO_DOCUMENT"; documentId: DocumentId; expectedRevision: Revision };
+
+type ManualCutoutEvent =
+  | { type: "MANUAL_DRAFT_STARTED"; documentId: DocumentId; draftId: ManualDraftId;
+      baselineRevision: Revision }
+  | { type: "MANUAL_DRAFT_DIRTY_CHANGED"; documentId: DocumentId; draftId: ManualDraftId;
+      dirty: boolean }
+  | { type: "MANUAL_COMMIT_SUCCEEDED"; documentId: DocumentId; draftId: ManualDraftId;
+      expectedRevision: Revision; snapshot: DocumentSnapshot }
+  | { type: "MANUAL_COMMIT_FAILED"; documentId: DocumentId; draftId: ManualDraftId;
+      expectedRevision: Revision; error: ProcessingError }
+  | { type: "MANUAL_DRAFT_CANCELLED"; documentId: DocumentId; draftId: ManualDraftId };
+```
+
+The worker protocol adds one correlated `manual-cutout-commit` operation. It composites/encodes but
+must never load or invoke an inference model.
 
 ### New types / models / shared interfaces
 
 ```ts
-type PrivacyCategory = "necessary" | "analytics";
+type ManualCutoutMode = "restore" | "erase";
+type ManualDraftId = string;
+type EditOperationId = string;
 
-interface PrivacyChoices {
-  schemaVersion: 1;
-  noticeVersion: string;
-  decidedAt: string;
-  expiresAt: string | null;
-  choices: Readonly<Record<Exclude<PrivacyCategory, "necessary">, boolean>>;
-}
+type ManualCutoutDraft = {
+  draftId: ManualDraftId;
+  documentId: DocumentId;
+  baselineRevision: Revision;
+  dirty: boolean;
+};
+
+type DocumentHistoryEntry = {
+  operationId: EditOperationId;
+  kind: "manual-cutout";
+  before: DocumentSnapshot;
+  after: DocumentSnapshot;
+  estimatedHistoricalBytes: number;
+};
+
+type DocumentHistory = {
+  past: readonly DocumentHistoryEntry[];
+  future: readonly DocumentHistoryEntry[];
+  retainedHistoricalBytes: number;
+};
+
+type ManualCutoutPatch = {
+  box: { minX: number; minY: number; maxX: number; maxY: number };
+  before: Uint8ClampedArray;
+  after: Uint8ClampedArray;
+}; // runtime-only; forbidden in actor/React snapshots
 ```
+
+Committed history is capped at 20 operations and 96 MiB retained historical artifacts. Gesture
+patch history is separately capped at 20 patches per draft.
 
 ### New env vars
 
-None unless the reviewed matrix requires an integration toggle already absent from the stack; any
-such variable must be added to SPEC/STACK and reviewed before implementation.
+None. Reuse current browser/model configuration; add no history, worker, backend, or feature flag.
 
 ---
 
 ## Gate Checks
 
-Run `/phase-gate 34`; standard checks plus:
+Run focused checks after each dependency-complete group, then `/phase-gate 34`. The complete
+[`STACK.md`](../../STACK.md#gate-commands) gate applies, plus:
 
 ```bash
-pnpm vitest run src/features/privacy-choices src/shared/lib/analytics src/shared/ui/site-footer
-pnpm e2e e2e/privacy-legal.spec.ts e2e/home.spec.ts e2e/scenario-pages.spec.ts
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm arch:lint
+pnpm e2e e2e/phase-34-manual-cutout.spec.ts --project=chromium --workers=1
+pnpm e2e:phase-34-real
+pnpm profile:phase-34 -- --verify
 pnpm build
-pnpm tsc --noEmit
-pnpm exec steiger ./src
 ```
 
-Fail if the refresh is incomplete or lacks final dated approval/readiness evidence, runtime and
-published inventory disagree, non-essential behavior runs before approval, Reject/withdraw is
-harder than Accept,
-rejection blocks the editor, choice evidence gains an ID, legal content is client-only/absent from
-SSR, locale/footer routes diverge, or unapproved metadata/legal claims appear. The Phase-33
-readiness report becomes final only after these checks pass.
+Fail on altered untouched alpha, full-image React/XState payload, duplicate/no-op history commit,
+silent dirty-draft loss, stale commit, redo resurrection, unreachable artifact leak, history cap
+violation, inference during Manual Apply/Undo/Redo/export, missed action/freeze, arbitrary sleep,
+retry-dependent pass, skipped real-model/target evidence, or unresolved architect review note.
 
 ---
 
 ## Architect Review Notes
 
+Use this section after manual product, UX, API, or workflow verification. The agent resolves each
+unchecked item through `/impl-assist 34 review`; checked items alone may pass `/phase-gate 34`.
+
 - [x] No architect review issues recorded
+
+---
 
 ## Implementation Notes
 
-None
+- Precise target event-to-paint latency was unsupported in the Windows MCP capture. The evidence
+  records successful observable actions and zero misses, with an empty unsupported latency sample;
+  it does not substitute MCP call duration. Export was verified in host mocked/real-model lanes but
+  was not repeated in that target capture.
+- Full host E2E initially attached to an already-running ordinary dev server on port 3000 and failed
+  environment-dependent English routes/mock downloads. After identifying and stopping that exact
+  process tree, the canonical gate-owned `--mode e2e` rerun passed 92 tests with 3 opt-in skips.
+
+---
 
 ## Atomic Commit Message
 
 ```text
-feat(phase-34): finalize legal consent and release readiness
+feat(phase-34): add v2 manual cutout and document history
 ```
+
+---
 
 ## Post-Phase Checklist
 
-- [ ] Scope complete; gates green; review notes resolved
-- [ ] Run `/context-update 34`
-- [ ] Commit on `feat/phase-34`; tag `v0.34.0` after merge
+- [x] Scope completed in dependency order
+- [x] Automated gates, real-model smoke, and target-device evidence green
+- [x] Architect verifies Manual/history on the affected browser/device
+- [x] Architect review notes resolved
+- [x] Run `/context-update 34`
+- [x] Commit on `feat/phase-34`
+- [ ] Tag `v0.34.0` only after merge

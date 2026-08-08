@@ -1,5 +1,4 @@
 export { useQualityMode } from "./model/use-quality-mode";
 export type { UseQualityModeResult } from "./model/use-quality-mode";
-export { QualityModeToggle } from "./ui/QualityModeToggle";
-export type { QualityModeToggleProps } from "./ui/QualityModeToggle";
-export { QualityModePopover } from "./ui/QualityModePopover";
+export { QualityModeToggle } from "./ui/quality-mode-selector";
+export { QUALITY_MODE_OPTIONS } from "./ui/quality-mode-selector/quality-mode-selector.config";

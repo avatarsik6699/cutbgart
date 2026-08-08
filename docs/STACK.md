@@ -26,10 +26,10 @@
 
 ---
 
-## Editor v2 foundation stack
+## Editor foundation stack
 
 Phase 33 implemented and gated the first isolated vertical slice governed by
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md). The table above remains the deployed public-product
+[`ARCHITECTURE.md`](./ARCHITECTURE.md). The table above remains the deployed public-product
 stack while the noindex v2 route grows through later accepted slices.
 
 | Area | Direction | Phase-33 boundary |
@@ -38,9 +38,9 @@ stack while the noindex v2 route grows through later accepted slices.
 | Domain/application | Framework-free TypeScript commands, events, transitions, ports, policies | No React, worker, HTTP, provider, or binary values |
 | Binary ownership | Explicit artifact repository with opaque IDs and leases | Browser-tab memory only |
 | Local runtime | Unified typed protocol and bounded browser worker gateway | Existing model/assets; no remote processing |
-| V2 shared UI | Rewritten Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; no blanket legacy component import |
+| Shared UI | Repository-wide Typography and optimized Image primitives plus consumer-proven generic components | Strict `FRONTEND_CONVENTIONS.md`; capability-owned public modules under `src/shared/ui` |
 | SSR/config | Typed `shared/config/env.ts` + `runtime.ts`, adapted from `patient_tracker` | Sole environment/runtime boundary; backward-compatible legacy exports during migration |
-| V2 utilities | `src/v2/shared/lib` plus reviewed repository-wide public APIs | Only utilities with a concrete Phase-33 consumer and tests; direct platform access forbidden |
+| Shared React utilities | `src/shared/lib/react` through the repository-wide `shared/lib` public API | Consumer-proven, SSR-safe hooks such as `useIsHydrated`; direct platform access from components is forbidden |
 | Test architecture | Vitest contract/model tests + Playwright typed fixtures and narrow component/page objects | Fast deterministic lane is parallel-safe; real-model lane is small and serialized; no sleeps/retry-masked flakes |
 | Performance evidence | Typed v2 User Timing/PerformanceObserver/resource collector and versioned reports | Rebuild useful v1 probes behind shared contracts; target-device evidence remains mandatory |
 | Worker/canvas tooling | Native typed Dedicated Worker protocol, imperative Canvas 2D, and capability-gated OffscreenCanvas | Comlink, workerpool/threads.js, and canvas frameworks are documented future candidates only; no Phase-33 evaluation or dependency |
@@ -154,6 +154,20 @@ diff before any fix. The optional local Codex MCP runs the same pinned dev depen
 structured read-only analysis. Product telemetry remains disabled unless the architect explicitly
 enables it.
 
+### Opt-in React render diagnostics
+
+Use `pnpm dev:profile` only for the final render audit or a focused rerender investigation. This
+profile mode initializes `@welldone-software/why-did-you-render` before hydration and switches the
+development JSX runtime to its React-19-compatible instrumentation. It tracks application
+components broadly and reports update reasons in the browser console.
+
+The profiler changes React execution cost, so its console output is causal evidence, not a timing
+benchmark. Confirm suspected owners with React DevTools Profiler commit data and use the managed
+Windows Chrome Performance tooling for long tasks, scripting/render time, memory, and resource
+evidence. Run ordinary `pnpm dev` or a production build for behavior and wall-time comparisons.
+The `profile` mode is never used by E2E, CI, release, or production commands, and a production build
+must not contain the WDYR package or diagnostics marker.
+
 ### Codex web-development diagnostics
 
 The architect's local Codex environment uses three complementary development integrations. They
@@ -187,15 +201,17 @@ Windows through `\\wsl.localhost\<distribution>\...` or copy the exact fixture i
 directory and record its hash. Do not pass `/home/...` paths to a Windows browser MCP.
 
 - Build Web Apps supplies current React performance-review and browser-debugging workflows; repo
-  SDD, `ARCHITECTURE_V2.md`, and `FRONTEND_CONVENTIONS.md` remain authoritative.
+  SDD, `ARCHITECTURE.md`, and `FRONTEND_CONVENTIONS.md` remain authoritative.
 - Chrome DevTools MCP owns runtime traces, long-task/main-thread attribution, network evidence, and
   heap diagnostics. It must use the same native-Windows boundary as Playwright MCP. Keep the
   isolated profile and privacy flags; Playwright remains the behavioral E2E owner.
 - Fallow MCP exposes the pinned repository dev dependency as structured static analysis. The CLI
   scripts remain the reproducible gate and fallback.
-- `review-v2-architecture` under `.agents/skills/` composes these layers into this repository's
-  ownership/performance review. Start a new Codex conversation after installing or changing a
-  plugin/MCP so the tool and skill inventory is refreshed.
+- `frontend-implementation` under `.agents/skills/` applies the repository's ownership,
+  render-boundary, selective-FSD, and lifecycle contract during frontend implementation and review.
+  Final performance/resource evidence remains owned by the active phase and `/phase-gate`. Start a
+  new Codex conversation after installing or changing a plugin/MCP so the tool and skill inventory
+  is refreshed.
 
 Verify local discovery with `codex plugin list` and `codex mcp list`. Never enable Fallow telemetry
 or relax Chrome profile/network privacy settings on the user's behalf.
@@ -379,7 +395,7 @@ pnpm profile:phase-33     # validates the stored fake + cold/warm real-model
 ```
 
 The physical-target capture itself is driven by the configured Playwright MCP in a managed,
-isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS.md` and
+isolated browser. Its durable observations live in `docs/archive/audits/phases-33-43/PHASE_33_RESULTS.md` and
 `PHASE_33_REPORTS.json`; repository scripts do not attach to a personal browser or debugging port.
 
 ### Phase-35 Magic Cutout reports
@@ -388,7 +404,7 @@ isolated browser. Its durable observations live in `docs/audits/PHASE_33_RESULTS
 pnpm profile:phase-35 -- --verify  # validates mocked, host real-model, and Windows target evidence
 ```
 
-The versioned report bundle lives in `docs/audits/PHASE_35_REPORTS.json`. Values not captured by
+The versioned report bundle lives in `docs/archive/audits/phases-33-43/PHASE_35_REPORTS.json`. Values not captured by
 the host runner or Windows Playwright MCP are recorded as unsupported with limitations rather than
 inferred from command duration.
 

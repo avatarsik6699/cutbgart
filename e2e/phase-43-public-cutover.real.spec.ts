@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -140,10 +140,19 @@ test("serialized real model covers cold and warm complete-product work without r
   const manualCanvas = page.getByRole("img", { name: "Manual cutout canvas" });
   const manualBox = await manualCanvas.boundingBox();
   if (manualBox === null) throw new Error("Manual canvas has no viewport box");
+  await page.getByRole("button", { name: "Erase", exact: true }).click();
   await manualCanvas.click({
     position: { x: manualBox.width / 2, y: manualBox.height / 2 },
   });
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const applyManual = page.getByRole("button", { name: "Apply", exact: true });
+  if (!(await applyManual.isEnabled())) {
+    await page.getByRole("button", { name: "Restore", exact: true }).click();
+    await manualCanvas.click({
+      position: { x: manualBox.width / 2, y: manualBox.height / 2 },
+    });
+  }
+  await expect(applyManual).toBeEnabled();
+  await applyManual.click();
   await expect.poll(async () => (await counters(page)).manualCommits).toBe(1);
 
   await page.getByRole("button", { name: "Background", exact: true }).click();
@@ -171,7 +180,8 @@ test("serialized real model covers cold and warm complete-product work without r
   expect((await selectedPng).suggestedFilename()).toBe("cutbg-result.png");
 
   const zip = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await zip).suggestedFilename()).toBe("cutbg-results.zip");
   expect((await counters(page)).automatic).toBe(2);
 

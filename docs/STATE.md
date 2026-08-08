@@ -18,32 +18,34 @@
 | 30 | ✅ historical done | `v0.30.0`; gate not run by architect decision | Design system/redesign; T19–T21 deferred |
 | 31 | ✅ historical done | `v0.31.0`; gate passed | Whole-project audit/refactor |
 | 32 | ⏹ closed-incomplete | no tag; gate explicitly waived | Legacy stability work accepted with unresolved browser freezes |
-| 33 | ✅ done | gate passed; no tag | Editor v2 foundation and first local vertical slice |
-| 34 | ✅ done | gate passed; no tag | [`PHASE_34.md`](./PHASE_34.md): document history + Manual Cutout |
-| 35 | ✅ done | gate passed; no tag | [`PHASE_35.md`](./PHASE_35.md): guided Magic Cutout |
-| 36 | ✅ done | gate passed; no tag | [`PHASE_36.md`](./PHASE_36.md): Background + Enhancements |
-| 37 | ✅ done | gate passed; no tag | [`PHASE_37.md`](./PHASE_37.md): batch + multi-document workspace |
-| 38 | ✅ done | gate passed; blocked cutover result; no tag | [`PHASE_38.md`](./PHASE_38.md): validation complete; public cutover not authorized |
-| 39 | ✅ done | gate passed; `v0.39.0` | [`PHASE_39.md`](./PHASE_39.md): v1-faithful main-page single-image flow on isolated v2 routes |
-| 40 | ✅ done | gate passed; `v0.40.0` | [`PHASE_40.md`](./PHASE_40.md): v1-faithful batch workspace on isolated v2 routes |
-| 41 | ✅ done | `v0.41.0`; gate passed | [`PHASE_41.md`](./PHASE_41.md): v1-faithful editor tools on isolated v2 routes |
-| 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`PHASE_42.md`](./PHASE_42.md): regression closure complete; cutover readiness remains blocked |
-| 43 | ✅ done | gate passed; tag after merge | [`PHASE_43.md`](./PHASE_43.md): final public v2 cutover, legacy removal, and pre-production readiness |
+| 33 | ✅ done | gate passed; no tag | [`archive/phases/PHASE_33.md`](./archive/phases/PHASE_33.md): editor v2 foundation |
+| 34 | ✅ done | gate passed; no tag | [`archive/phases/PHASE_34.md`](./archive/phases/PHASE_34.md): document history + Manual Cutout |
+| 35 | ✅ done | gate passed; no tag | [`archive/phases/PHASE_35.md`](./archive/phases/PHASE_35.md): guided Magic Cutout |
+| 36 | ✅ done | gate passed; no tag | [`archive/phases/PHASE_36.md`](./archive/phases/PHASE_36.md): Background + Enhancements |
+| 37 | ✅ done | gate passed; no tag | [`archive/phases/PHASE_37.md`](./archive/phases/PHASE_37.md): batch + multi-document workspace |
+| 38 | ✅ done | gate passed; blocked cutover result; no tag | [`archive/phases/PHASE_38.md`](./archive/phases/PHASE_38.md): validation complete; public cutover not authorized |
+| 39 | ✅ done | gate passed; `v0.39.0` | [`archive/phases/PHASE_39.md`](./archive/phases/PHASE_39.md): v1-faithful main-page single-image flow |
+| 40 | ✅ done | gate passed; `v0.40.0` | [`archive/phases/PHASE_40.md`](./archive/phases/PHASE_40.md): v1-faithful batch workspace |
+| 41 | ✅ done | `v0.41.0`; gate passed | [`archive/phases/PHASE_41.md`](./archive/phases/PHASE_41.md): v1-faithful editor tools |
+| 42 | ✅ done | gate failed; architect waiver accepted; `v0.42.0` after merge | [`archive/phases/PHASE_42.md`](./archive/phases/PHASE_42.md): regression closure; cutover remained blocked |
+| 43 | ✅ done | gate passed; `v0.43.0` | [`archive/phases/PHASE_43.md`](./archive/phases/PHASE_43.md): final public v2 cutover and legacy removal |
+| 44 | ✅ done | gate passed; tag after merge | [`PHASE_44.md`](./PHASE_44.md): frontend decomposition and bounded correctness/UX closure |
 
-**Latest closed phase:** `43`
+**Latest closed phase:** `44`
 
-**Implementation in progress:** `—`
+**Implementation in progress:** —. Phase 44 completed through `T1`; its full gate, native-Windows
+evidence, real-model journey, security checks, and disposable release/rollback suite passed.
 
-**Only active implementation scope:** `—`. Phase 43 is the final completed pre-production phase.
-Production deployment remains a separate authorized-operator workflow.
+**Only active implementation scope:** —. Production merge, tagging, and deployment remain separate
+authorized-operator workflows.
 
 ## Current contract
 
-This section describes the accepted contract through Phase 43. The v2 runtime is the sole public
+This section describes the accepted contract through Phase 44. The editor runtime is the sole public
 editor and includes automatic removal, Manual Cutout, guided Magic Cutout, Background,
 Enhancements, document history, and a batch/multi-document workspace. The superseded legacy
-workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
-[`PHASE_43.md`](./PHASE_43.md).
+workflow is deleted. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and the archived
+[`PHASE_43.md`](./archive/phases/PHASE_43.md).
 
 ### Runtime status
 
@@ -84,12 +86,35 @@ workflow is deleted. See [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) and
   readiness evidence without a waived gate, bind every public/scenario editor route to v2, remove
   the legacy workflow by proven reachability, and rehearse rollback to the previous immutable
   release before deployment.
-- Phase 43 completed that unconditional cutover. `src/widgets/public-editor` owns the sole
+- Phase 43 completed that unconditional cutover. `src/widgets/editor` owns the sole
   route-neutral composition; roots and eight scenario routes use it, former v2 routes redirect by
   locale, and the legacy development harness and workflow graph are removed.
 - The Phase-43 report concludes `ready` with zero blocker, missing evidence, serious accessibility
   finding, or reachable legacy entry. Full gate, real-model, managed-Windows, security, build,
   container smoke, and disposable immutable-release rollback evidence passed without waiver.
+- SPEC v1.44 scopes one checkpoint-driven Phase 44 to decompose the retained public frontend,
+  narrow React/XState/external-store render ownership, remove reachability-proven obsolete code,
+  and run end-state performance/resource evidence only in the final task. It keeps one-way layer
+  dependencies and entity/feature slice isolation while allowing direct same-layer widget/page
+  composition. Product behavior, routes, domain/runtime ownership, privacy, models, exports, and
+  deployment remain unchanged.
+- The Phase-44 frontend contract uses a stable editor session/view-model boundary, leaf
+  XState/external-store selectors, controller-neutral views, semantic commands, and abstraction
+  justification. FSD remains a layer/import vocabulary rather than a folder or wrapper mandate;
+  no additional workflow store is authorized.
+- SPEC v1.45 extends Phase 44 after accepted T8 with six grouped checkpoints: restore authoritative
+  document/history/background/viewport behavior; diagnose then recover Magic quality/performance;
+  improve admission, mode, delayed-status, and batch UX; add current-document selection among
+  existing local models; and add non-persisted theme, scrollbar, and navigation-progress polish.
+  Routes, privacy, backend scope, model families/assets, export formats, and deployment stay fixed.
+- Phase 44 completed the frontend decomposition under one stable editor model/session boundary,
+  leaf XState and external-store selectors, semantic commands, capability-owned UI modules, and
+  imperative high-frequency canvas/view interaction. The existing runtime remains the sole
+  workflow writer; no second state manager was added.
+- The final checkpoints restore one authoritative committed document across tools, atomic history
+  and draft behavior, bounded Magic recovery, deterministic paste/delayed feedback,
+  current-document reprocessing with existing local models, and non-persisted bilingual theme and
+  navigation feedback. The full gate passed without waiver.
 
 ### Core models
 
@@ -193,6 +218,12 @@ transferable boundary and candidate ranking/fusion remains off the interaction t
 versioned privacy-safe Phase-42 readiness/performance evidence files; no domain command, public API,
 endpoint, persistence, environment key, model policy, export format, or public route changes.
 
+Phase 44 adds only bounded presentation and selector contracts for existing local-model choice,
+theme, navigation progress, and decomposed view ownership. They carry no browser resources and do
+not mirror actor workflow state. Phase inventory and final verification reports are repository
+evidence only; theme selection remains non-persistent and no database, endpoint, RPC, environment
+variable, model asset, or worker-protocol contract was added.
+
 ### Active endpoints and pages
 
 There is no image-processing API.
@@ -242,11 +273,12 @@ There is no image-processing API.
 Phases 33–39 added no key. Typed `shared/config/env.ts` and SSR-safe `runtime.ts` centralize access
 without changing values or exposing server secrets.
 
-### Current Editor v2 contract
+### Current editor contract
 
-The implemented v2 editor is public and local-processing-only:
+The implemented editor is public and local-processing-only:
 
-- `src/v2/{domain,application,runtime-browser,presentation,shared/ui,shared/lib,testing}`;
+- `src/editor/{domain,application,runtime,testing}` plus React composition in
+  `src/widgets/editor/{model,ui}`;
 - one workspace actor over ordered membership/selection and one document actor/runtime per image;
 - IDs/revisions in domain state, binary values in `ArtifactRepository`;
 - `{ documentId, runId, expectedRevision }` correlation and explicit terminal outcomes;
@@ -388,12 +420,90 @@ separately gated work.
 | Phase 41 | Complete; architect verification, architecture review fixes, full gate, exact bilingual evidence, and serialized real-model journey passed |
 | Phase 42 | Complete with architect-accepted `blocked` readiness; one legacy timing gate failure was waived and unsupported absolute-duration signals remain recorded |
 | Phase 43 | Complete; full gate passed, readiness `ready`, public v2-only cutover and immutable-release rollback verified |
+| Phase 44 | Complete; T1 and the full gate passed with native-Windows, real-model, security, container, and release/rollback evidence |
 | Future paid tier | Architecture direction only; backend/auth/billing/data/security/legal contracts are intentionally undecided |
 
 ## Current decisions and project log
 
 Newest first. Earlier phase completions, spec changes, incidents, accepted risks, and superseded
 decisions remain append-only in the [full archived tracker](./archive/contracts/STATE_THROUGH_PHASE_32_FULL.md).
+
+### 2026-08-08 — Phase 44 complete
+
+**Type:** phase-completion
+
+**Author:** AI (context-update)
+
+**Triggered by:** PHASE_44 gate passed; final commit pending
+
+#### Changes / Decision
+
+- Completed the checkpoint-driven frontend decomposition, render/subscription narrowing, obsolete
+  code cleanup, and approved T9–T13 correctness and UX closure without adding a second workflow
+  store or changing backend, route, persistence, model-asset, or export contracts.
+- Recorded T1 native-Windows Chrome/WebGPU, resource, render-commit, bilingual deterministic,
+  real-model, Fallow, security, build, container, and disposable release/rollback evidence.
+- Pinned transitive `js-yaml` to patched `4.3.1`; the production dependency audit reports no known
+  vulnerabilities.
+
+#### Affected Phases / Consequences
+
+- Phase 44 is ready to merge. Tag `v0.44.0` after merge, then use the separately authorized
+  production deployment workflow.
+
+### 2026-08-07 — Phase 44 correctness and UX closure approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect supplied thirteen post-T8 product findings and requested prioritized,
+dependency-aware grouping inside the current phase
+
+#### Changes / Decision
+
+- SPEC v1.45 expands Phase 44 after accepted T8 with six grouped checkpoints in order
+  `T9 → T10 → T10A → T11 → T12 → T13`, followed by the existing final `T1`.
+- Correctness and shared document truth come first. Magic diagnosis is a mandatory no-algorithm-
+  change gate before recovery implementation. Processing/admission UX and model reprocessing follow;
+  theme, scrollbars, and navigation progress remain last so they do not mask workflow defects.
+- The extension adds no route, persistence, backend, remote processing, model family/asset, export
+  format, environment key, or deployment work. Every changed user-facing flow requires bilingual
+  Playwright coverage.
+
+#### Affected Phases / Consequences
+
+- Phase 44 — scope and contracts reviewed and synchronized; status remains in progress, with T9 as
+  the next authorized checkpoint.
+- Phases 01–43 remain complete and unchanged; their privacy, ownership, and accepted editor
+  invariants remain regression requirements.
+
+### 2026-08-05 — Checkpoint-driven frontend decomposition approved
+
+**Type:** spec-change
+
+**Author:** AI (spec-sync)
+
+**Triggered by:** architect approved one Phase 44 for incremental frontend decomposition and
+deferred the performance baseline to final acceptance
+
+#### Changes / Decision
+
+- SPEC v1.43 adds one frontend-refactoring phase with stable checkpoint order `T2` through `T8`,
+  followed by final evidence task `T1`; `/impl-assist 44 <ID>` stops after one focused task.
+- Each checkpoint receives only relevant architecture and behavioral checks, architect manual
+  review, and an approved conventional commit. Full gate, real-model, security, container, release,
+  render, and Chrome performance/resource evidence run after all implementation checkpoints.
+- XState/application remains the sole durable workflow source of truth. MobX or another state
+  manager requires a late isolated decision after decomposition and cannot mirror workflow state.
+- Pre-refactor render counters and Chrome traces are intentionally not required; Phase 44 proves
+  the accepted end state without claiming a numeric before/after improvement.
+
+#### Affected Phases / Consequences
+
+- Phase 44 — approved for initialization as the only next implementation phase.
+- Phases 33–43 remain complete and unchanged; Phase 44 preserves their accepted product and
+  domain/runtime contracts.
 
 ### 2026-08-05 — Phase 43 complete: public v2 cutover ready
 

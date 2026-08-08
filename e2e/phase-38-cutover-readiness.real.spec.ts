@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -55,7 +55,7 @@ test("cold and warm real-model documents complete the accepted full workflow", a
   await page
     .getByLabel("Choose an image")
     .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
-  const strip = page.getByTestId("v2-workspace-strip");
+  const strip = page.getByTestId("batch-filmstrip");
   await expect(strip.getByText("Result ready")).toHaveCount(2, {
     timeout: 12 * 60_000,
   });
@@ -106,7 +106,8 @@ test("cold and warm real-model documents complete the accepted full workflow", a
     ),
   ).toBe(2);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download all" }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await download).suggestedFilename()).toBe("cutbg-results.zip");
   const realToolRuns = await page.evaluate(() => ({
     magic: (window as Window & { __phase38MagicPredictions?: number })

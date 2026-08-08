@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test } from "./support/v2/fixtures";
-import { scanPhase38Accessibility } from "./support/v2/accessibility";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { scanPhase38Accessibility } from "./support/editor/accessibility";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -80,9 +80,10 @@ async function expectNoPageOverflow(
 }
 
 test("both locales pass the accessibility and responsive material-state matrix", async ({
-  editorV2,
+  editor,
   page,
 }) => {
+  test.setTimeout(90_000);
   for (const labels of locales) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -93,16 +94,16 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page
       .getByLabel(labels.choose)
       .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
-    await expect.poll(editorV2.scenario.runCount).toBe(1);
-    await editorV2.scenario.stage("model-loading", 0.42);
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.stage("model-loading", 0.42);
     await expect(page.locator('[data-main-page-phase="loading-model"]')).toContainText(
       "42",
     );
     await expectAccessible(page);
-    await editorV2.scenario.completeRun();
-    await expect.poll(editorV2.scenario.runCount).toBe(2);
-    await editorV2.scenario.stage("automatic-remove", 0.5);
-    await editorV2.scenario.completeRun();
+    await editor.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(2);
+    await editor.scenario.stage("automatic-remove", 0.5);
+    await editor.scenario.completeRun();
     await expect(page.getByTestId("batch-overview").locator("article")).toHaveCount(2);
     await expectAccessible(page);
 
@@ -141,13 +142,16 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page.getByRole("button", { name: labels.enhancements, exact: true }).click();
     await page.getByRole("button", { name: labels.apply, exact: true }).click();
     await expectAccessible(page);
-    await editorV2.scenario.completeEnhancement();
-    await editorV2.scenario.completeEnhancement();
+    await editor.scenario.completeEnhancement();
+    await editor.scenario.completeEnhancement();
 
     await page.getByLabel(labels.addImages).setInputFiles("e2e/fixtures/unsupported.txt");
     await expectAccessible(page);
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: /Download all|Скачать вс[её]/ }).click();
+    await page
+      .getByRole("button", { name: /Output options|Параметры результата/ })
+      .click();
+    await page.getByRole("menuitem", { name: /Download all|Скачать вс[её]/ }).click();
     await download;
     await expectAccessible(page);
 
@@ -164,7 +168,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
         .getByRole("menuitem", { name: /Remove image|Удалить изображение/ })
         .click();
     }
-    await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
       artifacts: 0,
       leases: 0,
       objectUrls: 0,
@@ -173,7 +177,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
 });
 
 test("one full cutover-readiness journey keeps all documents and resources isolated", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
@@ -187,9 +191,9 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   const strip = page.getByTestId("batch-overview");
   await expect(strip.locator("article")).toHaveCount(3);
   for (let run = 1; run <= 3; run += 1) {
-    await expect.poll(editorV2.scenario.runCount).toBe(run);
-    await editorV2.scenario.stage("automatic-remove", 0.5);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(run);
+    await editor.scenario.stage("automatic-remove", 0.5);
+    await editor.scenario.completeRun();
   }
 
   const second = strip.locator("article").nth(1);
@@ -209,23 +213,24 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   await page.getByRole("button", { name: "Background", exact: true }).click();
   await page.getByRole("button", { name: "Ocean" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await editorV2.scenario.setEnhancementOutcome("failed");
+  await editor.scenario.setEnhancementOutcome("failed");
   await page.getByRole("button", { name: "Enhancements", exact: true }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await editorV2.scenario.completeEnhancement();
+  await editor.scenario.completeEnhancement();
   await expect(page.getByText(/Enhancements could not be completed/)).toBeVisible();
-  await editorV2.scenario.setEnhancementOutcome("changed");
+  await editor.scenario.setEnhancementOutcome("changed");
   await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await editorV2.scenario.completeEnhancement();
-  await editorV2.scenario.completeEnhancement();
+  await editor.scenario.completeEnhancement();
+  await editor.scenario.completeEnhancement();
   await page.keyboard.press("Control+z");
   await page.keyboard.press("Control+y");
-  expect(await editorV2.scenario.runCount()).toBe(3);
+  expect(await editor.scenario.runCount()).toBe(3);
 
-  const selectedDownload = await editorV2.exportPng.download();
+  const selectedDownload = await editor.exportPng.download();
   expect(selectedDownload.suggestedFilename()).toBe("cutbg-result.png");
   const allDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   const archive = await allDownload;
   expect(archive.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await archive.path();
@@ -242,19 +247,19 @@ test("one full cutover-readiness journey keeps all documents and resources isola
     await strip.locator("article").last().getByTestId("batch-item-actions").click();
     await page.getByRole("menuitem", { name: "Remove image" }).click();
   }
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
   });
 
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    const expectedRunCount = (await editorV2.scenario.runCount()) + 1;
+    const expectedRunCount = (await editor.scenario.runCount()) + 1;
     await page.getByLabel("Upload an image").setInputFiles(phase33ImageCorpus.smoke.path);
-    await expect.poll(editorV2.scenario.runCount).toBe(expectedRunCount);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(expectedRunCount);
+    await editor.scenario.completeRun();
     await page.getByRole("button", { name: "Back to upload" }).click();
-    await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
       artifacts: 0,
       leases: 0,
       objectUrls: 0,

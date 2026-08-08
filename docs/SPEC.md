@@ -1,7 +1,7 @@
 # TECHNICAL SPECIFICATION: BG Remove App
 
 > Active product and system contract. Read this document, [`STATE.md`](./STATE.md),
-> [`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md), and the active phase before implementation.
+> [`ARCHITECTURE.md`](./ARCHITECTURE.md), and the active phase before implementation.
 > The complete pre-compaction v1.27 specification is preserved at
 > [`archive/contracts/SPEC_V1_27_FULL.md`](./archive/contracts/SPEC_V1_27_FULL.md).
 > Run `/spec-sync` whenever this file changes.
@@ -10,8 +10,8 @@
 
 | Field | Value |
 |-------|-------|
-| Version | `v1.42` |
-| Date | `2026-08-05` |
+| Version | `v1.45` |
+| Date | `2026-08-07` |
 | Architect / owner | `v.godlevskiy` |
 | Product | `cutbg` at `cutbg.art` |
 | Internal project | `bg_remove_app` / BG Remove App |
@@ -23,8 +23,8 @@
 ## 1. Product contract
 
 BG Remove App removes image backgrounds and supports finishing/export workflows. The deployed
-editor is an anonymous browser-local product; the next implementation track rebuilds its critical
-path around an explicit domain model before capabilities are migrated.
+editor is an anonymous browser-local product implemented solely by the accepted editor domain,
+application, browser-runtime, and presentation architecture.
 
 Three invariants govern every decision:
 
@@ -36,18 +36,21 @@ Three invariants govern every decision:
 3. **Responsiveness, indexability, and accessibility are functionality.** A visually correct result
    does not pass if the page freezes, actions are lost, resources leak, or public pages regress.
 
-The accepted v2 implementation now covers the complete browser-local workflow: automatic removal,
+The accepted editor implementation now covers the complete browser-local workflow: automatic removal,
 bounded committed history, Manual and Magic Cutout, Background, fine-detail/colour-halo
 Enhancements, multi-document orchestration, preview/export, deterministic ZIP export, and safe
 cancel/retry/reset. Phases 39–42 reconnected that architecture to the established v1 presentation
-and completed the isolated-route migration evidence. Phase 43 is the final pre-production phase: it
-must close the remaining public-path readiness evidence, switch every public and scenario editor
-route to v2, remove the superseded legacy workflow, and prove release/rollback readiness before any
-production deployment.
+and completed the isolated-route migration evidence. Phase 43 switched every public and scenario
+editor route to v2, removed the superseded legacy workflow, and proved release/rollback readiness.
+Phase 44 refactors the retained public frontend in one architect-reviewed phase and then closes a
+bounded set of architect-reported editor correctness and UX gaps before final verification. It
+decomposes large compositions, narrows subscriptions and render ownership, removes confirmed
+obsolete surfaces, restores coherent history/tool behavior, and adds only the explicitly scoped
+local UI improvements in §2.13 without changing privacy or backend ownership.
 
 ## 2. Scope and boundaries
 
-### 2.1 Existing legacy capability
+### 2.1 Current public capability
 
 The repository currently contains:
 
@@ -60,13 +63,13 @@ The repository currently contains:
   deployment, rollback, and incident infrastructure;
 - browser model/matting evaluation surfaces kept as internal, noindex tooling.
 
-Phase 32 added useful legacy guards, item-owned edit state, structured batch failures, and resource
-work, but did not eliminate real-browser model-load and Magic Apply freezes. It is closed incomplete,
-not evidence that the legacy editor satisfies the responsiveness contract.
+The Phase-32 legacy implementation did not eliminate real-browser model-load and Magic Apply
+freezes. It is closed incomplete and removed from the current product; its history is retained only
+in Git and archived evidence.
 
 ### 2.2 Implemented v2 foundation through Phase 37
 
-Phases 33–37 built an isolated implementation under `src/v2/` and a separate noindex route. It
+Phases 33–37 built an isolated implementation under `src/editor/` and a separate noindex route. It
 includes:
 
 - framework-free IDs, snapshots, commands, events, invariants, and processing ports;
@@ -83,9 +86,9 @@ includes:
 - isolated per-item retry/remove plus deterministic committed-result ZIP export;
 - deterministic unit, actor, worker, component, Playwright, real-model, and target-device evidence.
 
-Their exact checklists and acceptance gates live in [`PHASE_33.md`](./PHASE_33.md),
-[`PHASE_34.md`](./PHASE_34.md), [`PHASE_35.md`](./PHASE_35.md), and
-[`PHASE_36.md`](./PHASE_36.md), and [`PHASE_37.md`](./PHASE_37.md).
+Their historical checklists and acceptance gates live in
+[`archive/phases/PHASE_33.md`](./archive/phases/PHASE_33.md) through
+[`archive/phases/PHASE_37.md`](./archive/phases/PHASE_37.md).
 
 ### 2.3 Implemented v2 slice — Phase 34
 
@@ -462,12 +465,12 @@ bindings, indexing, analytics, and legacy ownership remain unchanged. A `ready` 
 authorizes planning a later cutover phase; it does not perform that cutover or authorize legacy
 removal.
 
-### 2.12 Final pre-production cutover — Phase 43
+### 2.12 Completed pre-production cutover — Phase 43
 
-Phase 43 is the only authorized public cutover and legacy-removal phase. It converts the accepted
-isolated v2 editor into the sole production editor implementation without redesigning the public
-experience or weakening the Phase-33–42 ownership, privacy, accessibility, responsiveness, and
-resource contracts.
+Phase 43 completed the public cutover and legacy removal. It converted the accepted isolated v2
+editor into the sole public editor implementation without redesigning the public experience or
+weakening the Phase-33–42 ownership, privacy, accessibility, responsiveness, and resource
+contracts.
 
 The dependency-complete phase covers:
 
@@ -501,7 +504,106 @@ Phase 43 adds no account, backend, server image processing, persistence, remote 
 family change, export format, environment key, or product redesign. It prepares a release candidate
 but does not deploy it to production; deployment remains an explicit post-merge operator action.
 
-### 2.13 Future paid direction
+### 2.13 Frontend decomposition and render ownership — Phase 44
+
+Phase 44 is one checkpoint-driven frontend phase. Its accepted T2–T8 checkpoints preserve the
+Phase-43 UI and behavior while rebuilding the public frontend composition with smaller ownership
+boundaries. The architect-approved T9–T13 extension then repairs observed behavior and adds the
+bounded UI capabilities below while preserving routes, local-only processing, artifact ownership,
+model families, export formats, and backend boundaries.
+
+Its stable checkpoint order is `T2` cleanup, `T3` shell/composition, `T4` upload/mode selection,
+`T5` single-image processing/result/export, `T5A` permanent editor structure, `T6` active document
+and editor tools, `T7` narrow subscriptions and selective memoization, `T8` state-manager decision,
+`T9` editor truth/history/viewport, `T10` Magic diagnosis, `T10A` Magic recovery, `T11` admission and
+processing UX, `T12` single-image model selection/reprocessing, `T13` global UI polish, then `T1`
+final evidence and gate. `/impl-assist 44 <ID>` targets one checkpoint and must stop after focused
+verification; the architect manually accepts it before a checkpoint commit and before the next
+task starts.
+
+The phase covers:
+
+- archive completed phase evidence and remove only source, tests, exports, profiling helpers, or
+  adapters whose retained consumers and operational references have been traced first; Git tag
+  `v0.43.0` remains the recoverable source snapshot, so obsolete production code is deleted rather
+  than moved under a compilable `src/archive` tree;
+- after the accepted v2 cutover, remove migration-era names from the active architecture: keep the
+  framework-independent editor core under `src/editor/{domain,application,runtime,testing}`, merge
+  React presentation and the sole composition root under `src/widgets/editor`, and rename active
+  E2E/profiling/configuration paths accordingly. Historical redirect URLs, versioned cache/report/
+  protocol identifiers, and traceability evidence retain their original names because changing
+  them would break compatibility or falsify history;
+- decompose the page shell and route-neutral public composition, then upload/mode selection,
+  single-image processing/result/export, batch, active-document, and editor-tool surfaces into
+  focused connectors and controller-neutral views with explicit render owners;
+- move XState and external-store subscriptions near their leaf consumers, select primitive or
+  stable-identity values, avoid freshly allocated broad projections at high-level parents, and
+  stabilize callbacks or derived objects only where they cross a meaningful memoization boundary;
+- provide the public editor through one stable session/view-model context whose value never contains
+  current snapshots or projections. The view model may own UI-only preferences and semantic
+  commands, but must not mirror XState workflow state or `src/editor/runtime` resources;
+- forbid model/session/snapshot and catch-all intent relays through intermediate presentation
+  components. A direct connector-to-view boundary may use narrow semantic data and callbacks;
+- require every wrapper, component, service, barrel, and public export to own state/lifecycle,
+  policy, accessibility/error behavior, a meaningful layout region, or proven repeated behavior;
+  otherwise inline or remove it;
+- keep pointer movement, brush preview, pan/zoom, canvas pixels, binary artifacts, object URLs,
+  workers, and other high-frequency/runtime resources outside broad React state and actor snapshots;
+- retain XState/application as the sole durable workflow source of truth. Another state manager,
+  including MobX, requires a late isolated spike and architect decision showing a remaining problem
+  after decomposition, a measurable benefit, one-way ownership, and no mirrored workflow state;
+- use the project-local `frontend-implementation` workflow and task-specific
+  unit/component/render/Playwright checks during checkpoints. A frontend task cannot complete
+  without `Frontend contract: PASS`; the architect manually reviews and accepts each task before
+  its checkpoint commit. Full performance, real-model, security, container, and release evidence
+  is deferred to the final task and phase gate;
+- finish with end-state render/subscription inspection, Chrome performance/resource evidence,
+  repeated workflow churn, full automated gates, and architect acceptance. The phase deliberately
+  has no mandatory pre-refactor render-counter or trace baseline; it proves the final acceptance
+  state rather than claiming a numeric before/after improvement.
+
+The post-T8 extension covers exactly these six checkpoint groups:
+
+- restore one authoritative committed image across Cutout, Enhancements, and Background; make each
+  successful changed Apply one bounded document-history operation; make initial and draft-active
+  Undo/Redo availability truthful; make Background preset/custom-image preview, Apply, and Cancel
+  deterministic; and standardize every tool viewport to the accepted Enhancements geometry,
+  scrolling, zoom, spacing, and control behavior;
+- diagnose Magic Cutout quality and Apply-latency regressions before editing the algorithm. Record
+  the responsible path, representative edge/foreground/background fixtures, objective comparison
+  criteria, a reproducible accepted performance target, and an architect-approved recovery plan;
+- implement only that accepted Magic recovery plan. Remove strokes must preserve subject edges they
+  merely cross, Keep strokes must not restore background they merely cross, and Apply must recover
+  the evidenced pre-regression responsiveness without weakening correlation or resource ownership;
+- keep keyboard paste available without hover dependence and make the visible clipboard affordance
+  invoke the same admission path with truthful permission/error feedback; render no processing mode
+  as selected during initialization, then select Maximum when the client is ready; show a localized
+  delayed-processing explanation only after a reviewed deterministic threshold; and group the batch
+  processing-mode choice with Add Image so the selected mode clearly applies to subsequently
+  admitted items without a duplicate heading;
+- replace the single-image `on-device` badge with the existing available local model choices,
+  identify the model that produced the current automatic result, and allow a different choice to
+  re-run the current document through the accepted processing gateway. Before implementation, the
+  checkpoint must document and receive architect approval for source/baseline, dirty-draft,
+  history, cancellation, and failure semantics; it must never mutate a sibling document or publish
+  stale work;
+- add a localized keyboard-accessible light/dark theme control, theme-correct editor/site styling,
+  and one coherent custom-scrollbar treatment, without adding persisted user data; and add an
+  accessible reduced-motion-aware top navigation progress indicator driven by real router/content
+  navigation rather than editor inference. Current primary TanStack Router and browser guidance
+  must be reviewed before choosing its lifecycle.
+
+Update deterministic bilingual Playwright coverage for every changed user flow and retain focused
+unit/contract/render/resource tests. Final real-model, managed-Windows, full-gate, security, build,
+container, and release evidence remains owned by T1.
+
+Phase 44 introduces no new route, model family or asset, server endpoint, persisted user state,
+environment variable, payment/backend behavior, or production deployment. Its only new visible
+capabilities are the existing-model reprocessing control, theme control, truthful delayed status,
+and navigation progress described above. It must not trade correctness, accessibility, privacy,
+correlation, resource lifecycle, or render ownership for visual convenience.
+
+### 2.14 Future paid direction
 
 The architecture must permit explicit paid server processing without coupling the free editor to a
 provider. Candidate capabilities are faster/higher-quality removal and AI backgrounds generated
@@ -514,7 +616,7 @@ templates, text, shadows, perspective—is a separate track after the focused wo
 
 ## 3. Domain model and invariants
 
-[`ARCHITECTURE_V2.md`](./ARCHITECTURE_V2.md) is the detailed architecture decision. The normative
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) is the detailed architecture decision. The normative
 v2 vocabulary is:
 
 ```ts
@@ -791,7 +893,7 @@ Core rules:
   workflow truth.
 
 Legacy runtime models such as `SourceImage`, `AlphaMatte`, `ProcessedImage`, `EditDocumentScope`, and
-`BatchItemError` remain historical migration vocabulary through Phase 42. Phase 43 removes their
+`BatchItemError` remain historical migration vocabulary through Phase 42. Phase 43 removed their
 production workflow implementations after proving that retained v2/shared/internal-tool code has no
 runtime dependency on them; their definitions and history remain preserved in Git and archived
 SPEC/STATE snapshots.
@@ -834,30 +936,38 @@ The app serves SSR/static HTML and published assets; it exposes no image-process
 | `/`, `/en` | Main localized product page and editor |
 | Four Russian scenario routes and four `/en/...` counterparts | Reused editor plus scenario-specific content and structured data |
 | `/about`, `/en/about`, `/privacy`, `/en/privacy` | Static localized information/legal pages |
-| `/dev/remove-background`, `/dev/model-lab` | Current internal noindex harnesses; Phase 43 removes the legacy remove-background harness and retains the explicitly enabled model lab |
-| `/editor-v2`, `/en/editor-v2` | Current bilingual noindex v2 migration surface; Phase 43 replaces these duplicate entry points with locale-preserving redirects to the public roots |
+| `/dev/model-lab` | Retained internal noindex model/matting evaluation surface, enabled only by its existing exact-`true` flag |
+| `/editor-v2`, `/en/editor-v2` | Locale-preserving redirects to `/` and `/en/`; `/dev/remove-background` is removed |
 | `/sitemap.xml`, `/robots.txt`, `/.well-known/security.txt` | Discovery and vulnerability-disclosure assets |
 | `https://cdn.cutbg.art/models/{manifest-path}` | Pinned public model/runtime assets with CORS, ranges, and immutable caching |
 
 ### 5.2 Frontend boundaries
 
-Legacy code remains available while v2 is built under:
+The sole editor implementation is organized under:
 
 ```text
-src/v2/
+src/editor/
   domain/             pure types, transitions, invariants
   application/        actors, commands, ports, use cases
-  runtime-browser/    artifacts, workers, local processing adapters
-  presentation/       route composition, selectors, UI adapters
-  shared/ui/          v2 reusable presentation primitives
-  shared/lib/         consumed cross-cutting wrappers only
+  runtime/            artifacts, workers, local processing adapters
   testing/            fakes, fixtures, model-based helpers
+src/widgets/editor/
+  model/              stable session/view-model binding
+  ui/                 connectors and controller-neutral React presentation
 ```
 
 All frontend work follows [`FRONTEND_CONVENTIONS.md`](./FRONTEND_CONVENTIONS.md). In particular:
 
 - modules expose intentional public APIs and depend inward; domain/application do not import React,
   router, browser globals, inference providers, or UI libraries;
+- source layers keep one-way dependencies from higher layers to lower layers. Same-layer slice
+  composition is allowed for `widgets` and `pages` when it makes an application composition
+  materially simpler; cross-slice imports remain forbidden for `entities` and `features`;
+- FSD is a dependency and naming vocabulary, not a folder-generation mandate: capability folders,
+  barrels, role subfolders, wrappers, and shared abstractions exist only when they express a real
+  owner or public boundary;
+- complex React surfaces expose stable model/service references, subscribe at leaf connectors, and
+  keep controller-neutral views free of XState/runtime objects and broad intent/projection relays;
 - `Typography` separates semantic element from finite visual variants;
 - `Image` has typed content/hero/preview/thumbnail presets, intrinsic/aspect/object-fit policy,
   accessible alt/decorative semantics, and explicit loading/decoding/fetch-priority defaults;
@@ -871,13 +981,12 @@ Public pages remain fully localized in Russian and English, keyboard operable, s
 meaningful, responsive, and SSR-safe. No essential action may depend only on hover, color, pointer
 precision, or an unannounced status change.
 
-The rendered v1 public editor is the normative visual and interaction reference for v2 migration.
-Unless a later architect-approved spec change says otherwise, v2 must preserve component placement,
-visual hierarchy, labels, responsive behavior, controls, and reachable states. Internal actors,
-commands, projections, processing, and resource ownership may change; visible product behavior may
-not silently change with them. Capture reference screenshots before each UI slice, compare both
-locales at approved desktop and narrow viewports, and treat unexplained visual drift as a failing
-contract rather than a redesign opportunity.
+The accepted Phase-43 public editor remains the normative visual and interaction reference for
+Phase-44 surfaces outside the explicit T9–T13 changes in §2.13. Internal actors, commands,
+projections, processing, and resource ownership may change only as required by those checkpoints;
+visible product behavior may not silently change with them. Capture reference screenshots before
+each UI slice, compare both locales at approved desktop and narrow viewports, and treat unexplained
+visual drift as a failing contract rather than a redesign opportunity.
 
 An incremental slice is compared only across presentation it owns. Truthful copy required by that
 slice and UI owned by an explicitly deferred slice may differ only when its active phase contract
@@ -921,6 +1030,14 @@ locale, and no retained route, component, test helper, worker, or export may ins
 editor workflow. Removal is reachability-driven: shared visual or pure policy code stays only when a
 current owner is explicit.
 
+For Phase 44, render ownership belongs to the smallest component that needs a value. Page and
+workspace composition must not subscribe to state used only by a descendant, aggregate unrelated
+local UI concerns, or recreate broad projections on every publication. Memoization is selective:
+stable selectors, props, callbacks, and derived identities come first; `memo`, `useMemo`, and
+`useCallback` are used at proven component boundaries rather than applied mechanically. XState and
+runtime external stores remain the default state mechanisms. Any MobX experiment stays isolated
+until the architect accepts its ownership contract and final evidence.
+
 ## 6. Stack and runtime configuration
 
 [`STACK.md`](./STACK.md) is authoritative for versions, commands, repository layout, gates, and
@@ -940,7 +1057,7 @@ Current environment contract:
 | `PORT`, `NODE_ENV` | Standard server runtime configuration |
 
 Phases 33–37 add no environment variable. Future backend technology is deliberately undecided; current
-candidates and decision criteria are recorded in `ARCHITECTURE_V2.md`, not an implementation mandate.
+candidates and decision criteria are recorded in `ARCHITECTURE.md`, not an implementation mandate.
 
 ## 7. Non-functional acceptance
 
@@ -1089,6 +1206,20 @@ resource, security, build/container, or rollback evidence is missing; the final 
 not `ready`; or an unresolved architect review note remains. Production deployment is outside the
 phase and is not authorized by a partial or waived gate.
 
+Phase 44 additionally fails if the accepted public behavior or layout regresses; a large parent
+retains subscriptions needed only by leaf controls; a new store mirrors XState workflow truth;
+component decomposition moves browser resources into React; unstable projections or callback fan-
+out continue to invalidate unrelated subtrees without explicit justification; a stale async result
+can publish; changed resource owners leak; confirmed obsolete code is removed without reachability
+evidence; any checkpoint lacks its focused checks or architect approval; or final render,
+performance, resource, full-gate, and architect evidence is incomplete. Pre-refactor Chrome traces
+and render counters are not required by this phase. The T9–T13 extension also fails if tools display
+different committed baselines, history availability lies, Background preview/Apply/Cancel is not
+atomic, Magic recovery lacks approved diagnosis/evidence, model reprocessing loses or crosses
+document ownership without an approved policy, paste depends on hover, initialization visibly
+selects an intermediate mode, delayed feedback is immediate or nondeterministic, theme/navigation
+controls are inaccessible, or any changed user-facing flow lacks bilingual Playwright coverage.
+
 ## 8. Delivery state and roadmap
 
 | Phase | State | Meaning |
@@ -1106,11 +1237,12 @@ phase and is not authorized by a partial or waived gate.
 | 41 | Complete | V1-faithful editor-tool workspace UI over accepted v2 Manual/Magic/Background/Enhancement runtimes; gate and architect acceptance passed |
 | 42 | Complete / blocked result | Regression closure and complete-product evidence finished; one gate timing failure was explicitly waived, unsupported duration signals remain, and no public cutover is authorized |
 | 43 | Complete / gate passed | Final pre-production phase: public/scenario routes use v2, legacy is removed, and release/rollback readiness is proven; no production deploy |
-| Later | Unscheduled | Production deployment is an explicit operator action after Phase 43 merge/gate; post-deploy observation and paid backend work remain separately scoped |
+| 44 | In progress | T2–T8 accepted; six grouped T9–T13 correctness/UX checkpoints precede final T1 evidence and gate |
+| Later | Unscheduled | Production deployment is an explicit operator action after Phase 44 acceptance; post-deploy observation and paid backend work remain separately scoped |
 
-No v2 capability is accepted merely because legacy code exists. Phase 43 is the approved final
-pre-production migration contract; it may remove legacy only after public v2 readiness and
-reachability evidence are complete. Paid work remains outside this track.
+Phase 44 changes implementation structure and the bounded local UI behavior named in §2.13. Paid
+work, remote processing, new model assets, persistence, and production deployment remain outside
+this track.
 
 ## 9. Deferred decisions
 

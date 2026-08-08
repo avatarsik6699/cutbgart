@@ -84,15 +84,17 @@ async function cacheStatus() {
       return asset ? [asset.path] : [];
     }),
   );
-  const usageBytes = manifest.assets
+  const cachedAssets = manifest.assets
     .filter((asset) => paths.has(asset.path))
-    .reduce((sum, asset) => sum + asset.byteSize, 0);
+    .map(({ path, revision, byteSize }) => ({ path, revision, byteSize }));
+  const usageBytes = cachedAssets.reduce((sum, asset) => sum + asset.byteSize, 0);
   const estimate = await self.navigator.storage?.estimate?.();
   return {
     type: "MODEL_CACHE_STATUS",
     release: manifest.release,
-    assetCount: paths.size,
+    assetCount: cachedAssets.length,
     usageBytes,
+    cachedAssets,
     quotaBytes: estimate?.quota ?? null,
     totalOriginUsageBytes: estimate?.usage ?? null,
   };
@@ -205,11 +207,17 @@ self.addEventListener("fetch", (event) => {
         try {
           await cache.put(request, verifiedReleaseResponse.clone());
         } catch (error) {
-          // Quota pressure must not break the active inference request.
-          await caches.delete(CACHE_NAME);
+          // Only actual quota exhaustion justifies wiping the cache; a transient
+          // write/network error must not discard assets that are already cached.
+          if (error instanceof DOMException && error.name === "QuotaExceededError") {
+            await caches.delete(CACHE_NAME);
+          }
           await notifyClients({
             type: "MODEL_CACHE_ERROR",
-            code: "quota-or-write-failed",
+            code:
+              error instanceof DOMException && error.name === "QuotaExceededError"
+                ? "quota-exceeded"
+                : "write-failed",
             assetPath: asset.path,
           });
           console.error(`[sw] cache write failed for ${request.url}:`, error);

@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./support/v2/fixtures";
-import { scanPhase42Accessibility } from "./support/v2/accessibility";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { scanPhase42Accessibility } from "./support/editor/accessibility";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ mode: "serial", retries: 0 });
 test.use({ trace: "retain-on-failure" });
@@ -20,10 +20,12 @@ type LocaleContract = Readonly<{
   magicCanvas: string;
   background: string;
   ocean: string;
+  processingMode: string;
   enhancements: string;
   apply: string;
   download: string;
   downloadAll: RegExp;
+  downloadOptions: string;
   remove: RegExp;
 }>;
 
@@ -39,10 +41,12 @@ const locales: readonly LocaleContract[] = [
     magicCanvas: "Paint Keep and Remove guidance on the image",
     background: "Background",
     ocean: "Ocean",
+    processingMode: "Optimal",
     enhancements: "Enhancements",
     apply: "Apply",
     download: "Download",
     downloadAll: /Download all/,
+    downloadOptions: "Output options",
     remove: /Remove image/,
   },
   {
@@ -56,10 +60,12 @@ const locales: readonly LocaleContract[] = [
     magicCanvas: "Нарисуйте подсказки «Сохранить» и «Удалить» на изображении",
     background: "Фон",
     ocean: "Океан",
+    processingMode: "Оптимально",
     enhancements: "Улучшения",
     apply: "Применить",
     download: "Скачать",
     downloadAll: /Скачать вс[её]/,
+    downloadOptions: "Параметры результата",
     remove: /Удалить изображение/,
   },
 ];
@@ -112,7 +118,7 @@ async function expectNoHorizontalPageOverflow(page: Page): Promise<void> {
 }
 
 test("both locales complete the single, batch, tool, recovery and export matrix", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   const fixtureBytes = [...(await readFile(phase33ImageCorpus.smoke.path))];
@@ -122,28 +128,31 @@ test("both locales complete the single, batch, tool, recovery and export matrix"
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(labels.route);
     await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
+    await page
+      .getByRole("radio", { name: new RegExp(`^${labels.processingMode}`) })
+      .click();
     await expectAccessible(page);
 
     await dispatchAdmission(page, labels.upload, "drop", fixtureBytes);
-    await expect.poll(editorV2.scenario.runCount).toBe(1);
-    await editorV2.scenario.stage("model-loading", 0.42);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(1);
+    await editor.scenario.stage("model-loading", 0.42);
+    await editor.scenario.completeRun();
     await page.getByRole("button", { name: labels.backToUpload, exact: true }).click();
     await expect(page.getByLabel(labels.upload)).toBeVisible();
 
     await dispatchAdmission(page, labels.upload, "paste", fixtureBytes);
-    await expect.poll(editorV2.scenario.runCount).toBe(2);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(2);
+    await editor.scenario.completeRun();
     await page.getByRole("button", { name: labels.backToUpload, exact: true }).click();
     await expect(page.getByLabel(labels.upload)).toBeVisible();
 
     await page
       .getByLabel(labels.upload)
       .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
-    await expect.poll(editorV2.scenario.runCount).toBe(3);
-    await editorV2.scenario.completeRun();
-    await expect.poll(editorV2.scenario.runCount).toBe(4);
-    await editorV2.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(3);
+    await editor.scenario.completeRun();
+    await expect.poll(editor.scenario.runCount).toBe(4);
+    await editor.scenario.completeRun();
 
     const batch = page.getByTestId("batch-overview");
     await expect(batch.locator("article")).toHaveCount(2);
@@ -158,41 +167,42 @@ test("both locales complete the single, batch, tool, recovery and export matrix"
       .getByRole("img", { name: labels.manualCanvas })
       .click({ position: { x: 8, y: 8 } });
     await page.getByRole("button", { name: labels.apply, exact: true }).click();
-    await expect.poll(editorV2.scenario.manualCommitCount).toBe(1);
+    await expect.poll(editor.scenario.manualCommitCount).toBe(1);
 
     await page.getByRole("tab", { name: labels.magic, exact: true }).click();
     await page.getByLabel(labels.magicCanvas).click({ position: { x: 8, y: 8 } });
     await page.getByRole("button", { name: labels.apply, exact: true }).click();
-    await expect.poll(editorV2.scenario.magicPredictionCount).toBe(1);
-    await expect.poll(editorV2.scenario.magicCommitCount).toBe(1);
+    await expect.poll(editor.scenario.magicPredictionCount).toBe(1);
+    await expect.poll(editor.scenario.magicCommitCount).toBe(1);
 
     await page.getByRole("button", { name: labels.background, exact: true }).click();
     await page.getByRole("button", { name: labels.ocean }).click();
     await page.getByRole("button", { name: labels.apply, exact: true }).click();
-    await expect.poll(editorV2.scenario.backgroundCommitCount).toBe(1);
+    await expect.poll(editor.scenario.backgroundCommitCount).toBe(1);
     await expect(
       page.getByRole("button", { name: labels.background, exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
 
     await page.getByRole("button", { name: labels.enhancements, exact: true }).click();
     await page.getByRole("button", { name: labels.apply, exact: true }).click();
-    await editorV2.scenario.completeEnhancement();
-    await editorV2.scenario.completeEnhancement();
-    await expect.poll(editorV2.scenario.enhancementCommitCount).toBe(1);
+    await editor.scenario.completeEnhancement();
+    await editor.scenario.completeEnhancement();
+    await expect.poll(editor.scenario.enhancementCommitCount).toBe(1);
     await expect(
       page.getByRole("button", { name: labels.enhancements, exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
 
     await page.keyboard.press("Control+z");
     await page.keyboard.press("Control+y");
-    expect(await editorV2.scenario.runCount()).toBe(4);
+    expect(await editor.scenario.runCount()).toBe(4);
     await expectAccessible(page);
 
     const selectedDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: labels.download, exact: true }).click();
     expect((await selectedDownload).suggestedFilename()).toBe("cutbg-result.png");
     const zipDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: labels.downloadAll }).click();
+    await page.getByRole("button", { name: labels.downloadOptions }).click();
+    await page.getByRole("menuitem", { name: labels.downloadAll }).click();
     expect((await zipDownload).suggestedFilename()).toBe("cutbg-results.zip");
 
     await page.getByLabel(labels.addImages).setInputFiles("e2e/fixtures/unsupported.txt");
@@ -207,19 +217,19 @@ test("both locales complete the single, batch, tool, recovery and export matrix"
       await batch.locator("article").last().getByTestId("batch-item-actions").click();
       await page.getByRole("menuitem", { name: labels.remove }).click();
     }
-    await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+    await expect.poll(editor.scenario.resourceCounts).toEqual({
       artifacts: 0,
       leases: 0,
       objectUrls: 0,
     });
 
     for (let cycle = 0; cycle < 3; cycle += 1) {
-      const nextRun = (await editorV2.scenario.runCount()) + 1;
+      const nextRun = (await editor.scenario.runCount()) + 1;
       await page.getByLabel(labels.upload).setInputFiles(phase33ImageCorpus.smoke.path);
-      await expect.poll(editorV2.scenario.runCount).toBe(nextRun);
-      await editorV2.scenario.completeRun();
+      await expect.poll(editor.scenario.runCount).toBe(nextRun);
+      await editor.scenario.completeRun();
       await page.getByRole("button", { name: labels.backToUpload, exact: true }).click();
-      await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+      await expect.poll(editor.scenario.resourceCounts).toEqual({
         artifacts: 0,
         leases: 0,
         objectUrls: 0,

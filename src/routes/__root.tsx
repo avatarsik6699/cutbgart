@@ -6,7 +6,8 @@ import appCss from "../app/styles/globals.css?url";
 import { ServiceWorkerRegistration } from "../app/service-worker-registration";
 import { env } from "../shared/config";
 import { getLocale } from "../paraglide/runtime";
-import { TooltipProvider } from "../shared/ui";
+import { ThemeProvider } from "../shared/lib";
+import { NavigationProgress, TooltipProvider } from "../shared/ui";
 import { NotFoundPage } from "../pages/not-found";
 import { RouteErrorPage } from "../pages/route-error";
 
@@ -73,7 +74,10 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         <ServiceWorkerRegistration />
-        <TooltipProvider>{children}</TooltipProvider>
+        <ThemeProvider>
+          <NavigationProgress />
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

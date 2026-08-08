@@ -23,6 +23,52 @@
 
 ## Gotcha Log
 
+### Why Did You Render's JSX runtime must stay client-only
+
+- **Symptoms**: `pnpm dev:profile` starts, but the first SSR request returns 500 with
+  `Named export 'Fragment' not found` from the WDYR `jsx-dev-runtime` module.
+- **Root cause**: WDYR 10 supports React 19 but publishes its instrumented JSX development runtime
+  as CommonJS. Applying `jsxImportSource` globally makes TanStack Start's Node SSR environment load
+  that runtime as ESM.
+- **Fix**: use Vite's per-environment plugin boundary: WDYR is the JSX import source only for the
+  `client` environment in `profile` mode; SSR and every ordinary mode keep React's runtime. Load
+  the React patch before hydration from the custom client entry.
+- **Prevention**: smoke `pnpm dev:profile` in a browser and require a hydrated page, the diagnostics
+  console marker, and zero page errors. After the normal production build, scan emitted client and
+  server assets for the WDYR package, marker, and patch symbols; all must be absent.
+
+### Canvas view input must be scoped to an active viewport
+
+- **Symptoms**: the wheel scrolls the page over the editor, `Ctrl/⌘ +/-` zooms the browser, or
+  Space/H/B/F affects a hidden or unrelated tool.
+- **Root cause**: view shortcuts were registered at `window` without a truthful hover/focus owner,
+  modifier shortcuts were discarded, and the viewport had no cancelable wheel listener. A later
+  implementation also waited for React hover and gesture-state commits, so a quick Space press
+  could reach browser scrolling before the canvas became active and pan start/end invalidated the
+  whole Cutout workspace.
+- **Fix**: activate view commands only while the cutout viewport is hovered or focused; expose that
+  state visually; route `Ctrl/⌘ +/-/0`, H/B/F, and Space to the active canvas; attach wheel directly
+  to the viewport with `{ passive: false }` and symmetric cleanup. Update the active ref and
+  Space/middle-button pan cursor synchronously at the viewport boundary; keep high-frequency pan
+  state and transforms outside React.
+- **Prevention**: browser-test that page scroll and browser zoom stay unchanged while the active
+  viewport zoom changes, verify immediate grab/grabbing cursors for both pan gestures, and use a
+  Profiler regression to prove a complete drag creates no Cutout workspace commit. Then verify the
+  same input is untouched after pointer/focus leaves the viewport.
+
+### Manual Restore must use source pixels and source alpha
+
+- **Symptoms**: Restore brings back only fragments the automatic model originally kept, while
+  erased subject details remain impossible to recover; repeated Restore/Erase feels random.
+- **Root cause**: the manual draft used the first automatic matte as its restore ceiling and painted
+  the already cut-out composite, so pixels rejected by the model no longer had recoverable alpha or
+  reliable source colour in the preview.
+- **Fix**: render the immutable source image into the manual canvas, extract its original alpha once,
+  and use that alpha as Restore's target while the current committed matte remains the draft's
+  working/dirty baseline.
+- **Prevention**: keep engine and browser regressions that erase an opaque source pixel to zero,
+  restore it to the decoded source alpha, and prove one Apply/history operation with no reinference.
+
 ### Service-worker registration must be owned by the application shell
 
 - **Symptoms**: the public v2 editor waits indefinitely for model-cache status or offline actions
@@ -160,11 +206,13 @@
   brush halo permits changes opposite to the user's intent; symmetric continuity scoring cannot
   distinguish a desired restoration from a destructive loss.
 - **Fix**: retain the latest stroke intent across the full influence footprint. Fuse Keep with
-  `max(baseAlpha, candidateAlpha)` and Remove with `min(baseAlpha, candidateAlpha)`, then apply the
-  hard core last and rank the resulting safe mattes.
-- **Prevention**: keep adversarial unit/hook/E2E candidates that contain opposite-direction holes,
-  plus real-model recomposition checks requiring zero alpha loss for Keep-only and zero alpha gain
-  for Remove-only automatic-base passes.
+  `max(baseAlpha, candidateAlpha)` and Remove with `min(baseAlpha, candidateAlpha)`. For an
+  automatic base, let the model candidate preserve the semantic boundary even inside incidental
+  hard-core overlap; the hard core ranks and prompts candidates but must not blindly overwrite a
+  model-confirmed subject/background edge. Direct no-base guidance may still apply its hard intent.
+- **Prevention**: keep adversarial subject-edge/background-edge fixtures in which the core crosses
+  the opposite semantic region, plus real-model recomposition checks requiring zero subject-alpha
+  loss for Remove, zero background-alpha gain for Keep, and the existing directional monotonicity.
 
 ### An awaited editor transition can resurrect a cancelled session
 

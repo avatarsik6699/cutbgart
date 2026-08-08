@@ -114,7 +114,7 @@ const build: BuildEnv = Object.freeze({
 export const env = Object.freeze({
   build,
   client,
-  // Backward-compatible legacy exports during the v2 migration.
+  // Backward-compatible exports retained for existing consumers.
   cfBeaconToken: client.analytics.cfBeaconToken,
   modelCdnBaseUrl: client.model.cdnBaseUrl,
   modelLabEnabled: client.model.labEnabled,

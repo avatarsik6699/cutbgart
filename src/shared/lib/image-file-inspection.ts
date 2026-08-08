@@ -95,12 +95,10 @@ export async function inspectEncodedImageDimensions(
   const bytes = new Uint8Array(
     await file.slice(0, Math.min(file.size, MAX_HEADER_BYTES)).arrayBuffer(),
   );
-  const dimensions =
-    type === "image/jpeg"
-      ? inspectJpeg(bytes)
-      : type === "image/png"
-        ? inspectPng(bytes)
-        : inspectWebp(bytes);
+  let dimensions: EncodedImageDimensions | null;
+  if (type === "image/jpeg") dimensions = inspectJpeg(bytes);
+  else if (type === "image/png") dimensions = inspectPng(bytes);
+  else dimensions = inspectWebp(bytes);
   if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) return null;
   return dimensions;
 }

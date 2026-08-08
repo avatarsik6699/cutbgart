@@ -1,8 +1,18 @@
 export { inspectEncodedImageDimensions } from "./image-file-inspection";
 export type { EncodedImageDimensions } from "./image-file-inspection";
-export { formatBytesLadder, formatMegabytes } from "./format-bytes";
-export { BACKGROUND_GRADIENT_PRESETS } from "./background-gradient-presets";
-export type { BackgroundGradientPreset } from "./background-gradient-presets";
+export {
+  currentLocalYear,
+  formatBytesLadder,
+  formatLocalTime,
+  formatMegabytes,
+} from "./formatting";
+export { BACKGROUND_GRADIENT_PRESETS } from "./editor/background-gradient-presets";
+export {
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MAGIC,
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MANUAL,
+  CUTOUT_BRUSH_DIAMETER_MAX,
+  CUTOUT_BRUSH_DIAMETER_MIN,
+} from "./editor/brush-geometry";
 export { createModelSourceLoader } from "./inference/model-source-loader";
 export type {
   LoadOptions,
@@ -29,5 +39,8 @@ export type {
   MattingRefinementMode,
   ProductionModelProfile,
 } from "./inference/production-model-config";
-export { useRouter } from "./use-router";
+export { useRouter, useRouterLoadingState } from "./use-router";
+export { useIsHydrated } from "./react";
+export { useTheme } from "./theme/theme-context";
+export { ThemeProvider } from "./theme/theme-provider";
 export { cn } from "./utils";

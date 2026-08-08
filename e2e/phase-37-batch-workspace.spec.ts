@@ -1,13 +1,13 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, test } from "./support/v2/fixtures";
-import { phase33ImageCorpus } from "./support/v2/image-corpus";
+import { expect, test } from "./support/editor/fixtures";
+import { phase33ImageCorpus } from "./support/editor/image-corpus";
 
 test.describe.configure({ retries: 0 });
 test.use({ trace: "retain-on-failure" });
 
 test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP remain isolated", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/en/");
@@ -21,17 +21,17 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
 
   const strip = page.getByTestId("batch-overview");
   await expect(strip.locator("article")).toHaveCount(3);
-  await expect.poll(editorV2.scenario.runCount).toBe(1);
+  await expect.poll(editor.scenario.runCount).toBe(1);
   await expect(strip).toContainText("Queue position 1");
-  await editorV2.scenario.stage("automatic-remove");
-  await editorV2.scenario.completeRun();
-  await expect.poll(editorV2.scenario.runCount).toBe(2);
-  await editorV2.scenario.stage("automatic-remove");
+  await editor.scenario.stage("automatic-remove");
+  await editor.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(2);
+  await editor.scenario.stage("automatic-remove");
   await expect(strip.getByText("Processing locally")).toBeVisible();
-  await editorV2.scenario.completeRun();
-  await expect.poll(editorV2.scenario.runCount).toBe(3);
-  await editorV2.scenario.stage("automatic-remove");
-  await editorV2.scenario.completeRun();
+  await editor.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(3);
+  await editor.scenario.stage("automatic-remove");
+  await editor.scenario.completeRun();
   await expect(strip.getByText("Result ready")).toHaveCount(3);
 
   const second = strip.locator("article").nth(1);
@@ -49,7 +49,7 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   ).toBeVisible();
   await second.getByRole("button", { name: /Select / }).click();
   await expect(page.getByText("Background preview has unapplied changes.")).toBeVisible();
-  expect(await editorV2.scenario.runCount()).toBe(3);
+  expect(await editor.scenario.runCount()).toBe(3);
 
   const addInput = page.getByLabel("Add images");
   await addInput.setInputFiles("e2e/fixtures/unsupported.txt");
@@ -60,7 +60,8 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   await expect(strip.locator("article")).toHaveCount(3);
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await download.path();
@@ -72,12 +73,13 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   expect(text).toContain("cutbg-result-03.png");
   expect(text).not.toContain("sample");
   await expect(page.getByText("ZIP includes 3; skips 0.")).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.keyboard.press("Escape");
   while ((await strip.locator("article").count()) > 0) {
     await strip.locator("article").last().getByTestId("batch-item-actions").click();
-    await page.getByRole("menuitem", { name: "Remove image" }).click();
+    const menu = page.getByRole("menu", { name: /Actions for/ });
+    await menu.getByRole("menuitem", { name: "Remove image" }).click();
   }
-  await expect.poll(editorV2.scenario.resourceCounts).toEqual({
+  await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,
     leases: 0,
     objectUrls: 0,
@@ -85,7 +87,7 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
 });
 
 test("Russian batch controls keep keyboard selection and guarded removal accessible", async ({
-  editorV2,
+  editor,
   page,
 }) => {
   await page.goto("/");
@@ -94,12 +96,12 @@ test("Russian batch controls keep keyboard selection and guarded removal accessi
     .getByLabel("Загрузить изображения")
     .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
   const strip = page.getByTestId("batch-overview");
-  await editorV2.scenario.stage("automatic-remove");
-  await editorV2.scenario.completeRun();
-  await expect.poll(editorV2.scenario.runCount).toBe(2);
-  await editorV2.scenario.stage("automatic-remove");
+  await editor.scenario.stage("automatic-remove");
+  await editor.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(2);
+  await editor.scenario.stage("automatic-remove");
   await expect(strip.getByText("Локальная обработка")).toBeVisible();
-  await editorV2.scenario.completeRun();
+  await editor.scenario.completeRun();
   const second = strip.locator("article").nth(1);
   const open = second.getByRole("button", { name: /Выбрать / });
   await open.focus();
@@ -121,5 +123,5 @@ test("Russian batch controls keep keyboard selection and guarded removal accessi
       .first()
       .getByRole("button", { name: /Выбрать / }),
   ).toHaveAttribute("aria-pressed", "true");
-  expect(await editorV2.scenario.runCount()).toBe(2);
+  expect(await editor.scenario.runCount()).toBe(2);
 });
