@@ -140,10 +140,19 @@ test("serialized real model covers cold and warm complete-product work without r
   const manualCanvas = page.getByRole("img", { name: "Manual cutout canvas" });
   const manualBox = await manualCanvas.boundingBox();
   if (manualBox === null) throw new Error("Manual canvas has no viewport box");
+  await page.getByRole("button", { name: "Erase", exact: true }).click();
   await manualCanvas.click({
     position: { x: manualBox.width / 2, y: manualBox.height / 2 },
   });
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const applyManual = page.getByRole("button", { name: "Apply", exact: true });
+  if (!(await applyManual.isEnabled())) {
+    await page.getByRole("button", { name: "Restore", exact: true }).click();
+    await manualCanvas.click({
+      position: { x: manualBox.width / 2, y: manualBox.height / 2 },
+    });
+  }
+  await expect(applyManual).toBeEnabled();
+  await applyManual.click();
   await expect.poll(async () => (await counters(page)).manualCommits).toBe(1);
 
   await page.getByRole("button", { name: "Background", exact: true }).click();

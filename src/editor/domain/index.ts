@@ -122,11 +122,8 @@ export {
   redoDocumentHistory,
   undoDocumentHistory,
 } from "./document-history";
-export {
-  advanceMagicDraftRevision,
-  createMagicCutoutDraft,
-  matchesMagicPrediction,
-} from "./magic-cutout";
+export { advanceMagicDraftRevision } from "./magic-cutout/magic-cutout.policy";
+export { createMagicCutoutDraft, matchesMagicPrediction } from "./magic-cutout";
 export type { MagicCutoutTypes } from "./magic-cutout";
 export type { DocumentHistoryTypes } from "./document-history";
 export { isProcessingErrorCode, isProcessingTerminalEvent } from "./processing";

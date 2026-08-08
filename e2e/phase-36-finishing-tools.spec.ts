@@ -59,10 +59,13 @@ test("Background and Enhancements remain explicit atomic document edits", async 
   await expect.poll(editor.scenario.enhancementRunCount).toBe(1);
   await page.keyboard.press("Control+Enter");
   expect(await editor.scenario.enhancementRunCount()).toBe(1);
-  await expect(page.getByRole("status")).toContainText("Improve fine details · 50%");
+  const enhancementStatus = page
+    .getByTestId("enhancements-tool-panel")
+    .getByRole("status");
+  await expect(enhancementStatus).toContainText("Improve fine details · 50%");
   await editor.scenario.completeEnhancement();
   await expect.poll(editor.scenario.enhancementRunCount).toBe(2);
-  await expect(page.getByRole("status")).toContainText("Remove colour halo · 50%");
+  await expect(enhancementStatus).toContainText("Remove colour halo · 50%");
   await editor.scenario.completeEnhancement();
   await expect(page.getByText("Document revision 5")).toBeVisible();
   await expect.poll(editor.scenario.enhancementRunCount).toBe(2);

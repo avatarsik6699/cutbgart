@@ -106,7 +106,8 @@ test("cold and warm real-model documents complete the accepted full workflow", a
     ),
   ).toBe(2);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download all" }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await download).suggestedFilename()).toBe("cutbg-results.zip");
   const realToolRuns = await page.evaluate(() => ({
     magic: (window as Window & { __phase38MagicPredictions?: number })

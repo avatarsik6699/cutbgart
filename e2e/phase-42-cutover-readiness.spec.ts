@@ -20,6 +20,7 @@ type LocaleContract = Readonly<{
   magicCanvas: string;
   background: string;
   ocean: string;
+  processingMode: string;
   enhancements: string;
   apply: string;
   download: string;
@@ -40,6 +41,7 @@ const locales: readonly LocaleContract[] = [
     magicCanvas: "Paint Keep and Remove guidance on the image",
     background: "Background",
     ocean: "Ocean",
+    processingMode: "Optimal",
     enhancements: "Enhancements",
     apply: "Apply",
     download: "Download",
@@ -58,6 +60,7 @@ const locales: readonly LocaleContract[] = [
     magicCanvas: "Нарисуйте подсказки «Сохранить» и «Удалить» на изображении",
     background: "Фон",
     ocean: "Океан",
+    processingMode: "Оптимально",
     enhancements: "Улучшения",
     apply: "Применить",
     download: "Скачать",
@@ -125,6 +128,9 @@ test("both locales complete the single, batch, tool, recovery and export matrix"
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(labels.route);
     await expect(page.locator("main")).toHaveAttribute("data-hydrated", "true");
+    await page
+      .getByRole("radio", { name: new RegExp(`^${labels.processingMode}`) })
+      .click();
     await expectAccessible(page);
 
     await dispatchAdmission(page, labels.upload, "drop", fixtureBytes);

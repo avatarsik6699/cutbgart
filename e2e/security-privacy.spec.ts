@@ -82,7 +82,8 @@ test.describe("public editor security and privacy", () => {
     await expect.poll(editor.scenario.runCount).toBe(3);
     await editor.scenario.completeRun();
     const pending = page.waitForEvent("download");
-    await page.getByRole("button", { name: /Download all/ }).click();
+    await page.getByRole("button", { name: "Output options" }).click();
+    await page.getByRole("menuitem", { name: /Download all/ }).click();
     const zipPath = await (await pending).path();
     if (zipPath === null) throw new Error("Batch ZIP download path unavailable");
     const zipText = (await readFile(zipPath)).toString("latin1");

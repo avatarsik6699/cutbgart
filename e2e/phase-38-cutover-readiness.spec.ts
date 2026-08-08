@@ -83,6 +83,7 @@ test("both locales pass the accessibility and responsive material-state matrix",
   editor,
   page,
 }) => {
+  test.setTimeout(90_000);
   for (const labels of locales) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });

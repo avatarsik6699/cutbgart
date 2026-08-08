@@ -56,6 +56,12 @@ const WASM_MODEL_MODES = Object.freeze(
   ).map((model) => model.id),
 );
 
+function modelModesForPath(
+  inferencePath: BrowserInferencePath | null,
+): readonly AutomaticModelMode[] {
+  return inferencePath === "webgpu" ? WEBGPU_MODEL_MODES : WASM_MODEL_MODES;
+}
+
 function documentState(
   documentId: DocumentId,
   imageId: DocumentState["imageId"],
@@ -95,6 +101,57 @@ function itemStatus(item: ItemRecord): EditorSessionTypes.ItemStatus {
   if (status === "queued" || status === "enhancement-queued") return "queued";
   if (status === "model-loading") return "model-loading";
   return "processing";
+}
+
+function canReprocess(
+  document: DocumentState,
+  targetMode: AutomaticModelMode,
+  availableModes: readonly AutomaticModelMode[],
+): boolean {
+  return (
+    document.status === "result" &&
+    document.committed !== null &&
+    document.activeDraft === null &&
+    document.committed.automaticModelMode !== targetMode &&
+    availableModes.includes(targetMode)
+  );
+}
+
+function startAutomaticRemoval(
+  runtime: DocumentRuntime,
+  modelMode: AutomaticModelMode,
+): boolean {
+  runtime.actor.send({
+    type: "COMMAND",
+    command: {
+      type: "START_AUTOMATIC_REMOVAL",
+      documentId: runtime.documentId,
+      backend: "local",
+      modelMode,
+    },
+  });
+  return runtime.actor.getSnapshot().context.lastCommandOutcome?.status === "accepted";
+}
+
+function retryRuntimeItem(
+  item: ItemRecord,
+  targetMode: AutomaticModelMode,
+  availableModes: readonly AutomaticModelMode[],
+  publish: () => void,
+): boolean {
+  if (item.runtime === null) return false;
+  const document = item.runtime.actor.getSnapshot().context.document;
+  if (document.status === "error") {
+    startAutomaticRemoval(item.runtime, targetMode);
+    return true;
+  }
+  if (!canReprocess(document, targetMode, availableModes)) return true;
+  if (startAutomaticRemoval(item.runtime, targetMode)) {
+    item.requestedModelMode = targetMode;
+    item.modelMode = targetMode;
+    publish();
+  }
+  return true;
 }
 
 export function createEditorSession(
@@ -464,7 +521,7 @@ export function createEditorSession(
       (candidate) =>
         !candidate.removed && candidate.documentId === selected()?.documentId,
     );
-    return item?.inferencePath === "webgpu" ? WEBGPU_MODEL_MODES : WASM_MODEL_MODES;
+    return modelModesForPath(item?.inferencePath ?? null);
   }
 
   return {
@@ -686,26 +743,9 @@ export function createEditorSession(
         (candidate) => !candidate.removed && candidate.documentId === runtime.documentId,
       );
       const document = runtime.actor.getSnapshot().context.document;
-      if (
-        item === undefined ||
-        document.status !== "result" ||
-        document.committed === null ||
-        document.activeDraft !== null ||
-        document.committed.automaticModelMode === modelMode ||
-        !availableModelModes().includes(modelMode)
-      )
+      if (item === undefined || !canReprocess(document, modelMode, availableModelModes()))
         return false;
-      runtime.actor.send({
-        type: "COMMAND",
-        command: {
-          type: "START_AUTOMATIC_REMOVAL",
-          documentId: runtime.documentId,
-          backend: "local",
-          modelMode,
-        },
-      });
-      const outcome = runtime.actor.getSnapshot().context.lastCommandOutcome;
-      if (outcome?.status !== "accepted") return false;
+      if (!startAutomaticRemoval(runtime, modelMode)) return false;
       item.requestedModelMode = modelMode;
       item.modelMode = modelMode;
       publish();
@@ -716,47 +756,11 @@ export function createEditorSession(
         (candidate) => candidate.itemId === itemId && !candidate.removed,
       );
       if (item === undefined) return;
-      if (item.runtime !== null) {
-        const document = item.runtime.actor.getSnapshot().context.document;
-        const targetMode = modelMode ?? item.modelMode;
-        if (document.status === "error") {
-          item.runtime.actor.send({
-            type: "COMMAND",
-            command: {
-              type: "START_AUTOMATIC_REMOVAL",
-              documentId: document.documentId,
-              backend: "local",
-              modelMode: targetMode,
-            },
-          });
-          return;
-        }
-
-        if (
-          document.status === "result" &&
-          document.committed !== null &&
-          document.committed.automaticModelMode !== targetMode &&
-          document.activeDraft === null &&
-          availableModelModes().includes(targetMode)
-        ) {
-          item.runtime.actor.send({
-            type: "COMMAND",
-            command: {
-              type: "START_AUTOMATIC_REMOVAL",
-              documentId: document.documentId,
-              backend: "local",
-              modelMode: targetMode,
-            },
-          });
-          const outcome = item.runtime.actor.getSnapshot().context.lastCommandOutcome;
-          if (outcome?.status === "accepted") {
-            item.requestedModelMode = targetMode;
-            item.modelMode = targetMode;
-            publish();
-          }
-        }
+      const targetMode = modelMode ?? item.modelMode;
+      if (
+        retryRuntimeItem(item, targetMode, modelModesForPath(item.inferencePath), publish)
+      )
         return;
-      }
       item.error = null;
       item.preparing = true;
       publish();

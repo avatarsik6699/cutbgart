@@ -36,5 +36,3 @@ export const BACKGROUND_GRADIENT_PRESETS = Object.freeze([
     colors: ["#334155", "#020617"] as const,
   }),
 ] as const);
-
-export type BackgroundGradientPreset = (typeof BACKGROUND_GRADIENT_PRESETS)[number];

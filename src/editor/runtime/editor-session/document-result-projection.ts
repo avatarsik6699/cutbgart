@@ -3,6 +3,18 @@ import type { ArtifactId, DocumentId } from "@/editor/domain";
 
 import type { ArtifactRepository } from "../artifacts";
 
+type DocumentActorSnapshot = ReturnType<DocumentMachineTypes.ActorRef["getSnapshot"]>;
+
+function committedForeground(
+  document: DocumentActorSnapshot["context"]["document"],
+): ArtifactId | null {
+  const composite = document.committed?.composite ?? null;
+  return (
+    document.committed?.foreground ??
+    (document.committed?.background.type === "transparent" ? composite : null)
+  );
+}
+
 export class DocumentResultProjection {
   readonly #repository: ArtifactRepository;
   #foregroundArtifactId: ArtifactId | null = null;
@@ -27,40 +39,9 @@ export class DocumentResultProjection {
     ) => void,
   ): void {
     this.stop();
-    this.#subscription = actor.subscribe((actorSnapshot) => {
-      const document = actorSnapshot.context.document;
-      const composite = document.committed?.composite ?? null;
-      const foreground =
-        document.committed?.foreground ??
-        (document.committed?.background.type === "transparent" ? composite : null);
-      if (
-        document.status !== "result" ||
-        composite === null ||
-        (composite === this.#resultArtifactId &&
-          foreground === this.#foregroundArtifactId)
-      ) {
-        return;
-      }
-      this.#releaseUrls();
-      this.#resultUrl = this.#resolveUrl(composite, documentId);
-      this.#resultArtifactId = composite;
-      this.#foregroundArtifactId = foreground;
-      if (foreground === null) {
-        this.#foregroundUrl = null;
-      } else if (foreground === composite) {
-        this.#foregroundUrl = this.#resultUrl;
-      } else {
-        this.#foregroundUrl = this.#resolveUrl(foreground, documentId);
-      }
-      // Pinned once, on the very first committed result; never re-derived on
-      // later Manual/Magic edits, background fills, enhancement runs, or
-      // reprocessing, so "before" panes can keep comparing against it.
-      if (this.#originalArtifactId === null) {
-        this.#originalArtifactId = composite;
-        this.#originalUrl = this.#resultUrl;
-      }
-      publishResultUrls(this.#resultUrl, this.#foregroundUrl, this.#originalUrl);
-    });
+    this.#subscription = actor.subscribe((actorSnapshot) =>
+      this.#projectSnapshot(actorSnapshot, documentId, publishResultUrls),
+    );
   }
 
   stop(): void {
@@ -87,6 +68,46 @@ export class DocumentResultProjection {
     return (
       this.#repository.createObjectUrl(id, { kind: "preview", documentId })?.url ?? null
     );
+  }
+
+  #projectSnapshot(
+    actorSnapshot: DocumentActorSnapshot,
+    documentId: DocumentId,
+    publishResultUrls: (
+      resultUrl: string | null,
+      foregroundUrl: string | null,
+      originalUrl: string | null,
+    ) => void,
+  ): void {
+    const document = actorSnapshot.context.document;
+    const composite = document.committed?.composite ?? null;
+    const foreground = committedForeground(document);
+    const unchanged =
+      composite === this.#resultArtifactId && foreground === this.#foregroundArtifactId;
+    if (document.status !== "result" || composite === null || unchanged) return;
+
+    this.#replaceUrls(composite, foreground, documentId);
+    // Pinned once, on the very first committed result; never re-derived on
+    // later edits or reprocessing, so "before" panes can keep comparing it.
+    if (this.#originalArtifactId === null) {
+      this.#originalArtifactId = composite;
+      this.#originalUrl = this.#resultUrl;
+    }
+    publishResultUrls(this.#resultUrl, this.#foregroundUrl, this.#originalUrl);
+  }
+
+  #replaceUrls(
+    composite: ArtifactId,
+    foreground: ArtifactId | null,
+    documentId: DocumentId,
+  ): void {
+    this.#releaseUrls();
+    this.#resultUrl = this.#resolveUrl(composite, documentId);
+    this.#resultArtifactId = composite;
+    this.#foregroundArtifactId = foreground;
+    if (foreground === null) this.#foregroundUrl = null;
+    else if (foreground === composite) this.#foregroundUrl = this.#resultUrl;
+    else this.#foregroundUrl = this.#resolveUrl(foreground, documentId);
   }
 
   #releaseUrls(): void {

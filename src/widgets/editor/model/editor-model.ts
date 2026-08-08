@@ -96,6 +96,8 @@ export class EditorModel {
     return started;
   };
 
+  // Consumed through ActiveDocumentModel's stable EditorModel reference.
+  // fallow-ignore-next-line unused-class-member
   readonly markModelFocusRestored = (): void => {
     this.updateView({ restoreModelFocus: false });
   };
@@ -105,39 +107,13 @@ export class EditorModel {
     this.session.reset();
   };
 
+  // Consumed through ActiveDocumentModel's stable EditorModel reference.
+  // fallow-ignore-next-line unused-class-member
   readonly downloadSelected = (): void => {
     void this.session
       .exportPng(this.view.exportSize)
       .then(() => trackEvent("download_clicked"));
   };
-
-  readonly beginManual = (): void => {
-    this.updateView({ restoreFocusTool: "manual" });
-    this.session.beginManual();
-  };
-
-  readonly beginMagic = (): void => {
-    this.updateView({ restoreFocusTool: "magic" });
-    this.session.beginMagic();
-  };
-
-  readonly beginBackground = (): void => {
-    this.updateView({ restoreFocusTool: "background" });
-    this.session.beginBackground();
-  };
-
-  readonly beginEnhancements = (): void => {
-    this.updateView({ restoreFocusTool: "enhancements" });
-    this.session.beginEnhancements();
-  };
-
-  readonly markToolFocusRestored = (): void => {
-    this.updateView({ restoreFocusTool: null });
-  };
-
-  readonly undoDocument = (): void => this.session.undoDocument();
-
-  readonly redoDocument = (): void => this.session.redoDocument();
 
   readonly selectBatchDocument = (documentId: DocumentId): void => {
     this.session.selectDocument(documentId);

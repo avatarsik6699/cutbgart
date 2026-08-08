@@ -1,5 +1,4 @@
 import type {
-  CommandOutcome,
   BackgroundTypes,
   DocumentState,
   DocumentStatus,
@@ -33,12 +32,6 @@ export function selectHasAutomaticReprocessError(
   snapshot: DocumentSnapshotLike,
 ): boolean {
   return snapshot.context.document.automaticReprocessError !== null;
-}
-
-export function selectLastDocumentCommandOutcome(
-  snapshot: DocumentSnapshotLike,
-): CommandOutcome | null {
-  return snapshot.context.lastCommandOutcome;
 }
 
 export function selectManualDraft(

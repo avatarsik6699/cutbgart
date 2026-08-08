@@ -55,6 +55,12 @@ type EnhancementCommitOutput = {
   input: EnhancementCommitInput;
   result: EnhancementCommitResult;
 };
+type PromotionEffect = Extract<DocumentTransitionTypes.Effect, { type: "promote-run" }>;
+type DomainActorEvent = Extract<
+  DocumentMachineTypes.ActorEvent,
+  { type: "DOMAIN_EVENT" }
+>;
+type CommandActorEvent = Extract<DocumentMachineTypes.ActorEvent, { type: "COMMAND" }>;
 
 function invokedProcessingError(error: unknown, fallback: string): ProcessingError {
   if (error instanceof ProcessingGatewayError) return error.detail;
@@ -77,6 +83,68 @@ function processingRequestFromState(state: DocumentState): ProcessingRequest {
     operation: "automatic-remove",
     source: state.source,
     modelMode: state.activeRun.modelMode,
+  };
+}
+
+function executeTransitionEffects(
+  dependencies: DocumentMachineTypes.Dependencies,
+  effects: readonly DocumentTransitionTypes.Effect[],
+): PromotionEffect | null {
+  let promotion: PromotionEffect | null = null;
+  for (const effect of effects) {
+    if (effect.type === "promote-run") promotion = effect;
+    else executeArtifactEffect(dependencies, effect);
+  }
+  return promotion;
+}
+
+function promotionSettlementEvent(
+  dependencies: DocumentMachineTypes.Dependencies,
+  promotion: PromotionEffect,
+  previousState: DocumentState,
+): DomainActorEvent {
+  const accepted = executeArtifactEffect(dependencies, promotion) === true;
+  if (!accepted) {
+    return {
+      type: "DOMAIN_EVENT",
+      event: {
+        type: "COMMIT_REJECTED_STALE",
+        documentId: promotion.documentId,
+        runId: promotion.runId,
+        expectedRevision: promotion.expectedRevision,
+      },
+    };
+  }
+  return {
+    type: "DOMAIN_EVENT",
+    event: {
+      type: "COMMIT_ACCEPTED",
+      documentId: promotion.documentId,
+      runId: promotion.runId,
+      expectedRevision: promotion.expectedRevision,
+      estimatedHistoricalBytes:
+        previousState.committed === null
+          ? 0
+          : dependencies.artifacts.estimateHistoricalBytes(previousState.committed),
+    },
+  };
+}
+
+function automaticStartEvent(
+  transition: ReturnType<typeof transitionDocument>,
+  event: DomainActorEvent,
+): CommandActorEvent | null {
+  if (event.event.type !== "PREPARATION_SUCCEEDED") return null;
+  if (transition.outcome !== "applied" || transition.state.status !== "ready")
+    return null;
+  return {
+    type: "COMMAND",
+    command: {
+      type: "START_AUTOMATIC_REMOVAL",
+      documentId: transition.state.documentId,
+      backend: "local",
+      modelMode: event.event.modelMode,
+    },
   };
 }
 
@@ -223,64 +291,14 @@ export function createDocumentMachine(dependencies: DocumentMachineTypes.Depende
     const transition = transitionDocument(context.document, event.event);
     enqueue.assign({ document: transition.state });
 
-    let promotion: Extract<
-      DocumentTransitionTypes.Effect,
-      { type: "promote-run" }
-    > | null = null;
-    for (const effect of transition.effects) {
-      if (effect.type === "promote-run") {
-        promotion = effect;
-      } else {
-        executeArtifactEffect(dependencies, effect);
-      }
-    }
+    const promotion = executeTransitionEffects(dependencies, transition.effects);
 
     if (promotion !== null) {
-      const accepted = executeArtifactEffect(dependencies, promotion) === true;
-      if (accepted) {
-        enqueue.raise({
-          type: "DOMAIN_EVENT",
-          event: {
-            type: "COMMIT_ACCEPTED",
-            documentId: promotion.documentId,
-            runId: promotion.runId,
-            expectedRevision: promotion.expectedRevision,
-            estimatedHistoricalBytes:
-              context.document.committed === null
-                ? 0
-                : dependencies.artifacts.estimateHistoricalBytes(
-                    context.document.committed,
-                  ),
-          },
-        });
-      } else {
-        enqueue.raise({
-          type: "DOMAIN_EVENT",
-          event: {
-            type: "COMMIT_REJECTED_STALE",
-            documentId: promotion.documentId,
-            runId: promotion.runId,
-            expectedRevision: promotion.expectedRevision,
-          },
-        });
-      }
+      enqueue.raise(promotionSettlementEvent(dependencies, promotion, context.document));
     }
 
-    if (
-      transition.outcome === "applied" &&
-      event.event.type === "PREPARATION_SUCCEEDED" &&
-      transition.state.status === "ready"
-    ) {
-      enqueue.raise({
-        type: "COMMAND",
-        command: {
-          type: "START_AUTOMATIC_REMOVAL",
-          documentId: transition.state.documentId,
-          backend: "local",
-          modelMode: event.event.modelMode,
-        },
-      });
-    }
+    const automaticStart = automaticStartEvent(transition, event);
+    if (automaticStart !== null) enqueue.raise(automaticStart);
   });
 
   return machineSetup.createMachine({

@@ -1,7 +1,8 @@
 # Active phase evidence
 
 This directory is reserved for evidence produced by the currently active phase. Phase 44 final
-evidence is created by checkpoint `T1`; the earlier T10 diagnosis and recovery-plan gate is
+evidence is recorded in
+[`PHASE_44_T1_FINAL_VERIFICATION.md`](./PHASE_44_T1_FINAL_VERIFICATION.md); the earlier T10 diagnosis and recovery-plan gate is
 recorded in [`PHASE_44_T10_MAGIC_DIAGNOSIS.md`](./PHASE_44_T10_MAGIC_DIAGNOSIS.md). The attempted
 implementation and its accepted performance stop condition are recorded in
 [`PHASE_44_T10A_MAGIC_RECOVERY_RESULTS.md`](./PHASE_44_T10A_MAGIC_RECOVERY_RESULTS.md). The T12

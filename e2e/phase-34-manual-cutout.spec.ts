@@ -23,8 +23,8 @@ test("Manual draft Cancel/Apply and document Undo/Redo stay local and atomic", a
   const brushCursorBox = await brushCursor.boundingBox();
   if (brushCursorBox === null) throw new Error("Manual brush cursor is not visible");
   expect(Math.abs(brushCursorBox.width - brushCursorBox.height)).toBeLessThanOrEqual(1);
-  await expect(brushCursor).toHaveCSS("border-top-color", "rgb(255, 255, 255)");
-  await expect(brushCursor).toHaveCSS("border-top-style", "solid");
+  await expect(brushCursor).toHaveCSS("border-top-width", "0px");
+  await expect(brushCursor).toHaveCSS("background-color", "rgba(239, 68, 68, 0.42)");
   await canvas.click({ position: { x: 1, y: 1 } });
   await expect(page.getByRole("button", { name: "Undo stroke" })).toBeEnabled();
   await page.keyboard.press("Control+z");

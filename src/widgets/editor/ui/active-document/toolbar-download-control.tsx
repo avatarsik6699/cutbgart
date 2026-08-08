@@ -1,6 +1,7 @@
 import { m } from "@/paraglide/messages";
 import { availableExportSizes, DownloadControl } from "@/features/download-result";
 import type { EditorSessionTypes } from "@/editor/runtime";
+import type { ComponentProps } from "react";
 
 import {
   selectActiveHeight,
@@ -24,6 +25,21 @@ const selectCompletedCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
 const selectExporting = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
   snapshot.export.status === "preparing";
 
+function batchZipOption(
+  batchMode: boolean,
+  exporting: boolean,
+  completedCount: number,
+  model: ReturnType<typeof useEditorModel>,
+): ComponentProps<typeof DownloadControl>["batchZip"] {
+  if (!batchMode) return undefined;
+  return {
+    busy: exporting,
+    disabled: !exporting && completedCount === 0,
+    label: exporting ? m.cancel() : m.downloadAllZip(),
+    onClick: exporting ? model.cancelDownloadAll : model.downloadAll,
+  };
+}
+
 export function ToolbarDownloadControl() {
   const document = useActiveDocumentModel();
   const model = useEditorModel();
@@ -36,19 +52,11 @@ export function ToolbarDownloadControl() {
   const exporting = useEditorWorkspaceSelector(selectExporting);
   const sizes = availableExportSizes({ width, height });
   const selectedSize = sizes.includes(exportSize) ? exportSize : "original";
+  const batchZip = batchZipOption(batchMode, exporting, completedCount, model);
 
   return (
     <DownloadControl
-      batchZip={
-        batchMode
-          ? {
-              busy: exporting,
-              disabled: !exporting && completedCount === 0,
-              label: exporting ? m.cancel() : m.downloadAllZip(),
-              onClick: exporting ? model.cancelDownloadAll : model.downloadAll,
-            }
-          : undefined
-      }
+      batchZip={batchZip}
       busy={singleExport.status === "preparing"}
       error={singleExport.error}
       onDownload={document.editor.downloadSelected}

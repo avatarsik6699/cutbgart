@@ -20,58 +20,68 @@ type Props = Readonly<{
   TriggerIcon: LucideIcon;
 }>;
 
+type OpenChangeReason = Parameters<
+  NonNullable<PopoverPrimitive.Root.Props["onOpenChange"]>
+>[1]["reason"];
+
+function shouldCancelClose(
+  reason: OpenChangeReason,
+  pressOpen: boolean,
+  wasPressOpenBeforeInteraction: boolean,
+): boolean {
+  const freshPressClose =
+    reason === "trigger-press" && pressOpen && !wasPressOpenBeforeInteraction;
+  const passiveClose = reason === "trigger-hover" || reason === "focus-out";
+  return freshPressClose || (pressOpen && passiveClose);
+}
+
+function shouldCancelOpen(reason: OpenChangeReason, dismissLocked: boolean): boolean {
+  const passiveOpen = reason === "trigger-hover" || reason === "trigger-focus";
+  return dismissLocked && passiveOpen;
+}
+
+function createsDismissLock(reason: OpenChangeReason): boolean {
+  return reason === "escape-key" || reason === "close-press";
+}
+
 export function InteractivePopover(props: Props) {
   const [open, setOpen] = useState(false);
   const dismissLockRef = useRef(false);
   const pressOpenRef = useRef(false);
   const wasPressOpenBeforeInteractionRef = useRef(false);
 
+  function handleOpenChange(
+    nextOpen: boolean,
+    eventDetails: Parameters<NonNullable<PopoverPrimitive.Root.Props["onOpenChange"]>>[1],
+  ): void {
+    if (!nextOpen) {
+      if (
+        shouldCancelClose(
+          eventDetails.reason,
+          pressOpenRef.current,
+          wasPressOpenBeforeInteractionRef.current,
+        )
+      ) {
+        eventDetails.cancel();
+        return;
+      }
+      setOpen(false);
+      pressOpenRef.current = false;
+      dismissLockRef.current = createsDismissLock(eventDetails.reason);
+      return;
+    }
+
+    if (shouldCancelOpen(eventDetails.reason, dismissLockRef.current)) {
+      eventDetails.cancel();
+      return;
+    }
+    dismissLockRef.current = false;
+    if (eventDetails.reason === "trigger-press") pressOpenRef.current = true;
+    setOpen(true);
+  }
+
   return (
-    <Popover
-      open={open}
-      onOpenChange={(nextOpen, eventDetails) => {
-        if (!nextOpen) {
-          if (
-            eventDetails.reason === "trigger-press" &&
-            pressOpenRef.current &&
-            !wasPressOpenBeforeInteractionRef.current
-          ) {
-            eventDetails.cancel();
-            return;
-          }
-
-          if (
-            pressOpenRef.current &&
-            (eventDetails.reason === "trigger-hover" ||
-              eventDetails.reason === "focus-out")
-          ) {
-            eventDetails.cancel();
-            return;
-          }
-
-          setOpen(false);
-          pressOpenRef.current = false;
-          dismissLockRef.current =
-            eventDetails.reason === "escape-key" || eventDetails.reason === "close-press";
-          return;
-        }
-
-        if (
-          dismissLockRef.current &&
-          (eventDetails.reason === "trigger-hover" ||
-            eventDetails.reason === "trigger-focus")
-        ) {
-          eventDetails.cancel();
-          return;
-        }
-
-        dismissLockRef.current = false;
-        if (eventDetails.reason === "trigger-press") {
-          pressOpenRef.current = true;
-        }
-        setOpen(true);
-      }}
-    >
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         openOnHover
         delay={150}

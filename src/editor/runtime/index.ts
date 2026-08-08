@@ -9,7 +9,6 @@ export {
   IMPORT_PREPARATION_CONCURRENCY,
   WORKSPACE_ITEM_LIMIT,
 } from "./batch-import";
-export type { BatchImportTypes } from "./batch-import";
 export { BatchExportCoordinator } from "./batch-export";
 export type { BatchExportEntry } from "./batch-export";
 export type {
@@ -86,7 +85,7 @@ export {
   MagicDraftEngine,
   MagicDraftRepository,
 } from "./magic-cutout";
-export type { MagicCutoutRuntimeTypes, MagicRuntimeProgress } from "./magic-cutout";
+export type { MagicRuntimeProgress } from "./magic-cutout";
 export {
   createNativeDownloadAdapter,
   createNativeEditorIdSource,

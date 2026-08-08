@@ -132,7 +132,7 @@ test("T11 admission, client mode, and delayed feedback stay truthful across resp
   expect(selectorMarkup).not.toContain("checked");
 
   const clipboardBytes = [...(await readFile(phase33ImageCorpus.smoke.path))];
-  await page.clock.install();
+  await page.clock.install({ time: new Date("2026-08-08T08:00:00Z") });
   await page.addInitScript(
     ({ bytes }) => {
       const testWindow = window as Window & {
@@ -214,8 +214,7 @@ test("T11 admission, client mode, and delayed feedback stay truthful across resp
         "image";
     });
     if (localeIndex === 0) {
-      const browserNow = await page.evaluate(() => Date.now());
-      await page.clock.pauseAt(new Date(browserNow));
+      await page.clock.pauseAt(new Date("2026-08-08T09:00:00Z"));
     }
     await pasteButton.click();
     await expect.poll(editor.scenario.runCount).toBe(1);

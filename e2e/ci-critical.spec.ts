@@ -41,7 +41,8 @@ test("mocked Chromium critical path: public single and batch edit, history, and 
   );
 
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   const archive = await pending;
   expect(archive.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await archive.path();

@@ -13,7 +13,6 @@ export {
   CUTOUT_BRUSH_DIAMETER_MAX,
   CUTOUT_BRUSH_DIAMETER_MIN,
 } from "./editor/brush-geometry";
-export type { BackgroundGradientPreset } from "./editor/background-gradient-presets";
 export { createModelSourceLoader } from "./inference/model-source-loader";
 export type {
   LoadOptions,
@@ -43,6 +42,5 @@ export type {
 export { useRouter, useRouterLoadingState } from "./use-router";
 export { useIsHydrated } from "./react";
 export { useTheme } from "./theme/theme-context";
-export type { Theme } from "./theme/theme-context";
 export { ThemeProvider } from "./theme/theme-provider";
 export { cn } from "./utils";

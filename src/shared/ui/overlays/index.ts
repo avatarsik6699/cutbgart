@@ -11,14 +11,12 @@ export { InteractivePopover } from "./interactive-popover";
 export {
   Popover,
   PopoverContent,
-  PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
 } from "./popover";
 export {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,

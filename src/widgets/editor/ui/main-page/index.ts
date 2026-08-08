@@ -1,4 +1,3 @@
-export type { ExportSize } from "@/editor/domain";
 export type { MainPageEditorTypes } from "./main-page-editor.types";
 export { MainPageBatchActions } from "./main-page-batch-actions";
 export { MainPageBatchRail } from "./main-page-batch-rail";

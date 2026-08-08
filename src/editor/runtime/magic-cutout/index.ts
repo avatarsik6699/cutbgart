@@ -38,4 +38,3 @@ export type {
   TransferableMagicCandidate,
   TransferableMagicSource,
 } from "./magic-worker-protocol";
-export type { MagicCutoutRuntimeTypes } from "./magic-cutout.types";

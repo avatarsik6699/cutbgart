@@ -81,7 +81,8 @@ test("three real documents share one FIFO model runtime and cached selection", a
     ),
   ).toBe(3);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download all" }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await download).suggestedFilename()).toBe("cutbg-results.zip");
   await strip
     .locator("li")

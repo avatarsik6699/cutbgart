@@ -31,6 +31,8 @@ export class ManualDraftRepository {
     return this.#drafts.delete(draftId);
   }
 
+  // Invoked through DocumentRuntime's injected repository contract.
+  // fallow-ignore-next-line unused-class-member
   releaseDocument(documentId: DocumentId): number {
     let released = 0;
     for (const [draftId, draft] of this.#drafts) {

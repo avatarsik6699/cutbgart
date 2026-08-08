@@ -94,6 +94,7 @@ test("Magic keeps a non-square image fully fitted and supports Space panning", a
   ).toBe(true);
 
   await page.getByRole("button", { name: "Zoom in" }).click();
+  await viewport.focus();
   await page.keyboard.down("Space");
   await expect(viewport).toHaveAttribute("data-space-panning", "true");
   await expect(canvas).toHaveCSS("cursor", "grab");
@@ -121,7 +122,8 @@ test("Magic keeps a non-square image fully fitted and supports Space panning", a
   const brushCursorBox = await brushCursor.boundingBox();
   if (brushCursorBox === null) throw new Error("Magic brush cursor is not visible");
   expect(Math.abs(brushCursorBox.width - brushCursorBox.height)).toBeLessThanOrEqual(1);
-  await expect(brushCursor).toHaveCSS("border-top-style", "solid");
+  await expect(brushCursor).toHaveCSS("border-top-width", "0px");
+  await expect(brushCursor).toHaveCSS("background-color", "rgba(34, 197, 94, 0.42)");
 
   await editor.preview.resetButton.click();
   await expect.poll(editor.scenario.resourceCounts).toEqual({

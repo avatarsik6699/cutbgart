@@ -152,7 +152,7 @@ render isolation.
   inference. Do not add persisted user data or a runtime dependency without an explicit phase
   amendment; consult current primary TanStack Router and browser guidance before implementation and
   add bilingual responsive Playwright coverage — _Depends on:_ `T12`
-- [ ] `T1` Perform final end-state render/subscription review, focused React render/commit evidence,
+- [x] `T1` Perform final end-state render/subscription review, focused React render/commit evidence,
   managed-Windows Chrome performance/resource verification, repeated upload/reset/batch/tool churn,
   complete bilingual deterministic and real-model journeys, full architecture/Fallow/security/
   build/container/release checks, and architect acceptance so the phase is ready for the separate
