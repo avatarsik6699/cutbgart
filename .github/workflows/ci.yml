@@ -63,6 +63,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm generate:code
       - name: Install the CI exception browser only
         run: pnpm exec playwright install --with-deps chromium
       - name: Deterministic mocked Chromium critical path
