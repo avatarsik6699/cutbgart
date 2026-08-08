@@ -80,6 +80,9 @@ export declare namespace EditorSessionTypes {
     backgroundRuntime: BackgroundRuntimeSnapshot;
     enhancementRuntime: EnhancementRuntimeSnapshot;
     magicProgress: MagicRuntimeProgress | null;
+    /** The composite from the very first successful automatic result, pinned
+     * for the document's lifetime regardless of later edits/reprocessing. */
+    originalUrl: string | null;
     previewUrl: string | null;
     resultUrl: string | null;
     width: number;
@@ -192,7 +195,7 @@ export declare namespace EditorSessionTypes {
     processingModelMode(): AutomaticModelMode | null;
     reset(): void;
     removeItem(itemId: WorkspaceItemId): void;
-    retryItem(itemId: WorkspaceItemId): Promise<void>;
+    retryItem(itemId: WorkspaceItemId, modelMode?: AutomaticModelMode): Promise<void>;
     selectDocument(documentId: DocumentId): void;
     retry(modelMode?: AutomaticModelMode): void;
     reprocess(modelMode: AutomaticModelMode): boolean;

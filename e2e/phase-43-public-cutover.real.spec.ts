@@ -171,7 +171,8 @@ test("serialized real model covers cold and warm complete-product work without r
   expect((await selectedPng).suggestedFilename()).toBe("cutbg-result.png");
 
   const zip = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await zip).suggestedFilename()).toBe("cutbg-results.zip");
   expect((await counters(page)).automatic).toBe(2);
 

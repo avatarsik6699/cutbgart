@@ -146,7 +146,7 @@ render isolation.
   obtain architect approval; never add a model asset/family, mutate a sibling, bypass the heavy-job
   coordinator, or publish stale work. Cover model identity, successful reprocessing, cancel/failure,
   history, and document isolation — _Depends on:_ `T11`
-- [ ] `T13` Add a localized keyboard-accessible light/dark theme control, make all editor/site
+- [x] `T13` Add a localized keyboard-accessible light/dark theme control, make all editor/site
   surfaces and custom scrollbars coherent in both themes, and add an accessible reduced-motion-
   aware top NavigationProgress driven by real TanStack Router/content navigation rather than editor
   inference. Do not add persisted user data or a runtime dependency without an explicit phase
@@ -424,6 +424,72 @@ waiver.
   reports avoidable rerenders without changing workflow ownership, and is absent from ordinary dev,
   E2E, production behavior, and production bundles. Document the evidence workflow and verify both
   enabled and excluded paths before the T10A checkpoint commit.
+- [x] Increase light-theme border/divider contrast across editor and site chrome surfaces so
+  borders remain visible against light backgrounds, without changing the dark-theme palette.
+- [x] Unify the transparent workspace checkerboard grid so Cutout, Enhancements, and Background use
+  identical cell color, contrast, and size; remove the current per-tool divergence (darker in
+  Cutout, lighter and differently sized in Enhancements/Background).
+- [x] Remove the visible flash/flicker when switching tools on a loaded image; the canvas/workspace
+  must transition between tools without a visible blank or restyle frame.
+- [x] Fix image-state divergence across tools where the same document renders differently per tool
+  (for example Background showing an opaque white background while other tools correctly show the
+  transparent/current result). All tools must render the same current committed image state; no
+  per-tool drift is acceptable.
+- [x] Replace the current single-image reprocessing toolbar control (the verbose "new-image mode"
+  dropdown) with a compact split button matching the existing Download button pattern: the left
+  segment opens the model-choice popover (same model list as multi-upload), the right segment
+  triggers reprocessing with the currently selected model. Reuse the multi-upload model-choice logic
+  for the single-image case.
+- [x] Clean up the multi-upload toolbar: remove the redundant "on-device" badge, fold "Download all
+  as ZIP" into the existing Download split-button's format list as a "ZIP" entry, and verify the
+  toolbar never clips its controls at any viewport width — add horizontal scroll when content
+  overflows instead of clipping.
+- [x] Fix the non-functional "Retry in optimal mode" batch item-menu action (three-dot menu per
+  photo) and extend it so the same menu lets the user pick which model to reprocess that item with,
+  instead of only a fixed "optimal" mode.
+- [x] Restyle the Magic/Manual brush cursor to match remove.bg: a solid, semi-transparent filled
+  circle that is red for erase and green for restore in both Magic and Manual modes. Manual mode
+  currently always renders a white cursor regardless of erase/restore mode; make its color follow
+  the active mode like Magic's.
+- [x] Fix the broken "paste from clipboard" admission path on the main page: copying an image from
+  the desktop or a browser and pressing the visible paste affordance currently does nothing;
+  restore end-to-end functionality for both the keyboard and visible-button paths.
+- [x] Restore Maximum as the main-page default processing mode; Optimal is currently selected on
+  load instead of the intended Maximum default.
+- [x] Redesign the brush cursor: remove the visible outline/border around the cursor circle, double
+  the maximum brush size, and unify the brush-size range so it is identical for single-image and
+  multi-upload sessions — trace why the range currently diverges between the two entry points
+  despite the shared brush-geometry constants/components and fix the root cause, not just the
+  symptom.
+- [x] Fix the before/after comparison after applying a new background color/preset: both sides
+  currently render the already-changed background. "Before" must show the original committed image
+  and "after" must show the image with the newly applied background.
+- [x] Fix Background/Cutout desynchronization: after applying and saving a new background,
+  switching to the Cutout tool causes the new background to disappear. Diagnose whether Cutout
+  reads a stale image reference or simply fails to render the committed background, and make all
+  tools converge on one authoritative current document image (per the earlier cross-tool
+  divergence note) so this cannot regress.
+- [x] Redesign the multi-upload "add image" control as a split button matching the Download button
+  pattern: a model-choice dropdown paired with a primary "Add image" action, and remove the "New
+  image mode" label.
+- [x] Replace the multi-upload per-item three-dot menu's current non-functional individual entries
+  with one dropdown offering a model choice plus a single "Retry" action that reprocesses that item
+  with the chosen model.
+- [x] Diagnose why the Diagnostics panel and downloaded-model storage section show no saved models
+  and no logs despite active local usage and prior model downloads; determine whether this is
+  dev/localhost-only behavior or a real regression, and fix it.
+- [x] Redefine "before" in every before/after comparison (Background, Enhancements, and any future
+  tool that adds one) to always mean the original image as first produced by the initial automatic
+  background removal — pinned once and never affected by later Manual/Magic cutout edits, background
+  fills, or enhancement runs. "After" continues to mean the current document/draft state for that
+  tool. Architect-confirmed decision, 2026-08-08: investigation showed the two reported comparison
+  bugs were not state divergence (both panes already read byte-identical URLs where they appeared
+  to differ) but a semantic mismatch — "before" tracked the current document at each tool's entry
+  point rather than the true original result. Requires a new immutable per-document artifact
+  reference pinned at the first successful "result" commit, threaded through the domain/runtime
+  snapshot to the Background/Enhancements connectors and their `BeforeAfterUrlSlider` `beforeUrl`
+  prop; must not be released/garbage-collected while the document lives, and must not affect
+  Download/export (which still uses the current committed result).
 
 ---
 
@@ -547,6 +613,164 @@ waiver.
   Undo/Redo restore pixels and model identity together. Reprocessing keeps the first automatic
   baseline, reads the immutable source, and uses the existing correlated heavy-job path; batch
   presentation remains non-interactive and sibling items are unchanged.
+- T13's `ThemeProvider` (`shared/lib/theme`) is deliberately React `useState` plus one DOM-sync
+  effect toggling `.dark` on `<html>`, not a persisted preference: every load still starts from the
+  existing shipped-dark default in `src/routes/__root.tsx`, matching the "theme selection is not
+  persisted" contract. `NavigationProgress` reads only `useRouterState`'s real `isLoading` through
+  the existing `shared/lib` router boundary; it has no dependency on editor processing/inference
+  state. Coherent themed scrollbars needed no new component: `--border`/`--muted-foreground` were
+  already tokenized for both `:root` and `.dark`, so one global `@layer base` rule covers every
+  surface, and the pre-existing `.editor-toolbar` hidden-scrollbar rule keeps winning on specificity.
+- The light-theme border/contrast review note lowered `--border`/`--input`/`--sidebar-border`
+  lightness from `oklch(0.899 …)` to `oklch(0.76 …)`; `--chart-1` intentionally kept its old value
+  since it is a chart color, not a border alias, despite sharing the old literal.
+- The checkerboard-grid review note found four independent implementations (Cutout's inline
+  `repeating-conic-gradient` at 18px, the idle `ImageStage`'s 18px/40px variant, Background's
+  theme-aware `.transparency-grid` utility, and Enhancements with no checkerboard at all). All four
+  now render through the single `.transparency-grid` utility class so cell size/color can never
+  drift per tool again; `ImageStage`'s "wide" grid keeps a larger cell via a
+  `--transparency-grid-cell` override rather than a second gradient.
+- The white-background review note traced to `BeforeAfterUrlSlider`'s root container carrying a
+  static `bg-muted` fallback layer behind the conditional after-image transparency overlay; any gap
+  not covered by the after/before panes (image not yet loaded, sub-pixel aspect-ratio rounding)
+  showed that near-white `--muted` fallback instead of a neutral transparent indicator. The root now
+  carries `.transparency-grid` unconditionally, matching the Cutout tools' backdrop, so no tool can
+  show a solid opaque fallback color. Committed-snapshot `foreground`/`background` provenance
+  (`document-result-projection.ts`, `worker-background-committer.ts`) was audited and is correct —
+  this was a presentation-layer gap, not a domain/history bug.
+- The tool-switch flicker review note is mitigated by the grid unification above (the dominant cause
+  was mismatched checkerboard color/size across tools, not just the remount itself) plus a
+  `motion-safe:animate-in fade-in` added to each tool's `[grid-area:surface]`/`[grid-area:rail]`
+  wrapper so the unavoidable remount (each tool owns its own canvas/pointer lifecycle per T6) no
+  longer paints a hard cut.
+- The brush-cursor review note found Magic already implemented a solid semi-transparent red/green
+  cursor; only Manual needed the same treatment. The palette moved to shared
+  `CUTOUT_BRUSH_CURSOR_FILL_COLOR`/`CUTOUT_BRUSH_CURSOR_BORDER_COLOR` in `cutout-stage-geometry.ts`
+  keyed by both tools' mode unions (`"keep" | "remove"` and `"restore" | "erase"`) so the two tools
+  can't drift again. Manual's mode lives in `ManualCutoutPanel`'s local state, sibling to the canvas,
+  so cursor recoloring is applied the same way brush-size changes already were: imperatively through
+  the shared `cursorRef`, not a re-render.
+- The default-processing-mode review note traced to `EditorModel.chooseQualityMode`
+  (`src/widgets/editor/model/editor-model.ts`): selecting Fast or Optimal persists a
+  `localStorage["qualityMode"]` preference, but selecting Maximum never cleared that key. Once a
+  user picked Optimal even once, every later reload restored Optimal from the stale key regardless
+  of a subsequent explicit Maximum click, because Maximum has no persisted representation of its
+  own — it is meant to be the implicit fallback (`storedQualityMode() ?? "ben2-fp16"`). Added the
+  missing `else safeLs.removeItem(...)` branch so choosing Maximum clears the stale preference;
+  verified live (seed `localStorage.qualityMode = "max"`, reload shows Optimal selected — matches
+  the report — then click Maximum, reload again, Maximum now stays selected).
+- Investigated the clipboard-paste review note but found no reproducible code defect: the keyboard
+  `Ctrl/⌘+V` path was verified end-to-end in a real browser (dispatching a native `paste` event with
+  an image file admits and starts processing correctly), and the visible "Paste from clipboard"
+  button's `navigator.clipboard.read()` path is covered by 8 passing unit tests
+  (`file-admission.test.tsx`) exercising success, denied-permission, and stale-result races. Live
+  click-through verification of the visible-button path specifically was inconclusive only because
+  of environment noise (the shared dev server's HMR churn from concurrent Phase-44 fork edits, and
+  this browser automation setup being unable to auto-grant the native one-time clipboard-read
+  permission prompt) — not because of app behavior. Left unchecked pending a clean re-test.
+- The empty-diagnostics/model-storage review note traced to a real regression in `public/sw.js`'s
+  `fetch` handler, not a display bug: `ModelStorageManager`'s status query truthfully reports the
+  dedicated `bg-remove-model-cache-v2-v0.22.0` bucket, and that bucket was being wiped on every run.
+  A single `cache.put()` failure for any one model asset (verified live: Chrome's Cache Storage can
+  throw `NetworkError` writing a large cross-origin response, independent of quota) was caught by a
+  blanket `catch` that treated every write failure as quota exhaustion and called
+  `caches.delete(CACHE_NAME)` — discarding every asset already cached that session, every time.
+  Fixed by only wiping the cache on an actual `QuotaExceededError`; other write failures (`"write-
+  failed"` vs. the renamed `"quota-exceeded"` error code) now skip caching just that one asset and
+  leave previously cached assets untouched. Verified live in Chrome: before the fix, the storage
+  panel stayed at "Files: 0" after a real local model run; after the fix, assets that write
+  successfully persist ("Files: 2" / "366 B" survived a run where the large `.onnx` write still hit
+  the same environment-specific `NetworkError`, proving the cache no longer self-wipes on partial
+  failure). `scripts/service-worker-cache.test.ts` gained a regression test asserting the quota-only
+  wipe ordering. Not dev/localhost-only: the bug is in the SW's own error handling, reachable in any
+  environment where a single asset write can transiently fail.
+
+- The multi-upload "add image" review note found the R5/R6 split-button pattern had only reached the
+  single-image reprocess control: `MainPageBatchActions` still paired a full-card `QualityModePopover`
+  with a separate `ChooseFilesButton`, and the "New image mode" (`batchAdmissionModeLabel`) heading
+  from T11 was still rendered. Replaced both with one split button — a compact `Menu.RadioGroup` over
+  the shared `QUALITY_MODE_OPTIONS` (left segment) and a `buttonVariants`-styled file-input `label`
+  (right segment) — and removed the now-dead `batchAdmissionModeLabel` message key from both locales.
+- The per-item retry-menu review note found R7's fix only removed the dead fixed action for
+  already-completed items; it never changed the interaction shape, so the three-dot menu still listed
+  one separate "Reprocess in X mode" `Menu.Item` per alternate model instead of one model choice plus
+  a single Retry action. `BatchWorkspaceRailItemMenu` now shows all models in one
+  `Menu.RadioGroup` (`closeOnClick={false}`, defaulting to the item's current/committed model) and one
+  `Menu.Item` labeled "Try again" that reprocesses with whatever is currently selected; the button is
+  disabled only when a completed item's selection still matches its committed model (the same no-op
+  the domain layer rejects) — failed items keep retry enabled even on their own model, since retrying
+  a failed run is not a no-op. Dropped the now-redundant `BatchWorkspaceRailItem.canRetry`/`retryLabel`
+  fields in favor of a single `retryModelOptions` list gating both the picker and the Retry action.
+  Verified via `main-page-batch-actions.test.tsx`, `phase-44-frontend-refactor.spec.ts`'s batch
+  connectors and per-item retry journeys, and `phase-37-batch-workspace.spec.ts` (chromium).
+
+- The brush-cursor review note found no shared brush-geometry module actually existed despite being
+  named in the Files section: Magic hardcoded a radius range of `2–80` and Manual hardcoded a
+  diameter range of `8–180`, independently. Added `shared/lib/brush-geometry.ts`
+  (`CUTOUT_BRUSH_DIAMETER_MIN/MAX/DEFAULT_MAGIC/DEFAULT_MANUAL`) as the single source of truth for
+  both tools' sliders and document-runtime defaults; Magic's slider now displays/writes diameter
+  (converting to/from its internally-stored radius) so both tools present the identical `8–360`
+  range. Removed the now-dead `CUTOUT_BRUSH_CURSOR_BORDER_COLOR` palette and the `border-2` class
+  from both cursor spans — only the solid semi-transparent fill remains, matching remove.bg.
+- The before/after-comparison review note traced to `BackgroundWorkspace` passing `resultUrl` (the
+  full baked composite, which always mirrors the currently-open draft's baseline because Background
+  auto-reopens a fresh draft against the just-committed background after every Apply — see
+  `ActiveDocumentModel.ensureSelectedToolOpen`) as `beforeUrl`. Since a freshly-reopened draft's
+  `fill` matches what was just committed, the "before" pane ended up showing the same background as
+  the live "after" draft preview on every subsequent edit. Fixed by using the pinned, never-rebaked
+  `foregroundUrl` (the original transparent cutout, unchanged across background edits per the R4
+  root-cause note) as both `beforeUrl` and the `afterUrl` base — "before" now always renders the
+  original subject with no fill behind it, "after" always renders the same subject with the live
+  draft's CSS fill behind it.
+- The Background/Cutout desync review note found Magic Cutout already renders `selectActiveResultUrl`
+  (the baked composite) as its base image, so it already reflected any committed background
+  correctly. Manual Cutout, however, paints on `selectActivePreviewUrl` — the untouched original
+  source pixels, required so "Restore" strokes have real photographic data to bring back rather than
+  synthetic background pixels bleeding into subject edges (the exact quality failure T10A fixed for
+  Magic) — and that base is intentionally never rebaked with a background fill. Rather than changing
+  Manual's paintable pixel source, added a `backgroundUrl` (the committed composite) rendered as a
+  `background-image: url(...)` CSS layer behind the alpha-painted canvas, sized `100% 100%` to align
+  exactly with the pre-sized aspect-correct stage content box. Any pixel the mask makes transparent
+  now shows the current committed background instead of the checkerboard, with zero change to the
+  restore/erase pixel math.
+- Post-merge regression: pinning Background's `afterUrl` unconditionally to `foregroundUrl` broke
+  cross-tool coherence — its accessible "before" pane (the pinned original subject) is intentionally
+  never equal to `selectActiveResultUrl` anymore, but the "committed history … stay coherent" journey
+  relied on that pane to assert the current authoritative image matches what Enhancements shows next.
+  Fixed by re-adding `selectActiveResultUrl` to `BackgroundConnector`/`BackgroundWorkspace` and using
+  it as the decorative "after" pane's base whenever the draft is clean (falls back to `foregroundUrl`
+  + CSS fill only while a fill edit is dirty/unapplied), and updated the e2e assertion to read the
+  decorative `after-preview-background` image rather than the accessible "before" pane, since "before"
+  and "after" now carry deliberately different meanings and only "after" is the cross-tool-authoritative
+  one.
+- The clipboard-paste review note found the keyboard `Ctrl/⌘+V` window-paste path already worked
+  end-to-end; only the visible "Paste from clipboard" button was affected, and it wasn't an app-logic
+  bug — `useClipboardAdmission.readClipboard` awaited `navigator.clipboard.read()` with no bound, so a
+  browser/policy that leaves the clipboard-read permission promise permanently pending (a suppressed
+  native prompt, an enterprise policy, some automation/kiosk contexts) left the button stuck on
+  "Checking the clipboard…" forever with no error and no way to retry — indistinguishable from "nothing
+  happens" to the user. Added an 8s `withClipboardReadTimeout` race in
+  `use-clipboard-admission.ts` so a hung permission promise now surfaces the existing
+  `uploadClipboardFailed` message and re-enables the button instead of hanging; verified live that a
+  permission stuck at `"prompt"` now recovers with the error state after the timeout.
+- The "before" redefinition review note pins a per-document `originalUrl` at the first successful
+  automatic result and threads it through `DocumentResultProjection`/`DocumentRuntime` to
+  `selectActiveOriginalUrl`; `BackgroundWorkspace` and `EnhancementWorkspace` now pass it as
+  `BeforeAfterUrlSlider`'s `beforeUrl` (in place of the current-cutout `foregroundUrl`/`resultUrl`
+  used before), while `afterUrl` keeps tracking the current draft/document state exactly as before.
+  The pinned artifact reuses the "baseline" lease `promoteRun` already retains forever on the first
+  automatic run (`editor-artifact-effects.ts`), so it can never be garbage-collected; its own
+  `{kind:"preview"}` object-URL lease is taken once and released only on document disposal
+  (`DocumentResultProjection.stop()`), never in the per-commit `#releaseUrls()` cycle. Because that
+  lease stays held, any later composite/foreground that happens to reference the same original
+  artifact again (an unedited cutout referenced as `foreground` once a background fill is applied,
+  or an Undo back to the first commit) reuses the pinned URL instead of re-leasing the artifact,
+  which the repository would otherwise reject as a duplicate lease — caught by the full unit suite,
+  not by manual testing. Superseded the prior before/after-comparison and Background/Cutout-desync
+  fixes' "before = current cutout, before this tool's change" semantic without contradicting their
+  underlying fixes (both remain correct for "after"); the two originally reported "divergence" bugs
+  were confirmed, via direct DOM inspection, to have been byte-identical URLs the whole time — the
+  real defect was the semantic, not the data.
 
 <!-- Add only intentional deviations, residual risks, or rejected alternatives not visible in git. -->
 

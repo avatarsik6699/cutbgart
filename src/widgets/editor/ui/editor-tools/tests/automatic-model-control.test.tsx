@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AutomaticModelControl } from "../automatic-model-control";
 
+afterEach(cleanup);
+
 describe("AutomaticModelControl", () => {
-  it("exposes only available models and emits a different keyboard-accessible choice", () => {
+  it("exposes only available models in the choice popover and reprocesses on the action button", () => {
     const onSelect = vi.fn();
     render(
       <AutomaticModelControl
@@ -17,12 +19,14 @@ describe("AutomaticModelControl", () => {
       />,
     );
 
-    const control = screen.getByRole<HTMLSelectElement>("combobox", {
-      name: "Current model: ISNet Fast",
-    });
-    expect(control.value).toBe("isnet-q8");
-    expect(screen.queryByRole("option", { name: "BEN2 Maximum" })).toBeNull();
-    fireEvent.change(control, { target: { value: "isnet-fp32" } });
+    fireEvent.click(screen.getByRole("button", { name: "Current model: ISNet Fast" }));
+    expect(screen.queryByRole("menuitemradio", { name: "BEN2 Maximum" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "ISNet Quality" }));
+    expect(onSelect).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reprocess in ISNet Quality mode" }),
+    );
     expect(onSelect).toHaveBeenCalledWith("isnet-fp32");
   });
 
@@ -39,8 +43,13 @@ describe("AutomaticModelControl", () => {
       />,
     );
     expect(
-      screen.getByRole<HTMLSelectElement>("combobox", {
+      screen.getByRole<HTMLButtonElement>("button", {
         name: "Processing with BEN2 Maximum",
+      }).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", {
+        name: "Reprocess in BEN2 Maximum mode",
       }).disabled,
     ).toBe(true);
 
@@ -56,10 +65,10 @@ describe("AutomaticModelControl", () => {
         onSelect={vi.fn()}
       />,
     );
-    const restored = screen.getByRole("combobox", {
+    const restored = screen.getByRole("button", {
       name: "Current model: BEN2 Maximum",
     });
-    await waitFor(() => expect(document.activeElement).toBe(restored));
+    await vi.waitFor(() => expect(document.activeElement).toBe(restored));
     expect(onFocusRestored).toHaveBeenCalledOnce();
   });
 });

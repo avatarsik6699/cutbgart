@@ -36,7 +36,7 @@ describe("DocumentResultProjection", () => {
 
     projection.watch(actor, createDocumentId("document-1"), publish);
     expect(publish).toHaveBeenCalledOnce();
-    expect(publish).toHaveBeenCalledWith("blob:result", "blob:result");
+    expect(publish).toHaveBeenCalledWith("blob:result", "blob:result", "blob:result");
     projection.stop();
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(repository.releaseObjectUrl).toHaveBeenCalledWith("blob:result");
@@ -72,12 +72,67 @@ describe("DocumentResultProjection", () => {
     const projection = new DocumentResultProjection(repository as never);
 
     projection.watch(actor, createDocumentId("document-1"), publish);
-    expect(publish).toHaveBeenCalledWith("blob:result", "blob:foreground");
+    expect(publish).toHaveBeenCalledWith("blob:result", "blob:foreground", "blob:result");
     expect(repository.createObjectUrl).toHaveBeenCalledTimes(2);
     projection.stop();
     expect(repository.releaseObjectUrl.mock.calls).toHaveLength(2);
     expect(repository.releaseObjectUrl.mock.calls).toEqual(
       expect.arrayContaining([["blob:result"], ["blob:foreground"]]),
     );
+  });
+
+  it("pins the original URL to the first commit and never re-derives or releases it early", () => {
+    const initialComposite = createArtifactId("composite-1");
+    const laterComposite = createArtifactId("composite-2");
+    let document = buildDocumentState({
+      status: "result",
+      committed: {
+        automaticModelMode: "isnet-q8",
+        matte: createArtifactId("matte-1"),
+        foreground: null,
+        composite: initialComposite,
+        background: { type: "transparent" },
+      },
+    });
+    let listener: (snapshot: unknown) => void = () => {};
+    const actor = {
+      subscribe(next: (snapshot: unknown) => void) {
+        listener = next;
+        listener({ context: { document } });
+        return { unsubscribe: vi.fn() };
+      },
+    } as unknown as DocumentMachineTypes.ActorRef;
+    let urlCounter = 0;
+    const repository = {
+      createObjectUrl: vi.fn(() => {
+        urlCounter += 1;
+        return { artifactId: "irrelevant", url: `blob:generated-${String(urlCounter)}` };
+      }),
+      releaseObjectUrl: vi.fn(() => true),
+    };
+    const publish = vi.fn();
+    const projection = new DocumentResultProjection(repository as never);
+
+    projection.watch(actor, createDocumentId("document-1"), publish);
+    const [, , firstOriginalUrl] = publish.mock.calls[0] as [string, string, string];
+    expect(firstOriginalUrl).toBe("blob:generated-1");
+
+    document = buildDocumentState({
+      status: "result",
+      committed: {
+        automaticModelMode: "isnet-q8",
+        matte: createArtifactId("matte-1"),
+        foreground: null,
+        composite: laterComposite,
+        background: { type: "transparent" },
+      },
+    });
+    listener({ context: { document } });
+    const lastCall = publish.mock.calls.at(-1) as [string, string, string];
+    expect(lastCall[2]).toBe(firstOriginalUrl);
+    expect(repository.releaseObjectUrl).not.toHaveBeenCalledWith(firstOriginalUrl);
+
+    projection.stop();
+    expect(repository.releaseObjectUrl).toHaveBeenCalledWith(firstOriginalUrl);
   });
 });

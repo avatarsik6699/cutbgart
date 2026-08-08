@@ -9,6 +9,8 @@ import {
 import type { EditorSessionTypes } from "@/editor/runtime";
 
 import {
+  selectAvailableModelModes,
+  useEditorSessionValue,
   useEditorWorkspaceSelector,
   useEditorModel,
   useEditorViewSelector,
@@ -36,13 +38,6 @@ const selectAdmissionError = (snapshot: EditorViewSnapshot) =>
 const selectQualityMode = (snapshot: EditorViewSnapshot) => snapshot.qualityMode;
 const selectItemCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
   snapshot.items.length;
-const selectCompletedCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) => {
-  let count = 0;
-  for (const item of snapshot.items) if (item.status === "result") count += 1;
-  return count;
-};
-const selectExporting = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
-  snapshot.export.status === "preparing";
 
 function useBatchRailProjection(): MainPageEditorTypes.BatchProjection {
   const workspace = useEditorWorkspaceSelector(selectWorkspace);
@@ -77,9 +72,11 @@ function useBatchRailProjection(): MainPageEditorTypes.BatchProjection {
 export function BatchRailConnector() {
   const model = useEditorModel();
   const batch = useBatchRailProjection();
+  const availableModes = useEditorSessionValue(selectAvailableModelModes);
 
   return (
     <MainPageBatchRail
+      availableModes={availableModes}
       batch={batch}
       onDownload={model.downloadBatchItem}
       onRemove={model.removeBatchItem}
@@ -93,17 +90,13 @@ export function BatchActionsConnector(props: Readonly<{ disabled: boolean }>) {
   const model = useEditorModel();
   const qualityMode = useEditorViewSelector(selectQualityMode);
   const itemCount = useEditorWorkspaceSelector(selectItemCount);
-  const completedCount = useEditorWorkspaceSelector(selectCompletedCount);
-  const exporting = useEditorWorkspaceSelector(selectExporting);
 
   return (
     <MainPageBatchActions
-      actions={{ atCapacity: itemCount >= 20, completedCount, exporting }}
+      actions={{ atCapacity: itemCount >= 20 }}
       disabled={props.disabled}
       onAddFiles={(files) => void model.admitFiles(files)}
-      onCancelDownloadAll={model.cancelDownloadAll}
       onChooseQualityMode={model.chooseQualityMode}
-      onDownloadAll={model.downloadAll}
       qualityMode={qualityMode}
     />
   );

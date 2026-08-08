@@ -8,6 +8,11 @@ import type {
   DocumentHistoryTypes,
 } from "@/editor/domain";
 
+import {
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MAGIC,
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MANUAL,
+} from "@/shared/lib";
+
 import { BackgroundController } from "../background";
 import { EnhancementController } from "../enhancements";
 import { MagicCutoutController } from "../magic-cutout";
@@ -38,12 +43,12 @@ export class DocumentRuntime {
   #disposed = false;
   #manualView: ManualViewState = {
     mode: "erase",
-    brushSize: 48,
+    brushSize: CUTOUT_BRUSH_DIAMETER_DEFAULT_MANUAL,
     zoom: 1,
   };
   #magicView: MagicViewState = {
     mode: "keep",
-    radius: 18,
+    radius: CUTOUT_BRUSH_DIAMETER_DEFAULT_MAGIC / 2,
   };
 
   constructor(options: {
@@ -98,21 +103,26 @@ export class DocumentRuntime {
       foregroundUrl: null,
       height: options.height,
       magicProgress: null,
+      originalUrl: null,
       previewUrl: options.previewUrl,
       resultUrl: null,
       width: options.width,
     };
     this.#projection = new DocumentResultProjection(options.dependencies.repository);
-    this.#projection.watch(this.#actor, this.#documentId, (resultUrl, foregroundUrl) => {
-      if (this.#disposed) return;
-      if (this.#actor.getSnapshot().context.document.activeDraft === null) {
-        options.dependencies.manualDrafts.releaseDocument(this.#documentId);
-        options.dependencies.magicDrafts.releaseDocument(this.#documentId);
-        options.dependencies.magicCandidates.releaseDocument(this.#documentId);
-      }
-      this.#snapshot = { ...this.#snapshot, resultUrl, foregroundUrl };
-      this.#onChange();
-    });
+    this.#projection.watch(
+      this.#actor,
+      this.#documentId,
+      (resultUrl, foregroundUrl, originalUrl) => {
+        if (this.#disposed) return;
+        if (this.#actor.getSnapshot().context.document.activeDraft === null) {
+          options.dependencies.manualDrafts.releaseDocument(this.#documentId);
+          options.dependencies.magicDrafts.releaseDocument(this.#documentId);
+          options.dependencies.magicCandidates.releaseDocument(this.#documentId);
+        }
+        this.#snapshot = { ...this.#snapshot, resultUrl, foregroundUrl, originalUrl };
+        this.#onChange();
+      },
+    );
     this.#stops.push(
       this.#background.subscribe(() => this.#publishControllerState()),
       this.#enhancements.subscribe(() => this.#publishControllerState()),

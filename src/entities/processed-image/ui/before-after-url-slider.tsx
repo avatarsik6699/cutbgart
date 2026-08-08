@@ -99,7 +99,7 @@ export function BeforeAfterUrlSlider(props: BeforeAfterUrlSliderProps) {
       data-testid="before-after-frame"
       data-tool-image-viewport="true"
       data-fit="contain"
-      className={`${EDITOR_IMAGE_VIEWPORT_CLASS_NAME} touch-none overflow-hidden rounded-xl bg-muted select-none`}
+      className={`${EDITOR_IMAGE_VIEWPORT_CLASS_NAME} transparency-grid touch-none overflow-hidden rounded-xl select-none`}
       style={editorImageViewportStyle(props.width, props.height)}
       onPointerDown={(event) => {
         draggingRef.current = true;

@@ -147,7 +147,10 @@ test("both locales pass the accessibility and responsive material-state matrix",
     await page.getByLabel(labels.addImages).setInputFiles("e2e/fixtures/unsupported.txt");
     await expectAccessible(page);
     const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: /Download all|Скачать вс[её]/ }).click();
+    await page
+      .getByRole("button", { name: /Output options|Параметры результата/ })
+      .click();
+    await page.getByRole("menuitem", { name: /Download all|Скачать вс[её]/ }).click();
     await download;
     await expectAccessible(page);
 
@@ -225,7 +228,8 @@ test("one full cutover-readiness journey keeps all documents and resources isola
   const selectedDownload = await editor.exportPng.download();
   expect(selectedDownload.suggestedFilename()).toBe("cutbg-result.png");
   const allDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   const archive = await allDownload;
   expect(archive.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await archive.path();

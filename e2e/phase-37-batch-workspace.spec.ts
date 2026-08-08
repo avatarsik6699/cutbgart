@@ -60,7 +60,8 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   await expect(strip.locator("article")).toHaveCount(3);
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("cutbg-results.zip");
   const archivePath = await download.path();
@@ -72,10 +73,11 @@ test("batch import stays FIFO while selection, drafts, failure, remove, and ZIP 
   expect(text).toContain("cutbg-result-03.png");
   expect(text).not.toContain("sample");
   await expect(page.getByText("ZIP includes 3; skips 0.")).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.keyboard.press("Escape");
   while ((await strip.locator("article").count()) > 0) {
     await strip.locator("article").last().getByTestId("batch-item-actions").click();
-    await page.getByRole("menuitem", { name: "Remove image" }).click();
+    const menu = page.getByRole("menu", { name: /Actions for/ });
+    await menu.getByRole("menuitem", { name: "Remove image" }).click();
   }
   await expect.poll(editor.scenario.resourceCounts).toEqual({
     artifacts: 0,

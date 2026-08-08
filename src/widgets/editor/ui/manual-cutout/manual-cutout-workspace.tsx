@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 
 import type { DocumentHistoryTypes } from "@/editor/domain";
+import { CUTOUT_BRUSH_CURSOR_FILL_COLOR } from "../cutout-stage";
 
 import { ManualCutoutCanvas } from "./manual-cutout-canvas";
 import { ManualCutoutPanel } from "./manual-cutout-panel";
@@ -51,6 +52,7 @@ export type ManualCutoutInteraction = Readonly<{
 
 export function ManualCutoutWorkspace(
   props: Readonly<{
+    backgroundUrl: string | null;
     busy: boolean;
     documentId: string;
     height: number;
@@ -77,9 +79,17 @@ export function ManualCutoutWorkspace(
     });
   }
 
+  function changeCursorMode(mode: DocumentHistoryTypes.ManualMode): void {
+    const cursor = cursorRef.current;
+    if (cursor !== null) {
+      cursor.style.backgroundColor = CUTOUT_BRUSH_CURSOR_FILL_COLOR[mode];
+    }
+  }
+
   return (
     <>
       <ManualCutoutCanvas
+        backgroundUrl={props.backgroundUrl}
         busy={props.busy}
         currentUrl={props.currentUrl}
         documentId={props.documentId}
@@ -93,6 +103,7 @@ export function ManualCutoutWorkspace(
         interaction={props.interaction}
         onBrushSizeChange={changeBrushSize}
         onCutoutModeChange={props.onCutoutModeChange}
+        onModeChange={changeCursorMode}
       />
     </>
   );

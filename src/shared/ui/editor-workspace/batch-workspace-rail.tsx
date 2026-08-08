@@ -1,8 +1,9 @@
+import { Check, Download, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { Menu } from "@base-ui/react/menu";
-import { Download, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { m } from "@/paraglide/messages";
+import type { AutomaticModelMode } from "@/shared/lib";
 
 import { Button } from "../controls";
 import {
@@ -10,15 +11,20 @@ import {
   type BatchWorkspaceSummary,
 } from "./batch-workspace-status";
 
+export type BatchWorkspaceRailRetryModelOption = Readonly<{
+  label: string;
+  mode: AutomaticModelMode;
+  selected: boolean;
+}>;
+
 export type BatchWorkspaceRailItem = Readonly<{
   canDownload: boolean;
-  canRetry: boolean;
   detail: string;
   errorDetail: string | null;
   id: string;
   name: string;
   PreviewSlot: ReactNode;
-  retryLabel: string;
+  retryModelOptions: readonly BatchWorkspaceRailRetryModelOption[];
   selected: boolean;
   selectable: boolean;
   status: "preparing" | "queued" | "model-loading" | "processing" | "result" | "error";
@@ -41,15 +47,127 @@ function statusLabel(status: BatchWorkspaceRailItem["status"]): string {
   return m.batchFailed();
 }
 
-export function BatchWorkspaceRail(props: {
+type BatchWorkspaceRailProps = {
   items: readonly BatchWorkspaceRailItem[];
   onDownload: (id: string) => void;
   onRemove: (id: string, trigger: HTMLButtonElement) => void;
-  onRetry: (id: string, trigger: HTMLButtonElement) => void;
+  onRetry: (
+    id: string,
+    trigger: HTMLButtonElement,
+    modelMode?: AutomaticModelMode,
+  ) => void;
   onSelect: (id: string, trigger: HTMLButtonElement) => void;
   summary: BatchWorkspaceSummary;
+};
+
+function BatchWorkspaceRailItemMenu(props: {
+  item: BatchWorkspaceRailItem;
+  onDownload: (trigger: HTMLButtonElement) => void;
+  onRemove: (trigger: HTMLButtonElement) => void;
+  onRetry: (trigger: HTMLButtonElement, modelMode?: AutomaticModelMode) => void;
 }) {
-  const itemMenuTriggers = useRef<Record<string, HTMLButtonElement | null>>({});
+  const { item } = props;
+  const committedMode = item.retryModelOptions.find((option) => option.selected)?.mode;
+  const [pendingMode, setPendingMode] = useState<AutomaticModelMode | undefined>(
+    undefined,
+  );
+  const selectedMode = pendingMode ?? committedMode;
+  const canRetry = item.retryModelOptions.length > 0;
+  const canApplyRetry =
+    canRetry && (item.status !== "result" || selectedMode !== committedMode);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <Menu.Root
+      onOpenChange={(open) => {
+        if (!open) setPendingMode(undefined);
+      }}
+    >
+      <Menu.Trigger
+        render={
+          <Button
+            ref={triggerRef}
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            className="absolute right-2 top-2 z-20 border border-background/70 shadow-sm"
+            aria-label={m.batchItemActions({ name: item.name })}
+            data-testid="batch-item-actions"
+          />
+        }
+      >
+        <MoreHorizontal aria-hidden="true" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-50">
+          <Menu.Popup className="min-w-56 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+            {item.canDownload ? (
+              <Menu.Item
+                onClick={() => {
+                  if (triggerRef.current) props.onDownload(triggerRef.current);
+                }}
+                className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+              >
+                <Download aria-hidden="true" />
+                {m.downloadPng()}
+              </Menu.Item>
+            ) : null}
+            {item.retryModelOptions.length > 0 ? (
+              <Menu.Group>
+                <Menu.GroupLabel className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  {m.editorModelChoiceLabel()}
+                </Menu.GroupLabel>
+                <Menu.RadioGroup
+                  value={selectedMode}
+                  onValueChange={(value) => setPendingMode(value as AutomaticModelMode)}
+                >
+                  {item.retryModelOptions.map((option) => (
+                    <Menu.RadioItem
+                      key={option.mode}
+                      value={option.mode}
+                      className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+                    >
+                      <span className="flex size-4 items-center justify-center">
+                        <Menu.RadioItemIndicator>
+                          <Check className="size-4" aria-hidden="true" />
+                        </Menu.RadioItemIndicator>
+                      </span>
+                      {option.label}
+                    </Menu.RadioItem>
+                  ))}
+                </Menu.RadioGroup>
+              </Menu.Group>
+            ) : null}
+            {canRetry ? (
+              <Menu.Item
+                disabled={!canApplyRetry}
+                onClick={() => {
+                  if (triggerRef.current) props.onRetry(triggerRef.current, selectedMode);
+                }}
+                className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted data-disabled:pointer-events-none data-disabled:opacity-50"
+              >
+                <RefreshCw aria-hidden="true" />
+                {m.tryAgain()}
+              </Menu.Item>
+            ) : null}
+            <div role="separator" className="my-1 h-px bg-border" />
+            <Menu.Item
+              onClick={() => {
+                if (triggerRef.current) props.onRemove(triggerRef.current);
+              }}
+              className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm text-destructive outline-none data-highlighted:bg-destructive/10"
+            >
+              <Trash2 aria-hidden="true" />
+              {m.removeImage()}
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+export function BatchWorkspaceRail(props: BatchWorkspaceRailProps) {
   return (
     <section
       className="flex min-w-0 flex-col gap-3 border-t border-border pt-3"
@@ -113,68 +231,12 @@ export function BatchWorkspaceRail(props: {
                 </p>
               </details>
             ) : null}
-            <Menu.Root>
-              <Menu.Trigger
-                render={
-                  <Button
-                    ref={(node) => {
-                      itemMenuTriggers.current[item.id] = node;
-                    }}
-                    type="button"
-                    variant="secondary"
-                    size="icon-sm"
-                    className="absolute right-2 top-2 z-20 border border-background/70 shadow-sm"
-                    aria-label={m.batchItemActions({ name: item.name })}
-                    data-testid="batch-item-actions"
-                  />
-                }
-              >
-                <MoreHorizontal aria-hidden="true" />
-              </Menu.Trigger>
-              <Menu.Portal>
-                <Menu.Positioner
-                  side="bottom"
-                  align="end"
-                  sideOffset={6}
-                  className="z-50"
-                >
-                  <Menu.Popup className="min-w-56 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
-                    {item.canDownload ? (
-                      <Menu.Item
-                        onClick={() => props.onDownload(item.id)}
-                        className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
-                      >
-                        <Download aria-hidden="true" />
-                        {m.downloadPng()}
-                      </Menu.Item>
-                    ) : null}
-                    {item.canRetry ? (
-                      <Menu.Item
-                        onClick={() => {
-                          const trigger = itemMenuTriggers.current[item.id];
-                          if (trigger) props.onRetry(item.id, trigger);
-                        }}
-                        className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
-                      >
-                        <RefreshCw aria-hidden="true" />
-                        {item.retryLabel}
-                      </Menu.Item>
-                    ) : null}
-                    <div role="separator" className="my-1 h-px bg-border" />
-                    <Menu.Item
-                      onClick={() => {
-                        const trigger = itemMenuTriggers.current[item.id];
-                        if (trigger) props.onRemove(item.id, trigger);
-                      }}
-                      className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm text-destructive outline-none data-highlighted:bg-destructive/10"
-                    >
-                      <Trash2 aria-hidden="true" />
-                      {m.removeImage()}
-                    </Menu.Item>
-                  </Menu.Popup>
-                </Menu.Positioner>
-              </Menu.Portal>
-            </Menu.Root>
+            <BatchWorkspaceRailItemMenu
+              item={item}
+              onDownload={() => props.onDownload(item.id)}
+              onRetry={(trigger, modelMode) => props.onRetry(item.id, trigger, modelMode)}
+              onRemove={(trigger) => props.onRemove(item.id, trigger)}
+            />
           </article>
         ))}
       </div>

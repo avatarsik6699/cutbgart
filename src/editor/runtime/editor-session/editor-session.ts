@@ -14,6 +14,8 @@ import {
   type WorkspaceItemId,
 } from "@/editor/domain";
 import {
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MAGIC,
+  CUTOUT_BRUSH_DIAMETER_DEFAULT_MANUAL,
   PRODUCTION_MODELS,
   type AutomaticModelMode,
   type BrowserInferencePath,
@@ -590,11 +592,19 @@ export function createEditorSession(
     importImage: (file, modelMode) => importImages([file], modelMode),
     importImages,
     magicDraft: () => selected()?.magicDraft() ?? null,
-    magicViewState: () => selected()?.magicViewState() ?? { mode: "keep", radius: 18 },
+    magicViewState: () =>
+      selected()?.magicViewState() ?? {
+        mode: "keep",
+        radius: CUTOUT_BRUSH_DIAMETER_DEFAULT_MAGIC / 2,
+      },
     setMagicViewState: (state) => selected()?.setMagicViewState(state),
     manualDraft: () => selected()?.manualDraft() ?? null,
     manualViewState: () =>
-      selected()?.manualViewState() ?? { mode: "erase", brushSize: 48, zoom: 1 },
+      selected()?.manualViewState() ?? {
+        mode: "erase",
+        brushSize: CUTOUT_BRUSH_DIAMETER_DEFAULT_MANUAL,
+        zoom: 1,
+      },
     setManualViewState: (state) => selected()?.setManualViewState(state),
     notifyMagicChanged: () => selected()?.notifyMagicChanged(),
     notifyManualDirty: () => selected()?.notifyManualDirty(),
@@ -701,13 +711,14 @@ export function createEditorSession(
       publish();
       return true;
     },
-    async retryItem(itemId) {
+    async retryItem(itemId, modelMode) {
       const item = items.find(
         (candidate) => candidate.itemId === itemId && !candidate.removed,
       );
       if (item === undefined) return;
       if (item.runtime !== null) {
         const document = item.runtime.actor.getSnapshot().context.document;
+        const targetMode = modelMode ?? item.modelMode;
         if (document.status === "error") {
           item.runtime.actor.send({
             type: "COMMAND",
@@ -715,9 +726,34 @@ export function createEditorSession(
               type: "START_AUTOMATIC_REMOVAL",
               documentId: document.documentId,
               backend: "local",
-              modelMode: item.modelMode,
+              modelMode: targetMode,
             },
           });
+          return;
+        }
+
+        if (
+          document.status === "result" &&
+          document.committed !== null &&
+          document.committed.automaticModelMode !== targetMode &&
+          document.activeDraft === null &&
+          availableModelModes().includes(targetMode)
+        ) {
+          item.runtime.actor.send({
+            type: "COMMAND",
+            command: {
+              type: "START_AUTOMATIC_REMOVAL",
+              documentId: document.documentId,
+              backend: "local",
+              modelMode: targetMode,
+            },
+          });
+          const outcome = item.runtime.actor.getSnapshot().context.lastCommandOutcome;
+          if (outcome?.status === "accepted") {
+            item.requestedModelMode = targetMode;
+            item.modelMode = targetMode;
+            publish();
+          }
         }
         return;
       }

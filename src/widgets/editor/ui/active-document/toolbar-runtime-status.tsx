@@ -11,7 +11,7 @@ import {
   useEditorViewSelector,
   type EditorViewSnapshot,
 } from "../../model";
-import { AutomaticModelControl, LocalExecutionReadout } from "../editor-tools";
+import { AutomaticModelControl } from "../editor-tools";
 
 const BUSY_STATUSES = new Set([
   "manual-applying",
@@ -35,23 +35,17 @@ export function ToolbarRuntimeStatus() {
   const currentMode = useEditorSessionValue(selectCurrentModelMode);
   const processingMode = useEditorSessionValue(selectProcessingModelMode);
   const inferencePath = useEditorSessionValue(selectInferencePath);
-  if (!batchMode)
-    return (
-      <AutomaticModelControl
-        availableModes={availableModes}
-        busy={BUSY_STATUSES.has(status)}
-        currentMode={currentMode}
-        inferencePath={inferencePath}
-        processingMode={processingMode}
-        restoreFocus={restoreFocus}
-        onFocusRestored={document.editor.markModelFocusRestored}
-        onSelect={(mode) => document.requestModel(mode)}
-      />
-    );
+  if (batchMode) return null;
   return (
-    <LocalExecutionReadout
+    <AutomaticModelControl
+      availableModes={availableModes}
       busy={BUSY_STATUSES.has(status)}
+      currentMode={currentMode}
       inferencePath={inferencePath}
+      processingMode={processingMode}
+      restoreFocus={restoreFocus}
+      onFocusRestored={document.editor.markModelFocusRestored}
+      onSelect={(mode) => document.requestModel(mode)}
     />
   );
 }

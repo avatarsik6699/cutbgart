@@ -1,7 +1,9 @@
-import { QualityModePopover } from "@/features/quality-mode-toggle";
-import { ChooseFilesButton } from "@/features/upload-image";
+import { Menu } from "@base-ui/react/menu";
+import { QUALITY_MODE_OPTIONS } from "@/features/quality-mode-toggle";
 import { m } from "@/paraglide/messages";
-import { Button, Typography } from "@/shared/ui";
+import { Button, buttonVariants } from "@/shared/ui";
+import { cn } from "@/shared/lib/utils";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { memo } from "react";
 
 import type { MainPageEditorTypes } from "./main-page-editor.types";
@@ -11,53 +13,101 @@ type Props = {
   actions: MainPageEditorTypes.BatchActionsProjection;
   disabled: boolean;
   onAddFiles: (files: readonly File[]) => void;
-  onCancelDownloadAll: () => void;
   onChooseQualityMode: (mode: AutomaticModelMode) => void;
-  onDownloadAll: () => void;
   qualityMode: AutomaticModelMode | null;
 };
 
 function MainPageBatchActionsView(props: Props) {
+  const modeDisabled = props.disabled || props.qualityMode === null;
+  const addDisabled =
+    props.disabled || props.actions.atCapacity || props.qualityMode === null;
+  const selectedOption =
+    props.qualityMode === null
+      ? undefined
+      : QUALITY_MODE_OPTIONS.find((option) => option.id === props.qualityMode);
+
   return (
     <div className="flex flex-wrap items-center gap-2" aria-label={m.batchActionsAria()}>
       <div
         role="group"
         aria-label={m.batchAdmissionControlsLabel()}
-        className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/35 p-1 pl-2"
+        className="flex shrink-0 items-center"
       >
-        <Typography
-          variant="caption"
-          as="span"
-          className="hidden max-w-28 text-muted-foreground sm:inline"
+        <Menu.Root>
+          <Menu.Trigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={modeDisabled}
+                aria-label={m.editorModelChoiceLabel()}
+                className="max-w-40 gap-1.5 rounded-r-none border-r-0 px-2 text-xs font-medium"
+              />
+            }
+          >
+            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {selectedOption === undefined ? "" : selectedOption.label()}
+            </span>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner side="bottom" align="start" sideOffset={6} className="z-50">
+              <Menu.Popup className="min-w-48 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+                <Menu.Group>
+                  <Menu.GroupLabel className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    {m.editorModelChoiceLabel()}
+                  </Menu.GroupLabel>
+                  <Menu.RadioGroup
+                    value={props.qualityMode ?? undefined}
+                    onValueChange={(value) =>
+                      props.onChooseQualityMode(value as AutomaticModelMode)
+                    }
+                  >
+                    {QUALITY_MODE_OPTIONS.map((option) => (
+                      <Menu.RadioItem
+                        key={option.id}
+                        value={option.id}
+                        className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none data-highlighted:bg-muted"
+                      >
+                        <span className="flex size-4 items-center justify-center">
+                          <Menu.RadioItemIndicator>
+                            <Check className="size-4" aria-hidden="true" />
+                          </Menu.RadioItemIndicator>
+                        </span>
+                        {option.label()}
+                      </Menu.RadioItem>
+                    ))}
+                  </Menu.RadioGroup>
+                </Menu.Group>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
+        <label
+          data-disabled={addDisabled || undefined}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "cursor-pointer gap-1.5 rounded-l-none px-2 text-xs font-medium",
+            "data-disabled:pointer-events-none data-disabled:opacity-50",
+          )}
         >
-          {m.batchAdmissionModeLabel()}
-        </Typography>
-        <QualityModePopover
-          qualityMode={props.qualityMode}
-          onQualityModeChange={props.onChooseQualityMode}
-          disabled={props.disabled || props.qualityMode === null}
-        />
-        <ChooseFilesButton
-          className="h-8 w-auto px-3 py-0 sm:flex"
-          disabled={
-            props.disabled || props.actions.atCapacity || props.qualityMode === null
-          }
-          label={m.addImages()}
-          multiple
-          onFiles={props.onAddFiles}
-        />
+          <Plus aria-hidden="true" className="size-3.5 shrink-0" />
+          <span>{m.addImages()}</span>
+          <input
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp"
+            disabled={addDisabled}
+            className="sr-only"
+            onChange={(event) => {
+              const files = [...(event.currentTarget.files ?? [])];
+              if (files.length > 0) props.onAddFiles(files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
       </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={props.actions.completedCount === 0 && !props.actions.exporting}
-        onClick={
-          props.actions.exporting ? props.onCancelDownloadAll : props.onDownloadAll
-        }
-      >
-        {props.actions.exporting ? m.cancel() : m.downloadAllZip()}
-      </Button>
     </div>
   );
 }
@@ -68,10 +118,6 @@ export const MainPageBatchActions = memo(
     previous.disabled === next.disabled &&
     previous.qualityMode === next.qualityMode &&
     previous.onAddFiles === next.onAddFiles &&
-    previous.onCancelDownloadAll === next.onCancelDownloadAll &&
     previous.onChooseQualityMode === next.onChooseQualityMode &&
-    previous.onDownloadAll === next.onDownloadAll &&
-    previous.actions.atCapacity === next.actions.atCapacity &&
-    previous.actions.completedCount === next.actions.completedCount &&
-    previous.actions.exporting === next.actions.exporting,
+    previous.actions.atCapacity === next.actions.atCapacity,
 );

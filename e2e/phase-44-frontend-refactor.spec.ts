@@ -304,8 +304,10 @@ test("single-image model reprocessing preserves history, failure state, focus, a
       path: "/en/",
       viewport: { width: 1280, height: 900 },
       upload: "Upload an image",
+      modelLabels: { "isnet-q8": "ISNet Fast", "isnet-fp32": "ISNet Quality" },
       current: /^Current model:/,
       processing: /^Processing with/,
+      reprocessPrefix: /^Reprocess in/,
       failure:
         "The selected model could not process this image. Your current result was preserved; choose a model to try again.",
       ocean: "Ocean",
@@ -319,8 +321,10 @@ test("single-image model reprocessing preserves history, failure state, focus, a
       path: "/",
       viewport: { width: 390, height: 844 },
       upload: "Загрузить изображения",
+      modelLabels: { "isnet-q8": "ISNet Быстро", "isnet-fp32": "ISNet Качество" },
       current: /^Текущая модель:/,
       processing: /^Обработка моделью/,
+      reprocessPrefix: /^Повторить в режиме/,
       failure:
         "Выбранная модель не смогла обработать изображение. Текущий результат сохранён; выберите модель для повторной попытки.",
       ocean: "Океан",
@@ -340,54 +344,68 @@ test("single-image model reprocessing preserves history, failure state, focus, a
     await expect.poll(editor.scenario.runCount).toBe(1);
     await editor.scenario.completeRun();
 
-    const modelControl = page.getByTestId("automatic-model-control").locator("select");
-    await expect(modelControl).toHaveAccessibleName(locale.current);
-    const initialMode = await modelControl.inputValue();
+    const control = page.getByTestId("automatic-model-control");
+    const trigger = control.locator("button").first();
+    const reprocessButton = control.locator("button").last();
+
+    async function pick(mode: "isnet-fp32" | "isnet-q8"): Promise<void> {
+      await trigger.click();
+      await page.getByRole("menuitemradio", { name: locale.modelLabels[mode] }).click();
+    }
+
+    await expect(trigger).toHaveAccessibleName(locale.current);
+    const initialMode = (await control.getAttribute("data-current-model")) as
+      "isnet-fp32" | "isnet-q8";
     const alternateMode = initialMode === "isnet-q8" ? "isnet-fp32" : "isnet-q8";
 
-    await modelControl.selectOption(alternateMode);
+    await pick(alternateMode);
+    await reprocessButton.click();
     await expect.poll(editor.scenario.runCount).toBe(2);
-    await expect(modelControl).toHaveAccessibleName(locale.processing);
-    await expect(modelControl).toBeDisabled();
+    await expect(trigger).toHaveAccessibleName(locale.processing);
+    await expect(trigger).toBeDisabled();
     expect((await editor.scenario.runModelModes()).at(-1)).toBe(alternateMode);
     await editor.progress.cancelButton.click();
-    await expect(modelControl).toHaveValue(initialMode);
-    await expect(modelControl).toBeFocused();
+    await expect(control).toHaveAttribute("data-current-model", initialMode);
+    await expect(trigger).toBeFocused();
 
-    await modelControl.selectOption(alternateMode);
+    await pick(alternateMode);
+    await reprocessButton.click();
     await expect.poll(editor.scenario.runCount).toBe(3);
     await editor.scenario.failRun();
     await expect(page.getByRole("alert")).toContainText(locale.failure);
-    await expect(modelControl).toHaveValue(initialMode);
-    await expect(modelControl).toBeFocused();
+    await expect(control).toHaveAttribute("data-current-model", initialMode);
+    await expect(trigger).toBeFocused();
 
-    await modelControl.selectOption(alternateMode);
+    await pick(alternateMode);
+    await reprocessButton.click();
     await expect.poll(editor.scenario.runCount).toBe(4);
     await editor.scenario.completeRun();
-    await expect(modelControl).toHaveValue(alternateMode);
-    await expect(modelControl).toBeFocused();
+    await expect(control).toHaveAttribute("data-current-model", alternateMode);
+    await expect(trigger).toBeFocused();
     const undo = page.getByRole("button", { name: locale.undo });
     const redo = page.getByRole("button", { name: locale.redo });
     await expect(undo).toBeEnabled();
     await undo.click();
-    await expect(modelControl).toHaveValue(initialMode);
+    await expect(control).toHaveAttribute("data-current-model", initialMode);
     await redo.click();
-    await expect(modelControl).toHaveValue(alternateMode);
+    await expect(control).toHaveAttribute("data-current-model", alternateMode);
 
     await page.locator('[data-tool-id="background"]').click();
     await page.getByRole("button", { name: locale.ocean, exact: true }).click();
-    await modelControl.selectOption(initialMode);
+    await pick(initialMode);
+    await reprocessButton.click();
     await expect(page.getByRole("heading", { name: locale.guard })).toBeVisible();
     await expect.poll(editor.scenario.runCount).toBe(4);
     await page.getByRole("button", { name: locale.continueEditing }).click();
-    await expect(modelControl).toHaveValue(alternateMode);
+    await expect(control).toHaveAttribute("data-current-model", alternateMode);
     await expect(page.getByTestId("tool-panel-slot")).toBeFocused();
 
-    await modelControl.selectOption(initialMode);
+    await pick(initialMode);
+    await reprocessButton.click();
     await page.getByRole("button", { name: locale.discard }).click();
     await expect.poll(editor.scenario.runCount).toBe(5);
     await editor.scenario.completeRun();
-    await expect(modelControl).toHaveValue(initialMode);
+    await expect(control).toHaveAttribute("data-current-model", initialMode);
 
     await editor.preview.resetButton.click();
     await expect.poll(editor.scenario.resourceCounts).toEqual({
@@ -455,10 +473,25 @@ test("committed history, Background preview, and tool viewports stay coherent in
     const cutoutViewport = await page
       .locator('[data-tool-image-viewport="true"]')
       .boundingBox();
+    const cutoutGrid = await page.getByTestId("cutout-stage-content").evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { image: style.backgroundImage, size: style.backgroundSize };
+    });
 
     await page.getByRole("button", { name: locale.background, exact: true }).click();
     const backgroundViewport = page.locator('[data-tool-image-viewport="true"]');
     await expect(backgroundViewport).toBeVisible();
+    const backgroundAfterPreview = page.getByTestId("after-preview-background");
+    await expect(backgroundAfterPreview).not.toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)",
+    );
+    const backgroundGrid = await backgroundAfterPreview.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { image: style.backgroundImage, size: style.backgroundSize };
+    });
+    expect(backgroundGrid).toEqual(cutoutGrid);
+
     await page.getByRole("button", { name: locale.ocean, exact: true }).click();
     await expect(page.getByTestId("after-preview-background")).toHaveCSS(
       "background-image",
@@ -480,38 +513,30 @@ test("committed history, Background preview, and tool viewports stay coherent in
       initialUrl!,
     );
 
+    const authoritativeImage = page
+      .getByTestId("after-preview-background")
+      .locator("img");
+
     await page.getByRole("button", { name: locale.ocean, exact: true }).click();
     await page.getByRole("button", { name: locale.apply, exact: true }).click();
     await expect.poll(editor.scenario.backgroundCommitCount).toBe(1);
     await expect(undo).toBeEnabled();
-    const committedUrl = await page
-      .getByRole("img", { name: locale.comparisonAlt })
-      .getAttribute("src");
+    const committedUrl = await authoritativeImage.getAttribute("src");
     expect(committedUrl).toMatch(/^blob:/);
     expect(committedUrl).not.toBe(initialUrl);
 
     await undo.click();
     await expect(redo).toBeEnabled();
     await expect
-      .poll(() =>
-        page.getByRole("img", { name: locale.comparisonAlt }).getAttribute("src"),
-      )
+      .poll(() => authoritativeImage.getAttribute("src"))
       .not.toBe(committedUrl);
-    const undoneUrl = await page
-      .getByRole("img", { name: locale.comparisonAlt })
-      .getAttribute("src");
+    const undoneUrl = await authoritativeImage.getAttribute("src");
     expect(undoneUrl).toMatch(/^blob:/);
     expect(undoneUrl).not.toBe(committedUrl);
     await redo.click();
     await expect(undo).toBeEnabled();
-    await expect
-      .poll(() =>
-        page.getByRole("img", { name: locale.comparisonAlt }).getAttribute("src"),
-      )
-      .not.toBe(undoneUrl);
-    const redoneUrl = await page
-      .getByRole("img", { name: locale.comparisonAlt })
-      .getAttribute("src");
+    await expect.poll(() => authoritativeImage.getAttribute("src")).not.toBe(undoneUrl);
+    const redoneUrl = await authoritativeImage.getAttribute("src");
     expect(redoneUrl).toMatch(/^blob:/);
     expect(redoneUrl).not.toBe(undoneUrl);
 
@@ -524,7 +549,10 @@ test("committed history, Background preview, and tool viewports stay coherent in
       .evaluateAll((images) => [
         ...new Set(images.map((image) => image.getAttribute("src"))),
       ]);
-    expect(enhancementSources).toEqual([redoneUrl]);
+    // "before" is pinned to the original automatic result (unaffected by the
+    // Background edit above); "after" tracks the current committed state.
+    expect(enhancementSources).toHaveLength(2);
+    expect(enhancementSources).toEqual(expect.arrayContaining([redoneUrl, initialUrl]));
     await page.getByRole("button", { name: locale.apply, exact: true }).click();
     await expect.poll(editor.scenario.enhancementRunCount).toBe(1);
     await expect(page.getByTestId("editor-stage-placeholder")).toContainText(
@@ -722,7 +750,7 @@ test("batch connectors keep admission, selection, and ZIP commands at their cons
     name: "Processing mode and admission for new images",
   });
   await expect(admissionGroup).toBeVisible();
-  await expect(admissionGroup).toContainText("Mode for new images");
+  await expect(admissionGroup).not.toContainText("Mode for new images");
   await expect(admissionGroup).toContainText("Maximum");
   await expect(admissionGroup).toContainText("Add images");
   await expect(batch.locator("article")).toHaveCount(2);
@@ -737,6 +765,106 @@ test("batch connectors keep admission, selection, and ZIP commands at their cons
   await expect(batch.locator("article").nth(1)).toHaveClass(/border-primary/);
 
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download all/ }).click();
+  await page.getByRole("button", { name: "Output options" }).click();
+  await page.getByRole("menuitem", { name: /Download all/ }).click();
   expect((await pending).suggestedFilename()).toBe("cutbg-results.zip");
+});
+
+test("batch item retry offers a per-item model choice and actually reprocesses", async ({
+  editor,
+  page,
+}) => {
+  await page.goto("/en");
+  await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+  await page
+    .getByLabel("Upload an image")
+    .setInputFiles([phase33ImageCorpus.smoke.path, phase33ImageCorpus.smoke.path]);
+  await expect.poll(editor.scenario.runCount).toBe(1);
+  await editor.scenario.completeRun();
+  await expect.poll(editor.scenario.runCount).toBe(2);
+  await editor.scenario.completeRun();
+
+  const batch = page.getByTestId("batch-overview");
+  // The first item is auto-focused as the active document (open draft), so
+  // only the second item is eligible for an in-place batch-menu reprocess.
+  const article = batch.locator("article").nth(1);
+  const menu = page.getByRole("menu", { name: /Actions for/ });
+
+  const modeLabels = { "isnet-q8": "Fast", "isnet-fp32": "Optimal" } as const;
+  const initialMode = (await editor.scenario.runModelModes())[1] as
+    "isnet-fp32" | "isnet-q8";
+  const alternateMode = initialMode === "isnet-q8" ? "isnet-fp32" : "isnet-q8";
+
+  await article.getByTestId("batch-item-actions").click();
+  const retryAction = menu.getByRole("menuitem", { name: "Try again" });
+  // Retrying in the item's own already-committed mode is not offered: the
+  // domain rejects a same-model reprocess as a no-op, which is exactly what
+  // made the old fixed "Retry in <mode> mode" action silently do nothing.
+  await expect(retryAction).toBeDisabled();
+  await menu
+    .getByRole("menuitemradio", { name: modeLabels[alternateMode], exact: true })
+    .click();
+  await expect(retryAction).toBeEnabled();
+  await retryAction.click();
+  await expect.poll(editor.scenario.runCount).toBe(3);
+  expect((await editor.scenario.runModelModes())[2]).toBe(alternateMode);
+  await editor.scenario.completeRun();
+});
+
+test("T13 theme toggle is keyboard-accessible and localized, scrollbars stay themed, and navigation progress reflects real router state", async ({
+  page,
+}) => {
+  const locales = [
+    {
+      path: "/",
+      toLight: "Переключить на светлую тему",
+      toDark: "Переключить на тёмную тему",
+      viewport: { width: 390, height: 844 },
+    },
+    {
+      path: "/en",
+      toLight: "Switch to light theme",
+      toDark: "Switch to dark theme",
+      viewport: { width: 1280, height: 900 },
+    },
+  ] as const;
+
+  for (const locale of locales) {
+    await page.setViewportSize(locale.viewport);
+    await page.goto(locale.path);
+    await expect(page.getByTestId("home-page")).toHaveAttribute("data-hydrated", "true");
+
+    const html = page.locator("html");
+    await expect(html).toHaveClass(/dark/);
+    const darkBackground = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor,
+    );
+    const darkScrollbarColor = await page.evaluate(
+      () => getComputedStyle(document.body).scrollbarColor,
+    );
+
+    const toggle = page.getByRole("button", { name: locale.toLight });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(html).not.toHaveClass(/dark/);
+    await expect(page.getByRole("button", { name: locale.toDark })).toBeFocused();
+
+    const lightBackground = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor,
+    );
+    const lightScrollbarColor = await page.evaluate(
+      () => getComputedStyle(document.body).scrollbarColor,
+    );
+    expect(lightBackground).not.toBe(darkBackground);
+    expect(lightScrollbarColor).not.toBe(darkScrollbarColor);
+
+    await page.keyboard.press("Enter");
+    await expect(html).toHaveClass(/dark/);
+    await expect(page.getByRole("button", { name: locale.toLight })).toBeFocused();
+
+    const progress = page.locator('[data-slot="navigation-progress"]');
+    await expect(progress).toHaveAttribute("aria-hidden", "true");
+    await expect(progress).toHaveAttribute("data-active", "false");
+    await expect(progress.locator(".navigation-progress-bar")).toHaveCSS("opacity", "0");
+  }
 });

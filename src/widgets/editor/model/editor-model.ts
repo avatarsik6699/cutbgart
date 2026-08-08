@@ -63,6 +63,7 @@ export class EditorModel {
     if (qualityMode === "isnet-q8") safeLs.setItem(QUALITY_MODE_STORAGE_KEY, "fast");
     else if (qualityMode === "isnet-fp32")
       safeLs.setItem(QUALITY_MODE_STORAGE_KEY, "max");
+    else safeLs.removeItem(QUALITY_MODE_STORAGE_KEY);
   };
 
   readonly chooseExportSize = (exportSize: ExportSize): void => {
@@ -142,8 +143,11 @@ export class EditorModel {
     this.session.selectDocument(documentId);
   };
 
-  readonly retryBatchItem = (itemId: WorkspaceItemId): void => {
-    void this.session.retryItem(itemId);
+  readonly retryBatchItem = (
+    itemId: WorkspaceItemId,
+    modelMode?: AutomaticModelMode,
+  ): void => {
+    void this.session.retryItem(itemId, modelMode);
   };
 
   readonly removeBatchItem = (itemId: WorkspaceItemId): void => {

@@ -15,8 +15,9 @@ type Props = {
   draft: BackgroundTypes.Draft;
   foregroundUrl: string;
   height: number;
+  originalUrl: string;
+  resultUrl: string;
   runtime: BackgroundRuntimeSnapshot;
-  sourceUrl: string;
   interaction: BackgroundInteraction;
   width: number;
 };
@@ -86,15 +87,15 @@ export function BackgroundWorkspace(props: Props) {
 
   return (
     <>
-      <div className="[grid-area:surface]">
+      <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <EditorStage
           documentId={props.draft.documentId}
           loading={busy}
           loadingLabel={backgroundStatus(props)}
         >
           <BeforeAfterUrlSlider
-            afterUrl={props.foregroundUrl}
-            beforeUrl={props.sourceUrl}
+            afterUrl={props.draft.dirty ? props.foregroundUrl : props.resultUrl}
+            beforeUrl={props.originalUrl}
             backgroundStyle={backgroundFillStyle(
               props.draft.fill,
               props.runtime.previewUrl,
@@ -112,7 +113,7 @@ export function BackgroundWorkspace(props: Props) {
           />
         </EditorStage>
       </div>
-      <div className="[grid-area:rail]">
+      <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <ToolPanelSlot toolId="background" label={m.editorBackgroundTitle()} autoFocus>
           <section className="flex h-full min-h-0 min-w-0 max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1">
             <fieldset className="flex flex-col gap-2" disabled={busy}>

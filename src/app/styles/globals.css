@@ -144,8 +144,8 @@
   --info-foreground: var(--color-blue-900);
   --success: var(--color-emerald-100);
   --success-foreground: var(--color-emerald-900);
-  --border: oklch(0.899 0.006 255.478); /* line */
-  --input: oklch(0.899 0.006 255.478);
+  --border: oklch(0.76 0.009 255.478); /* line */
+  --input: oklch(0.76 0.009 255.478);
   --ring: oklch(0.519 0.185 262.867); /* signal */
   --chart-1: oklch(0.899 0.006 255.478);
   --chart-2: oklch(0.706 0.012 252.128);
@@ -159,7 +159,7 @@
   --sidebar-primary-foreground: oklch(0.995 0.002 247.839);
   --sidebar-accent: oklch(0.93 0.004 250);
   --sidebar-accent-foreground: oklch(0.203 0.008 248.202);
-  --sidebar-border: oklch(0.899 0.006 255.478);
+  --sidebar-border: oklch(0.76 0.009 255.478);
   --sidebar-ring: oklch(0.519 0.185 262.867);
 }
 
@@ -209,12 +209,83 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
   body {
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+  }
+
+  /* Coherent themed scrollbars everywhere (T13) — the thumb/track colors
+     resolve through `--border`/`--muted-foreground`, so they track the
+     `.dark` class toggle automatically without a separate override block.
+     `.editor-toolbar` keeps its own higher-specificity hidden-scrollbar rule
+     below for its intentional edge-to-edge horizontal scroll. */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    background-clip: content-box;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}
+
+/* Top-of-viewport route-navigation indicator (T13), driven only by
+   `useRouterLoadingState`'s real TanStack Router `isLoading` — never by
+   editor processing/inference truth. Indeterminate: the bar eases toward
+   most of the track while `data-active` is true and completes/fades once
+   the router reports idle again. */
+@layer components {
+  .navigation-progress-track {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    z-index: 60;
+    height: 2px;
+    pointer-events: none;
+  }
+
+  .navigation-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    opacity: 0;
+    transition:
+      width 0.2s ease-out,
+      opacity 0.2s ease-out;
+  }
+
+  .navigation-progress-track[data-active="true"] .navigation-progress-bar {
+    width: 80%;
+    opacity: 1;
+    transition:
+      width 8s cubic-bezier(0.1, 0.5, 0.1, 1),
+      opacity 0.2s ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-progress-bar {
+    transition: opacity 0.15s ease-out !important;
+  }
+
+  .navigation-progress-track[data-active="true"] .navigation-progress-bar {
+    width: 100%;
   }
 }
 

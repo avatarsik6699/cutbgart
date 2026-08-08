@@ -9,6 +9,7 @@ import {
   useEditorSessionValue,
   selectActiveHeight,
   selectActivePreviewUrl,
+  selectActiveResultUrl,
   selectActiveWidth,
 } from "../../model";
 import {
@@ -20,6 +21,7 @@ export function ManualCutoutConnector() {
   const model = useActiveDocumentModel();
   const draft = useActiveDocumentActorSelector(selectManualDraft);
   const sourceUrl = useEditorSessionValue(selectActivePreviewUrl);
+  const backgroundUrl = useEditorSessionValue(selectActiveResultUrl);
   const status = useActiveDocumentActorSelector(selectDocumentStatus);
   const width = useEditorSessionValue(selectActiveWidth);
   const height = useEditorSessionValue(selectActiveHeight);
@@ -153,6 +155,7 @@ export function ManualCutoutConnector() {
   if (draft === null || sourceUrl === null) return null;
   return (
     <ManualCutoutWorkspace
+      backgroundUrl={backgroundUrl}
       busy={status === "manual-applying"}
       documentId={draft.documentId}
       height={height}

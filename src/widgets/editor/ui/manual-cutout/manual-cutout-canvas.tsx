@@ -10,6 +10,7 @@ import { m } from "@/paraglide/messages";
 import { EditorStage } from "@/shared/ui";
 
 import {
+  CUTOUT_BRUSH_CURSOR_FILL_COLOR,
   CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CanvasWorkspaceActiveIndicator,
@@ -38,6 +39,7 @@ function manualPointerIntent(
 }
 
 export function ManualCutoutCanvas({
+  backgroundUrl,
   busy,
   currentUrl,
   documentId,
@@ -46,6 +48,7 @@ export function ManualCutoutCanvas({
   onCursorElementChange,
   width,
 }: Readonly<{
+  backgroundUrl: string | null;
   busy: boolean;
   currentUrl: string;
   documentId: string;
@@ -127,11 +130,13 @@ export function ManualCutoutCanvas({
   function positionCursor(point: Readonly<{ x: number; y: number }>): void {
     const cursor = cursorRef.current;
     if (cursor === null) return;
-    const brushSize = interaction.readViewState().brushSize;
+    const view = interaction.readViewState();
     cursor.style.left = `${(point.x / width) * 100}%`;
     cursor.style.top = `${(point.y / height) * 100}%`;
-    cursor.style.width = `${(brushSize * 100) / width}%`;
-    cursor.style.height = `${(brushSize * 100) / height}%`;
+    cursor.style.width = `${(view.brushSize * 100) / width}%`;
+    cursor.style.height = `${(view.brushSize * 100) / height}%`;
+    cursor.style.backgroundColor = CUTOUT_BRUSH_CURSOR_FILL_COLOR[view.mode];
+    cursor.dataset.brushMode = view.mode;
     cursor.hidden = false;
   }
 
@@ -228,7 +233,7 @@ export function ManualCutoutCanvas({
   if (draftState === null) return null;
 
   return (
-    <div className="[grid-area:surface]">
+    <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <EditorStage
         documentId={documentId}
         loading={busy}
@@ -277,7 +282,15 @@ export function ManualCutoutCanvas({
             className={CUTOUT_STAGE_CONTENT_CLASS_NAME}
             data-testid="cutout-stage-content"
             data-tool-image-viewport="true"
-            style={cutoutStageContentStyle(width, height)}
+            style={{
+              ...cutoutStageContentStyle(width, height),
+              ...(backgroundUrl === null
+                ? {}
+                : {
+                    backgroundImage: `url("${backgroundUrl.replaceAll('"', '\\"')}")`,
+                    backgroundSize: "100% 100%",
+                  }),
+            }}
           >
             <canvas
               role="img"
@@ -300,13 +313,15 @@ export function ManualCutoutCanvas({
               ref={connectCursor}
               data-brush-cursor
               data-testid="manual-brush-cursor"
+              data-brush-mode={initialView.mode}
               hidden
               aria-hidden="true"
-              className="pointer-events-none absolute rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.8)]"
+              className="pointer-events-none absolute rounded-full"
               style={{
                 width: `${(initialView.brushSize * 100) / width}%`,
                 height: `${(initialView.brushSize * 100) / height}%`,
                 transform: "translate(-50%, -50%)",
+                backgroundColor: CUTOUT_BRUSH_CURSOR_FILL_COLOR[initialView.mode],
               }}
             />
           </div>

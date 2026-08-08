@@ -49,6 +49,7 @@ describe("ManualCutoutWorkspace", () => {
     const harness = interactionHarness();
     render(
       <ManualCutoutWorkspace
+        backgroundUrl={null}
         busy={false}
         documentId="document-1"
         height={10}
@@ -88,6 +89,7 @@ describe("ManualCutoutWorkspace", () => {
     render(
       <Profiler id="manual-workspace" onRender={onRender}>
         <ManualCutoutWorkspace
+          backgroundUrl={null}
           busy={false}
           documentId="document-1"
           height={2000}
@@ -110,15 +112,44 @@ describe("ManualCutoutWorkspace", () => {
     const cursor = screen.getByTestId("manual-brush-cursor");
     expect(cursor.style.width).toBe("2%");
     expect(cursor.style.height).toBe("4%");
-    expect(cursor.className).toContain("border-white");
+    expect(cursor.className).not.toContain("border-white");
     expect(cursor.className).not.toContain("border-dashed");
+    expect(cursor.className).toContain("rounded-full");
+    expect(cursor.style.backgroundColor).toBe("rgba(34, 197, 94, 0.42)");
     expect(cursor.childElementCount).toBe(0);
+  });
+
+  it("recolors the brush cursor imperatively when the erase/restore mode changes", () => {
+    const harness = interactionHarness();
+    render(
+      <ManualCutoutWorkspace
+        backgroundUrl={null}
+        busy={false}
+        documentId="document-1"
+        height={2000}
+        interaction={harness.interaction}
+        currentUrl="blob:source"
+        width={4000}
+      />,
+    );
+    const cursor = screen.getByTestId("manual-brush-cursor");
+    expect(cursor.style.backgroundColor).toBe("rgba(34, 197, 94, 0.42)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Erase" }));
+
+    expect(harness.interaction.writeViewState).toHaveBeenLastCalledWith({
+      mode: "erase",
+      brushSize: 48,
+      zoom: 1,
+    });
+    expect(cursor.style.backgroundColor).toBe("rgba(239, 68, 68, 0.42)");
   });
 
   it("blocks brush input while the manual Apply is in flight", () => {
     const harness = interactionHarness();
     render(
       <ManualCutoutWorkspace
+        backgroundUrl={null}
         busy
         documentId="document-1"
         height={10}
@@ -146,6 +177,7 @@ describe("ManualCutoutWorkspace", () => {
     render(
       <Profiler id="manual-workspace" onRender={onRender}>
         <ManualCutoutWorkspace
+          backgroundUrl={null}
           busy={false}
           documentId="document-1"
           height={2000}

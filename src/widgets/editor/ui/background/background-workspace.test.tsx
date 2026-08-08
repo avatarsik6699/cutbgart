@@ -47,8 +47,9 @@ describe("BackgroundWorkspace", () => {
         draft={{ ...draft, dirty: true }}
         foregroundUrl="blob:foreground"
         height={100}
+        originalUrl="blob:original"
+        resultUrl="blob:result"
         runtime={{ status: "ready", previewUrl: null, error: null }}
-        sourceUrl="blob:source"
         interaction={harness.interaction}
         width={100}
       />,
@@ -103,8 +104,9 @@ describe("BackgroundWorkspace", () => {
         }}
         foregroundUrl="blob:committed-foreground"
         height={100}
+        originalUrl="blob:original"
+        resultUrl="blob:committed-result"
         runtime={{ status: "ready", previewUrl: null, error: null }}
-        sourceUrl="blob:committed-result"
         interaction={harness.interaction}
         width={100}
       />,
@@ -115,7 +117,7 @@ describe("BackgroundWorkspace", () => {
     expect(preview.querySelector("img")?.getAttribute("src")).toBe(
       "blob:committed-foreground",
     );
-    expect(screen.getByRole("img").getAttribute("src")).toBe("blob:committed-result");
+    expect(screen.getByRole("img").getAttribute("src")).toBe("blob:original");
   });
 
   it("announces preparation errors and prevents committing them", () => {
@@ -125,8 +127,9 @@ describe("BackgroundWorkspace", () => {
         draft={{ ...draft, dirty: true }}
         foregroundUrl="blob:foreground"
         height={100}
+        originalUrl="blob:original"
+        resultUrl="blob:result"
         runtime={{ status: "error", previewUrl: null, error: "too-large" }}
-        sourceUrl="blob:source"
         interaction={harness.interaction}
         width={100}
       />,
@@ -147,8 +150,9 @@ describe("BackgroundWorkspace", () => {
         draft={{ ...draft, dirty: true, status: "applying" }}
         foregroundUrl="blob:foreground"
         height={100}
+        originalUrl="blob:original"
+        resultUrl="blob:result"
         runtime={{ status: "ready", previewUrl: null, error: null }}
-        sourceUrl="blob:source"
         interaction={harness.interaction}
         width={100}
       />,

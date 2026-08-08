@@ -1,7 +1,12 @@
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Image, Typography } from "@/shared/ui";
+
+const GRID_CELL_STYLE: Record<ImageStageProps["grid"], CSSProperties> = {
+  fine: {},
+  wide: { "--transparency-grid-cell": "20px" } as CSSProperties,
+};
 
 export type ImageStageProps = {
   fileName: string | null;
@@ -30,11 +35,8 @@ function ImageStage(props: ImageStageProps) {
 
   return (
     <section
-      className={
-        props.grid === "fine"
-          ? "border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:18px_18px] relative grid min-h-[23rem] place-items-center overflow-hidden rounded-xl border sm:min-h-[32rem]"
-          : "border-border bg-[repeating-conic-gradient(var(--muted)_0_25%,var(--card)_0_50%)] bg-[length:40px_40px] relative grid min-h-[23rem] place-items-center overflow-hidden rounded-xl border sm:min-h-[32rem]"
-      }
+      className="border-border transparency-grid relative grid min-h-[23rem] place-items-center overflow-hidden rounded-xl border sm:min-h-[32rem]"
+      style={GRID_CELL_STYLE[props.grid]}
       aria-label={m.editorPreview()}
     >
       {imageUrl === null ? (

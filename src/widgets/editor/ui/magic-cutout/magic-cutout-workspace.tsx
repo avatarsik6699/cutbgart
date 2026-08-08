@@ -12,6 +12,7 @@ import type { MagicCutoutTypes } from "@/editor/domain";
 import type { MagicRuntimeProgress } from "@/editor/runtime";
 import { CanvasViewControls, type CanvasInteractionMode } from "../editor-tools";
 import {
+  CUTOUT_BRUSH_CURSOR_FILL_COLOR,
   CUTOUT_STAGE_CONTENT_CLASS_NAME,
   CUTOUT_STAGE_VIEWPORT_CLASS_NAME,
   CanvasWorkspaceActiveIndicator,
@@ -345,7 +346,7 @@ export function MagicCutoutWorkspace(
 
   return (
     <>
-      <div className="[grid-area:surface]">
+      <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <EditorStage
           documentId={props.draft.documentId}
           loading={busy}
@@ -422,15 +423,15 @@ export function MagicCutoutWorkspace(
                 ref={cursorRef}
                 data-brush-cursor
                 data-testid="magic-brush-cursor"
+                data-brush-mode={mode}
                 hidden
                 aria-hidden="true"
-                className={`pointer-events-none absolute rounded-full border-2 ${
-                  mode === "keep" ? "border-emerald-700" : "border-rose-700"
-                }`}
+                className="pointer-events-none absolute rounded-full"
                 style={{
                   width: `${(initialView.radius * 2 * 100) / props.width}%`,
                   height: `${(initialView.radius * 2 * 100) / props.height}%`,
                   transform: "translate(-50%, -50%)",
+                  backgroundColor: CUTOUT_BRUSH_CURSOR_FILL_COLOR[mode],
                 }}
               />
             </div>

@@ -40,7 +40,5 @@ export declare namespace MainPageEditorTypes {
 
   type BatchActionsProjection = Readonly<{
     atCapacity: boolean;
-    completedCount: number;
-    exporting: boolean;
   }>;
 }

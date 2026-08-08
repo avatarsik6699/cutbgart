@@ -26,6 +26,7 @@ export {
   selectActiveForegroundUrl,
   selectActiveHeight,
   selectActiveMagicProgress,
+  selectActiveOriginalUrl,
   selectActivePreviewUrl,
   selectActiveResultUrl,
   selectActiveWidth,

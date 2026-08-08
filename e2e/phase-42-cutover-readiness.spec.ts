@@ -24,6 +24,7 @@ type LocaleContract = Readonly<{
   apply: string;
   download: string;
   downloadAll: RegExp;
+  downloadOptions: string;
   remove: RegExp;
 }>;
 
@@ -43,6 +44,7 @@ const locales: readonly LocaleContract[] = [
     apply: "Apply",
     download: "Download",
     downloadAll: /Download all/,
+    downloadOptions: "Output options",
     remove: /Remove image/,
   },
   {
@@ -60,6 +62,7 @@ const locales: readonly LocaleContract[] = [
     apply: "Применить",
     download: "Скачать",
     downloadAll: /Скачать вс[её]/,
+    downloadOptions: "Параметры результата",
     remove: /Удалить изображение/,
   },
 ];
@@ -192,7 +195,8 @@ test("both locales complete the single, batch, tool, recovery and export matrix"
     await page.getByRole("button", { name: labels.download, exact: true }).click();
     expect((await selectedDownload).suggestedFilename()).toBe("cutbg-result.png");
     const zipDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: labels.downloadAll }).click();
+    await page.getByRole("button", { name: labels.downloadOptions }).click();
+    await page.getByRole("menuitem", { name: labels.downloadAll }).click();
     expect((await zipDownload).suggestedFilename()).toBe("cutbg-results.zip");
 
     await page.getByLabel(labels.addImages).setInputFiles("e2e/fixtures/unsupported.txt");

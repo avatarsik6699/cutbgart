@@ -5,8 +5,10 @@ import { m } from "@/paraglide/messages";
 
 import type { ExportSize } from "../../../model/types";
 import { exportSizeLabel } from "../download-control.utils";
+import type { DownloadControlTypes } from "../download-control.types";
 
 type Props = Readonly<{
+  batchZip?: DownloadControlTypes.BatchZipOption;
   onDownload(): void;
   onSelectSize(size: ExportSize): void;
   selectedSize: ExportSize;
@@ -48,6 +50,16 @@ export function ExportSizeMenu(props: Props) {
         <Download className="size-4" aria-hidden="true" />
         {m.download()}
       </Menu.Item>
+      {props.batchZip ? (
+        <Menu.Item
+          disabled={props.batchZip.disabled}
+          onClick={props.batchZip.onClick}
+          className="flex cursor-default items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium outline-none data-highlighted:bg-muted data-disabled:opacity-50"
+        >
+          <Download className="size-4" aria-hidden="true" />
+          {props.batchZip.label}
+        </Menu.Item>
+      ) : null}
     </Menu.Popup>
   );
 }

@@ -5,6 +5,7 @@ import type { MagicCutoutTypes } from "@/editor/domain";
 import type { MagicRuntimeProgress } from "@/editor/runtime";
 import { m } from "@/paraglide/messages";
 import { Button, Typography } from "@/shared/ui";
+import { CUTOUT_BRUSH_DIAMETER_MAX, CUTOUT_BRUSH_DIAMETER_MIN } from "@/shared/lib";
 
 import { ToolPanelSlot } from "../editor-tools";
 import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
@@ -98,7 +99,7 @@ export function MagicCutoutPanel(
   }
 
   return (
-    <div className="[grid-area:rail]">
+    <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <ToolPanelSlot toolId="cutout" label={m.editorMagicTitle()} autoFocus>
         <section className="flex h-full min-h-0 flex-col gap-5">
           <CutoutModeTabs
@@ -136,12 +137,12 @@ export function MagicCutoutPanel(
             <span>{m.brushSize()}</span>
             <input
               type="range"
-              min="2"
-              max="80"
-              defaultValue={props.initialRadius}
+              min={CUTOUT_BRUSH_DIAMETER_MIN}
+              max={CUTOUT_BRUSH_DIAMETER_MAX}
+              defaultValue={props.initialRadius * 2}
               disabled={props.busy}
               onChange={(event) =>
-                props.onRadiusChange(Number(event.currentTarget.value))
+                props.onRadiusChange(Number(event.currentTarget.value) / 2)
               }
             />
           </label>

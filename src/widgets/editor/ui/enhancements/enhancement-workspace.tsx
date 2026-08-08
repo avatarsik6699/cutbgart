@@ -48,7 +48,7 @@ export function EnhancementWorkspace(props: Props) {
 
   return (
     <>
-      <div className="[grid-area:surface]">
+      <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <EditorStage
           documentId={props.draft.documentId}
           loading={busy}
@@ -69,7 +69,7 @@ export function EnhancementWorkspace(props: Props) {
           />
         </EditorStage>
       </div>
-      <div className="[grid-area:rail]">
+      <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <ToolPanelSlot toolId="enhance" label={m.editorEnhancementsTitle()} autoFocus>
           <EnhancementsToolPanel
             registry={registry}

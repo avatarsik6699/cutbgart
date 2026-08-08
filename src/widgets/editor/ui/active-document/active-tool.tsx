@@ -61,7 +61,7 @@ function CommittedDocumentStage() {
 
   return (
     <>
-      <div className="[grid-area:surface]">
+      <div className="[grid-area:surface] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <ImageStage
           fileName={fileName}
           grid="fine"
@@ -73,7 +73,7 @@ function CommittedDocumentStage() {
           width={width}
         />
       </div>
-      <div className="[grid-area:rail]">
+      <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
         <ToolPanelSlot toolId="cutout" label={m.editorToolCutout()}>
           <Typography variant="body-small" as="p" className="text-muted-foreground">
             {m.editorMagicReady()}

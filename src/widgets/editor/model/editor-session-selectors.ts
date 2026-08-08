@@ -40,6 +40,12 @@ export function selectActiveForegroundUrl(
   return selectActiveSessionSnapshot(session)?.foregroundUrl ?? null;
 }
 
+export function selectActiveOriginalUrl(
+  session: EditorSessionTypes.Session,
+): string | null {
+  return selectActiveSessionSnapshot(session)?.originalUrl ?? null;
+}
+
 export function selectActiveFileName(session: EditorSessionTypes.Session): string | null {
   return selectActiveSessionSnapshot(session)?.fileName ?? null;
 }

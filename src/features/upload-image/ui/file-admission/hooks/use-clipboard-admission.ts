@@ -6,7 +6,13 @@ import type { FileAdmissionTypes } from "../file-admission.types";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+/** Some browsers/policies leave the clipboard-read permission promise pending
+ * indefinitely instead of resolving or rejecting it (e.g. a suppressed native
+ * prompt), so the read is raced against this bound rather than left to hang. */
+const CLIPBOARD_READ_TIMEOUT_MS = 8000;
+
 class ClipboardUnavailableError extends Error {}
+class ClipboardReadTimeoutError extends Error {}
 
 function clipboardFile(blob: Blob, index: number): File {
   const extension = blob.type === "image/jpeg" ? "jpg" : blob.type.split("/")[1];
@@ -21,8 +27,20 @@ function permissionError(error: unknown): boolean {
 
 function clipboardReadErrorMessage(error: unknown): string {
   if (error instanceof ClipboardUnavailableError) return m.uploadClipboardUnavailable();
+  if (error instanceof ClipboardReadTimeoutError) return m.uploadClipboardFailed();
   if (permissionError(error)) return m.uploadClipboardPermissionDenied();
   return m.uploadClipboardFailed();
+}
+
+function withClipboardReadTimeout<Value>(promise: Promise<Value>): Promise<Value> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new ClipboardReadTimeoutError()),
+      CLIPBOARD_READ_TIMEOUT_MS,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function imageFilesFromClipboard(
@@ -48,7 +66,7 @@ async function readClipboardImageFiles(
 ): Promise<readonly File[] | null> {
   const clipboard = navigator.clipboard;
   if (clipboard?.read === undefined) throw new ClipboardUnavailableError();
-  const items = await clipboard.read();
+  const items = await withClipboardReadTimeout(clipboard.read());
   if (!isCurrent()) return null;
   return imageFilesFromClipboard(items, multiple, isCurrent);
 }

@@ -20,7 +20,8 @@ import {
   LocalExecutionReadout,
 } from "../editor-tools";
 import type { EditorSessionTypes } from "@/editor/runtime";
-import { Skeleton, Typography } from "@/shared/ui";
+import { Button, Skeleton, Typography } from "@/shared/ui";
+import type { AutomaticModelMode, BrowserInferencePath } from "@/shared/lib";
 import { m } from "@/paraglide/messages";
 
 import {
@@ -32,6 +33,7 @@ import {
   useEditorSessionValue,
   useEditorModel,
   useEditorViewSelector,
+  useEditorWorkspaceSelector,
   type EditorViewSnapshot,
 } from "../../model";
 import { BatchActionsConnector, BatchRailConnector } from "./batch-connectors";
@@ -159,6 +161,57 @@ function ProcessingStatusView(props: {
   );
 }
 
+function AutomaticToolbarStatusSlot(props: {
+  availableModes: readonly AutomaticModelMode[];
+  busy: boolean;
+  currentMode: AutomaticModelMode | null;
+  inferencePath: BrowserInferencePath;
+  processingMode: AutomaticModelMode | null;
+}) {
+  if (props.currentMode === null && props.processingMode === null)
+    return (
+      <LocalExecutionReadout busy={props.busy} inferencePath={props.inferencePath} />
+    );
+  return (
+    <AutomaticModelControl
+      availableModes={props.availableModes}
+      busy={props.busy}
+      currentMode={props.currentMode}
+      inferencePath={props.inferencePath}
+      processingMode={props.processingMode}
+    />
+  );
+}
+
+const selectBatchCompletedCount = (snapshot: EditorSessionTypes.WorkspaceSnapshot) => {
+  let count = 0;
+  for (const item of snapshot.items) if (item.status === "result") count += 1;
+  return count;
+};
+const selectBatchExporting = (snapshot: EditorSessionTypes.WorkspaceSnapshot) =>
+  snapshot.export.status === "preparing";
+
+/** Only reachable while the currently selected batch item has not yet reached
+ * "result" itself, so it cannot host the post-result `ToolbarDownloadControl`
+ * split button; kept as a plain button rather than folding it into a split
+ * button with no "current document" action to pair it with. */
+function BatchZipDownloadSlot() {
+  const model = useEditorModel();
+  const completedCount = useEditorWorkspaceSelector(selectBatchCompletedCount);
+  const exporting = useEditorWorkspaceSelector(selectBatchExporting);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={completedCount === 0 && !exporting}
+      onClick={exporting ? model.cancelDownloadAll : model.downloadAll}
+    >
+      {exporting ? m.cancel() : m.downloadAllZip()}
+    </Button>
+  );
+}
+
 function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {
   const model = useEditorModel();
   const availableModes = useEditorSessionValue(selectAvailableModelModes);
@@ -169,10 +222,8 @@ function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {
     <EditorToolbar
       onBack={props.busy ? model.cancelProcessing : model.reset}
       StatusSlot={
-        props.batchMode || (currentMode === null && processingMode === null) ? (
-          <LocalExecutionReadout busy={props.busy} inferencePath={inferencePath} />
-        ) : (
-          <AutomaticModelControl
+        props.batchMode ? undefined : (
+          <AutomaticToolbarStatusSlot
             availableModes={availableModes}
             busy={props.busy}
             currentMode={currentMode}
@@ -184,6 +235,7 @@ function AutomaticToolbar(props: { batchMode: boolean; busy: boolean }) {
       WorkspaceActionsSlot={
         props.batchMode ? <BatchActionsConnector disabled={props.busy} /> : undefined
       }
+      DownloadSlot={props.batchMode ? <BatchZipDownloadSlot /> : undefined}
     />
   );
 }

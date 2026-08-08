@@ -3,6 +3,8 @@ import { CircleMinus, CirclePlus } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { Button, Typography } from "@/shared/ui";
+import { CUTOUT_BRUSH_DIAMETER_MAX, CUTOUT_BRUSH_DIAMETER_MIN } from "@/shared/lib";
+import type { DocumentHistoryTypes } from "@/editor/domain";
 
 import { ToolPanelSlot } from "../editor-tools";
 import { CutoutModeTabs } from "../editor-tools/cutout-mode-tabs";
@@ -14,6 +16,7 @@ export function ManualCutoutPanel(
     interaction: ManualCutoutInteraction;
     onBrushSizeChange(brushSize: number): void;
     onCutoutModeChange?(mode: "magic" | "manual"): void;
+    onModeChange?(mode: DocumentHistoryTypes.ManualMode): void;
   }>,
 ) {
   const initialView = props.interaction.readViewState();
@@ -27,10 +30,11 @@ export function ManualCutoutPanel(
       ...props.interaction.readViewState(),
       mode: nextMode,
     });
+    props.onModeChange?.(nextMode);
   }
 
   return (
-    <div className="[grid-area:rail]">
+    <div className="[grid-area:rail] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <ToolPanelSlot toolId="cutout" label={m.editorManualWorkspace()} autoFocus>
         <section className="flex h-full min-h-0 flex-col gap-5">
           <CutoutModeTabs
@@ -70,8 +74,8 @@ export function ManualCutoutPanel(
             <span>{m.brushSize()}</span>
             <input
               type="range"
-              min="8"
-              max="180"
+              min={CUTOUT_BRUSH_DIAMETER_MIN}
+              max={CUTOUT_BRUSH_DIAMETER_MAX}
               defaultValue={initialView.brushSize}
               onChange={(event) =>
                 props.onBrushSizeChange(Number(event.currentTarget.value))

@@ -12,12 +12,11 @@ import { BatchAdmissionError } from "./image-admission";
 
 import type { MainPageEditorTypes } from "./main-page-editor.types";
 import type { DocumentId, WorkspaceItemId } from "@/editor/domain";
+import type { AutomaticModelMode } from "@/shared/lib";
 
-function qualityLabel(
-  item: MainPageEditorTypes.BatchProjection["items"][number],
-): string {
-  if (item.qualityMode === "isnet-fp32") return m.processingModePrecise();
-  if (item.qualityMode === "ben2-fp16") return m.processingModeBen2();
+function modeLabel(mode: AutomaticModelMode): string {
+  if (mode === "isnet-fp32") return m.processingModePrecise();
+  if (mode === "ben2-fp16") return m.processingModeBen2();
   return m.processingModeFast();
 }
 
@@ -32,10 +31,11 @@ function detailText(item: MainPageEditorTypes.BatchProjection["items"][number]):
 }
 
 type Props = {
+  availableModes: readonly AutomaticModelMode[];
   batch: MainPageEditorTypes.BatchProjection;
   onDownload: (documentId: DocumentId) => void;
   onRemove: (itemId: WorkspaceItemId) => void;
-  onRetry: (itemId: WorkspaceItemId) => void;
+  onRetry: (itemId: WorkspaceItemId, modelMode?: AutomaticModelMode) => void;
   onSelect: (documentId: DocumentId) => void;
 };
 
@@ -45,9 +45,6 @@ function MainPageBatchRailView(props: Props) {
   );
   const items: readonly BatchWorkspaceRailItem[] = props.batch.items.map((item) => ({
     canDownload: item.status === "result" && item.documentId !== null,
-    canRetry:
-      item.status === "result" ||
-      (item.status === "error" && item.error?.retryable !== false),
     detail: detailText(item),
     errorDetail:
       item.status === "error" ? (item.error?.message ?? m.editorBatchError()) : null,
@@ -70,10 +67,15 @@ function MainPageBatchRailView(props: Props) {
           data-testid="batch-item-skeleton"
         />
       ),
-    retryLabel:
-      item.status === "result"
-        ? m.reprocessMode({ mode: qualityLabel(item) })
-        : m.tryAgain(),
+    retryModelOptions:
+      (item.status === "result" && item.documentId !== null) ||
+      (item.status === "error" && item.error?.retryable !== false)
+        ? props.availableModes.map((mode) => ({
+            label: modeLabel(mode),
+            mode,
+            selected: mode === item.qualityMode,
+          }))
+        : [],
     selected: item.selected,
     selectable: item.status === "result" && item.documentId !== null,
     status: item.status,
@@ -105,9 +107,9 @@ function MainPageBatchRailView(props: Props) {
           if (documentId !== null && documentId !== undefined)
             props.onDownload(documentId);
         }}
-        onRetry={(id) => {
+        onRetry={(id, _trigger, modelMode) => {
           const itemId = byId.get(id)?.itemId;
-          if (itemId !== undefined) props.onRetry(itemId);
+          if (itemId !== undefined) props.onRetry(itemId, modelMode);
         }}
         onRemove={(id) => {
           const itemId = byId.get(id)?.itemId;
@@ -139,6 +141,7 @@ function MainPageBatchRailView(props: Props) {
 export const MainPageBatchRail = memo(
   MainPageBatchRailView,
   (previous, next) =>
+    previous.availableModes === next.availableModes &&
     previous.onDownload === next.onDownload &&
     previous.onRemove === next.onRemove &&
     previous.onRetry === next.onRetry &&

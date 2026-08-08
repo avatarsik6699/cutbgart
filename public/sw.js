@@ -207,11 +207,17 @@ self.addEventListener("fetch", (event) => {
         try {
           await cache.put(request, verifiedReleaseResponse.clone());
         } catch (error) {
-          // Quota pressure must not break the active inference request.
-          await caches.delete(CACHE_NAME);
+          // Only actual quota exhaustion justifies wiping the cache; a transient
+          // write/network error must not discard assets that are already cached.
+          if (error instanceof DOMException && error.name === "QuotaExceededError") {
+            await caches.delete(CACHE_NAME);
+          }
           await notifyClients({
             type: "MODEL_CACHE_ERROR",
-            code: "quota-or-write-failed",
+            code:
+              error instanceof DOMException && error.name === "QuotaExceededError"
+                ? "quota-exceeded"
+                : "write-failed",
             assetPath: asset.path,
           });
           console.error(`[sw] cache write failed for ${request.url}:`, error);

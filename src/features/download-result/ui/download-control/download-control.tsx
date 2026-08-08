@@ -48,6 +48,7 @@ export function DownloadControl(props: DownloadControlTypes.Props) {
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-50">
             <ExportSizeMenu
+              batchZip={props.batchZip}
               onDownload={props.onDownload}
               onSelectSize={props.onSelectSize}
               selectedSize={props.selectedSize}

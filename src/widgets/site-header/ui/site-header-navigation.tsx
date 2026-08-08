@@ -1,6 +1,6 @@
 import { ModelStorageTrigger } from "@/features/model-storage";
 import { m } from "@/paraglide/messages";
-import { FeedbackLink, SiteLink } from "@/shared/ui";
+import { FeedbackLink, SiteLink, ThemeToggle } from "@/shared/ui";
 import { DiagnosticsSheet } from "@/widgets/editor";
 
 import { LanguageSwitcher } from "./language-switcher";
@@ -35,6 +35,7 @@ export function SiteHeaderNavigation(props: Props) {
       <div className="flex shrink-0 items-center gap-x-1">
         {props.variant === "home" ? <ModelStorageTrigger /> : null}
         <DiagnosticsSheet logs={EMPTY_DIAGNOSTIC_LOGS} />
+        <ThemeToggle />
       </div>
       <LanguageSwitcher />
     </nav>

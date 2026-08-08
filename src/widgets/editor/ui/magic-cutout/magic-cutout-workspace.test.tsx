@@ -283,7 +283,7 @@ describe("MagicCutoutWorkspace", () => {
     );
     const committedBeforeInput = onRender.mock.calls.length;
 
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "40" } });
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "80" } });
 
     expect(onRender).toHaveBeenCalledTimes(committedBeforeInput);
     expect(harness.interaction.writeViewState).toHaveBeenLastCalledWith({
